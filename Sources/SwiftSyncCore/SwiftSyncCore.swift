@@ -215,12 +215,9 @@ public enum BuiltInTransforms {
     }
 }
 
-public enum SyncMode: Sendable, Equatable {
-    case upsertOnly
-    case fullReplace
-    case insertOnly
-    case updateOnly
-    case custom(insert: Bool, update: Bool, delete: Bool)
+public enum SyncStrategy: Sendable, Equatable {
+    /// Payload is the source of truth: insert missing, update existing, delete stale local rows.
+    case payloadSourceOfTruthDiff
 }
 
 public enum RelationshipMode: Sendable, Equatable {
@@ -268,7 +265,7 @@ public struct SyncCheckpoint: Codable, Hashable, Sendable {
 }
 
 public struct SyncOptions: Sendable {
-    public var mode: SyncMode
+    public var strategy: SyncStrategy
     public var relationshipMode: RelationshipMode
     public var conflictPolicy: ConflictPolicy
     public var deleteScope: DeleteScope
@@ -277,7 +274,7 @@ public struct SyncOptions: Sendable {
     public var checkpoint: SyncCheckpoint?
 
     public init(
-        mode: SyncMode = .upsertOnly,
+        strategy: SyncStrategy = .payloadSourceOfTruthDiff,
         relationshipMode: RelationshipMode = .sync,
         conflictPolicy: ConflictPolicy = .serverWins,
         deleteScope: DeleteScope = .none,
@@ -285,7 +282,7 @@ public struct SyncOptions: Sendable {
         batchSize: Int = 500,
         checkpoint: SyncCheckpoint? = nil
     ) {
-        self.mode = mode
+        self.strategy = strategy
         self.relationshipMode = relationshipMode
         self.conflictPolicy = conflictPolicy
         self.deleteScope = deleteScope

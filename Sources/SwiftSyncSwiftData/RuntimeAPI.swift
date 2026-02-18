@@ -23,16 +23,16 @@ public extension SwiftSync {
             index[key] = row
         }
 
-        let rules = modeRules(options.mode)
         var changed = false
+        var seenKeys: Set<String> = []
 
         for entry in entries {
             let payloadModel = SyncPayload(values: entry)
             let identity = try resolveIdentity(from: payloadModel, model: Model.self)
             let key = identityKey(from: identity)
+            seenKeys.insert(key)
 
             if let row = index[key] {
-                guard rules.update else { continue }
                 if options.dryRun { continue }
                 if try row.apply(payloadModel) {
                     changed = true
@@ -40,11 +40,16 @@ public extension SwiftSync {
                 continue
             }
 
-            guard rules.insert else { continue }
             if options.dryRun { continue }
             let created = try Model.make(from: payloadModel)
             context.insert(created)
             index[key] = created
+            changed = true
+        }
+
+        for (key, row) in index where !seenKeys.contains(key) {
+            if options.dryRun { continue }
+            context.delete(row)
             changed = true
         }
 
@@ -81,18 +86,6 @@ public extension SwiftSync {
         String(describing: identity)
     }
 
-    private static func modeRules(_ mode: SyncMode) -> (insert: Bool, update: Bool) {
-        switch mode {
-        case .upsertOnly, .fullReplace:
-            return (true, true)
-        case .insertOnly:
-            return (true, false)
-        case .updateOnly:
-            return (false, true)
-        case let .custom(insert, update, _):
-            return (insert, update)
-        }
-    }
 }
 
 public extension ModelContext {

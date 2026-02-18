@@ -46,7 +46,7 @@ public extension ModelContext {
 
 ## Options We Keep
 
-- `SyncMode` (`upsertOnly`, `fullReplace`, `insertOnly`, `updateOnly`, `custom`)
+- `SyncStrategy` (`payloadSourceOfTruthDiff`)
 - `RelationshipMode`
 - `ConflictPolicy`
 - `DeleteScope`
@@ -85,7 +85,7 @@ try await SwiftSync.sync(
   payload: usersPayload,
   as: User.self,
   in: modelContext,
-  options: .init(mode: .upsertOnly)
+  options: .init(strategy: .payloadSourceOfTruthDiff)
 )
 ```
 
@@ -102,18 +102,17 @@ try await SwiftSync.sync(
 
 - snake_case -> camelCase mapping
 - identity mapping (`id`, `remoteID`)
-- real upsert behavior
+- source-of-truth diff behavior (insert/update/delete)
 - write-on-change behavior
 
-### Milestone 2: Safe Replace
-
-- `fullReplace`
-- scoped deletes only
-
-### Milestone 3: Relationships
+### Milestone 2: Relationships
 
 - common to-one and to-many behavior
 
-### Later: Outbound Export
+### Milestone 3: Hardening
 
-Add export only after inbound sync is stable in real usage.
+- additional safety/performance validation in production scenarios
+
+### Later (Last): Outbound Export
+
+Add export only after inbound sync is stable in real usage. This is where locally-created data will be synced upstream (`local -> server`).

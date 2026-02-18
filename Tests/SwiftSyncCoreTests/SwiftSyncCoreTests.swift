@@ -2,10 +2,10 @@ import Testing
 @testable import SwiftSyncCore
 
 struct SwiftSyncCoreTests {
-    @Test("SyncOptions defaults to safe upsert")
+    @Test("SyncOptions defaults to payload source-of-truth diff")
     func syncOptionsDefaults() {
         let options = SyncOptions()
-        #expect(options.mode == .upsertOnly)
+        #expect(options.strategy == .payloadSourceOfTruthDiff)
         #expect(options.relationshipMode == .sync)
         #expect(options.batchSize == 500)
         #expect(options.dryRun == false)

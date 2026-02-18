@@ -66,6 +66,27 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     }
 
     @MainActor
+    func testSyncDeletesLocalRowsMissingFromPayload() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeUser.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let seedPayload: [Any] = [
+            ["id": 1, "full_name": "Ava Swift"],
+            ["id": 2, "full_name": "Noah Swift"]
+        ]
+        try await SwiftSync.sync(payload: seedPayload, as: RuntimeUser.self, in: context)
+
+        let replacePayload: [Any] = [["id": 1, "full_name": "Ava Updated"]]
+        try await SwiftSync.sync(payload: replacePayload, as: RuntimeUser.self, in: context)
+
+        let users = try context.fetch(FetchDescriptor<RuntimeUser>())
+        XCTAssertEqual(users.count, 1)
+        XCTAssertEqual(users.first?.id, 1)
+        XCTAssertEqual(users.first?.fullName, "Ava Updated")
+    }
+
+    @MainActor
     func testSyncThrowsOnMissingIdentity() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: RuntimeUser.self, configurations: configuration)

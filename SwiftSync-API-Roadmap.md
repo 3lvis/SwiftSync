@@ -33,16 +33,12 @@ public extension ModelContext {
 ## Core Types (current)
 
 ```swift
-public enum SyncMode: Sendable {
-  case upsertOnly
-  case fullReplace
-  case insertOnly
-  case updateOnly
-  case custom(insert: Bool, update: Bool, delete: Bool)
+public enum SyncStrategy: Sendable {
+  case payloadSourceOfTruthDiff
 }
 
 public struct SyncOptions: Sendable {
-  public var mode: SyncMode
+  public var strategy: SyncStrategy
   public var relationshipMode: RelationshipMode
   public var conflictPolicy: ConflictPolicy
   public var deleteScope: DeleteScope
@@ -74,34 +70,30 @@ Shippable:
 ## Milestone 1: Happy Path Inbound Sync
 
 Shippable:
-- Real upsert sync for common flat models
+- Real source-of-truth diff sync for common flat models
 
 Included:
 1. Identity mapping for `id` / `remoteID`
 2. snake_case to camelCase mapping
 3. Changed-value writes only
-4. `SyncUpdatableModel` path for inserts/updates
+4. `SyncUpdatableModel` path for inserts/updates/deletes via payload diff
 
-## Milestone 2: Safe Replace
-
-Shippable:
-- `fullReplace` with scoped delete safety
-
-Included:
-1. `SyncMode.fullReplace`
-2. `DeleteScope` enforcement
-
-## Milestone 3: Relationship Basics
+## Milestone 2: Relationship Basics
 
 Shippable:
 - Practical to-one/to-many sync support
 
-## Milestone 4 (Later): Outbound Export
+## Milestone 3: Hardening
+
+Shippable:
+- Additional safety and performance validation after real usage feedback
+
+## Milestone 4 (Later / Last): Outbound Export
 
 Shippable:
 - Export API and outbound queue semantics
 
-Only start this phase after Milestones 1-3 are stable in real app usage.
+Only start this phase after Milestones 1-3 are stable in real app usage. This phase will cover syncing locally-created data from app to backend.
 
 ## Guardrails Against Over-Engineering
 

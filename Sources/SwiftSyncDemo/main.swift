@@ -33,7 +33,7 @@ struct SwiftSyncDemo {
                 payload: SwiftSyncFixtures.usersPayload,
                 as: DemoUser.self,
                 in: context,
-                options: SyncOptions(mode: .upsertOnly, dryRun: true)
+                options: SyncOptions(dryRun: true)
             )
             print("Sync completed")
         } catch {
