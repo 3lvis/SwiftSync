@@ -13,7 +13,7 @@ Lean roadmap focused on shipping inbound sync first.
 public enum SwiftSync {}
 
 public extension SwiftSync {
-  static func sync<Model: PersistentModel>(
+  static func sync<Model: SyncUpdatableModel>(
     payload: [Any],
     as model: Model.Type,
     in context: ModelContext,
@@ -22,7 +22,7 @@ public extension SwiftSync {
 }
 
 public extension ModelContext {
-  func sync<Model: PersistentModel>(
+  func sync<Model: SyncUpdatableModel>(
     _ payload: [Any],
     as model: Model.Type,
     options: SyncOptions = .init()
@@ -50,6 +50,11 @@ public struct SyncOptions: Sendable {
   public var batchSize: Int
   public var checkpoint: SyncCheckpoint?
 }
+
+public protocol SyncUpdatableModel: SyncModel {
+  static func make(from payload: SyncPayload) throws -> Self
+  func apply(_ payload: SyncPayload) throws -> Bool
+}
 ```
 
 ## Error Model
@@ -75,6 +80,7 @@ Included:
 1. Identity mapping for `id` / `remoteID`
 2. snake_case to camelCase mapping
 3. Changed-value writes only
+4. `SyncUpdatableModel` path for inserts/updates
 
 ## Milestone 2: Safe Replace
 

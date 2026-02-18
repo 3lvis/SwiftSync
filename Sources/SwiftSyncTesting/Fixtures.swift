@@ -5,14 +5,14 @@ public enum SwiftSyncFixtures {
         [
             [
                 "id": 1,
-                "name": "Ava Swift",
+                "full_name": "Ava Swift",
                 "email": "ava@example.com",
                 "created_at": "2026-02-18T00:00:00Z",
                 "updated_at": "2026-02-18T00:00:00Z"
             ],
             [
                 "id": 2,
-                "name": "Noah Sync",
+                "full_name": "Noah Sync",
                 "email": "noah@example.com",
                 "created_at": "2026-02-18T01:00:00Z",
                 "updated_at": "2026-02-18T01:00:00Z"

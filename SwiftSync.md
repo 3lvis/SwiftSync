@@ -27,7 +27,7 @@ Ship a reliable `sync` API first.
 public enum SwiftSync {}
 
 public extension SwiftSync {
-  static func sync<Model: PersistentModel>(
+  static func sync<Model: SyncUpdatableModel>(
     payload: [Any],
     as model: Model.Type,
     in context: ModelContext,
@@ -36,7 +36,7 @@ public extension SwiftSync {
 }
 
 public extension ModelContext {
-  func sync<Model: PersistentModel>(
+  func sync<Model: SyncUpdatableModel>(
     _ payload: [Any],
     as model: Model.Type,
     options: SyncOptions = .init()
@@ -51,6 +51,16 @@ public extension ModelContext {
 - `ConflictPolicy`
 - `DeleteScope`
 - `batchSize`
+
+## Model Contract (Milestone 1)
+
+Models participating in sync conform to `SyncUpdatableModel`:
+
+- declare identity key path
+- provide `make(from:)` for inserts
+- provide `apply(_:)` for updates (return `true` only if a value changed)
+
+`SyncPayload` provides snake_case/camelCase lookup and `id`/`remoteID` identity key conventions.
 
 ## Principles
 
@@ -81,11 +91,11 @@ try await SwiftSync.sync(
 
 ## Milestones
 
-### Milestone 0: Foundation (current)
+### Milestone 0: Foundation
 
 - Buildable package
 - Demo app scaffold
-- No-op sync stub
+- Basic sync wiring
 - Basic tests and CI
 
 ### Milestone 1: Inbound Happy Path
@@ -93,6 +103,7 @@ try await SwiftSync.sync(
 - snake_case -> camelCase mapping
 - identity mapping (`id`, `remoteID`)
 - real upsert behavior
+- write-on-change behavior
 
 ### Milestone 2: Safe Replace
 

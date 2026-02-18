@@ -1,19 +1,21 @@
 import Foundation
 import SwiftData
 import SwiftSyncCore
+import SwiftSyncMacros
 import SwiftSyncSwiftData
 import SwiftSyncTesting
 
+@Syncable
 @Model
 final class DemoUser {
     @Attribute(.unique) var id: Int
-    var name: String
+    var fullName: String
     var email: String
     var createdAt: Date
 
-    init(id: Int, name: String, email: String, createdAt: Date = .now) {
+    init(id: Int, fullName: String, email: String, createdAt: Date = .now) {
         self.id = id
-        self.name = name
+        self.fullName = fullName
         self.email = email
         self.createdAt = createdAt
     }
