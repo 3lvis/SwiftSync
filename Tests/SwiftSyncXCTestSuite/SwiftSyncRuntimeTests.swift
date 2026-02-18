@@ -94,10 +94,17 @@ extension RuntimeTeam: SyncRelationshipUpdatableModel {
             }
         }
 
-        if payload.contains("members"), let memberPayloads: [[String: Any]] = payload.value(for: "members") {
-            var desiredMembers: [RuntimeMember] = []
-            for memberPayload in memberPayloads {
-                desiredMembers.append(try upsertMember(from: memberPayload, in: context))
+        if payload.contains("members") {
+            let desiredMembers: [RuntimeMember]
+            if let memberPayloads: [[String: Any]] = payload.value(for: "members") {
+                var resolvedMembers: [RuntimeMember] = []
+                for memberPayload in memberPayloads {
+                    resolvedMembers.append(try upsertMember(from: memberPayload, in: context))
+                }
+                desiredMembers = resolvedMembers
+            } else {
+                // Explicit null for members means clear membership.
+                desiredMembers = []
             }
             if members.map(\.id) != desiredMembers.map(\.id) {
                 members = desiredMembers
@@ -232,6 +239,67 @@ final class SwiftSyncRuntimeTests: XCTestCase {
         XCTAssertEqual(teams.first?.name, "Platform Updated")
         XCTAssertEqual(teams.first?.owner?.id, 2)
         XCTAssertEqual(teams.first?.members.map(\.id), [2, 3])
+    }
+
+    @MainActor
+    func testSyncRelationshipsClearWithNullAndEmptyCollection() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeTeam.self, RuntimeMember.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let seedPayload: [Any] = [[
+            "id": 11,
+            "name": "Platform",
+            "owner": ["id": 1, "full_name": "Owner A"],
+            "members": [
+                ["id": 1, "full_name": "Owner A"],
+                ["id": 2, "full_name": "Member B"]
+            ]
+        ]]
+        try await SwiftSync.sync(payload: seedPayload, as: RuntimeTeam.self, in: context)
+
+        let clearPayload: [Any] = [[
+            "id": 11,
+            "name": "Platform",
+            "owner": NSNull(),
+            "members": []
+        ]]
+        try await SwiftSync.sync(payload: clearPayload, as: RuntimeTeam.self, in: context)
+
+        let teams = try context.fetch(FetchDescriptor<RuntimeTeam>())
+        XCTAssertEqual(teams.count, 1)
+        XCTAssertNil(teams.first?.owner)
+        XCTAssertEqual(teams.first?.members.count, 0)
+    }
+
+    @MainActor
+    func testSyncRelationshipsMissingKeysPreserveExistingLinks() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeTeam.self, RuntimeMember.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let seedPayload: [Any] = [[
+            "id": 12,
+            "name": "Platform",
+            "owner": ["id": 1, "full_name": "Owner A"],
+            "members": [
+                ["id": 1, "full_name": "Owner A"],
+                ["id": 2, "full_name": "Member B"]
+            ]
+        ]]
+        try await SwiftSync.sync(payload: seedPayload, as: RuntimeTeam.self, in: context)
+
+        let nameOnlyPayload: [Any] = [[
+            "id": 12,
+            "name": "Platform Renamed"
+        ]]
+        try await SwiftSync.sync(payload: nameOnlyPayload, as: RuntimeTeam.self, in: context)
+
+        let teams = try context.fetch(FetchDescriptor<RuntimeTeam>())
+        XCTAssertEqual(teams.count, 1)
+        XCTAssertEqual(teams.first?.name, "Platform Renamed")
+        XCTAssertEqual(teams.first?.owner?.id, 1)
+        XCTAssertEqual(Set(teams.first?.members.map(\.id) ?? []), Set([1, 2]))
     }
 
 }
