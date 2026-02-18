@@ -1,0 +1,322 @@
+import Foundation
+import SwiftData
+
+public enum SwiftSync {}
+
+public protocol SyncModel: PersistentModel {
+    associatedtype SyncID: Hashable & Codable & Sendable
+    static var syncIdentity: KeyPath<Self, SyncID> { get }
+}
+
+public protocol SyncSchemaProviding: PersistentModel {
+    static var syncSchema: SyncSchema<Self> { get }
+}
+
+public protocol SyncTransform: Sendable {
+    associatedtype Output: Sendable
+    func decode(_ remoteValue: Any) throws -> Output
+    func encode(_ localValue: Output) throws -> Any
+}
+
+public struct AnySyncTransform<Value: Sendable>: @unchecked Sendable {
+    private let decodeImpl: @Sendable (Any) throws -> Value
+    private let encodeImpl: @Sendable (Value) throws -> Any
+
+    public init<T: SyncTransform>(_ transform: T) where T.Output == Value {
+        self.decodeImpl = transform.decode
+        self.encodeImpl = transform.encode
+    }
+
+    public init(
+        decode: @escaping @Sendable (Any) throws -> Value,
+        encode: @escaping @Sendable (Value) throws -> Any
+    ) {
+        self.decodeImpl = decode
+        self.encodeImpl = encode
+    }
+
+    public func decode(_ remoteValue: Any) throws -> Value {
+        try decodeImpl(remoteValue)
+    }
+
+    public func encode(_ localValue: Value) throws -> Any {
+        try encodeImpl(localValue)
+    }
+}
+
+public enum BuiltInTransforms {
+    public static var iso8601Date: AnySyncTransform<Date> {
+        AnySyncTransform<Date>(
+            decode: { any in
+                guard let value = any as? String else {
+                    throw SyncError.invalidPayload(model: "Date", reason: "Expected ISO-8601 string")
+                }
+                guard let date = ISO8601DateFormatter().date(from: value) else {
+                    throw SyncError.invalidPayload(model: "Date", reason: "Invalid ISO-8601 date")
+                }
+                return date
+            },
+            encode: { value in
+                ISO8601DateFormatter().string(from: value)
+            }
+        )
+    }
+
+    public static var unixTimestampDate: AnySyncTransform<Date> {
+        AnySyncTransform<Date>(
+            decode: { any in
+                if let seconds = any as? TimeInterval {
+                    return Date(timeIntervalSince1970: seconds)
+                }
+                if let intSeconds = any as? Int {
+                    return Date(timeIntervalSince1970: TimeInterval(intSeconds))
+                }
+                throw SyncError.invalidPayload(model: "Date", reason: "Expected unix timestamp")
+            },
+            encode: { value in
+                Int(value.timeIntervalSince1970)
+            }
+        )
+    }
+
+    public static var urlString: AnySyncTransform<URL> {
+        AnySyncTransform<URL>(
+            decode: { any in
+                guard let value = any as? String, let url = URL(string: value) else {
+                    throw SyncError.invalidPayload(model: "URL", reason: "Expected URL string")
+                }
+                return url
+            },
+            encode: { value in
+                value.absoluteString
+            }
+        )
+    }
+
+    public static var uuidString: AnySyncTransform<UUID> {
+        AnySyncTransform<UUID>(
+            decode: { any in
+                guard let value = any as? String, let uuid = UUID(uuidString: value) else {
+                    throw SyncError.invalidPayload(model: "UUID", reason: "Expected UUID string")
+                }
+                return uuid
+            },
+            encode: { value in
+                value.uuidString
+            }
+        )
+    }
+
+    public static var decimalString: AnySyncTransform<Decimal> {
+        AnySyncTransform<Decimal>(
+            decode: { any in
+                guard let value = any as? String, let decimal = Decimal(string: value) else {
+                    throw SyncError.invalidPayload(model: "Decimal", reason: "Expected decimal string")
+                }
+                return decimal
+            },
+            encode: { value in
+                NSDecimalNumber(decimal: value).stringValue
+            }
+        )
+    }
+}
+
+public enum SyncMode: Sendable, Equatable {
+    case upsertOnly
+    case fullReplace
+    case insertOnly
+    case updateOnly
+    case custom(insert: Bool, update: Bool, delete: Bool)
+}
+
+public enum RelationshipMode: Sendable, Equatable {
+    case sync
+    case upsertWithoutDelete
+    case ignore
+}
+
+public enum ConflictPolicy: Sendable, Equatable {
+    case serverWins
+    case clientWins
+    case latestTimestamp(remote: String, local: String)
+    case mergeNonNil
+    case custom(name: String)
+}
+
+public struct DeleteScope: Sendable {
+    public let descriptor: String
+
+    private init(descriptor: String) {
+        self.descriptor = descriptor
+    }
+
+    public static var none: DeleteScope { .init(descriptor: "none") }
+
+    public static func byRemoteQuery(_ queryName: String) -> DeleteScope {
+        .init(descriptor: "remoteQuery:\(queryName)")
+    }
+
+    public static func byPredicateDescription(_ description: String) -> DeleteScope {
+        .init(descriptor: "predicate:\(description)")
+    }
+}
+
+public struct SyncCheckpoint: Codable, Hashable, Sendable {
+    public var stream: String
+    public var token: String
+    public var updatedAt: Date
+
+    public init(stream: String, token: String, updatedAt: Date) {
+        self.stream = stream
+        self.token = token
+        self.updatedAt = updatedAt
+    }
+}
+
+public struct SyncOptions: Sendable {
+    public var mode: SyncMode
+    public var relationshipMode: RelationshipMode
+    public var conflictPolicy: ConflictPolicy
+    public var deleteScope: DeleteScope
+    public var dryRun: Bool
+    public var batchSize: Int
+    public var checkpoint: SyncCheckpoint?
+
+    public init(
+        mode: SyncMode = .upsertOnly,
+        relationshipMode: RelationshipMode = .sync,
+        conflictPolicy: ConflictPolicy = .serverWins,
+        deleteScope: DeleteScope = .none,
+        dryRun: Bool = false,
+        batchSize: Int = 500,
+        checkpoint: SyncCheckpoint? = nil
+    ) {
+        self.mode = mode
+        self.relationshipMode = relationshipMode
+        self.conflictPolicy = conflictPolicy
+        self.deleteScope = deleteScope
+        self.dryRun = dryRun
+        self.batchSize = max(1, batchSize)
+        self.checkpoint = checkpoint
+    }
+}
+
+public struct SyncPolicy<Model: PersistentModel>: @unchecked Sendable {
+    public var onWillInsert: (@Sendable ([String: Any]) throws -> [String: Any])?
+    public var onWillUpdate: (@Sendable ([String: Any]) throws -> [String: Any])?
+    public var onDidApply: (@Sendable (Model) -> Void)?
+    public var onConflict: (@Sendable (_ local: Model, _ remote: [String: Any]) throws -> Void)?
+
+    public init() {}
+}
+
+public enum SyncError: Error, Sendable {
+    case missingIdentity(model: String, key: String)
+    case duplicateIdentity(model: String, identity: String)
+    case unsupportedTransform(model: String, key: String)
+    case unsafeDeleteScope(model: String)
+    case schemaDrift(model: String, key: String)
+    case conflictResolutionFailed(model: String, identity: String)
+    case invalidPayload(model: String, reason: String)
+}
+
+public struct SyncSchema<Model: PersistentModel>: Sendable {
+    public struct Field: Sendable {
+        public enum Kind: Sendable {
+            case identity
+            case required
+            case optional
+            case toOne
+            case toMany
+        }
+
+        public var kind: Kind
+        public var localPath: String
+        public var remoteKey: String
+
+        public init(kind: Kind, localPath: String, remoteKey: String) {
+            self.kind = kind
+            self.localPath = localPath
+            self.remoteKey = remoteKey
+        }
+    }
+
+    public var fields: [Field]
+    public var policyValue: SyncPolicy<Model>?
+
+    public init() {
+        self.fields = []
+        self.policyValue = nil
+    }
+
+    public func identity<ID: Hashable & Sendable>(
+        _ keyPath: KeyPath<Model, ID>,
+        remote: String
+    ) -> Self {
+        var copy = self
+        copy.fields.append(.init(kind: .identity, localPath: String(describing: keyPath), remoteKey: remote))
+        return copy
+    }
+
+    public func field<Value: Sendable>(
+        _ keyPath: KeyPath<Model, Value>,
+        remote: String,
+        transform: AnySyncTransform<Value>? = nil
+    ) -> Self {
+        _ = transform
+        var copy = self
+        copy.fields.append(.init(kind: .required, localPath: String(describing: keyPath), remoteKey: remote))
+        return copy
+    }
+
+    public func optionalField<Value: Sendable>(
+        _ keyPath: KeyPath<Model, Value?>,
+        remote: String,
+        transform: AnySyncTransform<Value>? = nil
+    ) -> Self {
+        _ = transform
+        var copy = self
+        copy.fields.append(.init(kind: .optional, localPath: String(describing: keyPath), remoteKey: remote))
+        return copy
+    }
+
+    public func toOne<Child: PersistentModel>(
+        _ keyPath: KeyPath<Model, Child?>,
+        remoteObject: String? = nil,
+        remoteID: String? = nil
+    ) -> Self {
+        _ = keyPath
+        var copy = self
+        if let remoteObject {
+            copy.fields.append(.init(kind: .toOne, localPath: String(describing: keyPath), remoteKey: remoteObject))
+        }
+        if let remoteID {
+            copy.fields.append(.init(kind: .toOne, localPath: String(describing: keyPath), remoteKey: remoteID))
+        }
+        return copy
+    }
+
+    public func toMany<Child: PersistentModel>(
+        _ keyPath: KeyPath<Model, [Child]>,
+        remoteObjects: String? = nil,
+        remoteIDs: String? = nil,
+        ordered: Bool = false
+    ) -> Self {
+        _ = ordered
+        var copy = self
+        if let remoteObjects {
+            copy.fields.append(.init(kind: .toMany, localPath: String(describing: keyPath), remoteKey: remoteObjects))
+        }
+        if let remoteIDs {
+            copy.fields.append(.init(kind: .toMany, localPath: String(describing: keyPath), remoteKey: remoteIDs))
+        }
+        return copy
+    }
+
+    public func policy(_ policy: SyncPolicy<Model>) -> Self {
+        var copy = self
+        copy.policyValue = policy
+        return copy
+    }
+}

@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+
+# SwiftPM
+/.build/
+/.swiftpm/
+/Packages/
+Package.resolved
+
+# Xcode user data
+xcuserdata/
+*.xcuserdatad/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+DerivedData/
+
+# Logs and caches
+*.log
+
+# Secrets
+.env
+.env.*
+.netrc
