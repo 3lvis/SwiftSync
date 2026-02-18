@@ -37,12 +37,22 @@ public extension SwiftSync {
                 if try row.apply(payloadModel) {
                     changed = true
                 }
+                if let relationshipRow = row as? any SyncRelationshipUpdatableModel {
+                    if try await relationshipRow.applyRelationships(payloadModel, in: context, options: options) {
+                        changed = true
+                    }
+                }
                 continue
             }
 
             if options.dryRun { continue }
             let created = try Model.make(from: payloadModel)
             context.insert(created)
+            if let relationshipRow = created as? any SyncRelationshipUpdatableModel {
+                if try await relationshipRow.applyRelationships(payloadModel, in: context, options: options) {
+                    changed = true
+                }
+            }
             index[key] = created
             changed = true
         }

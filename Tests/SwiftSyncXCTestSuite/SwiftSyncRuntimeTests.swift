@@ -28,6 +28,115 @@ final class RuntimeRemoteUser {
     }
 }
 
+@Syncable
+@Model
+final class RuntimeMember {
+    @Attribute(.unique) var id: Int
+    var fullName: String
+
+    init(id: Int, fullName: String) {
+        self.id = id
+        self.fullName = fullName
+    }
+}
+
+@Model
+final class RuntimeTeam {
+    @Attribute(.unique) var id: Int
+    var name: String
+    var owner: RuntimeMember?
+    var members: [RuntimeMember]
+
+    init(id: Int, name: String, owner: RuntimeMember? = nil, members: [RuntimeMember] = []) {
+        self.id = id
+        self.name = name
+        self.owner = owner
+        self.members = members
+    }
+}
+
+extension RuntimeTeam: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<RuntimeTeam, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> RuntimeTeam {
+        RuntimeTeam(
+            id: try payload.required(Int.self, for: "id"),
+            name: try payload.required(String.self, for: "name")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        let incomingName: String = try payload.required(String.self, for: "name")
+        if name != incomingName {
+            name = incomingName
+            return true
+        }
+        return false
+    }
+}
+
+extension RuntimeTeam: SyncRelationshipUpdatableModel {
+    func applyRelationships(_ payload: SyncPayload, in context: ModelContext, options: SyncOptions) async throws -> Bool {
+        guard options.relationshipMode != .ignore else { return false }
+
+        var changed = false
+
+        if payload.contains("owner") {
+            let nextOwner: RuntimeMember?
+            if let ownerPayload: [String: Any] = payload.value(for: "owner") {
+                nextOwner = try upsertMember(from: ownerPayload, in: context)
+            } else {
+                nextOwner = nil
+            }
+
+            if owner?.id != nextOwner?.id {
+                owner = nextOwner
+                changed = true
+            }
+        }
+
+        if payload.contains("members"), let memberPayloads: [[String: Any]] = payload.value(for: "members") {
+            var desiredMembers: [RuntimeMember] = []
+            for memberPayload in memberPayloads {
+                desiredMembers.append(try upsertMember(from: memberPayload, in: context))
+            }
+
+            switch options.relationshipMode {
+            case .sync:
+                if members.map(\.id) != desiredMembers.map(\.id) {
+                    members = desiredMembers
+                    changed = true
+                }
+            case .upsertWithoutDelete:
+                let existingIDs = Set(members.map(\.id))
+                let additions = desiredMembers.filter { !existingIDs.contains($0.id) }
+                if !additions.isEmpty {
+                    members.append(contentsOf: additions)
+                    changed = true
+                }
+            case .ignore:
+                break
+            }
+        }
+
+        return changed
+    }
+
+    private func upsertMember(from payload: [String: Any], in context: ModelContext) throws -> RuntimeMember {
+        let syncPayload = SyncPayload(values: payload)
+        let memberID: Int = try syncPayload.required(Int.self, for: "id")
+        let allMembers = try context.fetch(FetchDescriptor<RuntimeMember>())
+        if let existing = allMembers.first(where: { $0.id == memberID }) {
+            _ = try existing.apply(syncPayload)
+            return existing
+        }
+        let created = try RuntimeMember.make(from: syncPayload)
+        context.insert(created)
+        return created
+    }
+}
+
 final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncInsertsThenUpdatesByID() async throws {
@@ -103,5 +212,115 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                 return
             }
         }
+    }
+
+    @MainActor
+    func testSyncRelationshipsApplyToOneAndToMany() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeTeam.self, RuntimeMember.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let seedPayload: [Any] = [[
+            "id": 10,
+            "name": "Platform",
+            "owner": ["id": 1, "full_name": "Owner A"],
+            "members": [
+                ["id": 1, "full_name": "Owner A"],
+                ["id": 2, "full_name": "Member B"]
+            ]
+        ]]
+        try await SwiftSync.sync(payload: seedPayload, as: RuntimeTeam.self, in: context)
+
+        let updatePayload: [Any] = [[
+            "id": 10,
+            "name": "Platform Updated",
+            "owner": ["id": 2, "full_name": "Member B Updated"],
+            "members": [
+                ["id": 2, "full_name": "Member B Updated"],
+                ["id": 3, "full_name": "Member C"]
+            ]
+        ]]
+        try await SwiftSync.sync(payload: updatePayload, as: RuntimeTeam.self, in: context)
+
+        let teams = try context.fetch(FetchDescriptor<RuntimeTeam>())
+        XCTAssertEqual(teams.count, 1)
+        XCTAssertEqual(teams.first?.name, "Platform Updated")
+        XCTAssertEqual(teams.first?.owner?.id, 2)
+        XCTAssertEqual(teams.first?.members.map(\.id), [2, 3])
+    }
+
+    @MainActor
+    func testSyncRelationshipsUpsertWithoutDeleteKeepsExistingToManyLinks() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeTeam.self, RuntimeMember.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let seedPayload: [Any] = [[
+            "id": 20,
+            "name": "Core",
+            "members": [
+                ["id": 1, "full_name": "One"],
+                ["id": 2, "full_name": "Two"]
+            ]
+        ]]
+        try await SwiftSync.sync(payload: seedPayload, as: RuntimeTeam.self, in: context)
+
+        let updatePayload: [Any] = [[
+            "id": 20,
+            "name": "Core",
+            "members": [
+                ["id": 2, "full_name": "Two Updated"],
+                ["id": 3, "full_name": "Three"]
+            ]
+        ]]
+        try await SwiftSync.sync(
+            payload: updatePayload,
+            as: RuntimeTeam.self,
+            in: context,
+            options: SyncOptions(relationshipMode: .upsertWithoutDelete)
+        )
+
+        let teams = try context.fetch(FetchDescriptor<RuntimeTeam>())
+        XCTAssertEqual(teams.count, 1)
+        XCTAssertEqual(Set(teams.first?.members.map(\.id) ?? []), Set([1, 2, 3]))
+    }
+
+    @MainActor
+    func testSyncRelationshipsIgnoreLeavesRelationshipsUntouched() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeTeam.self, RuntimeMember.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let seedPayload: [Any] = [[
+            "id": 30,
+            "name": "Infra",
+            "owner": ["id": 1, "full_name": "Owner A"],
+            "members": [
+                ["id": 1, "full_name": "Owner A"],
+                ["id": 2, "full_name": "Member B"]
+            ]
+        ]]
+        try await SwiftSync.sync(payload: seedPayload, as: RuntimeTeam.self, in: context)
+
+        let updatePayload: [Any] = [[
+            "id": 30,
+            "name": "Infra Updated",
+            "owner": ["id": 3, "full_name": "Owner C"],
+            "members": [
+                ["id": 3, "full_name": "Owner C"]
+            ]
+        ]]
+        try await SwiftSync.sync(
+            payload: updatePayload,
+            as: RuntimeTeam.self,
+            in: context,
+            options: SyncOptions(relationshipMode: .ignore)
+        )
+
+        let teams = try context.fetch(FetchDescriptor<RuntimeTeam>())
+        XCTAssertEqual(teams.count, 1)
+        XCTAssertEqual(teams.first?.name, "Infra Updated")
+        XCTAssertEqual(teams.first?.owner?.id, 1)
+        XCTAssertEqual(Set(teams.first?.members.map(\.id) ?? []), Set([1, 2]))
     }
 }

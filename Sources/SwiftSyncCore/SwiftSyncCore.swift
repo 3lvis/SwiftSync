@@ -22,6 +22,10 @@ public protocol SyncUpdatableModel: SyncModel {
     func apply(_ payload: SyncPayload) throws -> Bool
 }
 
+public protocol SyncRelationshipUpdatableModel: SyncUpdatableModel {
+    func applyRelationships(_ payload: SyncPayload, in context: ModelContext, options: SyncOptions) async throws -> Bool
+}
+
 public struct SyncPayload {
     public let values: [String: Any]
 

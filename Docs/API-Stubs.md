@@ -12,6 +12,7 @@ This package ships a minimal but functional Milestone 1 inbound sync API.
 ## Runtime behavior in this milestone
 
 - `SwiftSync.sync`: applies source-of-truth payload diff sync (insert/update/delete) for models conforming to `SyncUpdatableModel`.
+- Relationship-aware models can also conform to `SyncRelationshipUpdatableModel` to apply to-one/to-many updates in the same sync pass.
 
 ## Macro usage
 

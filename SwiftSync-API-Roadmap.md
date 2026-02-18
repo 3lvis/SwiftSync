@@ -83,6 +83,10 @@ Included:
 Shippable:
 - Practical to-one/to-many sync support
 
+Included:
+1. Relationship application hook via `SyncRelationshipUpdatableModel`
+2. Support for `.sync`, `.upsertWithoutDelete`, and `.ignore` relationship modes
+
 ## Milestone 3: Hardening
 
 Shippable:

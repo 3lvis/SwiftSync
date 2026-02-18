@@ -62,6 +62,8 @@ Models participating in sync conform to `SyncUpdatableModel`:
 
 `SyncPayload` provides snake_case/camelCase lookup and `id`/`remoteID` identity key conventions.
 
+For relationship updates, models can additionally conform to `SyncRelationshipUpdatableModel` and apply to-one/to-many changes during the same sync run.
+
 ## Principles
 
 1. Keep API small.
@@ -108,6 +110,7 @@ try await SwiftSync.sync(
 ### Milestone 2: Relationships
 
 - common to-one and to-many behavior
+- `SyncRelationshipUpdatableModel` hook for relationship diff application
 
 ### Milestone 3: Hardening
 
