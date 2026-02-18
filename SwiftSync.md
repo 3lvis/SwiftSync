@@ -41,7 +41,7 @@ Models participating in sync conform to `SyncUpdatableModel`:
 
 - declare identity key path
 - provide `make(from:)` for inserts
-- provide `apply(_:)` for updates (return `true` only if a value changed)
+- provide `apply(_:)` for updates with field-by-field comparison (return `true` only if a value changed)
 
 `SyncPayload` provides snake_case/camelCase lookup and `id`/`remoteID` identity key conventions.
 
@@ -87,7 +87,7 @@ try await SwiftSync.sync(
 - snake_case -> camelCase mapping
 - identity mapping (`id`, `remoteID`)
 - source-of-truth diff behavior (insert/update/delete)
-- write-on-change behavior
+- write-on-change behavior via field-by-field comparison for matching identities
 
 ### Milestone 2: Relationships
 

@@ -130,6 +130,26 @@ extension RuntimeTeam: SyncRelationshipUpdatableModel {
 }
 
 final class SwiftSyncRuntimeTests: XCTestCase {
+    func testApplyReturnsFalseWhenPayloadMatchesExistingValues() throws {
+        let user = RuntimeUser(id: 1, fullName: "Ava Swift")
+        let payload = SyncPayload(values: ["id": 1, "full_name": "Ava Swift"])
+
+        let changed = try user.apply(payload)
+
+        XCTAssertFalse(changed)
+        XCTAssertEqual(user.fullName, "Ava Swift")
+    }
+
+    func testApplyReturnsTrueWhenAnyFieldDiffers() throws {
+        let user = RuntimeUser(id: 1, fullName: "Ava Swift")
+        let payload = SyncPayload(values: ["id": 1, "full_name": "Ava Updated"])
+
+        let changed = try user.apply(payload)
+
+        XCTAssertTrue(changed)
+        XCTAssertEqual(user.fullName, "Ava Updated")
+    }
+
     @MainActor
     func testSyncInsertsThenUpdatesByID() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)

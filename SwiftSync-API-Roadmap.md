@@ -52,7 +52,7 @@ Shippable:
 Included:
 1. Identity mapping for `id` / `remoteID`
 2. snake_case to camelCase mapping
-3. Changed-value writes only
+3. Changed-value writes only (field-by-field comparison for matching identities)
 4. `SyncUpdatableModel` path for inserts/updates/deletes via payload diff
 
 ## Milestone 2: Relationship Basics
