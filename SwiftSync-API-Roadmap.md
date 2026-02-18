@@ -19,13 +19,6 @@ public extension SwiftSync {
     in context: ModelContext
   ) async throws
 }
-
-public extension ModelContext {
-  func sync<Model: SyncUpdatableModel>(
-    _ payload: [Any],
-    as model: Model.Type
-  ) async throws
-}
 ```
 
 ## Core Types (current)

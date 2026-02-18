@@ -93,12 +93,3 @@ public extension SwiftSync {
     }
 
 }
-
-public extension ModelContext {
-    func sync<Model: SyncUpdatableModel>(
-        _ payload: [Any],
-        as model: Model.Type
-    ) async throws {
-        try await SwiftSync.sync(payload: payload, as: model, in: self)
-    }
-}
