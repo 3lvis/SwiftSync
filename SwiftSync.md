@@ -46,9 +46,6 @@ public extension ModelContext {
 
 ## Options We Keep
 
-- `SyncStrategy` (`payloadSourceOfTruthDiff`)
-- `RelationshipMode`
-- `ConflictPolicy`
 - `DeleteScope`
 - `batchSize`
 
@@ -86,8 +83,7 @@ This can evolve internally without growing public surface area.
 try await SwiftSync.sync(
   payload: usersPayload,
   as: User.self,
-  in: modelContext,
-  options: .init(strategy: .payloadSourceOfTruthDiff)
+  in: modelContext
 )
 ```
 

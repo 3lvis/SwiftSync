@@ -1,7 +1,7 @@
-import SwiftCompilerPlugin
 import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
+import SwiftCompilerPlugin
 
 private struct SyncedProperty {
     let name: String

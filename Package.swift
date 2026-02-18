@@ -12,8 +12,7 @@ let package = Package(
         .library(name: "SwiftSyncCore", targets: ["SwiftSyncCore"]),
         .library(name: "SwiftSyncSwiftData", targets: ["SwiftSyncSwiftData"]),
         .library(name: "SwiftSyncMacros", targets: ["SwiftSyncMacros"]),
-        .library(name: "SwiftSyncTesting", targets: ["SwiftSyncTesting"]),
-        .executable(name: "SwiftSyncDemo", targets: ["SwiftSyncDemo"])
+        .library(name: "SwiftSyncTesting", targets: ["SwiftSyncTesting"])
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0-latest")
@@ -40,10 +39,6 @@ let package = Package(
         .target(
             name: "SwiftSyncTesting",
             dependencies: ["SwiftSyncCore"]
-        ),
-        .executableTarget(
-            name: "SwiftSyncDemo",
-            dependencies: ["SwiftSyncCore", "SwiftSyncSwiftData", "SwiftSyncTesting", "SwiftSyncMacros"]
         ),
         .testTarget(
             name: "SwiftSyncCoreTests",

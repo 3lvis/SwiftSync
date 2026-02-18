@@ -219,25 +219,6 @@ public enum BuiltInTransforms {
     }
 }
 
-public enum SyncStrategy: Sendable, Equatable {
-    /// Payload is the source of truth: insert missing, update existing, delete stale local rows.
-    case payloadSourceOfTruthDiff
-}
-
-public enum RelationshipMode: Sendable, Equatable {
-    case sync
-    case upsertWithoutDelete
-    case ignore
-}
-
-public enum ConflictPolicy: Sendable, Equatable {
-    case serverWins
-    case clientWins
-    case latestTimestamp(remote: String, local: String)
-    case mergeNonNil
-    case custom(name: String)
-}
-
 public struct DeleteScope: Sendable {
     public let descriptor: String
 
@@ -269,26 +250,17 @@ public struct SyncCheckpoint: Codable, Hashable, Sendable {
 }
 
 public struct SyncOptions: Sendable {
-    public var strategy: SyncStrategy
-    public var relationshipMode: RelationshipMode
-    public var conflictPolicy: ConflictPolicy
     public var deleteScope: DeleteScope
     public var dryRun: Bool
     public var batchSize: Int
     public var checkpoint: SyncCheckpoint?
 
     public init(
-        strategy: SyncStrategy = .payloadSourceOfTruthDiff,
-        relationshipMode: RelationshipMode = .sync,
-        conflictPolicy: ConflictPolicy = .serverWins,
         deleteScope: DeleteScope = .none,
         dryRun: Bool = false,
         batchSize: Int = 500,
         checkpoint: SyncCheckpoint? = nil
     ) {
-        self.strategy = strategy
-        self.relationshipMode = relationshipMode
-        self.conflictPolicy = conflictPolicy
         self.deleteScope = deleteScope
         self.dryRun = dryRun
         self.batchSize = max(1, batchSize)

@@ -2,11 +2,9 @@ import Testing
 @testable import SwiftSyncCore
 
 struct SwiftSyncCoreTests {
-    @Test("SyncOptions defaults to payload source-of-truth diff")
+    @Test("SyncOptions defaults remain stable")
     func syncOptionsDefaults() {
         let options = SyncOptions()
-        #expect(options.strategy == .payloadSourceOfTruthDiff)
-        #expect(options.relationshipMode == .sync)
         #expect(options.batchSize == 500)
         #expect(options.dryRun == false)
     }

@@ -45,8 +45,8 @@ public extension ModelContext {
 }
 ```
 
-## Demo
+## Validation
 
 ```bash
-swift run SwiftSyncDemo
+swift test
 ```

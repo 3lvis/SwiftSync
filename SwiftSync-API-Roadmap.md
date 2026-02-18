@@ -33,14 +33,7 @@ public extension ModelContext {
 ## Core Types (current)
 
 ```swift
-public enum SyncStrategy: Sendable {
-  case payloadSourceOfTruthDiff
-}
-
 public struct SyncOptions: Sendable {
-  public var strategy: SyncStrategy
-  public var relationshipMode: RelationshipMode
-  public var conflictPolicy: ConflictPolicy
   public var deleteScope: DeleteScope
   public var dryRun: Bool
   public var batchSize: Int
@@ -85,7 +78,7 @@ Shippable:
 
 Included:
 1. Relationship application hook via `SyncRelationshipUpdatableModel`
-2. Support for `.sync`, `.upsertWithoutDelete`, and `.ignore` relationship modes
+2. Source-of-truth replacement semantics for relationship payloads
 
 ## Milestone 3: Hardening
 
