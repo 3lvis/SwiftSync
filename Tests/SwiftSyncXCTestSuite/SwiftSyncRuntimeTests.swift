@@ -77,7 +77,7 @@ extension RuntimeTeam: SyncUpdatableModel {
 }
 
 extension RuntimeTeam: SyncRelationshipUpdatableModel {
-    func applyRelationships(_ payload: SyncPayload, in context: ModelContext, options _: SyncOptions) async throws -> Bool {
+    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         var changed = false
 
         if payload.contains("owner") {

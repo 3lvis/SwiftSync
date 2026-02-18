@@ -2,17 +2,18 @@ import Testing
 @testable import SwiftSyncCore
 
 struct SwiftSyncCoreTests {
-    @Test("SyncOptions defaults remain stable")
-    func syncOptionsDefaults() {
-        let options = SyncOptions()
-        #expect(options.batchSize == 500)
-        #expect(options.dryRun == false)
+    @Test("SyncPayload supports id and remoteID conventions")
+    func payloadIdentityConventions() throws {
+        let payload = SyncPayload(values: ["id": 42])
+        let remoteID: Int? = payload.value(for: "remoteID")
+        #expect(remoteID == 42)
     }
 
-    @Test("DeleteScope descriptors remain stable")
-    func deleteScopeDescriptors() {
-        #expect(DeleteScope.none.descriptor == "none")
-        #expect(DeleteScope.byRemoteQuery("users:index").descriptor == "remoteQuery:users:index")
-        #expect(DeleteScope.byPredicateDescription("team == 1").descriptor == "predicate:team == 1")
+    @Test("SyncPayload throws for missing required keys")
+    func payloadRequiredThrows() {
+        let payload = SyncPayload(values: [:])
+        #expect(throws: SyncError.self) {
+            let _: Int = try payload.required(Int.self, for: "id")
+        }
     }
 }

@@ -6,8 +6,7 @@ public extension SwiftSync {
     static func sync<Model: SyncUpdatableModel>(
         payload: [Any],
         as model: Model.Type,
-        in context: ModelContext,
-        options: SyncOptions = .init()
+        in context: ModelContext
     ) async throws {
         _ = model
 
@@ -33,23 +32,21 @@ public extension SwiftSync {
             seenKeys.insert(key)
 
             if let row = index[key] {
-                if options.dryRun { continue }
                 if try row.apply(payloadModel) {
                     changed = true
                 }
                 if let relationshipRow = row as? any SyncRelationshipUpdatableModel {
-                    if try await relationshipRow.applyRelationships(payloadModel, in: context, options: options) {
+                    if try await relationshipRow.applyRelationships(payloadModel, in: context) {
                         changed = true
                     }
                 }
                 continue
             }
 
-            if options.dryRun { continue }
             let created = try Model.make(from: payloadModel)
             context.insert(created)
             if let relationshipRow = created as? any SyncRelationshipUpdatableModel {
-                if try await relationshipRow.applyRelationships(payloadModel, in: context, options: options) {
+                if try await relationshipRow.applyRelationships(payloadModel, in: context) {
                     changed = true
                 }
             }
@@ -58,7 +55,6 @@ public extension SwiftSync {
         }
 
         for (key, row) in index where !seenKeys.contains(key) {
-            if options.dryRun { continue }
             context.delete(row)
             changed = true
         }
@@ -101,9 +97,8 @@ public extension SwiftSync {
 public extension ModelContext {
     func sync<Model: SyncUpdatableModel>(
         _ payload: [Any],
-        as model: Model.Type,
-        options: SyncOptions = .init()
+        as model: Model.Type
     ) async throws {
-        try await SwiftSync.sync(payload: payload, as: model, in: self, options: options)
+        try await SwiftSync.sync(payload: payload, as: model, in: self)
     }
 }

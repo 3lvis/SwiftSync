@@ -16,16 +16,14 @@ public extension SwiftSync {
   static func sync<Model: SyncUpdatableModel>(
     payload: [Any],
     as model: Model.Type,
-    in context: ModelContext,
-    options: SyncOptions = .init()
+    in context: ModelContext
   ) async throws
 }
 
 public extension ModelContext {
   func sync<Model: SyncUpdatableModel>(
     _ payload: [Any],
-    as model: Model.Type,
-    options: SyncOptions = .init()
+    as model: Model.Type
   ) async throws
 }
 ```
@@ -33,13 +31,6 @@ public extension ModelContext {
 ## Core Types (current)
 
 ```swift
-public struct SyncOptions: Sendable {
-  public var deleteScope: DeleteScope
-  public var dryRun: Bool
-  public var batchSize: Int
-  public var checkpoint: SyncCheckpoint?
-}
-
 public protocol SyncUpdatableModel: SyncModel {
   static func make(from payload: SyncPayload) throws -> Self
   func apply(_ payload: SyncPayload) throws -> Bool

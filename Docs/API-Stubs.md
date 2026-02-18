@@ -4,7 +4,7 @@ This package ships a minimal but functional Milestone 1 inbound sync API.
 
 ## Modules
 
-- `SwiftSyncCore`: schema and sync option primitives.
+- `SwiftSyncCore`: sync model contracts, payload decoding, and typed errors.
 - `SwiftSyncSwiftData`: `SwiftSync.sync` and `ModelContext.sync`.
 - `SwiftSyncMacros`: `@Syncable` macro that generates `SyncUpdatableModel` boilerplate.
 - `SwiftSyncTesting`: mocked payload fixtures.
@@ -31,16 +31,14 @@ public extension SwiftSync {
     static func sync<Model: SyncUpdatableModel>(
         payload: [Any],
         as model: Model.Type,
-        in context: ModelContext,
-        options: SyncOptions = .init()
+        in context: ModelContext
     ) async throws
 }
 
 public extension ModelContext {
     func sync<Model: SyncUpdatableModel>(
         _ payload: [Any],
-        as model: Model.Type,
-        options: SyncOptions = .init()
+        as model: Model.Type
     ) async throws
 }
 ```

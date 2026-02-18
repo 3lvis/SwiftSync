@@ -30,24 +30,17 @@ public extension SwiftSync {
   static func sync<Model: SyncUpdatableModel>(
     payload: [Any],
     as model: Model.Type,
-    in context: ModelContext,
-    options: SyncOptions = .init()
+    in context: ModelContext
   ) async throws
 }
 
 public extension ModelContext {
   func sync<Model: SyncUpdatableModel>(
     _ payload: [Any],
-    as model: Model.Type,
-    options: SyncOptions = .init()
+    as model: Model.Type
   ) async throws
 }
 ```
-
-## Options We Keep
-
-- `DeleteScope`
-- `batchSize`
 
 ## Model Contract (Milestone 1)
 
