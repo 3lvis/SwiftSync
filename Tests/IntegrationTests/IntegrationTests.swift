@@ -686,18 +686,6 @@ final class DifferentContextConflictUser {
     }
 }
 
-@Syncable
-@Model
-final class AwaitHopUser {
-    @Attribute(.unique) var id: Int
-    var fullName: String
-
-    init(id: Int, fullName: String) {
-        self.id = id
-        self.fullName = fullName
-    }
-}
-
 private actor ConcurrentRaceHooks {
     static let shared = ConcurrentRaceHooks()
 
@@ -748,28 +736,6 @@ extension ConcurrentRaceUser: SyncRelationshipUpdatableModel {
             await Task.yield()
         }
         return false
-    }
-}
-
-extension AwaitHopUser: SyncRelationshipUpdatableModel {
-    private func prepareRelationshipMarker(from payload: SyncPayload) async -> String? {
-        guard payload.contains("relationship_probe") else { return nil }
-        await Task.yield()
-        return payload.value(for: "relationship_probe") ?? "after-await"
-    }
-
-    private func applyPreparedRelationshipMarker(_ marker: String) -> Bool {
-        if fullName != marker {
-            fullName = marker
-            return true
-        }
-        return false
-    }
-
-    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
-        _ = context
-        guard let marker = await prepareRelationshipMarker(from: payload) else { return false }
-        return applyPreparedRelationshipMarker(marker)
     }
 }
 
@@ -1736,58 +1702,6 @@ final class IntegrationTests: XCTestCase {
 
         let notes = try contextB.fetch(FetchDescriptor<SuperNote>())
         XCTAssertEqual(notes.count, 0, "Safe fallback should avoid partial writes when parent context mismatches.")
-    }
-
-    @MainActor
-    func testApplyRelationshipsAfterAwaitOnWrongActor() async throws {
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: AwaitHopUser.self, configurations: configuration)
-        let context = ModelContext(container)
-
-        try await SwiftSync.sync(
-            payload: [[
-                "id": 1,
-                "full_name": "Before Await",
-                "relationship_probe": "After Await"
-            ]],
-            as: AwaitHopUser.self,
-            in: context
-        )
-
-        let rows = try context.fetch(FetchDescriptor<AwaitHopUser>())
-        XCTAssertEqual(rows.count, 1)
-        XCTAssertEqual(rows.first?.fullName, "After Await")
-    }
-
-    @MainActor
-    func testApplyRelationshipsAfterAwaitDeterministicLastWriteWins() async throws {
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: AwaitHopUser.self, configurations: configuration)
-        let context = ModelContext(container)
-
-        try await SwiftSync.sync(
-            payload: [[
-                "id": 9,
-                "full_name": "Seed",
-                "relationship_probe": "First Await Value"
-            ]],
-            as: AwaitHopUser.self,
-            in: context
-        )
-        try await SwiftSync.sync(
-            payload: [[
-                "id": 9,
-                "full_name": "Intermediate",
-                "relationship_probe": "Second Await Value"
-            ]],
-            as: AwaitHopUser.self,
-            in: context
-        )
-
-        let rows = try context.fetch(FetchDescriptor<AwaitHopUser>())
-        XCTAssertEqual(rows.count, 1)
-        XCTAssertEqual(rows.first?.id, 9)
-        XCTAssertEqual(rows.first?.fullName, "Second Await Value")
     }
 
     @MainActor

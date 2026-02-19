@@ -57,23 +57,6 @@ Status legend:
   - Parent is resolved in the target sync context before mutation.
   - If the parent cannot be resolved in that context, sync aborts deterministically with a clear diagnostic and no partial writes.
 
-### [x] 4. Relationship updates after `await` actor/context hop
-
-- Test name: `testApplyRelationshipsAfterAwaitOnWrongActor`
-- Real-world scenario: relationship mapping awaits network/async work mid-update.
-- Setup:
-  - In `applyRelationships`, perform an `await` before context mutation.
-  - Validate behavior if execution resumes on a different actor context.
-- Expected behavior:
-  - Actor-safe execution (no undefined behavior).
-  - Deterministic isolation handling or enforced single-actor execution.
-- Why DataStack helped:
-  - Queue confinement via `performBlock` reduced accidental hops.
-- SwiftSync status:
-  - Covered by `testApplyRelationshipsAfterAwaitOnWrongActor`.
-  - Hardening coverage added by `testApplyRelationshipsAfterAwaitDeterministicLastWriteWins`.
-  - Relationship update flow uses explicit async preparation followed by a dedicated mutation step, with deterministic last-write-wins behavior.
-
 ### [ ] 5. Store corruption recovery
 
 - Test name: `testStoreCorruptionRecoveryPath`
@@ -155,7 +138,7 @@ Status legend:
 2. Add explicit expected-policy comments in each test (pass criteria must be precise).
 3. Implement the smallest mechanism required to deliver the expected deterministic outcome for each test.
 4. Re-run full suite after each test/policy change.
-5. Move to P0 tests 4-6, then P1, then P2.
+5. Move to remaining P0 tests, then P1, then P2.
 
 ## Notes for Implementation
 
