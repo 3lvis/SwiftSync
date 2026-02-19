@@ -532,6 +532,14 @@ That row is skipped for matching/diffing. Sync continues for valid rows.
 Flat attributes are automatic with `@Syncable`.
 For relationship behavior, implement `SyncRelationshipUpdatableModel` and define `applyRelationships(...)`.
 
+### What happens if two sync calls run at the same time on the same `ModelContext`?
+
+SwiftSync serializes sync calls per `ModelContext`.
+
+- Calls on the same context are queued (no overlap/interleaving on that context).
+- Final state is last-writer-wins by queued execution order.
+- Calls on different contexts are not serialized by this guard.
+
 ## API Reference
 
 ```swift

@@ -8,71 +8,77 @@ public extension SwiftSync {
         as model: Model.Type,
         in context: ModelContext
     ) async throws {
+        let lease = await acquireSyncLease(for: context)
         _ = model
+        do {
+            let entries = try normalize(payload: payload, model: Model.self)
+            let existing = try context.fetch(FetchDescriptor<Model>())
 
-        let entries = try normalize(payload: payload, model: Model.self)
-        let existing = try context.fetch(FetchDescriptor<Model>())
-
-        var index: [String: Model] = [:]
-        var duplicates: [Model] = []
-        for row in existing {
-            let key = identityKey(from: row[keyPath: Model.syncIdentity])
-            if index[key] != nil {
-                duplicates.append(row)
-                continue
-            }
-            index[key] = row
-        }
-
-        var changed = false
-        var seenKeys: Set<String> = []
-
-        if !duplicates.isEmpty {
-            for duplicate in duplicates {
-                context.delete(duplicate)
-            }
-            changed = true
-        }
-
-        for entry in entries {
-            let payloadModel = SyncPayload(values: entry)
-            guard let identity = resolveIdentity(from: payloadModel, model: Model.self) else {
-                // For hardening: rows without valid identity are skipped from matching/diffing.
-                continue
-            }
-            let key = identityKey(from: identity)
-            seenKeys.insert(key)
-
-            if let row = index[key] {
-                if try row.apply(payloadModel) {
-                    changed = true
+            var index: [String: Model] = [:]
+            var duplicates: [Model] = []
+            for row in existing {
+                let key = identityKey(from: row[keyPath: Model.syncIdentity])
+                if index[key] != nil {
+                    duplicates.append(row)
+                    continue
                 }
-                if let relationshipRow = row as? any SyncRelationshipUpdatableModel {
+                index[key] = row
+            }
+
+            var changed = false
+            var seenKeys: Set<String> = []
+
+            if !duplicates.isEmpty {
+                for duplicate in duplicates {
+                    context.delete(duplicate)
+                }
+                changed = true
+            }
+
+            for entry in entries {
+                let payloadModel = SyncPayload(values: entry)
+                guard let identity = resolveIdentity(from: payloadModel, model: Model.self) else {
+                    // For hardening: rows without valid identity are skipped from matching/diffing.
+                    continue
+                }
+                let key = identityKey(from: identity)
+                seenKeys.insert(key)
+
+                if let row = index[key] {
+                    if try row.apply(payloadModel) {
+                        changed = true
+                    }
+                    if let relationshipRow = row as? any SyncRelationshipUpdatableModel {
+                        if try await relationshipRow.applyRelationships(payloadModel, in: context) {
+                            changed = true
+                        }
+                    }
+                    continue
+                }
+
+                let created = try Model.make(from: payloadModel)
+                context.insert(created)
+                if let relationshipRow = created as? any SyncRelationshipUpdatableModel {
                     if try await relationshipRow.applyRelationships(payloadModel, in: context) {
                         changed = true
                     }
                 }
-                continue
+                index[key] = created
+                changed = true
             }
 
-            let created = try Model.make(from: payloadModel)
-            context.insert(created)
-            if let relationshipRow = created as? any SyncRelationshipUpdatableModel {
-                if try await relationshipRow.applyRelationships(payloadModel, in: context) {
-                    changed = true
-                }
+            for (key, row) in index where !seenKeys.contains(key) {
+                context.delete(row)
+                changed = true
             }
-            index[key] = created
-            changed = true
-        }
 
-        for (key, row) in index where !seenKeys.contains(key) {
-            context.delete(row)
-            changed = true
-        }
-
-        if changed {
-            try context.save()
+            if changed {
+                try context.save()
+            }
+            await releaseSyncLease(lease)
+        } catch {
+            await releaseSyncLease(lease)
+            throw error
         }
     }
 
@@ -82,75 +88,81 @@ public extension SwiftSync {
         in context: ModelContext,
         parent: Model.SyncParent
     ) async throws {
+        let lease = await acquireSyncLease(for: context)
         _ = model
+        do {
+            let entries = try normalize(payload: payload, model: Model.self)
+            let existing = try context.fetch(FetchDescriptor<Model>())
 
-        let entries = try normalize(payload: payload, model: Model.self)
-        let existing = try context.fetch(FetchDescriptor<Model>())
-
-        var index: [String: Model] = [:]
-        var duplicates: [Model] = []
-        for row in existing where row[keyPath: Model.parentRelationship]?.persistentModelID == parent.persistentModelID {
-            let key = identityKey(from: row[keyPath: Model.syncIdentity])
-            if index[key] != nil {
-                duplicates.append(row)
-                continue
-            }
-            index[key] = row
-        }
-
-        var changed = false
-        var seenKeys: Set<String> = []
-
-        if !duplicates.isEmpty {
-            for duplicate in duplicates {
-                context.delete(duplicate)
-            }
-            changed = true
-        }
-
-        for entry in entries {
-            let payloadModel = SyncPayload(values: entry)
-            guard let identity = resolveIdentity(from: payloadModel, model: Model.self) else {
-                continue
-            }
-            let key = identityKey(from: identity)
-            seenKeys.insert(key)
-
-            if let row = index[key] {
-                if row[keyPath: Model.parentRelationship]?.persistentModelID != parent.persistentModelID {
-                    row[keyPath: Model.parentRelationship] = parent
-                    changed = true
+            var index: [String: Model] = [:]
+            var duplicates: [Model] = []
+            for row in existing where row[keyPath: Model.parentRelationship]?.persistentModelID == parent.persistentModelID {
+                let key = identityKey(from: row[keyPath: Model.syncIdentity])
+                if index[key] != nil {
+                    duplicates.append(row)
+                    continue
                 }
-                if try row.apply(payloadModel) {
-                    changed = true
+                index[key] = row
+            }
+
+            var changed = false
+            var seenKeys: Set<String> = []
+
+            if !duplicates.isEmpty {
+                for duplicate in duplicates {
+                    context.delete(duplicate)
                 }
-                if let relationshipRow = row as? any SyncRelationshipUpdatableModel {
+                changed = true
+            }
+
+            for entry in entries {
+                let payloadModel = SyncPayload(values: entry)
+                guard let identity = resolveIdentity(from: payloadModel, model: Model.self) else {
+                    continue
+                }
+                let key = identityKey(from: identity)
+                seenKeys.insert(key)
+
+                if let row = index[key] {
+                    if row[keyPath: Model.parentRelationship]?.persistentModelID != parent.persistentModelID {
+                        row[keyPath: Model.parentRelationship] = parent
+                        changed = true
+                    }
+                    if try row.apply(payloadModel) {
+                        changed = true
+                    }
+                    if let relationshipRow = row as? any SyncRelationshipUpdatableModel {
+                        if try await relationshipRow.applyRelationships(payloadModel, in: context) {
+                            changed = true
+                        }
+                    }
+                    continue
+                }
+
+                let created = try Model.make(from: payloadModel)
+                created[keyPath: Model.parentRelationship] = parent
+                context.insert(created)
+                if let relationshipRow = created as? any SyncRelationshipUpdatableModel {
                     if try await relationshipRow.applyRelationships(payloadModel, in: context) {
                         changed = true
                     }
                 }
-                continue
+                index[key] = created
+                changed = true
             }
 
-            let created = try Model.make(from: payloadModel)
-            created[keyPath: Model.parentRelationship] = parent
-            context.insert(created)
-            if let relationshipRow = created as? any SyncRelationshipUpdatableModel {
-                if try await relationshipRow.applyRelationships(payloadModel, in: context) {
-                    changed = true
-                }
+            for (key, row) in index where !seenKeys.contains(key) {
+                context.delete(row)
+                changed = true
             }
-            index[key] = created
-            changed = true
-        }
 
-        for (key, row) in index where !seenKeys.contains(key) {
-            context.delete(row)
-            changed = true
-        }
-
-        if changed {
-            try context.save()
+            if changed {
+                try context.save()
+            }
+            await releaseSyncLease(lease)
+        } catch {
+            await releaseSyncLease(lease)
+            throw error
         }
     }
 
@@ -218,4 +230,53 @@ public extension SwiftSync {
         String(describing: identity)
     }
 
+    private struct SyncLease {
+        let contextID: ObjectIdentifier
+    }
+
+    private actor SyncLeaseRegistry {
+        private var activeContextIDs: Set<ObjectIdentifier> = []
+        private var waitersByContextID: [ObjectIdentifier: [CheckedContinuation<Void, Never>]] = [:]
+
+        func acquire(contextID: ObjectIdentifier) async -> SyncLease {
+            if !activeContextIDs.contains(contextID) {
+                activeContextIDs.insert(contextID)
+                return SyncLease(contextID: contextID)
+            }
+
+            await withCheckedContinuation { continuation in
+                var waiters = waitersByContextID[contextID] ?? []
+                waiters.append(continuation)
+                waitersByContextID[contextID] = waiters
+            }
+
+            return SyncLease(contextID: contextID)
+        }
+
+        func release(_ lease: SyncLease) {
+            var waiters = waitersByContextID[lease.contextID] ?? []
+            if waiters.isEmpty {
+                activeContextIDs.remove(lease.contextID)
+                return
+            }
+
+            let next = waiters.removeFirst()
+            if waiters.isEmpty {
+                waitersByContextID.removeValue(forKey: lease.contextID)
+            } else {
+                waitersByContextID[lease.contextID] = waiters
+            }
+            next.resume()
+        }
+    }
+
+    private static let syncLeaseRegistry = SyncLeaseRegistry()
+
+    private static func acquireSyncLease(for context: ModelContext) async -> SyncLease {
+        await syncLeaseRegistry.acquire(contextID: ObjectIdentifier(context))
+    }
+
+    private static func releaseSyncLease(_ lease: SyncLease) async {
+        await syncLeaseRegistry.release(lease)
+    }
 }

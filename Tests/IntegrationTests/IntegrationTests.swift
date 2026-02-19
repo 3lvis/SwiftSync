@@ -662,6 +662,71 @@ extension SuperNote: ParentScopedModel {
     static var parentRelationship: ReferenceWritableKeyPath<SuperNote, SuperUser?> { \.superUser }
 }
 
+@Syncable
+@Model
+final class ConcurrentRaceUser {
+    @Attribute(.unique) var id: Int
+    var fullName: String
+
+    init(id: Int, fullName: String) {
+        self.id = id
+        self.fullName = fullName
+    }
+}
+
+private actor ConcurrentRaceHooks {
+    static let shared = ConcurrentRaceHooks()
+
+    private var blockFirst = false
+    private var didBlockFirst = false
+    private var firstBlockedContinuation: CheckedContinuation<Void, Never>?
+    private var releaseFirstContinuation: CheckedContinuation<Void, Never>?
+
+    func installFirstSyncBlocker() {
+        blockFirst = true
+        didBlockFirst = false
+        firstBlockedContinuation = nil
+        releaseFirstContinuation = nil
+    }
+
+    func waitUntilFirstSyncBlocked() async {
+        if didBlockFirst { return }
+        await withCheckedContinuation { continuation in
+            firstBlockedContinuation = continuation
+        }
+    }
+
+    func releaseFirstSync() {
+        releaseFirstContinuation?.resume()
+        releaseFirstContinuation = nil
+        blockFirst = false
+    }
+
+    func waitIfInstalled() async {
+        if blockFirst {
+            blockFirst = false
+            didBlockFirst = true
+            firstBlockedContinuation?.resume()
+            firstBlockedContinuation = nil
+            await withCheckedContinuation { continuation in
+                releaseFirstContinuation = continuation
+            }
+        }
+    }
+}
+
+extension ConcurrentRaceUser: SyncRelationshipUpdatableModel {
+    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+        _ = payload
+        _ = context
+        if id == 1 {
+            await ConcurrentRaceHooks.shared.waitIfInstalled()
+            await Task.yield()
+        }
+        return false
+    }
+}
+
 final class IntegrationTests: XCTestCase {
     func testApplyReturnsFalseWhenPayloadMatchesExistingValues() throws {
         let user = User(id: 1, fullName: "Ava Swift")
@@ -1669,6 +1734,49 @@ final class IntegrationTests: XCTestCase {
 
         let users = try context.fetch(FetchDescriptor<UserTagsByIDs>())
         return Dictionary(uniqueKeysWithValues: users.map { ($0.id, Set($0.tags.map(\.id))) })
+    }
+
+    @MainActor
+    func testConcurrentSyncSameContextCausesRaceOrConflict() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: ConcurrentRaceUser.self, configurations: configuration)
+        let context = ModelContext(container)
+        context.insert(ConcurrentRaceUser(id: 1, fullName: "Seed"))
+        try context.save()
+
+        await ConcurrentRaceHooks.shared.installFirstSyncBlocker()
+        defer {
+            Task {
+                await ConcurrentRaceHooks.shared.installFirstSyncBlocker()
+                await ConcurrentRaceHooks.shared.releaseFirstSync()
+            }
+        }
+
+        let firstTask = Task { @MainActor in
+            let payload: [Any] = [
+                ["id": 1, "full_name": "Refresh User"],
+                ["id": 99, "full_name": "Refresh Insert"]
+            ]
+            try await SwiftSync.sync(payload: payload, as: ConcurrentRaceUser.self, in: context)
+        }
+        await ConcurrentRaceHooks.shared.waitUntilFirstSyncBlocked()
+
+        let secondTask = Task { @MainActor in
+            let payload: [Any] = [
+                ["id": 1, "full_name": "Websocket User"],
+                ["id": 99, "full_name": "Websocket Winner"]
+            ]
+            try await SwiftSync.sync(payload: payload, as: ConcurrentRaceUser.self, in: context)
+        }
+
+        await ConcurrentRaceHooks.shared.releaseFirstSync()
+
+        try await firstTask.value
+        try await secondTask.value
+
+        let rows = try context.fetch(FetchDescriptor<ConcurrentRaceUser>())
+        XCTAssertEqual(Set(rows.map(\.id)), Set([1, 99]))
+        XCTAssertEqual(rows.first(where: { $0.id == 99 })?.fullName, "Websocket Winner")
     }
 
 }
