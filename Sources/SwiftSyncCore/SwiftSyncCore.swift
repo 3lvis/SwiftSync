@@ -101,6 +101,17 @@ public struct SyncPayload {
             return value as? T
         }
 
+        if T.self == Date.self, let string = raw as? String {
+            let formatter = ISO8601DateFormatter()
+            if let date = formatter.date(from: string) {
+                return date as? T
+            }
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = formatter.date(from: string) {
+                return date as? T
+            }
+        }
+
         return nil
     }
 }

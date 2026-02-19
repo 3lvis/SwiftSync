@@ -47,6 +47,7 @@ Models participating in sync conform to `SyncUpdatableModel`:
 Top-level payload rows without a valid identity are skipped during matching/diffing.
 Custom primary keys can be declared with `@PrimaryKey` on a model property (no string key configuration required).
 Numeric payload values are coerced leniently for `Int` identity fields (for example, `42.9` becomes `42`).
+ISO8601 date strings are coerced to `Date` values (for example, `updated_at` -> `updatedAt`).
 
 For relationship updates, models can additionally conform to `SyncRelationshipUpdatableModel` and apply to-one/to-many changes during the same sync run.
 

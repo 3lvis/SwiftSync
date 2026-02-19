@@ -55,6 +55,20 @@ final class RuntimeExternalUser {
 
 @Syncable
 @Model
+final class RuntimeProfile {
+    @Attribute(.unique) var id: Int
+    var firstName: String
+    var updatedAt: Date
+
+    init(id: Int, firstName: String, updatedAt: Date) {
+        self.id = id
+        self.firstName = firstName
+        self.updatedAt = updatedAt
+    }
+}
+
+@Syncable
+@Model
 final class RuntimeExternalMappedUser {
     @PrimaryKey(remote: "external_id")
     @Attribute(.unique) var xid: String
@@ -237,6 +251,26 @@ final class SwiftSyncRuntimeTests: XCTestCase {
         XCTAssertEqual(users.count, 1)
         XCTAssertEqual(users.first?.id, 42)
         XCTAssertEqual(users.first?.fullName, "Float ID User")
+    }
+
+    @MainActor
+    func testSyncSnakeCaseToCamelCaseWithISO8601Date() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeProfile.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let payload: [Any] = [[
+            "id": 1,
+            "first_name": "Elvis",
+            "updated_at": "2014-02-17T00:00:00+00:00"
+        ]]
+        try await SwiftSync.sync(payload: payload, as: RuntimeProfile.self, in: context)
+        try await SwiftSync.sync(payload: payload, as: RuntimeProfile.self, in: context)
+
+        let rows = try context.fetch(FetchDescriptor<RuntimeProfile>())
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.firstName, "Elvis")
+        XCTAssertEqual(rows.first?.updatedAt, ISO8601DateFormatter().date(from: "2014-02-17T00:00:00+00:00"))
     }
 
     @MainActor
