@@ -22,16 +22,21 @@ Status legend:
 - Why DataStack helped:
   - Writer context serialization prevented concurrent mutation races.
 
-### [ ] 2. Concurrent sync on different contexts targeting one store
+### [x] 2. Concurrent sync on different contexts targeting one store
 - Test name: `testConcurrentSyncDifferentContextsSameStoreUniqueConstraintConflict`
 - Real-world scenario: foreground edit and background import save simultaneously.
 - Setup:
   - Create two `ModelContext` instances on one `ModelContainer`.
   - Both write rows with the same unique ID.
 - Expected behavior:
-  - Deterministic conflict resolution policy (or deterministic failure path).
+  - No crash.
+  - No overlap across contexts that share one store/container; requests are queued.
+  - Deterministic final state by execution order (last queued writer wins).
 - Why DataStack helped:
   - Explicit merge policy and save funnel reduced ambiguous conflict outcomes.
+- SwiftSync status:
+  - Covered by test `testConcurrentSyncDifferentContextsSameStoreUniqueConstraintConflict`.
+  - Implemented via store-scoped sync lease (container-level), replacing per-context-only locking.
 
 ### [ ] 3. Parent model passed from a different context
 - Test name: `testParentObjectFromDifferentContextFailsDeterministically`

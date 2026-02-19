@@ -674,6 +674,18 @@ final class ConcurrentRaceUser {
     }
 }
 
+@Syncable
+@Model
+final class DifferentContextConflictUser {
+    @Attribute(.unique) var id: Int
+    var fullName: String
+
+    init(id: Int, fullName: String) {
+        self.id = id
+        self.fullName = fullName
+    }
+}
+
 private actor ConcurrentRaceHooks {
     static let shared = ConcurrentRaceHooks()
 
@@ -1777,6 +1789,40 @@ final class IntegrationTests: XCTestCase {
         let rows = try context.fetch(FetchDescriptor<ConcurrentRaceUser>())
         XCTAssertEqual(Set(rows.map(\.id)), Set([1, 99]))
         XCTAssertEqual(rows.first(where: { $0.id == 99 })?.fullName, "Websocket Winner")
+    }
+
+    @MainActor
+    func testConcurrentSyncDifferentContextsSameStoreUniqueConstraintConflict() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: DifferentContextConflictUser.self, configurations: configuration)
+        let foregroundContext = ModelContext(container)
+        let backgroundContext = ModelContext(container)
+        let readerContext = ModelContext(container)
+
+        let foregroundTask = Task { @MainActor in
+            try await SwiftSync.sync(
+                payload: [["id": 500, "full_name": "Foreground Winner"]],
+                as: DifferentContextConflictUser.self,
+                in: foregroundContext
+            )
+        }
+
+        await Task.yield()
+        let backgroundTask = Task { @MainActor in
+            try await SwiftSync.sync(
+                payload: [["id": 500, "full_name": "Background Winner"]],
+                as: DifferentContextConflictUser.self,
+                in: backgroundContext
+            )
+        }
+
+        try await foregroundTask.value
+        try await backgroundTask.value
+
+        let rows = try readerContext.fetch(FetchDescriptor<DifferentContextConflictUser>())
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.id, 500)
+        XCTAssertEqual(rows.first?.fullName, "Background Winner")
     }
 
 }

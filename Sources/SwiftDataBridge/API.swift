@@ -231,40 +231,40 @@ public extension SwiftSync {
     }
 
     private struct SyncLease {
-        let contextID: ObjectIdentifier
+        let scopeID: ObjectIdentifier
     }
 
     private actor SyncLeaseRegistry {
-        private var activeContextIDs: Set<ObjectIdentifier> = []
-        private var waitersByContextID: [ObjectIdentifier: [CheckedContinuation<Void, Never>]] = [:]
+        private var activeScopeIDs: Set<ObjectIdentifier> = []
+        private var waitersByScopeID: [ObjectIdentifier: [CheckedContinuation<Void, Never>]] = [:]
 
-        func acquire(contextID: ObjectIdentifier) async -> SyncLease {
-            if !activeContextIDs.contains(contextID) {
-                activeContextIDs.insert(contextID)
-                return SyncLease(contextID: contextID)
+        func acquire(scopeID: ObjectIdentifier) async -> SyncLease {
+            if !activeScopeIDs.contains(scopeID) {
+                activeScopeIDs.insert(scopeID)
+                return SyncLease(scopeID: scopeID)
             }
 
             await withCheckedContinuation { continuation in
-                var waiters = waitersByContextID[contextID] ?? []
+                var waiters = waitersByScopeID[scopeID] ?? []
                 waiters.append(continuation)
-                waitersByContextID[contextID] = waiters
+                waitersByScopeID[scopeID] = waiters
             }
 
-            return SyncLease(contextID: contextID)
+            return SyncLease(scopeID: scopeID)
         }
 
         func release(_ lease: SyncLease) {
-            var waiters = waitersByContextID[lease.contextID] ?? []
+            var waiters = waitersByScopeID[lease.scopeID] ?? []
             if waiters.isEmpty {
-                activeContextIDs.remove(lease.contextID)
+                activeScopeIDs.remove(lease.scopeID)
                 return
             }
 
             let next = waiters.removeFirst()
             if waiters.isEmpty {
-                waitersByContextID.removeValue(forKey: lease.contextID)
+                waitersByScopeID.removeValue(forKey: lease.scopeID)
             } else {
-                waitersByContextID[lease.contextID] = waiters
+                waitersByScopeID[lease.scopeID] = waiters
             }
             next.resume()
         }
@@ -273,7 +273,7 @@ public extension SwiftSync {
     private static let syncLeaseRegistry = SyncLeaseRegistry()
 
     private static func acquireSyncLease(for context: ModelContext) async -> SyncLease {
-        await syncLeaseRegistry.acquire(contextID: ObjectIdentifier(context))
+        await syncLeaseRegistry.acquire(scopeID: ObjectIdentifier(context.container))
     }
 
     private static func releaseSyncLease(_ lease: SyncLease) async {
