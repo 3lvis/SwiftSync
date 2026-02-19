@@ -92,11 +92,17 @@ public extension SwiftSync {
         _ = model
         do {
             let entries = try normalize(payload: payload, model: Model.self)
+            guard let resolvedParent = try resolveParent(parent, in: context) else {
+                throw SyncError.invalidPayload(
+                    model: String(describing: Model.self),
+                    reason: "Parent must be resolved in the same ModelContext used for sync."
+                )
+            }
             let existing = try context.fetch(FetchDescriptor<Model>())
 
             var index: [String: Model] = [:]
             var duplicates: [Model] = []
-            for row in existing where row[keyPath: Model.parentRelationship]?.persistentModelID == parent.persistentModelID {
+            for row in existing where row[keyPath: Model.parentRelationship]?.persistentModelID == resolvedParent.persistentModelID {
                 let key = identityKey(from: row[keyPath: Model.syncIdentity])
                 if index[key] != nil {
                     duplicates.append(row)
@@ -124,8 +130,8 @@ public extension SwiftSync {
                 seenKeys.insert(key)
 
                 if let row = index[key] {
-                    if row[keyPath: Model.parentRelationship]?.persistentModelID != parent.persistentModelID {
-                        row[keyPath: Model.parentRelationship] = parent
+                    if row[keyPath: Model.parentRelationship]?.persistentModelID != resolvedParent.persistentModelID {
+                        row[keyPath: Model.parentRelationship] = resolvedParent
                         changed = true
                     }
                     if try row.apply(payloadModel) {
@@ -140,7 +146,7 @@ public extension SwiftSync {
                 }
 
                 let created = try Model.make(from: payloadModel)
-                created[keyPath: Model.parentRelationship] = parent
+                created[keyPath: Model.parentRelationship] = resolvedParent
                 context.insert(created)
                 if let relationshipRow = created as? any SyncRelationshipUpdatableModel {
                     if try await relationshipRow.applyRelationships(payloadModel, in: context) {
@@ -224,6 +230,14 @@ public extension SwiftSync {
             }
         }
         return nil
+    }
+
+    private static func resolveParent<Parent: PersistentModel>(
+        _ parent: Parent,
+        in context: ModelContext
+    ) throws -> Parent? {
+        let parents = try context.fetch(FetchDescriptor<Parent>())
+        return parents.first { $0.persistentModelID == parent.persistentModelID }
     }
 
     private static func identityKey<ID: Hashable>(from identity: ID) -> String {

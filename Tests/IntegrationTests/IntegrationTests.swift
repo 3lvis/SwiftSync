@@ -1667,6 +1667,44 @@ final class IntegrationTests: XCTestCase {
     }
 
     @MainActor
+    func testParentObjectFromDifferentContextHandledDeterministically() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: SuperUser.self, SuperNote.self, configurations: configuration)
+        let contextA = ModelContext(container)
+        let contextB = ModelContext(container)
+
+        let userFromContextA = SuperUser(id: 42, name: "Parent A")
+        contextA.insert(userFromContextA)
+
+        var capturedError: Error?
+        do {
+            try await SwiftSync.sync(
+                payload: [["id": 1001, "text": "cross-context-child"]],
+                as: SuperNote.self,
+                in: contextB,
+                parent: userFromContextA
+            )
+        } catch {
+            capturedError = error
+        }
+
+        XCTAssertNotNil(
+            capturedError,
+            "Expected deterministic handling for cross-context parent usage with a clear diagnostic."
+        )
+        if let capturedError {
+            let description = String(describing: capturedError).lowercased()
+            XCTAssertTrue(
+                description.contains("context") || description.contains("parent") || description.contains("relationship"),
+                "Expected diagnostic to mention parent/context mismatch, got: \(capturedError)"
+            )
+        }
+
+        let notes = try contextB.fetch(FetchDescriptor<SuperNote>())
+        XCTAssertEqual(notes.count, 0, "Safe fallback should avoid partial writes when parent context mismatches.")
+    }
+
+    @MainActor
     private func runManyToManyObjectsScenario() async throws -> [Int: Set<Int>] {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: UserTagsByObjects.self, Tag.self, configurations: configuration)

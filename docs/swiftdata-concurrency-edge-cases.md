@@ -41,7 +41,7 @@ Status legend:
   - Covered by test `testConcurrentSyncDifferentContextsSameStoreUniqueConstraintConflict`.
   - Implemented via store-scoped sync lease (container-level), replacing per-context-only locking.
 
-### [ ] 3. Parent model passed from a different context
+### [x] 3. Parent model passed from a different context
 
 - Test name: `testParentObjectFromDifferentContextHandledDeterministically`
 - Real-world scenario: UI-selected parent object is reused in background sync context.
@@ -52,6 +52,10 @@ Status legend:
   - Deterministic handling with a clear diagnostic and a safe fallback path.
 - Why DataStack helped:
   - Context-bound patterns made cross-context object usage easier to detect.
+- SwiftSync status:
+  - Covered by test `testParentObjectFromDifferentContextHandledDeterministically`.
+  - Parent is resolved in the target sync context before mutation.
+  - If the parent cannot be resolved in that context, sync aborts deterministically with a clear diagnostic and no partial writes.
 
 ### [ ] 4. Relationship updates after `await` actor/context hop
 
