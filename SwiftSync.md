@@ -53,6 +53,14 @@ our policy is honestly we do our best without affecting performance.
 
 For relationship updates, models can additionally conform to `SyncRelationshipUpdatableModel` and apply to-one/to-many changes during the same sync run.
 
+To-one relationships can be handled either as nested objects (for example, `"owner": {...}`) or by foreign-key scalar fields (for example, `"company_id": 10`) inside `applyRelationships`.
+For `*_id` fields, recommended behavior is:
+
+- non-null id: fetch referenced model by primary key and link if found
+- explicit `null`: clear the relationship
+- missing key: preserve existing relationship
+- missing referenced row: no crash; leave relationship unset unless your app explicitly supports stubs
+
 ### Date Parsing Contract
 
 `SwiftSyncCore` includes `SyncDateParser` for inbound mapping hot paths:

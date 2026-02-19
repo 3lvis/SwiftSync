@@ -167,6 +167,30 @@ final class RuntimeTeam {
     }
 }
 
+@Model
+final class RuntimeCompany {
+    @Attribute(.unique) var id: Int
+    var name: String
+
+    init(id: Int, name: String) {
+        self.id = id
+        self.name = name
+    }
+}
+
+@Model
+final class RuntimeEmployee {
+    @Attribute(.unique) var id: Int
+    var name: String
+    var company: RuntimeCompany?
+
+    init(id: Int, name: String, company: RuntimeCompany? = nil) {
+        self.id = id
+        self.name = name
+        self.company = company
+    }
+}
+
 extension RuntimeTeam: SyncUpdatableModel {
     typealias SyncID = Int
     static var syncIdentity: KeyPath<RuntimeTeam, Int> { \.id }
@@ -238,6 +262,74 @@ extension RuntimeTeam: SyncRelationshipUpdatableModel {
         let created = try RuntimeMember.make(from: syncPayload)
         context.insert(created)
         return created
+    }
+}
+
+extension RuntimeCompany: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<RuntimeCompany, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> RuntimeCompany {
+        RuntimeCompany(
+            id: try payload.required(Int.self, for: "id"),
+            name: try payload.required(String.self, for: "name")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        var changed = false
+        let incomingName: String = try payload.required(String.self, for: "name")
+        if name != incomingName {
+            name = incomingName
+            changed = true
+        }
+        return changed
+    }
+}
+
+extension RuntimeEmployee: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<RuntimeEmployee, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> RuntimeEmployee {
+        RuntimeEmployee(
+            id: try payload.required(Int.self, for: "id"),
+            name: try payload.required(String.self, for: "name")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        var changed = false
+        let incomingName: String = try payload.required(String.self, for: "name")
+        if name != incomingName {
+            name = incomingName
+            changed = true
+        }
+        return changed
+    }
+}
+
+extension RuntimeEmployee: SyncRelationshipUpdatableModel {
+    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+        // Support to-one by foreign key scalar (company_id).
+        guard payload.contains("company_id") else { return false }
+
+        let companyID: Int? = payload.value(for: "company_id")
+        if let companyID {
+            let companies = try context.fetch(FetchDescriptor<RuntimeCompany>())
+            let nextCompany = companies.first(where: { $0.id == companyID })
+            if company?.id != nextCompany?.id {
+                company = nextCompany
+                return true
+            }
+            return false
+        } else {
+            if company != nil {
+                company = nil
+                return true
+            }
+            return false
+        }
     }
 }
 
@@ -773,6 +865,76 @@ final class SwiftSyncRuntimeTests: XCTestCase {
         XCTAssertEqual(teams.first?.name, "Platform Renamed")
         XCTAssertEqual(teams.first?.owner?.id, 1)
         XCTAssertEqual(Set(teams.first?.members.map(\.id) ?? []), Set([1, 2]))
+    }
+
+    @MainActor
+    func testSyncToOneByIDSetsAndClearsRelationship() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeEmployee.self, RuntimeCompany.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [["id": 10, "name": "Apple"]],
+            as: RuntimeCompany.self,
+            in: context
+        )
+
+        try await SwiftSync.sync(
+            payload: [["id": 1, "name": "Ava"]],
+            as: RuntimeEmployee.self,
+            in: context
+        )
+
+        let linkPayload: [Any] = [[
+            "id": 1,
+            "name": "Ava",
+            "company_id": 10
+        ]]
+        try await SwiftSync.sync(payload: linkPayload, as: RuntimeEmployee.self, in: context)
+
+        var employees = try context.fetch(FetchDescriptor<RuntimeEmployee>())
+        XCTAssertEqual(employees.count, 1)
+        XCTAssertEqual(employees.first?.id, 1)
+        XCTAssertEqual(employees.first?.company?.id, 10)
+
+        let clearPayload: [Any] = [[
+            "id": 1,
+            "name": "Ava",
+            "company_id": NSNull()
+        ]]
+        try await SwiftSync.sync(payload: clearPayload, as: RuntimeEmployee.self, in: context)
+
+        employees = try context.fetch(FetchDescriptor<RuntimeEmployee>())
+        XCTAssertEqual(employees.count, 1)
+        XCTAssertNil(employees.first?.company)
+    }
+
+    @MainActor
+    func testSyncToOneByIDMissingReferencedCompanyIsDeterministic() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeEmployee.self, RuntimeCompany.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [["id": 1, "name": "Ava"]],
+            as: RuntimeEmployee.self,
+            in: context
+        )
+
+        let missingReferencePayload: [Any] = [[
+            "id": 1,
+            "name": "Ava",
+            "company_id": 999
+        ]]
+        do {
+            try await SwiftSync.sync(payload: missingReferencePayload, as: RuntimeEmployee.self, in: context)
+        } catch {
+            XCTFail("Expected missing referenced company to be handled without crashing, got error: \(error)")
+        }
+
+        let employees = try context.fetch(FetchDescriptor<RuntimeEmployee>())
+        XCTAssertEqual(employees.count, 1)
+        XCTAssertNil(employees.first?.company)
     }
 
 }
