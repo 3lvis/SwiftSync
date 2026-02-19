@@ -1,26 +1,21 @@
 # SwiftSync
 
-A minimal SwiftData sync framework.
+SwiftSync is a focused SwiftData sync and export library.
 
-## Status
+- Inbound sync: JSON payload -> local SwiftData models
+- Outbound export: local SwiftData models -> API-ready JSON payloads
 
-- Proposed
-- Audience: iOS engineers
-- Current scope: inbound sync + outbound export (`server -> local`, `local -> server`)
+It is designed for deterministic behavior, low configuration, and clear conventions.
 
-## Goal
+## Installation
 
-Ship a reliable `sync` + `export` API with minimal configuration.
+Add the package to your project and import the modules you need:
 
-## Non-Goals (for now)
+- `Core`: protocols, payload decoding, date parsing, export options
+- `SwiftDataBridge`: `SwiftSync.sync(...)` and `SwiftSync.export(...)`
+- `Macros`: `@Syncable`, `@PrimaryKey`, `@NotExport`, `@RemoteKey`, `@RemotePath`
 
-- No networking layer.
-- No outbound queue/reconciliation.
-- No agent-specific APIs.
-- No broad compatibility/migration framework.
-- No performance hardening work until core behavior is stable.
-
-## Minimal Public API
+## Public API
 
 ```swift
 public enum SwiftSync {}
@@ -54,127 +49,48 @@ public extension SwiftSync {
 }
 ```
 
-## Model Contract (Milestone 1)
-
-Models participating in sync conform to `SyncUpdatableModel`:
-
-- declare identity key path
-- provide `make(from:)` for inserts
-- provide `apply(_:)` for updates with field-by-field comparison (return `true` only if a value changed)
-
-`SyncPayload` provides snake_case/camelCase lookup and `id`/`remoteID` identity key conventions.
-Top-level payload rows without a valid identity are skipped during matching/diffing.
-Custom primary keys can be declared with `@PrimaryKey` on a model property (no string key configuration required).
-Numeric payload values are coerced leniently for `Int` identity fields (for example, `42.9` becomes `42`).
-ISO8601 date strings are coerced to `Date` values (for example, `updated_at` -> `updatedAt`).
-Explicit `null` clears optional scalars to `nil`; for non-optional primitive scalars it applies type defaults (for example `""`, `0`, `false`, epoch date, zero UUID).
-our policy is honestly we do our best without affecting performance.
-
-For relationship updates, models can additionally conform to `SyncRelationshipUpdatableModel` and apply to-one/to-many changes during the same sync run.
-
-For child-only payload sync scoped to one parent, models can conform to `ParentScopedModel` and use the `parent:` overload.
-Behavior:
-
-- created/updated children are linked to the provided parent relationship
-- diff/delete scope is limited to rows already linked to that parent
-- children linked to other parents are unaffected
-
-To-one relationships can be handled either as nested objects (for example, `"owner": {...}`) or by foreign-key scalar fields (for example, `"company_id": 10`) inside `applyRelationships`.
-For `*_id` fields, recommended behavior is:
-
-- non-null id: fetch referenced model by primary key and link if found
-- explicit `null`: clear the relationship
-- missing key: preserve existing relationship
-- missing referenced row: no crash; leave relationship unset unless your app explicitly supports stubs
-
-For to-many nested object arrays (for example, `"messages": [{...}, {...}]`), recommended behavior is payload-membership source-of-truth for that parent:
-
-- payload A sets relation membership to A ids
-- payload B replaces relation membership with B ids
-- overlapping child ids are updated in place (upsert)
-- ids removed from B are no longer related to the parent
-
-For to-many foreign-key scalar arrays (for example, `"notes_ids": [1, 2]`) inside `applyRelationships`:
-
-- relation should match exactly the resolved id list for that parent
-- links not present in the latest `*_ids` payload are removed
-- repeating the same payload is idempotent
-- missing referenced ids should not crash; unresolved ids can be ignored unless your app explicitly supports stubs
-
-For many-to-many relationships, nested-object and `*_ids` forms should converge to the same final join graph when they represent the same intended links.
-
-## Export Contract
-
-`SwiftSync.export` walks model attributes and relationships and produces JSON-ready dictionaries.
-
-Defaults:
-
-- snake_case keys
-- relationship mode `.array` (to-one object, to-many array of objects)
-- ISO-like UTC date string formatting
-- include `null` keys for `nil` values
-
-Options:
-
-- `ExportOptions.keyStyle`: `.snakeCase` or `.camelCase`
-- `ExportOptions.relationshipMode`: `.array`, `.nested`, `.none`
-- `ExportOptions.dateFormatter`: custom formatter
-- `ExportOptions.includeNulls`: include or omit `nil` keys
-
-Macro-driven mapping:
-
-- `@NotExport`: omit field/relationship from export
-- `@PrimaryKey(remote: "...")`: export identity under custom remote key
-- `@RemoteKey("...")`: export under a specific remote key
-- `@RemotePath("a.b.c")`: export into nested JSON path
-
-### Date Parsing Contract
-
-`Core` includes `SyncDateParser` for inbound mapping hot paths:
-
-- `SyncDateParser.dateFromDateString(_:)`
-- `SyncDateParser.dateFromISO8601String(_:)`
-- `SyncDateParser.dateFromUnixTimestampString(_:)`
-- `SyncDateParser.dateFromUnixTimestampNumber(_:)`
-- `String.dateType()` (`iso8601` vs `unixTimestamp`)
-
-Behavior:
-
-- Date-only `YYYY-MM-DD` is normalized to UTC midnight.
-- `YYYY-MM-DD HH:MM:SS` is accepted by converting the space to `T`.
-- Timezone forms supported: `Z`, `+00:00`, `+0000`, and no timezone (defaults to UTC).
-- Fractional seconds support includes deciseconds, centiseconds, milliseconds, and microseconds.
-- Microseconds are truncated to millisecond precision.
-- Invalid date text returns `nil`; sync mapping never crashes on invalid date values.
-- Unix timestamps support seconds and long microseconds-like forms (string and numeric input).
-
-## Principles
-
-1. Keep API small.
-2. Prefer convention over custom DSL when possible.
-3. Add features only when a concrete use case requires them.
-4. Make behavior deterministic.
-5. Fail clearly with typed errors.
-
-## Internal Direction (not public API)
-
-- Parse payload
-- Decide changes
-- Apply changes in `ModelContext`
-
-This can evolve internally without growing public surface area.
-
-## Example
+## Quick Start
 
 ```swift
-try await SwiftSync.sync(
-  payload: usersPayload,
-  as: User.self,
-  in: modelContext
-)
+import SwiftData
+import SwiftDataBridge
+import Macros
+
+@Syncable
+@Model
+final class User {
+  @Attribute(.unique) var id: Int
+  var name: String
+  var updatedAt: Date?
+
+  init(id: Int, name: String, updatedAt: Date? = nil) {
+    self.id = id
+    self.name = name
+    self.updatedAt = updatedAt
+  }
+}
+
+let payload: [Any] = [
+  ["id": 1, "name": "Elvis", "updated_at": "2014-02-17T00:00:00+00:00"],
+  ["id": 2, "name": "Maya"]
+]
+
+try await SwiftSync.sync(payload: payload, as: User.self, in: context)
+let rows = try SwiftSync.export(as: User.self, in: context)
 ```
 
-## Custom Primary Key Example
+## Modeling
+
+### `@Syncable` default behavior
+
+`@Syncable` generates sync/export boilerplate for model properties.
+
+Identity selection order:
+1. A property marked with `@PrimaryKey` (or `@PrimaryKey(remote: ...)`)
+2. `id`
+3. `remoteID`
+
+### Custom identity key
 
 ```swift
 @Syncable
@@ -183,12 +99,15 @@ final class ExternalUser {
   @PrimaryKey
   @Attribute(.unique) var xid: String
   var name: String
+
+  init(xid: String, name: String) {
+    self.xid = xid
+    self.name = name
+  }
 }
 ```
 
-Without `@PrimaryKey`, `@Syncable` falls back to `id`/`remoteID` conventions.
-
-If the remote key differs from the local property name:
+### Custom remote identity name
 
 ```swift
 @Syncable
@@ -197,35 +116,257 @@ final class ExternalMappedUser {
   @PrimaryKey(remote: "external_id")
   @Attribute(.unique) var xid: String
   var name: String
+
+  init(xid: String, name: String) {
+    self.xid = xid
+    self.name = name
+  }
 }
 ```
 
-## Milestones
+### Export-only field mapping controls
 
-### Milestone 0: Foundation
+```swift
+@Syncable
+@Model
+final class Account {
+  @Attribute(.unique) var id: Int
+  @RemoteKey("type") var userType: String
+  @RemotePath("profile.contact.email") var email: String?
+  @NotExport var localOnly: String
 
-- Buildable package
-- Demo app scaffold
-- Basic sync wiring
-- Basic tests and CI
+  init(id: Int, userType: String, email: String?, localOnly: String) {
+    self.id = id
+    self.userType = userType
+    self.email = email
+    self.localOnly = localOnly
+  }
+}
+```
 
-### Milestone 1: Inbound Happy Path
+## Sync Scenarios
 
-- snake_case -> camelCase mapping
-- identity mapping (`id`, `remoteID`)
-- source-of-truth diff behavior (insert/update/delete)
-- write-on-change behavior via field-by-field comparison for matching identities
+### 1. Full payload source of truth (insert/update/delete)
 
-### Milestone 2: Relationships
+If local has ids `{0,1,2,3,4}` and payload has `{0,1,6}`:
 
-- common to-one and to-many behavior
-- `SyncRelationshipUpdatableModel` hook for relationship diff application
+- `0,1` update in place
+- `6` inserts
+- `2,3,4` delete
+- final local ids are exactly `{0,1,6}`
 
-### Milestone 3: Hardening Sync
+### 2. Invalid identity rows are skipped
 
-### Milestone 4: Export
+Rows with missing or `null` identity are ignored for matching/diffing.
+Valid rows still sync normally.
 
-- outbound JSON export API
-- relationship modes (`array`, `nested`, `none`)
-- key style options and custom date formatter
-- macro-driven export mapping (`@NotExport`, `@RemoteKey`, `@RemotePath`, `@PrimaryKey(remote:)`)
+### 3. Local duplicate identity dedupe
+
+If local database has accidental duplicate rows with the same primary key, SwiftSync compacts them during sync and continues safely.
+
+### 4. Field-by-field no-op updates
+
+For existing rows, `apply(_:)` returns `true` only when a field value actually changes.
+No write means no save for that row change path.
+
+### 5. Null handling for scalars
+
+- Optional scalar + `null` -> `nil`
+- Non-optional primitive + `null` -> type default (`""`, `0`, `false`, epoch date, zero UUID)
+- No throw for this case
+
+### 6. Key mapping in payload lookup
+
+`SyncPayload` supports common API key shape differences:
+
+- snake_case -> camelCase (e.g. `updated_at` -> `updatedAt`)
+- identity aliases (`id`, `remote_id`, `remoteID`)
+
+### 7. Relationship sync in same pass
+
+If model also conforms to `SyncRelationshipUpdatableModel`, relationships are applied during the sync run.
+
+Supported patterns in `applyRelationships(...)`:
+
+- to-one nested object (`"company": {...}`)
+- to-one by foreign key (`"company_id": 10`)
+- to-many nested objects (`"notes": [{...}]`)
+- to-many by ids (`"notes_ids": [1,2]`)
+
+Expected semantics:
+
+- payload membership is source of truth
+- repeated identical payload is idempotent
+- missing referenced rows do not crash
+
+### 8. Parent-scoped child sync
+
+Use the parent overload when payload is child-only but scoped to one parent.
+
+```swift
+try await SwiftSync.sync(
+  payload: notesPayload,
+  as: Note.self,
+  in: context,
+  parent: user
+)
+```
+
+Behavior:
+
+- created/updated children are linked to that parent
+- delete/diff scope is restricted to that parent's children
+- children of other parents are unaffected
+
+## Export Scenarios
+
+### Default export
+
+```swift
+let rows = try SwiftSync.export(as: User.self, in: context)
+```
+
+Defaults:
+
+- key style: snake_case
+- relationship mode: `.array`
+- date format: ISO-style UTC formatter
+- nulls: included (`NSNull`)
+
+### CamelCase export
+
+```swift
+var options = ExportOptions.camelCase
+let rows = try SwiftSync.export(as: User.self, in: context, using: options)
+```
+
+### Exclude relationships
+
+```swift
+let rows = try SwiftSync.export(as: User.self, in: context, using: .excludedRelationships)
+```
+
+### Nested relationship mode (`*_attributes`)
+
+```swift
+var options = ExportOptions()
+options.relationshipMode = .nested
+let rows = try SwiftSync.export(as: User.self, in: context, using: options)
+```
+
+Shape examples:
+
+- `.array`
+```json
+{
+  "id": 1,
+  "company": { "id": 7, "name": "Acme" },
+  "notes": [{ "id": 10 }, { "id": 11 }]
+}
+```
+
+- `.nested`
+```json
+{
+  "id": 1,
+  "company_attributes": { "id": 7, "name": "Acme" },
+  "notes_attributes": {
+    "0": { "id": 10 },
+    "1": { "id": 11 }
+  }
+}
+```
+
+- `.none`
+```json
+{
+  "id": 1,
+  "name": "User"
+}
+```
+
+### Custom date formatter
+
+```swift
+let formatter = DateFormatter()
+formatter.locale = Locale(identifier: "en_US_POSIX")
+formatter.timeZone = TimeZone(secondsFromGMT: 0)
+formatter.dateFormat = "yyyy/MM/dd"
+
+var options = ExportOptions()
+options.dateFormatter = formatter
+
+let rows = try SwiftSync.export(as: User.self, in: context, using: options)
+```
+
+### Parent-scoped export
+
+```swift
+let childRows = try SwiftSync.export(
+  as: Note.self,
+  in: context,
+  parent: user
+)
+```
+
+Only rows linked to that parent are exported.
+
+### Recursion guard
+
+Cyclic object graphs are safe; export uses a traversal guard to avoid infinite loops.
+
+## Date Parsing
+
+SwiftSync uses a custom parser for inbound date hot paths (`SyncDateParser`), not formatter-heavy parsing.
+
+`SyncDateParser` supports:
+
+- ISO-like strings with `Z`, `+00:00`, `+0000`, or no timezone (assumes UTC)
+- date-only `YYYY-MM-DD` (normalized to UTC midnight)
+- `YYYY-MM-DD HH:mm:ss` style (space replaced with `T`)
+- fractional seconds: deciseconds, centiseconds, milliseconds, microseconds
+- Unix timestamp strings/numbers (seconds and microseconds-like values)
+
+Invalid date input behavior:
+
+- parser returns `nil`
+- sync does not crash
+- optional date fields become `nil`
+- required date fields fall back to epoch
+
+our policy is honestly we do our best without affecting performance.
+
+## Guarantees and Constraints
+
+- Deterministic identity diffing
+- Best-effort coercion for common payload types
+- Skip invalid top-level identity rows instead of throwing
+- Relationship updates are model-defined via `applyRelationships`
+- No networking layer and no queue/reconciliation layer
+
+## Error Behavior
+
+Sync throws typed `SyncError` for structurally invalid operations (for example, non-dictionary payload rows).
+
+For data quality issues in row content, behavior is intentionally lenient where possible:
+
+- invalid identity rows: skipped
+- invalid nullable values: mapped to `nil`/defaults when supported
+- invalid dates: best-effort fallback behavior above
+
+## Testing
+
+Run all tests:
+
+```bash
+swift test
+```
+
+The suite covers:
+
+- core date parser compatibility behavior
+- identity diffing insert/update/delete
+- invalid identity skip and dedupe
+- relationship mapping (to-one, to-many, many-to-many)
+- parent-scoped sync
+- export modes/options/macro mapping controls
