@@ -84,14 +84,22 @@ That single call will insert, update, and delete based on identity diffing.
 
 ### Scenario: payload only contains children for one parent
 
-When to use:
-- You call an endpoint like `/users/6/notes` and it only returns that user’s notes.
-- Payload does not include parent IDs in each child row.
+You have a user details screen, and the backend endpoint `/users/6/notes` returns only that user's notes. Each note comes without a `user_id`, because the endpoint itself is already scoped.
 
-Expected result:
-- Incoming notes are linked to the provided parent.
-- Missing notes for that parent are removed.
-- Notes for other parents are untouched.
+JSON:
+
+```json
+[
+  {
+    "id": 301,
+    "text": "Call supplier before Friday"
+  },
+  {
+    "id": 302,
+    "text": "Prepare Q1 budget review"
+  }
+]
+```
 
 Model:
 
@@ -117,16 +125,7 @@ extension Note: ParentScopedModel {
 }
 ```
 
-JSON:
-
-```json
-[
-  { "id": 301, "text": "Call supplier before Friday" },
-  { "id": 302, "text": "Prepare Q1 budget review" }
-]
-```
-
-API call:
+API:
 
 ```swift
 let user = try context.fetch(FetchDescriptor<User>()).first { $0.id == 6 }!
@@ -141,19 +140,32 @@ try await SwiftSync.sync(
 
 ### Scenario: to-one relationship by nested object
 
-When to use:
-- Backend sends the related object inline (for example `company` nested inside user/employee).
+You have a list of employees, each employee has one company. The backend sends that company as an inline object in each employee row.
 
-Expected result:
-- Related object is upserted.
-- To-one link points to that related object.
+JSON:
+
+```json
+[
+  {
+    "id": 44,
+    "full_name": "Ariana Patel",
+    "company": {
+      "id": 10,
+      "name": "Apple"
+    }
+  }
+]
+```
 
 Model:
 
 ```swift
 @Syncable
 @Model
-final class Company { @Attribute(.unique) var id: Int; var name: String }
+final class Company {
+  @Attribute(.unique) var id: Int
+  var name: String
+}
 
 @Syncable
 @Model
@@ -164,19 +176,7 @@ final class Employee {
 }
 ```
 
-JSON:
-
-```json
-[
-  {
-    "id": 44,
-    "full_name": "Ariana Patel",
-    "company": { "id": 10, "name": "Apple" }
-  }
-]
-```
-
-API call:
+API:
 
 ```swift
 try await SwiftSync.sync(payload: payload, as: Employee.self, in: context)
@@ -184,27 +184,16 @@ try await SwiftSync.sync(payload: payload, as: Employee.self, in: context)
 
 ### Scenario: to-one relationship by `*_id`
 
-When to use:
-- Backend sends only foreign key IDs for a to-one relation.
-
-Expected result:
-- Non-null ID links relation if target exists.
-- `null` clears the relation.
-- Missing key keeps current relation unchanged.
-
-Model:
-
-```swift
-@Syncable
-@Model
-final class Employee { @Attribute(.unique) var id: Int; var company: Company? }
-```
+You have employees and companies already synced. For employee updates, the backend sends only `company_id` instead of a nested company object.
 
 JSON:
 
 ```json
 [
-  { "id": 44, "company_id": 10 }
+  {
+    "id": 44,
+    "company_id": 10
+  }
 ]
 ```
 
@@ -212,11 +201,25 @@ JSON to clear:
 
 ```json
 [
-  { "id": 44, "company_id": null }
+  {
+    "id": 44,
+    "company_id": null
+  }
 ]
 ```
 
-API call:
+Model:
+
+```swift
+@Syncable
+@Model
+final class Employee {
+  @Attribute(.unique) var id: Int
+  var company: Company?
+}
+```
+
+API:
 
 ```swift
 try await SwiftSync.sync(payload: payload, as: Employee.self, in: context)
@@ -224,20 +227,59 @@ try await SwiftSync.sync(payload: payload, as: Employee.self, in: context)
 
 ### Scenario: to-many relationship by objects
 
-When to use:
-- Backend sends full related objects in an array.
+You have chats and each chat has many messages. The backend sends each chat with an inline `messages` array.
 
-Expected result:
-- Membership is replaced by payload membership.
-- Existing children update in place.
-- Removed IDs are no longer related.
+JSON A:
+
+```json
+[
+  {
+    "id": 77,
+    "title": "Launch Planning",
+    "messages": [
+      {
+        "id": 101,
+        "text": "Draft kickoff agenda"
+      },
+      {
+        "id": 102,
+        "text": "Share timeline v1"
+      }
+    ]
+  }
+]
+```
+
+JSON B:
+
+```json
+[
+  {
+    "id": 77,
+    "title": "Launch Planning",
+    "messages": [
+      {
+        "id": 102,
+        "text": "Share timeline v2"
+      },
+      {
+        "id": 103,
+        "text": "Book design review"
+      }
+    ]
+  }
+]
+```
 
 Model:
 
 ```swift
 @Syncable
 @Model
-final class Message { @Attribute(.unique) var id: Int; var text: String }
+final class Message {
+  @Attribute(.unique) var id: Int
+  var text: String
+}
 
 @Syncable
 @Model
@@ -248,17 +290,23 @@ final class Chat {
 }
 ```
 
+API:
+
+```swift
+try await SwiftSync.sync(payload: payload, as: Chat.self, in: context)
+```
+
+### Scenario: to-many relationship by `*_ids`
+
+You already synced notes separately, and user payloads now include only `notes_ids` to define membership.
+
 JSON A:
 
 ```json
 [
   {
-    "id": 77,
-    "title": "Launch Planning",
-    "messages": [
-      { "id": 101, "text": "Draft kickoff agenda" },
-      { "id": 102, "text": "Share timeline v1" }
-    ]
+    "id": 6,
+    "notes_ids": [301, 302]
   }
 ]
 ```
@@ -268,37 +316,20 @@ JSON B:
 ```json
 [
   {
-    "id": 77,
-    "title": "Launch Planning",
-    "messages": [
-      { "id": 102, "text": "Share timeline v2" },
-      { "id": 103, "text": "Book design review" }
-    ]
+    "id": 6,
+    "notes_ids": [302, 305]
   }
 ]
 ```
-
-API call:
-
-```swift
-try await SwiftSync.sync(payload: payload, as: Chat.self, in: context)
-```
-
-### Scenario: to-many relationship by `*_ids`
-
-When to use:
-- Backend sends only IDs for related objects and those rows already exist (or are synced elsewhere).
-
-Expected result:
-- Relationship membership matches exactly the provided ID list.
-- Re-running same payload is idempotent.
 
 Model:
 
 ```swift
 @Syncable
 @Model
-final class Note { @Attribute(.unique) var id: Int }
+final class Note {
+  @Attribute(.unique) var id: Int
+}
 
 @Syncable
 @Model
@@ -309,23 +340,7 @@ final class User {
 }
 ```
 
-JSON A:
-
-```json
-[
-  { "id": 6, "notes_ids": [301, 302] }
-]
-```
-
-JSON B:
-
-```json
-[
-  { "id": 6, "notes_ids": [302, 305] }
-]
-```
-
-API call:
+API:
 
 ```swift
 try await SwiftSync.sync(payload: payload, as: User.self, in: context)
@@ -333,13 +348,19 @@ try await SwiftSync.sync(payload: payload, as: User.self, in: context)
 
 ### Scenario: export local rows to API JSON
 
-When to use:
-- You need outbound JSON for create/update requests.
+You have local SwiftData rows and need to send them to your backend in API format.
 
-Expected result:
-- Keys are transformed per export options.
-- Dates and scalars are encoded to JSON-friendly values.
-- Relationships are included/excluded based on export mode.
+JSON output shape (default):
+
+```json
+[
+  {
+    "id": 1,
+    "first_name": "Elvis",
+    "last_name": "Nunez"
+  }
+]
+```
 
 Model:
 
@@ -353,15 +374,7 @@ final class User {
 }
 ```
 
-JSON output shape (default):
-
-```json
-[
-  { "id": 1, "first_name": "Elvis", "last_name": "Nunez" }
-]
-```
-
-API call:
+API:
 
 ```swift
 let rows = try SwiftSync.export(as: User.self, in: context)
