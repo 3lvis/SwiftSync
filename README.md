@@ -84,92 +84,216 @@ That single call will insert, update, and delete based on identity diffing.
 
 ### Scenario: server payload is source of truth
 
-Use full sync:
+Model:
 
 ```swift
-try await SwiftSync.sync(payload: usersPayload, as: User.self, in: context)
+@Syncable
+@Model
+final class User {
+  @Attribute(.unique) var id: Int
+  var name: String
+}
 ```
 
-Behavior:
-- existing IDs update
-- new IDs insert
-- local IDs missing from payload delete
+JSON:
+
+```json
+[
+  { "id": 0, "name": "A" },
+  { "id": 1, "name": "B" },
+  { "id": 6, "name": "C" }
+]
+```
+
+API call:
+
+```swift
+try await SwiftSync.sync(payload: payload, as: User.self, in: context)
+```
 
 ### Scenario: payload only contains children for one parent
 
-Use parent-scoped sync:
+Model:
+
+```swift
+@Syncable
+@Model
+final class Note {
+  @Attribute(.unique) var id: Int
+  var text: String
+  @Relationship var user: User?
+}
+
+extension Note: ParentScopedModel {
+  typealias SyncParent = User
+  static var parentRelationship: ReferenceWritableKeyPath<Note, User?> { \.user }
+}
+```
+
+JSON:
+
+```json
+[
+  { "id": 10, "text": "n0" },
+  { "id": 11, "text": "n1" }
+]
+```
+
+API call:
 
 ```swift
 try await SwiftSync.sync(
-  payload: notesPayload,
+  payload: payload,
   as: Note.self,
   in: context,
   parent: user
 )
 ```
 
-Behavior:
-- children are linked to `user`
-- delete scope is limited to that parent
-- other parents are unaffected
-
 ### Scenario: to-one relationship by nested object
 
-In `applyRelationships(...)`, map JSON like:
+Model:
+
+```swift
+@Syncable
+@Model
+final class Company { @Attribute(.unique) var id: Int; var name: String }
+
+@Syncable
+@Model
+final class Employee { @Attribute(.unique) var id: Int; var company: Company? }
+```
+
+JSON:
 
 ```json
 { "id": 1, "company": { "id": 10, "name": "Apple" } }
 ```
 
-Expected result:
-- `Company(10)` is upserted
-- `user.company` points to `10`
+API call:
+
+```swift
+try await SwiftSync.sync(payload: payload, as: Employee.self, in: context)
+```
 
 ### Scenario: to-one relationship by `*_id`
 
-In `applyRelationships(...)`, map:
+Model:
+
+```swift
+@Syncable
+@Model
+final class Employee { @Attribute(.unique) var id: Int; var company: Company? }
+```
+
+JSON:
 
 ```json
 { "id": 1, "company_id": 10 }
 ```
 
-and clear with:
+JSON to clear:
 
 ```json
 { "id": 1, "company_id": null }
 ```
 
+API call:
+
+```swift
+try await SwiftSync.sync(payload: payload, as: Employee.self, in: context)
+```
+
 ### Scenario: to-many relationship by objects
 
-Map payload membership as source of truth:
+Model:
 
-```json
-{ "id": 1, "notes": [{"id": 101}, {"id": 102}] }
+```swift
+@Syncable
+@Model
+final class Message { @Attribute(.unique) var id: Int; var text: String }
+
+@Syncable
+@Model
+final class User { @Attribute(.unique) var id: Int; var messages: [Message] }
 ```
 
-then later:
+JSON A:
 
 ```json
-{ "id": 1, "notes": [{"id": 102}, {"id": 103}] }
+{ "id": 1, "messages": [{"id": 101}, {"id": 102}] }
 ```
 
-Expected result: relation becomes exactly `{102, 103}`.
+JSON B:
+
+```json
+{ "id": 1, "messages": [{"id": 102}, {"id": 103}] }
+```
+
+API call:
+
+```swift
+try await SwiftSync.sync(payload: payload, as: User.self, in: context)
+```
 
 ### Scenario: to-many relationship by `*_ids`
 
-When children already exist locally:
+Model:
+
+```swift
+@Syncable
+@Model
+final class Note { @Attribute(.unique) var id: Int }
+
+@Syncable
+@Model
+final class User { @Attribute(.unique) var id: Int; var notes: [Note] }
+```
+
+JSON A:
 
 ```json
 { "id": 1, "notes_ids": [0, 1] }
 ```
 
-then later:
+JSON B:
 
 ```json
 { "id": 1, "notes_ids": [1, 2] }
 ```
 
-Expected result: relation becomes exactly `{1, 2}`.
+API call:
+
+```swift
+try await SwiftSync.sync(payload: payload, as: User.self, in: context)
+```
+
+### Scenario: export local rows to API JSON
+
+Model:
+
+```swift
+@Syncable
+@Model
+final class User {
+  @Attribute(.unique) var id: Int
+  var firstName: String
+}
+```
+
+JSON output shape (default):
+
+```json
+[
+  { "id": 1, "first_name": "Elvis" }
+]
+```
+
+API call:
+
+```swift
+let rows = try SwiftSync.export(as: User.self, in: context)
+```
 
 ## Modeling and Mapping
 
