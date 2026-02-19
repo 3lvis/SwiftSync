@@ -61,6 +61,13 @@ For `*_id` fields, recommended behavior is:
 - missing key: preserve existing relationship
 - missing referenced row: no crash; leave relationship unset unless your app explicitly supports stubs
 
+For to-many nested object arrays (for example, `"messages": [{...}, {...}]`), recommended behavior is payload-membership source-of-truth for that parent:
+
+- payload A sets relation membership to A ids
+- payload B replaces relation membership with B ids
+- overlapping child ids are updated in place (upsert)
+- ids removed from B are no longer related to the parent
+
 ### Date Parsing Contract
 
 `SwiftSyncCore` includes `SyncDateParser` for inbound mapping hot paths:

@@ -937,4 +937,44 @@ final class SwiftSyncRuntimeTests: XCTestCase {
         XCTAssertNil(employees.first?.company)
     }
 
+    @MainActor
+    func testSyncToManyNestedObjectArrayReplacesMembershipAndUpdatesExistingChild() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeTeam.self, RuntimeMember.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let payloadA: [Any] = [[
+            "id": 21,
+            "name": "Inbox",
+            "members": [
+                ["id": 101, "full_name": "a"],
+                ["id": 102, "full_name": "b"]
+            ]
+        ]]
+        try await SwiftSync.sync(payload: payloadA, as: RuntimeTeam.self, in: context)
+
+        var teams = try context.fetch(FetchDescriptor<RuntimeTeam>())
+        XCTAssertEqual(teams.count, 1)
+        XCTAssertEqual(Set(teams[0].members.map(\.id)), Set([101, 102]))
+
+        let payloadB: [Any] = [[
+            "id": 21,
+            "name": "Inbox",
+            "members": [
+                ["id": 102, "full_name": "b2"],
+                ["id": 103, "full_name": "c"]
+            ]
+        ]]
+        try await SwiftSync.sync(payload: payloadB, as: RuntimeTeam.self, in: context)
+
+        teams = try context.fetch(FetchDescriptor<RuntimeTeam>())
+        XCTAssertEqual(teams.count, 1)
+        XCTAssertEqual(Set(teams[0].members.map(\.id)), Set([102, 103]))
+        XCTAssertFalse(Set(teams[0].members.map(\.id)).contains(101))
+
+        let allMembers = try context.fetch(FetchDescriptor<RuntimeMember>())
+        XCTAssertEqual(allMembers.filter { $0.id == 102 }.count, 1)
+        XCTAssertEqual(allMembers.first(where: { $0.id == 102 })?.fullName, "b2")
+    }
+
 }
