@@ -1093,6 +1093,101 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     }
 
     @MainActor
+    func testSyncToManyObjectArrayEmptyClearsRelationshipSet() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeUserTagsByObjects.self, RuntimeTag.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let seedPayload: [Any] = [[
+            "id": 1,
+            "name": "U1",
+            "tags": [
+                ["id": 10, "name": "t10"],
+                ["id": 11, "name": "t11"]
+            ]
+        ]]
+        try await SwiftSync.sync(payload: seedPayload, as: RuntimeUserTagsByObjects.self, in: context)
+
+        let clearPayload: [Any] = [[
+            "id": 1,
+            "name": "U1",
+            "tags": []
+        ]]
+        try await SwiftSync.sync(payload: clearPayload, as: RuntimeUserTagsByObjects.self, in: context)
+
+        let users = try context.fetch(FetchDescriptor<RuntimeUserTagsByObjects>())
+        XCTAssertEqual(users.count, 1)
+        XCTAssertEqual(users[0].tags.count, 0)
+    }
+
+    @MainActor
+    func testSyncToManyObjectArrayNullClearsRelationshipSetAndMatchesEmptySemantics() async throws {
+        // Snapshot A: clear with empty array.
+        let configurationA = ModelConfiguration(isStoredInMemoryOnly: true)
+        let containerA = try ModelContainer(for: RuntimeUserTagsByObjects.self, RuntimeTag.self, configurations: configurationA)
+        let contextA = ModelContext(containerA)
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 1,
+                "name": "U1",
+                "tags": [
+                    ["id": 10, "name": "t10"],
+                    ["id": 11, "name": "t11"]
+                ]
+            ]],
+            as: RuntimeUserTagsByObjects.self,
+            in: contextA
+        )
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 1,
+                "name": "U1",
+                "tags": []
+            ]],
+            as: RuntimeUserTagsByObjects.self,
+            in: contextA
+        )
+        let usersA = try contextA.fetch(FetchDescriptor<RuntimeUserTagsByObjects>())
+
+        // Snapshot B: clear with null.
+        let configurationB = ModelConfiguration(isStoredInMemoryOnly: true)
+        let containerB = try ModelContainer(for: RuntimeUserTagsByObjects.self, RuntimeTag.self, configurations: configurationB)
+        let contextB = ModelContext(containerB)
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 1,
+                "name": "U1",
+                "tags": [
+                    ["id": 10, "name": "t10"],
+                    ["id": 11, "name": "t11"]
+                ]
+            ]],
+            as: RuntimeUserTagsByObjects.self,
+            in: contextB
+        )
+        do {
+            try await SwiftSync.sync(
+                payload: [[
+                    "id": 1,
+                    "name": "U1",
+                    "tags": NSNull()
+                ]],
+                as: RuntimeUserTagsByObjects.self,
+                in: contextB
+            )
+        } catch {
+            XCTFail("Expected null to clear to-many relationship without crashing, got error: \(error)")
+        }
+        let usersB = try contextB.fetch(FetchDescriptor<RuntimeUserTagsByObjects>())
+
+        XCTAssertEqual(usersA.count, 1)
+        XCTAssertEqual(usersB.count, 1)
+        XCTAssertEqual(usersA[0].tags.count, 0)
+        XCTAssertEqual(usersB[0].tags.count, 0)
+        XCTAssertEqual(Set(usersA[0].tags.map(\.id)), Set(usersB[0].tags.map(\.id)))
+    }
+
+    @MainActor
     func testSyncRelationshipsMissingKeysPreserveExistingLinks() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: RuntimeTeam.self, RuntimeMember.self, configurations: configuration)
