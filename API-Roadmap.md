@@ -1,4 +1,4 @@
-# SwiftSync API Proposal and Roadmap
+# API Proposal and Roadmap
 
 Lean roadmap focused on shipping inbound sync first.
 
@@ -18,6 +18,13 @@ public extension SwiftSync {
     as model: Model.Type,
     in context: ModelContext
   ) async throws
+
+  static func sync<Model: ParentScopedModel>(
+    payload: [Any],
+    as model: Model.Type,
+    in context: ModelContext,
+    parent: Model.SyncParent
+  ) async throws
 }
 ```
 
@@ -27,6 +34,11 @@ public extension SwiftSync {
 public protocol SyncUpdatableModel: SyncModel {
   static func make(from payload: SyncPayload) throws -> Self
   func apply(_ payload: SyncPayload) throws -> Bool
+}
+
+public protocol ParentScopedModel: SyncUpdatableModel {
+  associatedtype SyncParent: PersistentModel
+  static var parentRelationship: ReferenceWritableKeyPath<Self, SyncParent?> { get }
 }
 ```
 
@@ -72,5 +84,5 @@ Included:
 
 1. No new public API without a concrete use case.
 2. No new module unless at least two call sites need it.
-3. Keep runtime entry point as `sync` until outbound phase.
+3. Keep sync entry point as `sync` until outbound phase.
 4. Prefer removing unused options over adding new ones.

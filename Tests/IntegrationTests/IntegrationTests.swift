@@ -1,12 +1,12 @@
 import XCTest
 import SwiftData
-import SwiftSyncCore
-import SwiftSyncMacros
-import SwiftSyncSwiftData
+import Core
+import Macros
+import SwiftDataBridge
 
 @Syncable
 @Model
-final class RuntimeUser {
+final class User {
     @Attribute(.unique) var id: Int
     var fullName: String
 
@@ -18,7 +18,7 @@ final class RuntimeUser {
 
 @Syncable
 @Model
-final class RuntimeLooseUser {
+final class LooseUser {
     var id: Int
     var fullName: String
 
@@ -30,7 +30,7 @@ final class RuntimeLooseUser {
 
 @Syncable
 @Model
-final class RuntimeRemoteUser {
+final class RemoteUser {
     @Attribute(.unique) var remoteID: Int
     var fullName: String
 
@@ -42,7 +42,7 @@ final class RuntimeRemoteUser {
 
 @Syncable
 @Model
-final class RuntimeExternalUser {
+final class ExternalUser {
     @PrimaryKey
     @Attribute(.unique) var xid: String
     var name: String
@@ -55,7 +55,7 @@ final class RuntimeExternalUser {
 
 @Syncable
 @Model
-final class RuntimeProfile {
+final class Profile {
     @Attribute(.unique) var id: Int
     var firstName: String
     var updatedAt: Date
@@ -69,7 +69,7 @@ final class RuntimeProfile {
 
 @Syncable
 @Model
-final class RuntimeOptionalDateProfile {
+final class OptionalDateProfile {
     @Attribute(.unique) var id: Int
     var updatedAt: Date?
 
@@ -81,7 +81,7 @@ final class RuntimeOptionalDateProfile {
 
 @Syncable
 @Model
-final class RuntimePrimitiveUser {
+final class PrimitiveUser {
     @Attribute(.unique) var id: Int
     var name: String
     var age: Int
@@ -117,7 +117,7 @@ final class RuntimePrimitiveUser {
 
 @Syncable
 @Model
-final class RuntimeExternalMappedUser {
+final class ExternalMappedUser {
     @PrimaryKey(remote: "external_id")
     @Attribute(.unique) var xid: String
     var name: String
@@ -130,7 +130,7 @@ final class RuntimeExternalMappedUser {
 
 @Syncable
 @Model
-final class RuntimeStringIDUser {
+final class StringIDUser {
     @Attribute(.unique) var id: String
     var name: String
 
@@ -142,7 +142,7 @@ final class RuntimeStringIDUser {
 
 @Syncable
 @Model
-final class RuntimeMember {
+final class Member {
     @Attribute(.unique) var id: Int
     var fullName: String
 
@@ -153,13 +153,13 @@ final class RuntimeMember {
 }
 
 @Model
-final class RuntimeTeam {
+final class Team {
     @Attribute(.unique) var id: Int
     var name: String
-    var owner: RuntimeMember?
-    var members: [RuntimeMember]
+    var owner: Member?
+    var members: [Member]
 
-    init(id: Int, name: String, owner: RuntimeMember? = nil, members: [RuntimeMember] = []) {
+    init(id: Int, name: String, owner: Member? = nil, members: [Member] = []) {
         self.id = id
         self.name = name
         self.owner = owner
@@ -168,7 +168,7 @@ final class RuntimeTeam {
 }
 
 @Model
-final class RuntimeCompany {
+final class Company {
     @Attribute(.unique) var id: Int
     var name: String
 
@@ -179,12 +179,12 @@ final class RuntimeCompany {
 }
 
 @Model
-final class RuntimeEmployee {
+final class Employee {
     @Attribute(.unique) var id: Int
     var name: String
-    var company: RuntimeCompany?
+    var company: Company?
 
-    init(id: Int, name: String, company: RuntimeCompany? = nil) {
+    init(id: Int, name: String, company: Company? = nil) {
         self.id = id
         self.name = name
         self.company = company
@@ -192,7 +192,7 @@ final class RuntimeEmployee {
 }
 
 @Model
-final class RuntimeNote {
+final class Note {
     @Attribute(.unique) var id: Int
     var text: String
 
@@ -203,12 +203,12 @@ final class RuntimeNote {
 }
 
 @Model
-final class RuntimeUserWithNotes {
+final class UserWithNotes {
     @Attribute(.unique) var id: Int
     var name: String
-    var notes: [RuntimeNote]
+    var notes: [Note]
 
-    init(id: Int, name: String, notes: [RuntimeNote] = []) {
+    init(id: Int, name: String, notes: [Note] = []) {
         self.id = id
         self.name = name
         self.notes = notes
@@ -216,11 +216,11 @@ final class RuntimeUserWithNotes {
 }
 
 @Model
-final class RuntimeTag {
+final class Tag {
     @Attribute(.unique) var id: Int
     var name: String
-    var usersByObjects: [RuntimeUserTagsByObjects]
-    var usersByIDs: [RuntimeUserTagsByIDs]
+    var usersByObjects: [UserTagsByObjects]
+    var usersByIDs: [UserTagsByIDs]
 
     init(id: Int, name: String) {
         self.id = id
@@ -231,13 +231,13 @@ final class RuntimeTag {
 }
 
 @Model
-final class RuntimeUserTagsByObjects {
+final class UserTagsByObjects {
     @Attribute(.unique) var id: Int
     var name: String
-    @Relationship(inverse: \RuntimeTag.usersByObjects)
-    var tags: [RuntimeTag]
+    @Relationship(inverse: \Tag.usersByObjects)
+    var tags: [Tag]
 
-    init(id: Int, name: String, tags: [RuntimeTag] = []) {
+    init(id: Int, name: String, tags: [Tag] = []) {
         self.id = id
         self.name = name
         self.tags = tags
@@ -245,25 +245,52 @@ final class RuntimeUserTagsByObjects {
 }
 
 @Model
-final class RuntimeUserTagsByIDs {
+final class UserTagsByIDs {
     @Attribute(.unique) var id: Int
     var name: String
-    @Relationship(inverse: \RuntimeTag.usersByIDs)
-    var tags: [RuntimeTag]
+    @Relationship(inverse: \Tag.usersByIDs)
+    var tags: [Tag]
 
-    init(id: Int, name: String, tags: [RuntimeTag] = []) {
+    init(id: Int, name: String, tags: [Tag] = []) {
         self.id = id
         self.name = name
         self.tags = tags
     }
 }
 
-extension RuntimeTeam: SyncUpdatableModel {
-    typealias SyncID = Int
-    static var syncIdentity: KeyPath<RuntimeTeam, Int> { \.id }
+@Model
+final class SuperUser {
+    @Attribute(.unique) var id: Int
+    var name: String
+    var notes: [SuperNote]
 
-    static func make(from payload: SyncPayload) throws -> RuntimeTeam {
-        RuntimeTeam(
+    init(id: Int, name: String, notes: [SuperNote] = []) {
+        self.id = id
+        self.name = name
+        self.notes = notes
+    }
+}
+
+@Model
+final class SuperNote {
+    @Attribute(.unique) var id: Int
+    var text: String
+    @Relationship(inverse: \SuperUser.notes)
+    var superUser: SuperUser?
+
+    init(id: Int, text: String, superUser: SuperUser? = nil) {
+        self.id = id
+        self.text = text
+        self.superUser = superUser
+    }
+}
+
+extension Team: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<Team, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> Team {
+        Team(
             id: try payload.required(Int.self, for: "id"),
             name: try payload.required(String.self, for: "name")
         )
@@ -279,12 +306,12 @@ extension RuntimeTeam: SyncUpdatableModel {
     }
 }
 
-extension RuntimeTeam: SyncRelationshipUpdatableModel {
+extension Team: SyncRelationshipUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         var changed = false
 
         if payload.contains("owner") {
-            let nextOwner: RuntimeMember?
+            let nextOwner: Member?
             if let ownerPayload: [String: Any] = payload.value(for: "owner") {
                 nextOwner = try upsertMember(from: ownerPayload, in: context)
             } else {
@@ -298,9 +325,9 @@ extension RuntimeTeam: SyncRelationshipUpdatableModel {
         }
 
         if payload.contains("members") {
-            let desiredMembers: [RuntimeMember]
+            let desiredMembers: [Member]
             if let memberPayloads: [[String: Any]] = payload.value(for: "members") {
-                var resolvedMembers: [RuntimeMember] = []
+                var resolvedMembers: [Member] = []
                 for memberPayload in memberPayloads {
                     resolvedMembers.append(try upsertMember(from: memberPayload, in: context))
                 }
@@ -318,26 +345,26 @@ extension RuntimeTeam: SyncRelationshipUpdatableModel {
         return changed
     }
 
-    private func upsertMember(from payload: [String: Any], in context: ModelContext) throws -> RuntimeMember {
+    private func upsertMember(from payload: [String: Any], in context: ModelContext) throws -> Member {
         let syncPayload = SyncPayload(values: payload)
         let memberID: Int = try syncPayload.required(Int.self, for: "id")
-        let allMembers = try context.fetch(FetchDescriptor<RuntimeMember>())
+        let allMembers = try context.fetch(FetchDescriptor<Member>())
         if let existing = allMembers.first(where: { $0.id == memberID }) {
             _ = try existing.apply(syncPayload)
             return existing
         }
-        let created = try RuntimeMember.make(from: syncPayload)
+        let created = try Member.make(from: syncPayload)
         context.insert(created)
         return created
     }
 }
 
-extension RuntimeCompany: SyncUpdatableModel {
+extension Company: SyncUpdatableModel {
     typealias SyncID = Int
-    static var syncIdentity: KeyPath<RuntimeCompany, Int> { \.id }
+    static var syncIdentity: KeyPath<Company, Int> { \.id }
 
-    static func make(from payload: SyncPayload) throws -> RuntimeCompany {
-        RuntimeCompany(
+    static func make(from payload: SyncPayload) throws -> Company {
+        Company(
             id: try payload.required(Int.self, for: "id"),
             name: try payload.required(String.self, for: "name")
         )
@@ -354,12 +381,12 @@ extension RuntimeCompany: SyncUpdatableModel {
     }
 }
 
-extension RuntimeEmployee: SyncUpdatableModel {
+extension Employee: SyncUpdatableModel {
     typealias SyncID = Int
-    static var syncIdentity: KeyPath<RuntimeEmployee, Int> { \.id }
+    static var syncIdentity: KeyPath<Employee, Int> { \.id }
 
-    static func make(from payload: SyncPayload) throws -> RuntimeEmployee {
-        RuntimeEmployee(
+    static func make(from payload: SyncPayload) throws -> Employee {
+        Employee(
             id: try payload.required(Int.self, for: "id"),
             name: try payload.required(String.self, for: "name")
         )
@@ -376,14 +403,14 @@ extension RuntimeEmployee: SyncUpdatableModel {
     }
 }
 
-extension RuntimeEmployee: SyncRelationshipUpdatableModel {
+extension Employee: SyncRelationshipUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         // Support to-one by foreign key scalar (company_id).
         guard payload.contains("company_id") else { return false }
 
         let companyID: Int? = payload.value(for: "company_id")
         if let companyID {
-            let companies = try context.fetch(FetchDescriptor<RuntimeCompany>())
+            let companies = try context.fetch(FetchDescriptor<Company>())
             let nextCompany = companies.first(where: { $0.id == companyID })
             if company?.id != nextCompany?.id {
                 company = nextCompany
@@ -400,12 +427,12 @@ extension RuntimeEmployee: SyncRelationshipUpdatableModel {
     }
 }
 
-extension RuntimeNote: SyncUpdatableModel {
+extension Note: SyncUpdatableModel {
     typealias SyncID = Int
-    static var syncIdentity: KeyPath<RuntimeNote, Int> { \.id }
+    static var syncIdentity: KeyPath<Note, Int> { \.id }
 
-    static func make(from payload: SyncPayload) throws -> RuntimeNote {
-        RuntimeNote(
+    static func make(from payload: SyncPayload) throws -> Note {
+        Note(
             id: try payload.required(Int.self, for: "id"),
             text: try payload.required(String.self, for: "text")
         )
@@ -422,12 +449,12 @@ extension RuntimeNote: SyncUpdatableModel {
     }
 }
 
-extension RuntimeUserWithNotes: SyncUpdatableModel {
+extension UserWithNotes: SyncUpdatableModel {
     typealias SyncID = Int
-    static var syncIdentity: KeyPath<RuntimeUserWithNotes, Int> { \.id }
+    static var syncIdentity: KeyPath<UserWithNotes, Int> { \.id }
 
-    static func make(from payload: SyncPayload) throws -> RuntimeUserWithNotes {
-        RuntimeUserWithNotes(
+    static func make(from payload: SyncPayload) throws -> UserWithNotes {
+        UserWithNotes(
             id: try payload.required(Int.self, for: "id"),
             name: try payload.required(String.self, for: "name")
         )
@@ -444,7 +471,7 @@ extension RuntimeUserWithNotes: SyncUpdatableModel {
     }
 }
 
-extension RuntimeUserWithNotes: SyncRelationshipUpdatableModel {
+extension UserWithNotes: SyncRelationshipUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         // Support to-many by foreign key scalar array (notes_ids).
         guard payload.contains("notes_ids") else { return false }
@@ -456,7 +483,7 @@ extension RuntimeUserWithNotes: SyncRelationshipUpdatableModel {
             desiredIDs = []
         }
 
-        let allNotes = try context.fetch(FetchDescriptor<RuntimeNote>())
+        let allNotes = try context.fetch(FetchDescriptor<Note>())
         let byID = Dictionary(uniqueKeysWithValues: allNotes.map { ($0.id, $0) })
         let desiredNotes = desiredIDs.compactMap { byID[$0] }
 
@@ -468,12 +495,12 @@ extension RuntimeUserWithNotes: SyncRelationshipUpdatableModel {
     }
 }
 
-extension RuntimeTag: SyncUpdatableModel {
+extension Tag: SyncUpdatableModel {
     typealias SyncID = Int
-    static var syncIdentity: KeyPath<RuntimeTag, Int> { \.id }
+    static var syncIdentity: KeyPath<Tag, Int> { \.id }
 
-    static func make(from payload: SyncPayload) throws -> RuntimeTag {
-        RuntimeTag(
+    static func make(from payload: SyncPayload) throws -> Tag {
+        Tag(
             id: try payload.required(Int.self, for: "id"),
             name: try payload.required(String.self, for: "name")
         )
@@ -490,12 +517,12 @@ extension RuntimeTag: SyncUpdatableModel {
     }
 }
 
-extension RuntimeUserTagsByObjects: SyncUpdatableModel {
+extension UserTagsByObjects: SyncUpdatableModel {
     typealias SyncID = Int
-    static var syncIdentity: KeyPath<RuntimeUserTagsByObjects, Int> { \.id }
+    static var syncIdentity: KeyPath<UserTagsByObjects, Int> { \.id }
 
-    static func make(from payload: SyncPayload) throws -> RuntimeUserTagsByObjects {
-        RuntimeUserTagsByObjects(
+    static func make(from payload: SyncPayload) throws -> UserTagsByObjects {
+        UserTagsByObjects(
             id: try payload.required(Int.self, for: "id"),
             name: try payload.required(String.self, for: "name")
         )
@@ -512,12 +539,12 @@ extension RuntimeUserTagsByObjects: SyncUpdatableModel {
     }
 }
 
-extension RuntimeUserTagsByObjects: SyncRelationshipUpdatableModel {
+extension UserTagsByObjects: SyncRelationshipUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         guard payload.contains("tags") else { return false }
-        let desiredTags: [RuntimeTag]
+        let desiredTags: [Tag]
         if let tagPayloads: [[String: Any]] = payload.value(for: "tags") {
-            var resolved: [RuntimeTag] = []
+            var resolved: [Tag] = []
             for tagPayload in tagPayloads {
                 resolved.append(try upsertTag(from: tagPayload, in: context))
             }
@@ -532,26 +559,26 @@ extension RuntimeUserTagsByObjects: SyncRelationshipUpdatableModel {
         return false
     }
 
-    private func upsertTag(from payload: [String: Any], in context: ModelContext) throws -> RuntimeTag {
+    private func upsertTag(from payload: [String: Any], in context: ModelContext) throws -> Tag {
         let syncPayload = SyncPayload(values: payload)
         let tagID: Int = try syncPayload.required(Int.self, for: "id")
-        let allTags = try context.fetch(FetchDescriptor<RuntimeTag>())
+        let allTags = try context.fetch(FetchDescriptor<Tag>())
         if let existing = allTags.first(where: { $0.id == tagID }) {
             _ = try existing.apply(syncPayload)
             return existing
         }
-        let created = try RuntimeTag.make(from: syncPayload)
+        let created = try Tag.make(from: syncPayload)
         context.insert(created)
         return created
     }
 }
 
-extension RuntimeUserTagsByIDs: SyncUpdatableModel {
+extension UserTagsByIDs: SyncUpdatableModel {
     typealias SyncID = Int
-    static var syncIdentity: KeyPath<RuntimeUserTagsByIDs, Int> { \.id }
+    static var syncIdentity: KeyPath<UserTagsByIDs, Int> { \.id }
 
-    static func make(from payload: SyncPayload) throws -> RuntimeUserTagsByIDs {
-        RuntimeUserTagsByIDs(
+    static func make(from payload: SyncPayload) throws -> UserTagsByIDs {
+        UserTagsByIDs(
             id: try payload.required(Int.self, for: "id"),
             name: try payload.required(String.self, for: "name")
         )
@@ -568,7 +595,7 @@ extension RuntimeUserTagsByIDs: SyncUpdatableModel {
     }
 }
 
-extension RuntimeUserTagsByIDs: SyncRelationshipUpdatableModel {
+extension UserTagsByIDs: SyncRelationshipUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         guard payload.contains("tags_ids") else { return false }
         let desiredIDs: [Int]
@@ -577,7 +604,7 @@ extension RuntimeUserTagsByIDs: SyncRelationshipUpdatableModel {
         } else {
             desiredIDs = []
         }
-        let allTags = try context.fetch(FetchDescriptor<RuntimeTag>())
+        let allTags = try context.fetch(FetchDescriptor<Tag>())
         let byID = Dictionary(uniqueKeysWithValues: allTags.map { ($0.id, $0) })
         let desiredTags = desiredIDs.compactMap { byID[$0] }
         if tags.map(\.id) != desiredTags.map(\.id) {
@@ -588,9 +615,58 @@ extension RuntimeUserTagsByIDs: SyncRelationshipUpdatableModel {
     }
 }
 
-final class SwiftSyncRuntimeTests: XCTestCase {
+extension SuperUser: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<SuperUser, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> SuperUser {
+        SuperUser(
+            id: try payload.required(Int.self, for: "id"),
+            name: try payload.required(String.self, for: "name")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        var changed = false
+        let incomingName: String = try payload.required(String.self, for: "name")
+        if name != incomingName {
+            name = incomingName
+            changed = true
+        }
+        return changed
+    }
+}
+
+extension SuperNote: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<SuperNote, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> SuperNote {
+        SuperNote(
+            id: try payload.required(Int.self, for: "id"),
+            text: payload.value(for: "text") ?? ""
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        var changed = false
+        let incomingText: String = payload.value(for: "text") ?? ""
+        if text != incomingText {
+            text = incomingText
+            changed = true
+        }
+        return changed
+    }
+}
+
+extension SuperNote: ParentScopedModel {
+    typealias SyncParent = SuperUser
+    static var parentRelationship: ReferenceWritableKeyPath<SuperNote, SuperUser?> { \.superUser }
+}
+
+final class IntegrationTests: XCTestCase {
     func testApplyReturnsFalseWhenPayloadMatchesExistingValues() throws {
-        let user = RuntimeUser(id: 1, fullName: "Ava Swift")
+        let user = User(id: 1, fullName: "Ava Swift")
         let payload = SyncPayload(values: ["id": 1, "full_name": "Ava Swift"])
 
         let changed = try user.apply(payload)
@@ -600,7 +676,7 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     }
 
     func testApplyReturnsTrueWhenAnyFieldDiffers() throws {
-        let user = RuntimeUser(id: 1, fullName: "Ava Swift")
+        let user = User(id: 1, fullName: "Ava Swift")
         let payload = SyncPayload(values: ["id": 1, "full_name": "Ava Updated"])
 
         let changed = try user.apply(payload)
@@ -612,20 +688,20 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncInsertsThenUpdatesByID() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeUser.self, configurations: configuration)
+        let container = try ModelContainer(for: User.self, configurations: configuration)
         let context = ModelContext(container)
 
         let insertPayload: [Any] = [["id": 1, "full_name": "Ava Swift"]]
-        try await SwiftSync.sync(payload: insertPayload, as: RuntimeUser.self, in: context)
+        try await SwiftSync.sync(payload: insertPayload, as: User.self, in: context)
 
-        var users = try context.fetch(FetchDescriptor<RuntimeUser>())
+        var users = try context.fetch(FetchDescriptor<User>())
         XCTAssertEqual(users.count, 1)
         XCTAssertEqual(users.first?.fullName, "Ava Swift")
 
         let updatePayload: [Any] = [["id": 1, "full_name": "Ava Updated"]]
-        try await SwiftSync.sync(payload: updatePayload, as: RuntimeUser.self, in: context)
+        try await SwiftSync.sync(payload: updatePayload, as: User.self, in: context)
 
-        users = try context.fetch(FetchDescriptor<RuntimeUser>())
+        users = try context.fetch(FetchDescriptor<User>())
         XCTAssertEqual(users.count, 1)
         XCTAssertEqual(users.first?.fullName, "Ava Updated")
     }
@@ -633,13 +709,13 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncUsesRemoteIDConvention() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeRemoteUser.self, configurations: configuration)
+        let container = try ModelContainer(for: RemoteUser.self, configurations: configuration)
         let context = ModelContext(container)
 
         let payload: [Any] = [["id": 55, "full_name": "Remote User"]]
-        try await SwiftSync.sync(payload: payload, as: RuntimeRemoteUser.self, in: context)
+        try await SwiftSync.sync(payload: payload, as: RemoteUser.self, in: context)
 
-        let users = try context.fetch(FetchDescriptor<RuntimeRemoteUser>())
+        let users = try context.fetch(FetchDescriptor<RemoteUser>())
         XCTAssertEqual(users.count, 1)
         XCTAssertEqual(users.first?.remoteID, 55)
         XCTAssertEqual(users.first?.fullName, "Remote User")
@@ -648,13 +724,13 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncLenientIntPrimaryKeyCoercesFloatValue() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeUser.self, configurations: configuration)
+        let container = try ModelContainer(for: User.self, configurations: configuration)
         let context = ModelContext(container)
 
         let payload: [Any] = [["id": 42.9, "full_name": "Float ID User"]]
-        try await SwiftSync.sync(payload: payload, as: RuntimeUser.self, in: context)
+        try await SwiftSync.sync(payload: payload, as: User.self, in: context)
 
-        let users = try context.fetch(FetchDescriptor<RuntimeUser>())
+        let users = try context.fetch(FetchDescriptor<User>())
         XCTAssertEqual(users.count, 1)
         XCTAssertEqual(users.first?.id, 42)
         XCTAssertEqual(users.first?.fullName, "Float ID User")
@@ -663,20 +739,20 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncCoercesStringIDToIntAndMatchesLaterNumericID() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeUser.self, configurations: configuration)
+        let container = try ModelContainer(for: User.self, configurations: configuration)
         let context = ModelContext(container)
 
         let payloadA: [Any] = [["id": "42", "full_name": "X"]]
-        try await SwiftSync.sync(payload: payloadA, as: RuntimeUser.self, in: context)
+        try await SwiftSync.sync(payload: payloadA, as: User.self, in: context)
 
-        var rows = try context.fetch(FetchDescriptor<RuntimeUser>())
+        var rows = try context.fetch(FetchDescriptor<User>())
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows.first?.id, 42)
 
         let payloadB: [Any] = [["id": 42, "full_name": "X Updated"]]
-        try await SwiftSync.sync(payload: payloadB, as: RuntimeUser.self, in: context)
+        try await SwiftSync.sync(payload: payloadB, as: User.self, in: context)
 
-        rows = try context.fetch(FetchDescriptor<RuntimeUser>())
+        rows = try context.fetch(FetchDescriptor<User>())
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows.first?.id, 42)
         XCTAssertEqual(rows.first?.fullName, "X Updated")
@@ -685,21 +761,21 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncCoercesNumericIDToStringAndMatchesLaterStringID() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeStringIDUser.self, configurations: configuration)
+        let container = try ModelContainer(for: StringIDUser.self, configurations: configuration)
         let context = ModelContext(container)
 
         let payloadA: [Any] = [["id": 42, "name": "X"]]
-        try await SwiftSync.sync(payload: payloadA, as: RuntimeStringIDUser.self, in: context)
+        try await SwiftSync.sync(payload: payloadA, as: StringIDUser.self, in: context)
 
-        var rows = try context.fetch(FetchDescriptor<RuntimeStringIDUser>())
+        var rows = try context.fetch(FetchDescriptor<StringIDUser>())
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows.first?.id, "42")
         XCTAssertEqual(rows.first?.name, "X")
 
         let payloadB: [Any] = [["id": "42", "name": "X Updated"]]
-        try await SwiftSync.sync(payload: payloadB, as: RuntimeStringIDUser.self, in: context)
+        try await SwiftSync.sync(payload: payloadB, as: StringIDUser.self, in: context)
 
-        rows = try context.fetch(FetchDescriptor<RuntimeStringIDUser>())
+        rows = try context.fetch(FetchDescriptor<StringIDUser>())
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows.first?.id, "42")
         XCTAssertEqual(rows.first?.name, "X Updated")
@@ -708,7 +784,7 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncSnakeCaseToCamelCaseWithISO8601Date() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeProfile.self, configurations: configuration)
+        let container = try ModelContainer(for: Profile.self, configurations: configuration)
         let context = ModelContext(container)
 
         let payload: [Any] = [[
@@ -716,10 +792,10 @@ final class SwiftSyncRuntimeTests: XCTestCase {
             "first_name": "Elvis",
             "updated_at": "2014-02-17T00:00:00+00:00"
         ]]
-        try await SwiftSync.sync(payload: payload, as: RuntimeProfile.self, in: context)
-        try await SwiftSync.sync(payload: payload, as: RuntimeProfile.self, in: context)
+        try await SwiftSync.sync(payload: payload, as: Profile.self, in: context)
+        try await SwiftSync.sync(payload: payload, as: Profile.self, in: context)
 
-        let rows = try context.fetch(FetchDescriptor<RuntimeProfile>())
+        let rows = try context.fetch(FetchDescriptor<Profile>())
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows.first?.firstName, "Elvis")
         XCTAssertEqual(rows.first?.updatedAt, ISO8601DateFormatter().date(from: "2014-02-17T00:00:00+00:00"))
@@ -728,7 +804,7 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncParsesDateOnlyISOFormat() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeProfile.self, configurations: configuration)
+        let container = try ModelContainer(for: Profile.self, configurations: configuration)
         let context = ModelContext(container)
 
         let payload: [Any] = [[
@@ -736,9 +812,9 @@ final class SwiftSyncRuntimeTests: XCTestCase {
             "first_name": "Elvis",
             "updated_at": "2014-01-02"
         ]]
-        try await SwiftSync.sync(payload: payload, as: RuntimeProfile.self, in: context)
+        try await SwiftSync.sync(payload: payload, as: Profile.self, in: context)
 
-        let rows = try context.fetch(FetchDescriptor<RuntimeProfile>())
+        let rows = try context.fetch(FetchDescriptor<Profile>())
         XCTAssertEqual(rows.count, 1)
 
         var components = DateComponents()
@@ -756,7 +832,7 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncParsesUnixTimestampVariants() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeProfile.self, configurations: configuration)
+        let container = try ModelContainer(for: Profile.self, configurations: configuration)
         let context = ModelContext(container)
 
         // Seconds
@@ -766,10 +842,10 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                 "first_name": "A",
                 "updated_at": 1_700_000_000
             ]],
-            as: RuntimeProfile.self,
+            as: Profile.self,
             in: context
         )
-        var rows = try context.fetch(FetchDescriptor<RuntimeProfile>())
+        var rows = try context.fetch(FetchDescriptor<Profile>())
         XCTAssertEqual(rows.first?.updatedAt, Date(timeIntervalSince1970: 1_700_000_000))
 
         // Milliseconds
@@ -779,10 +855,10 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                 "first_name": "A",
                 "updated_at": 1_700_000_000_000
             ]],
-            as: RuntimeProfile.self,
+            as: Profile.self,
             in: context
         )
-        rows = try context.fetch(FetchDescriptor<RuntimeProfile>())
+        rows = try context.fetch(FetchDescriptor<Profile>())
         XCTAssertEqual(rows.first?.updatedAt, Date(timeIntervalSince1970: 1_700_000_000))
 
         // Microseconds
@@ -792,17 +868,17 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                 "first_name": "A",
                 "updated_at": 1_700_000_000_000_000
             ]],
-            as: RuntimeProfile.self,
+            as: Profile.self,
             in: context
         )
-        rows = try context.fetch(FetchDescriptor<RuntimeProfile>())
+        rows = try context.fetch(FetchDescriptor<Profile>())
         XCTAssertEqual(rows.first?.updatedAt, Date(timeIntervalSince1970: 1_700_000_000))
     }
 
     @MainActor
     func testSyncInvalidDateDefaultsRequiredAndNilForOptional() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeProfile.self, RuntimeOptionalDateProfile.self, configurations: configuration)
+        let container = try ModelContainer(for: Profile.self, OptionalDateProfile.self, configurations: configuration)
         let context = ModelContext(container)
 
         // Required Date field defaults to epoch on invalid input.
@@ -812,10 +888,10 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                 "first_name": "Elvis",
                 "updated_at": "not-a-date"
             ]],
-            as: RuntimeProfile.self,
+            as: Profile.self,
             in: context
         )
-        let requiredRows = try context.fetch(FetchDescriptor<RuntimeProfile>())
+        let requiredRows = try context.fetch(FetchDescriptor<Profile>())
         XCTAssertEqual(requiredRows.count, 1)
         XCTAssertEqual(requiredRows.first?.updatedAt, Date(timeIntervalSince1970: 0))
 
@@ -825,10 +901,10 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                 "id": 2,
                 "updated_at": "not-a-date"
             ]],
-            as: RuntimeOptionalDateProfile.self,
+            as: OptionalDateProfile.self,
             in: context
         )
-        let optionalRows = try context.fetch(FetchDescriptor<RuntimeOptionalDateProfile>())
+        let optionalRows = try context.fetch(FetchDescriptor<OptionalDateProfile>())
         XCTAssertEqual(optionalRows.count, 1)
         XCTAssertNil(optionalRows.first?.updatedAt)
     }
@@ -836,7 +912,7 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncNullClearsNonOptionalPrimitiveScalarsToDefaults() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimePrimitiveUser.self, configurations: configuration)
+        let container = try ModelContainer(for: PrimitiveUser.self, configurations: configuration)
         let context = ModelContext(container)
 
         let seedPayload: [Any] = [[
@@ -850,7 +926,7 @@ final class SwiftSyncRuntimeTests: XCTestCase {
             "big_count": Int64(77),
             "nickname": "Al"
         ]]
-        try await SwiftSync.sync(payload: seedPayload, as: RuntimePrimitiveUser.self, in: context)
+        try await SwiftSync.sync(payload: seedPayload, as: PrimitiveUser.self, in: context)
 
         let clearPayload: [Any] = [[
             "id": 1,
@@ -863,9 +939,9 @@ final class SwiftSyncRuntimeTests: XCTestCase {
             "big_count": NSNull(),
             "nickname": NSNull()
         ]]
-        try await SwiftSync.sync(payload: clearPayload, as: RuntimePrimitiveUser.self, in: context)
+        try await SwiftSync.sync(payload: clearPayload, as: PrimitiveUser.self, in: context)
 
-        let rows = try context.fetch(FetchDescriptor<RuntimePrimitiveUser>())
+        let rows = try context.fetch(FetchDescriptor<PrimitiveUser>())
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows.first?.name, "")
         XCTAssertEqual(rows.first?.age, 0)
@@ -880,19 +956,19 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncDeletesLocalRowsMissingFromPayload() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeUser.self, configurations: configuration)
+        let container = try ModelContainer(for: User.self, configurations: configuration)
         let context = ModelContext(container)
 
         let seedPayload: [Any] = [
             ["id": 1, "full_name": "Ava Swift"],
             ["id": 2, "full_name": "Noah Swift"]
         ]
-        try await SwiftSync.sync(payload: seedPayload, as: RuntimeUser.self, in: context)
+        try await SwiftSync.sync(payload: seedPayload, as: User.self, in: context)
 
         let replacePayload: [Any] = [["id": 1, "full_name": "Ava Updated"]]
-        try await SwiftSync.sync(payload: replacePayload, as: RuntimeUser.self, in: context)
+        try await SwiftSync.sync(payload: replacePayload, as: User.self, in: context)
 
-        let users = try context.fetch(FetchDescriptor<RuntimeUser>())
+        let users = try context.fetch(FetchDescriptor<User>())
         XCTAssertEqual(users.count, 1)
         XCTAssertEqual(users.first?.id, 1)
         XCTAssertEqual(users.first?.fullName, "Ava Updated")
@@ -901,7 +977,7 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncPrimaryKeyDiffingInsertUpdateDeleteInSingleRun() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeUser.self, configurations: configuration)
+        let container = try ModelContainer(for: User.self, configurations: configuration)
         let context = ModelContext(container)
 
         let seedPayload: [Any] = [
@@ -911,16 +987,16 @@ final class SwiftSyncRuntimeTests: XCTestCase {
             ["id": 3, "full_name": "User 3"],
             ["id": 4, "full_name": "User 4"]
         ]
-        try await SwiftSync.sync(payload: seedPayload, as: RuntimeUser.self, in: context)
+        try await SwiftSync.sync(payload: seedPayload, as: User.self, in: context)
 
         let diffPayload: [Any] = [
             ["id": 0, "full_name": "User 0 Updated"],
             ["id": 1, "full_name": "User 1 Updated"],
             ["id": 6, "full_name": "User 6 New"]
         ]
-        try await SwiftSync.sync(payload: diffPayload, as: RuntimeUser.self, in: context)
+        try await SwiftSync.sync(payload: diffPayload, as: User.self, in: context)
 
-        let users = try context.fetch(FetchDescriptor<RuntimeUser>())
+        let users = try context.fetch(FetchDescriptor<User>())
         XCTAssertEqual(users.count, 3)
 
         let ids = Set(users.map(\.id))
@@ -937,23 +1013,23 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncDeduplicatesLocalDuplicatePrimaryKeys() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeLooseUser.self, configurations: configuration)
+        let container = try ModelContainer(for: LooseUser.self, configurations: configuration)
         let context = ModelContext(container)
 
-        context.insert(RuntimeLooseUser(id: 1, fullName: "dup-a"))
-        context.insert(RuntimeLooseUser(id: 1, fullName: "dup-b"))
-        context.insert(RuntimeLooseUser(id: 1, fullName: "dup-c"))
-        context.insert(RuntimeLooseUser(id: 2, fullName: "other"))
+        context.insert(LooseUser(id: 1, fullName: "dup-a"))
+        context.insert(LooseUser(id: 1, fullName: "dup-b"))
+        context.insert(LooseUser(id: 1, fullName: "dup-c"))
+        context.insert(LooseUser(id: 2, fullName: "other"))
         try context.save()
 
         let payload: [Any] = [["id": 1, "full_name": "single"]]
         do {
-            try await SwiftSync.sync(payload: payload, as: RuntimeLooseUser.self, in: context)
+            try await SwiftSync.sync(payload: payload, as: LooseUser.self, in: context)
         } catch {
             XCTFail("Expected sync to dedupe local duplicates without crashing, got error: \(error)")
         }
 
-        let rows = try context.fetch(FetchDescriptor<RuntimeLooseUser>())
+        let rows = try context.fetch(FetchDescriptor<LooseUser>())
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows.filter { $0.id == 1 }.count, 1)
         XCTAssertEqual(rows.first?.id, 1)
@@ -963,16 +1039,16 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncUsesCustomPrimaryKeyWithoutIDField() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeExternalUser.self, configurations: configuration)
+        let container = try ModelContainer(for: ExternalUser.self, configurations: configuration)
         let context = ModelContext(container)
 
         let payloadA: [Any] = [["xid": "abc", "name": "v1"]]
-        try await SwiftSync.sync(payload: payloadA, as: RuntimeExternalUser.self, in: context)
+        try await SwiftSync.sync(payload: payloadA, as: ExternalUser.self, in: context)
 
         let payloadB: [Any] = [["xid": "abc", "name": "v2"]]
-        try await SwiftSync.sync(payload: payloadB, as: RuntimeExternalUser.self, in: context)
+        try await SwiftSync.sync(payload: payloadB, as: ExternalUser.self, in: context)
 
-        let rows = try context.fetch(FetchDescriptor<RuntimeExternalUser>())
+        let rows = try context.fetch(FetchDescriptor<ExternalUser>())
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows.first?.xid, "abc")
         XCTAssertEqual(rows.first?.name, "v2")
@@ -981,16 +1057,16 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncUsesCustomPrimaryKeyWithRemoteKeyMapping() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeExternalMappedUser.self, configurations: configuration)
+        let container = try ModelContainer(for: ExternalMappedUser.self, configurations: configuration)
         let context = ModelContext(container)
 
         let payloadA: [Any] = [["external_id": "abc", "name": "v1"]]
-        try await SwiftSync.sync(payload: payloadA, as: RuntimeExternalMappedUser.self, in: context)
+        try await SwiftSync.sync(payload: payloadA, as: ExternalMappedUser.self, in: context)
 
         let payloadB: [Any] = [["external_id": "abc", "name": "v2"]]
-        try await SwiftSync.sync(payload: payloadB, as: RuntimeExternalMappedUser.self, in: context)
+        try await SwiftSync.sync(payload: payloadB, as: ExternalMappedUser.self, in: context)
 
-        let rows = try context.fetch(FetchDescriptor<RuntimeExternalMappedUser>())
+        let rows = try context.fetch(FetchDescriptor<ExternalMappedUser>())
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows.first?.xid, "abc")
         XCTAssertEqual(rows.first?.name, "v2")
@@ -999,14 +1075,14 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncSkipsRowsWithNullOrMissingIdentity() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeUser.self, configurations: configuration)
+        let container = try ModelContainer(for: User.self, configurations: configuration)
         let context = ModelContext(container)
 
         let seedPayload: [Any] = [
             ["id": 1, "full_name": "One"],
             ["id": 2, "full_name": "Two"]
         ]
-        try await SwiftSync.sync(payload: seedPayload, as: RuntimeUser.self, in: context)
+        try await SwiftSync.sync(payload: seedPayload, as: User.self, in: context)
 
         let mixedPayload: [Any] = [
             ["id": NSNull(), "full_name": "Null ID"],
@@ -1015,12 +1091,12 @@ final class SwiftSyncRuntimeTests: XCTestCase {
         ]
 
         do {
-            try await SwiftSync.sync(payload: mixedPayload, as: RuntimeUser.self, in: context)
+            try await SwiftSync.sync(payload: mixedPayload, as: User.self, in: context)
         } catch {
             XCTFail("Expected sync to skip invalid identity rows, got error: \(error)")
         }
 
-        let users = try context.fetch(FetchDescriptor<RuntimeUser>())
+        let users = try context.fetch(FetchDescriptor<User>())
         XCTAssertEqual(users.count, 1)
         XCTAssertEqual(users.first?.id, 1)
         XCTAssertEqual(users.first?.fullName, "One Updated")
@@ -1029,7 +1105,7 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncRelationshipsApplyToOneAndToMany() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeTeam.self, RuntimeMember.self, configurations: configuration)
+        let container = try ModelContainer(for: Team.self, Member.self, configurations: configuration)
         let context = ModelContext(container)
 
         let seedPayload: [Any] = [[
@@ -1041,7 +1117,7 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                 ["id": 2, "full_name": "Member B"]
             ]
         ]]
-        try await SwiftSync.sync(payload: seedPayload, as: RuntimeTeam.self, in: context)
+        try await SwiftSync.sync(payload: seedPayload, as: Team.self, in: context)
 
         let updatePayload: [Any] = [[
             "id": 10,
@@ -1052,9 +1128,9 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                 ["id": 3, "full_name": "Member C"]
             ]
         ]]
-        try await SwiftSync.sync(payload: updatePayload, as: RuntimeTeam.self, in: context)
+        try await SwiftSync.sync(payload: updatePayload, as: Team.self, in: context)
 
-        let teams = try context.fetch(FetchDescriptor<RuntimeTeam>())
+        let teams = try context.fetch(FetchDescriptor<Team>())
         XCTAssertEqual(teams.count, 1)
         XCTAssertEqual(teams.first?.name, "Platform Updated")
         XCTAssertEqual(teams.first?.owner?.id, 2)
@@ -1064,7 +1140,7 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncRelationshipsClearWithNullAndEmptyCollection() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeTeam.self, RuntimeMember.self, configurations: configuration)
+        let container = try ModelContainer(for: Team.self, Member.self, configurations: configuration)
         let context = ModelContext(container)
 
         let seedPayload: [Any] = [[
@@ -1076,7 +1152,7 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                 ["id": 2, "full_name": "Member B"]
             ]
         ]]
-        try await SwiftSync.sync(payload: seedPayload, as: RuntimeTeam.self, in: context)
+        try await SwiftSync.sync(payload: seedPayload, as: Team.self, in: context)
 
         let clearPayload: [Any] = [[
             "id": 11,
@@ -1084,9 +1160,9 @@ final class SwiftSyncRuntimeTests: XCTestCase {
             "owner": NSNull(),
             "members": []
         ]]
-        try await SwiftSync.sync(payload: clearPayload, as: RuntimeTeam.self, in: context)
+        try await SwiftSync.sync(payload: clearPayload, as: Team.self, in: context)
 
-        let teams = try context.fetch(FetchDescriptor<RuntimeTeam>())
+        let teams = try context.fetch(FetchDescriptor<Team>())
         XCTAssertEqual(teams.count, 1)
         XCTAssertNil(teams.first?.owner)
         XCTAssertEqual(teams.first?.members.count, 0)
@@ -1095,7 +1171,7 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncToManyObjectArrayEmptyClearsRelationshipSet() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeUserTagsByObjects.self, RuntimeTag.self, configurations: configuration)
+        let container = try ModelContainer(for: UserTagsByObjects.self, Tag.self, configurations: configuration)
         let context = ModelContext(container)
 
         let seedPayload: [Any] = [[
@@ -1106,16 +1182,16 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                 ["id": 11, "name": "t11"]
             ]
         ]]
-        try await SwiftSync.sync(payload: seedPayload, as: RuntimeUserTagsByObjects.self, in: context)
+        try await SwiftSync.sync(payload: seedPayload, as: UserTagsByObjects.self, in: context)
 
         let clearPayload: [Any] = [[
             "id": 1,
             "name": "U1",
             "tags": []
         ]]
-        try await SwiftSync.sync(payload: clearPayload, as: RuntimeUserTagsByObjects.self, in: context)
+        try await SwiftSync.sync(payload: clearPayload, as: UserTagsByObjects.self, in: context)
 
-        let users = try context.fetch(FetchDescriptor<RuntimeUserTagsByObjects>())
+        let users = try context.fetch(FetchDescriptor<UserTagsByObjects>())
         XCTAssertEqual(users.count, 1)
         XCTAssertEqual(users[0].tags.count, 0)
     }
@@ -1124,7 +1200,7 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     func testSyncToManyObjectArrayNullClearsRelationshipSetAndMatchesEmptySemantics() async throws {
         // Snapshot A: clear with empty array.
         let configurationA = ModelConfiguration(isStoredInMemoryOnly: true)
-        let containerA = try ModelContainer(for: RuntimeUserTagsByObjects.self, RuntimeTag.self, configurations: configurationA)
+        let containerA = try ModelContainer(for: UserTagsByObjects.self, Tag.self, configurations: configurationA)
         let contextA = ModelContext(containerA)
         try await SwiftSync.sync(
             payload: [[
@@ -1135,7 +1211,7 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                     ["id": 11, "name": "t11"]
                 ]
             ]],
-            as: RuntimeUserTagsByObjects.self,
+            as: UserTagsByObjects.self,
             in: contextA
         )
         try await SwiftSync.sync(
@@ -1144,14 +1220,14 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                 "name": "U1",
                 "tags": []
             ]],
-            as: RuntimeUserTagsByObjects.self,
+            as: UserTagsByObjects.self,
             in: contextA
         )
-        let usersA = try contextA.fetch(FetchDescriptor<RuntimeUserTagsByObjects>())
+        let usersA = try contextA.fetch(FetchDescriptor<UserTagsByObjects>())
 
         // Snapshot B: clear with null.
         let configurationB = ModelConfiguration(isStoredInMemoryOnly: true)
-        let containerB = try ModelContainer(for: RuntimeUserTagsByObjects.self, RuntimeTag.self, configurations: configurationB)
+        let containerB = try ModelContainer(for: UserTagsByObjects.self, Tag.self, configurations: configurationB)
         let contextB = ModelContext(containerB)
         try await SwiftSync.sync(
             payload: [[
@@ -1162,7 +1238,7 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                     ["id": 11, "name": "t11"]
                 ]
             ]],
-            as: RuntimeUserTagsByObjects.self,
+            as: UserTagsByObjects.self,
             in: contextB
         )
         do {
@@ -1172,13 +1248,13 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                     "name": "U1",
                     "tags": NSNull()
                 ]],
-                as: RuntimeUserTagsByObjects.self,
+                as: UserTagsByObjects.self,
                 in: contextB
             )
         } catch {
             XCTFail("Expected null to clear to-many relationship without crashing, got error: \(error)")
         }
-        let usersB = try contextB.fetch(FetchDescriptor<RuntimeUserTagsByObjects>())
+        let usersB = try contextB.fetch(FetchDescriptor<UserTagsByObjects>())
 
         XCTAssertEqual(usersA.count, 1)
         XCTAssertEqual(usersB.count, 1)
@@ -1190,7 +1266,7 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncRelationshipsMissingKeysPreserveExistingLinks() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeTeam.self, RuntimeMember.self, configurations: configuration)
+        let container = try ModelContainer(for: Team.self, Member.self, configurations: configuration)
         let context = ModelContext(container)
 
         let seedPayload: [Any] = [[
@@ -1202,15 +1278,15 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                 ["id": 2, "full_name": "Member B"]
             ]
         ]]
-        try await SwiftSync.sync(payload: seedPayload, as: RuntimeTeam.self, in: context)
+        try await SwiftSync.sync(payload: seedPayload, as: Team.self, in: context)
 
         let nameOnlyPayload: [Any] = [[
             "id": 12,
             "name": "Platform Renamed"
         ]]
-        try await SwiftSync.sync(payload: nameOnlyPayload, as: RuntimeTeam.self, in: context)
+        try await SwiftSync.sync(payload: nameOnlyPayload, as: Team.self, in: context)
 
-        let teams = try context.fetch(FetchDescriptor<RuntimeTeam>())
+        let teams = try context.fetch(FetchDescriptor<Team>())
         XCTAssertEqual(teams.count, 1)
         XCTAssertEqual(teams.first?.name, "Platform Renamed")
         XCTAssertEqual(teams.first?.owner?.id, 1)
@@ -1220,18 +1296,18 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncToOneByIDSetsAndClearsRelationship() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeEmployee.self, RuntimeCompany.self, configurations: configuration)
+        let container = try ModelContainer(for: Employee.self, Company.self, configurations: configuration)
         let context = ModelContext(container)
 
         try await SwiftSync.sync(
             payload: [["id": 10, "name": "Apple"]],
-            as: RuntimeCompany.self,
+            as: Company.self,
             in: context
         )
 
         try await SwiftSync.sync(
             payload: [["id": 1, "name": "Ava"]],
-            as: RuntimeEmployee.self,
+            as: Employee.self,
             in: context
         )
 
@@ -1240,9 +1316,9 @@ final class SwiftSyncRuntimeTests: XCTestCase {
             "name": "Ava",
             "company_id": 10
         ]]
-        try await SwiftSync.sync(payload: linkPayload, as: RuntimeEmployee.self, in: context)
+        try await SwiftSync.sync(payload: linkPayload, as: Employee.self, in: context)
 
-        var employees = try context.fetch(FetchDescriptor<RuntimeEmployee>())
+        var employees = try context.fetch(FetchDescriptor<Employee>())
         XCTAssertEqual(employees.count, 1)
         XCTAssertEqual(employees.first?.id, 1)
         XCTAssertEqual(employees.first?.company?.id, 10)
@@ -1252,9 +1328,9 @@ final class SwiftSyncRuntimeTests: XCTestCase {
             "name": "Ava",
             "company_id": NSNull()
         ]]
-        try await SwiftSync.sync(payload: clearPayload, as: RuntimeEmployee.self, in: context)
+        try await SwiftSync.sync(payload: clearPayload, as: Employee.self, in: context)
 
-        employees = try context.fetch(FetchDescriptor<RuntimeEmployee>())
+        employees = try context.fetch(FetchDescriptor<Employee>())
         XCTAssertEqual(employees.count, 1)
         XCTAssertNil(employees.first?.company)
     }
@@ -1262,12 +1338,12 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncToOneByIDMissingReferencedCompanyIsDeterministic() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeEmployee.self, RuntimeCompany.self, configurations: configuration)
+        let container = try ModelContainer(for: Employee.self, Company.self, configurations: configuration)
         let context = ModelContext(container)
 
         try await SwiftSync.sync(
             payload: [["id": 1, "name": "Ava"]],
-            as: RuntimeEmployee.self,
+            as: Employee.self,
             in: context
         )
 
@@ -1277,12 +1353,12 @@ final class SwiftSyncRuntimeTests: XCTestCase {
             "company_id": 999
         ]]
         do {
-            try await SwiftSync.sync(payload: missingReferencePayload, as: RuntimeEmployee.self, in: context)
+            try await SwiftSync.sync(payload: missingReferencePayload, as: Employee.self, in: context)
         } catch {
             XCTFail("Expected missing referenced company to be handled without crashing, got error: \(error)")
         }
 
-        let employees = try context.fetch(FetchDescriptor<RuntimeEmployee>())
+        let employees = try context.fetch(FetchDescriptor<Employee>())
         XCTAssertEqual(employees.count, 1)
         XCTAssertNil(employees.first?.company)
     }
@@ -1290,7 +1366,7 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncToManyNestedObjectArrayReplacesMembershipAndUpdatesExistingChild() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeTeam.self, RuntimeMember.self, configurations: configuration)
+        let container = try ModelContainer(for: Team.self, Member.self, configurations: configuration)
         let context = ModelContext(container)
 
         let payloadA: [Any] = [[
@@ -1301,9 +1377,9 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                 ["id": 102, "full_name": "b"]
             ]
         ]]
-        try await SwiftSync.sync(payload: payloadA, as: RuntimeTeam.self, in: context)
+        try await SwiftSync.sync(payload: payloadA, as: Team.self, in: context)
 
-        var teams = try context.fetch(FetchDescriptor<RuntimeTeam>())
+        var teams = try context.fetch(FetchDescriptor<Team>())
         XCTAssertEqual(teams.count, 1)
         XCTAssertEqual(Set(teams[0].members.map(\.id)), Set([101, 102]))
 
@@ -1315,14 +1391,14 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                 ["id": 103, "full_name": "c"]
             ]
         ]]
-        try await SwiftSync.sync(payload: payloadB, as: RuntimeTeam.self, in: context)
+        try await SwiftSync.sync(payload: payloadB, as: Team.self, in: context)
 
-        teams = try context.fetch(FetchDescriptor<RuntimeTeam>())
+        teams = try context.fetch(FetchDescriptor<Team>())
         XCTAssertEqual(teams.count, 1)
         XCTAssertEqual(Set(teams[0].members.map(\.id)), Set([102, 103]))
         XCTAssertFalse(Set(teams[0].members.map(\.id)).contains(101))
 
-        let allMembers = try context.fetch(FetchDescriptor<RuntimeMember>())
+        let allMembers = try context.fetch(FetchDescriptor<Member>())
         XCTAssertEqual(allMembers.filter { $0.id == 102 }.count, 1)
         XCTAssertEqual(allMembers.first(where: { $0.id == 102 })?.fullName, "b2")
     }
@@ -1330,7 +1406,7 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncToManyByIDsReplacesMembershipExactly() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeUserWithNotes.self, RuntimeNote.self, configurations: configuration)
+        let container = try ModelContainer(for: UserWithNotes.self, Note.self, configurations: configuration)
         let context = ModelContext(container)
 
         try await SwiftSync.sync(
@@ -1339,13 +1415,13 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                 ["id": 1, "text": "n1"],
                 ["id": 2, "text": "n2"]
             ],
-            as: RuntimeNote.self,
+            as: Note.self,
             in: context
         )
 
         try await SwiftSync.sync(
             payload: [["id": 10, "name": "U"]],
-            as: RuntimeUserWithNotes.self,
+            as: UserWithNotes.self,
             in: context
         )
 
@@ -1354,9 +1430,9 @@ final class SwiftSyncRuntimeTests: XCTestCase {
             "name": "U",
             "notes_ids": [0, 1]
         ]]
-        try await SwiftSync.sync(payload: payloadA, as: RuntimeUserWithNotes.self, in: context)
+        try await SwiftSync.sync(payload: payloadA, as: UserWithNotes.self, in: context)
 
-        var users = try context.fetch(FetchDescriptor<RuntimeUserWithNotes>())
+        var users = try context.fetch(FetchDescriptor<UserWithNotes>())
         XCTAssertEqual(users.count, 1)
         XCTAssertEqual(Set(users[0].notes.map(\.id)), Set([0, 1]))
 
@@ -1365,9 +1441,9 @@ final class SwiftSyncRuntimeTests: XCTestCase {
             "name": "U",
             "notes_ids": [1, 2]
         ]]
-        try await SwiftSync.sync(payload: payloadB, as: RuntimeUserWithNotes.self, in: context)
+        try await SwiftSync.sync(payload: payloadB, as: UserWithNotes.self, in: context)
 
-        users = try context.fetch(FetchDescriptor<RuntimeUserWithNotes>())
+        users = try context.fetch(FetchDescriptor<UserWithNotes>())
         XCTAssertEqual(users.count, 1)
         XCTAssertEqual(Set(users[0].notes.map(\.id)), Set([1, 2]))
         XCTAssertFalse(Set(users[0].notes.map(\.id)).contains(0))
@@ -1376,7 +1452,7 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     @MainActor
     func testSyncToManyByIDsIsIdempotentForRepeatedPayload() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeUserWithNotes.self, RuntimeNote.self, configurations: configuration)
+        let container = try ModelContainer(for: UserWithNotes.self, Note.self, configurations: configuration)
         let context = ModelContext(container)
 
         try await SwiftSync.sync(
@@ -1384,12 +1460,12 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                 ["id": 1, "text": "n1"],
                 ["id": 2, "text": "n2"]
             ],
-            as: RuntimeNote.self,
+            as: Note.self,
             in: context
         )
         try await SwiftSync.sync(
             payload: [["id": 10, "name": "U"]],
-            as: RuntimeUserWithNotes.self,
+            as: UserWithNotes.self,
             in: context
         )
 
@@ -1398,14 +1474,14 @@ final class SwiftSyncRuntimeTests: XCTestCase {
             "name": "U",
             "notes_ids": [1, 2]
         ]]
-        try await SwiftSync.sync(payload: payloadB, as: RuntimeUserWithNotes.self, in: context)
-        try await SwiftSync.sync(payload: payloadB, as: RuntimeUserWithNotes.self, in: context)
+        try await SwiftSync.sync(payload: payloadB, as: UserWithNotes.self, in: context)
+        try await SwiftSync.sync(payload: payloadB, as: UserWithNotes.self, in: context)
 
-        let users = try context.fetch(FetchDescriptor<RuntimeUserWithNotes>())
+        let users = try context.fetch(FetchDescriptor<UserWithNotes>())
         XCTAssertEqual(users.count, 1)
         XCTAssertEqual(Set(users[0].notes.map(\.id)), Set([1, 2]))
 
-        let notes = try context.fetch(FetchDescriptor<RuntimeNote>())
+        let notes = try context.fetch(FetchDescriptor<Note>())
         XCTAssertEqual(notes.count, 2)
         XCTAssertEqual(Set(notes.map(\.id)), Set([1, 2]))
     }
@@ -1439,9 +1515,86 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     }
 
     @MainActor
+    func testSyncParentScopedLinksChildrenToExactParent() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: SuperUser.self, SuperNote.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let userA = SuperUser(id: 6, name: "A")
+        context.insert(userA)
+        try context.save()
+
+        let childPayload: [Any] = [
+            ["id": 0, "text": "n0"],
+            ["id": 1, "text": "n1"]
+        ]
+        try await SwiftSync.sync(
+            payload: childPayload,
+            as: SuperNote.self,
+            in: context,
+            parent: userA
+        )
+
+        let notes = try context.fetch(FetchDescriptor<SuperNote>())
+        XCTAssertEqual(notes.count, 2)
+        XCTAssertEqual(Set(notes.map(\.id)), Set([0, 1]))
+        XCTAssertTrue(notes.allSatisfy { $0.superUser?.id == 6 })
+    }
+
+    @MainActor
+    func testSyncParentScopedDeleteAffectsOnlyThatParentScope() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: SuperUser.self, SuperNote.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let userA = SuperUser(id: 6, name: "A")
+        let userB = SuperUser(id: 7, name: "B")
+        context.insert(userA)
+        context.insert(userB)
+        try context.save()
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 0, "text": "a0"],
+                ["id": 1, "text": "a1"]
+            ],
+            as: SuperNote.self,
+            in: context,
+            parent: userA
+        )
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 2, "text": "b2"],
+                ["id": 3, "text": "b3"]
+            ],
+            as: SuperNote.self,
+            in: context,
+            parent: userB
+        )
+
+        // Sync user A scope with one child; user B scope must remain untouched.
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "text": "a1-updated"]
+            ],
+            as: SuperNote.self,
+            in: context,
+            parent: userA
+        )
+
+        let notes = try context.fetch(FetchDescriptor<SuperNote>())
+        let notesA = notes.filter { $0.superUser?.id == 6 }
+        let notesB = notes.filter { $0.superUser?.id == 7 }
+
+        XCTAssertEqual(Set(notesA.map(\.id)), Set([1]))
+        XCTAssertEqual(notesA.first?.text, "a1-updated")
+        XCTAssertEqual(Set(notesB.map(\.id)), Set([2, 3]))
+    }
+
+    @MainActor
     private func runManyToManyObjectsScenario() async throws -> [Int: Set<Int>] {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeUserTagsByObjects.self, RuntimeTag.self, configurations: configuration)
+        let container = try ModelContainer(for: UserTagsByObjects.self, Tag.self, configurations: configuration)
         let context = ModelContext(container)
 
         let payloadA: [Any] = [
@@ -1462,7 +1615,7 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                 ]
             ]
         ]
-        try await SwiftSync.sync(payload: payloadA, as: RuntimeUserTagsByObjects.self, in: context)
+        try await SwiftSync.sync(payload: payloadA, as: UserTagsByObjects.self, in: context)
 
         let payloadB: [Any] = [
             [
@@ -1481,16 +1634,16 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                 ]
             ]
         ]
-        try await SwiftSync.sync(payload: payloadB, as: RuntimeUserTagsByObjects.self, in: context)
+        try await SwiftSync.sync(payload: payloadB, as: UserTagsByObjects.self, in: context)
 
-        let users = try context.fetch(FetchDescriptor<RuntimeUserTagsByObjects>())
+        let users = try context.fetch(FetchDescriptor<UserTagsByObjects>())
         return Dictionary(uniqueKeysWithValues: users.map { ($0.id, Set($0.tags.map(\.id))) })
     }
 
     @MainActor
     private func runManyToManyIDsScenario() async throws -> [Int: Set<Int>] {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RuntimeUserTagsByIDs.self, RuntimeTag.self, configurations: configuration)
+        let container = try ModelContainer(for: UserTagsByIDs.self, Tag.self, configurations: configuration)
         let context = ModelContext(container)
 
         try await SwiftSync.sync(
@@ -1500,7 +1653,7 @@ final class SwiftSyncRuntimeTests: XCTestCase {
                 ["id": 3, "name": "t3"],
                 ["id": 4, "name": "t4"]
             ],
-            as: RuntimeTag.self,
+            as: Tag.self,
             in: context
         )
 
@@ -1508,15 +1661,15 @@ final class SwiftSyncRuntimeTests: XCTestCase {
             ["id": 1, "name": "U1", "tags_ids": [1, 2]],
             ["id": 2, "name": "U2", "tags_ids": [2, 3]]
         ]
-        try await SwiftSync.sync(payload: payloadA, as: RuntimeUserTagsByIDs.self, in: context)
+        try await SwiftSync.sync(payload: payloadA, as: UserTagsByIDs.self, in: context)
 
         let payloadB: [Any] = [
             ["id": 1, "name": "U1", "tags_ids": [2, 4]],
             ["id": 2, "name": "U2", "tags_ids": [3]]
         ]
-        try await SwiftSync.sync(payload: payloadB, as: RuntimeUserTagsByIDs.self, in: context)
+        try await SwiftSync.sync(payload: payloadB, as: UserTagsByIDs.self, in: context)
 
-        let users = try context.fetch(FetchDescriptor<RuntimeUserTagsByIDs>())
+        let users = try context.fetch(FetchDescriptor<UserTagsByIDs>())
         return Dictionary(uniqueKeysWithValues: users.map { ($0.id, Set($0.tags.map(\.id))) })
     }
 

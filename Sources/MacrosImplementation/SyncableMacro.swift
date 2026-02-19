@@ -179,7 +179,7 @@ public struct PrimaryKeyMacro: PeerMacro {
 }
 
 @main
-struct SwiftSyncMacroPlugin: CompilerPlugin {
+struct MacroPlugin: CompilerPlugin {
     let providingMacros: [Macro.Type] = [
         SyncableMacro.self,
         PrimaryKeyMacro.self

@@ -1,6 +1,6 @@
 import Foundation
 import SwiftData
-import SwiftSyncCore
+import Core
 
 public extension SwiftSync {
     static func sync<Model: SyncUpdatableModel>(
@@ -56,6 +56,84 @@ public extension SwiftSync {
             }
 
             let created = try Model.make(from: payloadModel)
+            context.insert(created)
+            if let relationshipRow = created as? any SyncRelationshipUpdatableModel {
+                if try await relationshipRow.applyRelationships(payloadModel, in: context) {
+                    changed = true
+                }
+            }
+            index[key] = created
+            changed = true
+        }
+
+        for (key, row) in index where !seenKeys.contains(key) {
+            context.delete(row)
+            changed = true
+        }
+
+        if changed {
+            try context.save()
+        }
+    }
+
+    static func sync<Model: ParentScopedModel>(
+        payload: [Any],
+        as model: Model.Type,
+        in context: ModelContext,
+        parent: Model.SyncParent
+    ) async throws {
+        _ = model
+
+        let entries = try normalize(payload: payload, model: Model.self)
+        let existing = try context.fetch(FetchDescriptor<Model>())
+
+        var index: [String: Model] = [:]
+        var duplicates: [Model] = []
+        for row in existing where row[keyPath: Model.parentRelationship]?.persistentModelID == parent.persistentModelID {
+            let key = identityKey(from: row[keyPath: Model.syncIdentity])
+            if index[key] != nil {
+                duplicates.append(row)
+                continue
+            }
+            index[key] = row
+        }
+
+        var changed = false
+        var seenKeys: Set<String> = []
+
+        if !duplicates.isEmpty {
+            for duplicate in duplicates {
+                context.delete(duplicate)
+            }
+            changed = true
+        }
+
+        for entry in entries {
+            let payloadModel = SyncPayload(values: entry)
+            guard let identity = resolveIdentity(from: payloadModel, model: Model.self) else {
+                continue
+            }
+            let key = identityKey(from: identity)
+            seenKeys.insert(key)
+
+            if let row = index[key] {
+                if row[keyPath: Model.parentRelationship]?.persistentModelID != parent.persistentModelID {
+                    row[keyPath: Model.parentRelationship] = parent
+                    changed = true
+                }
+                if try row.apply(payloadModel) {
+                    changed = true
+                }
+                if let relationshipRow = row as? any SyncRelationshipUpdatableModel {
+                    if try await relationshipRow.applyRelationships(payloadModel, in: context) {
+                        changed = true
+                    }
+                }
+                continue
+            }
+
+            let created = try Model.make(from: payloadModel)
+            created[keyPath: Model.parentRelationship] = parent
             context.insert(created)
             if let relationshipRow = created as? any SyncRelationshipUpdatableModel {
                 if try await relationshipRow.applyRelationships(payloadModel, in: context) {

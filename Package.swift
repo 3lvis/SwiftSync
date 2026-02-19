@@ -9,44 +9,51 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .library(name: "SwiftSyncCore", targets: ["SwiftSyncCore"]),
-        .library(name: "SwiftSyncSwiftData", targets: ["SwiftSyncSwiftData"]),
-        .library(name: "SwiftSyncMacros", targets: ["SwiftSyncMacros"]),
-        .library(name: "SwiftSyncTesting", targets: ["SwiftSyncTesting"])
+        .library(name: "Core", targets: ["Core"]),
+        .library(name: "SwiftDataBridge", targets: ["SwiftDataBridge"]),
+        .library(name: "Macros", targets: ["Macros"]),
+        .library(name: "TestingKit", targets: ["TestingKit"])
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0-latest")
     ],
     targets: [
         .macro(
-            name: "SwiftSyncMacrosImplementation",
+            name: "MacrosImplementation",
             dependencies: [
                 .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
                 .product(name: "SwiftCompilerPlugin", package: "swift-syntax")
-            ]
+            ],
+            path: "Sources/MacrosImplementation"
         ),
         .target(
-            name: "SwiftSyncMacros",
-            dependencies: ["SwiftSyncMacrosImplementation", "SwiftSyncCore"]
+            name: "Macros",
+            dependencies: ["MacrosImplementation", "Core"],
+            path: "Sources/Macros"
         ),
         .target(
-            name: "SwiftSyncCore"
+            name: "Core",
+            path: "Sources/Core"
         ),
         .target(
-            name: "SwiftSyncSwiftData",
-            dependencies: ["SwiftSyncCore"]
+            name: "SwiftDataBridge",
+            dependencies: ["Core"],
+            path: "Sources/SwiftDataBridge"
         ),
         .target(
-            name: "SwiftSyncTesting",
-            dependencies: ["SwiftSyncCore"]
+            name: "TestingKit",
+            dependencies: ["Core"],
+            path: "Sources/TestingKit"
         ),
         .testTarget(
-            name: "SwiftSyncCoreTests",
-            dependencies: ["SwiftSyncCore"]
+            name: "CoreTests",
+            dependencies: ["Core"],
+            path: "Tests/CoreTests"
         ),
         .testTarget(
-            name: "SwiftSyncXCTestSuite",
-            dependencies: ["SwiftSyncCore", "SwiftSyncSwiftData", "SwiftSyncMacros"]
+            name: "IntegrationTests",
+            dependencies: ["Core", "SwiftDataBridge", "Macros"],
+            path: "Tests/IntegrationTests"
         )
     ]
 )

@@ -22,6 +22,11 @@ public protocol SyncRelationshipUpdatableModel: SyncUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool
 }
 
+public protocol ParentScopedModel: SyncUpdatableModel {
+    associatedtype SyncParent: PersistentModel
+    static var parentRelationship: ReferenceWritableKeyPath<Self, SyncParent?> { get }
+}
+
 public struct SyncPayload {
     public let values: [String: Any]
 

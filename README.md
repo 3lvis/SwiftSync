@@ -32,6 +32,13 @@ public extension SwiftSync {
     as model: Model.Type,
     in context: ModelContext
   ) async throws
+
+  static func sync<Model: ParentScopedModel>(
+    payload: [Any],
+    as model: Model.Type,
+    in context: ModelContext,
+    parent: Model.SyncParent
+  ) async throws
 }
 ```
 
@@ -52,6 +59,13 @@ Explicit `null` clears optional scalars to `nil`; for non-optional primitive sca
 our policy is honestly we do our best without affecting performance.
 
 For relationship updates, models can additionally conform to `SyncRelationshipUpdatableModel` and apply to-one/to-many changes during the same sync run.
+
+For child-only payload sync scoped to one parent, models can conform to `ParentScopedModel` and use the `parent:` overload.
+Behavior:
+
+- created/updated children are linked to the provided parent relationship
+- diff/delete scope is limited to rows already linked to that parent
+- children linked to other parents are unaffected
 
 To-one relationships can be handled either as nested objects (for example, `"owner": {...}`) or by foreign-key scalar fields (for example, `"company_id": 10`) inside `applyRelationships`.
 For `*_id` fields, recommended behavior is:
@@ -79,7 +93,7 @@ For many-to-many relationships, nested-object and `*_ids` forms should converge 
 
 ### Date Parsing Contract
 
-`SwiftSyncCore` includes `SyncDateParser` for inbound mapping hot paths:
+`Core` includes `SyncDateParser` for inbound mapping hot paths:
 
 - `SyncDateParser.dateFromDateString(_:)`
 - `SyncDateParser.dateFromISO8601String(_:)`

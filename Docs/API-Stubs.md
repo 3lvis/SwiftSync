@@ -1,23 +1,24 @@
-# SwiftSync Milestone 1 API
+# Milestone 1 API
 
 This package ships a minimal but functional Milestone 1 inbound sync API.
 
 ## Modules
 
-- `SwiftSyncCore`: sync model contracts, payload decoding, and typed errors.
-- `SwiftSyncSwiftData`: `SwiftSync.sync`.
-- `SwiftSyncMacros`: `@Syncable` macro that generates `SyncUpdatableModel` boilerplate.
-- `SwiftSyncTesting`: mocked payload fixtures.
+- `Core`: sync model contracts, payload decoding, and typed errors.
+- `SwiftDataBridge`: `SwiftSync.sync`.
+- `Macros`: `@Syncable` macro that generates `SyncUpdatableModel` boilerplate.
+- `TestingKit`: mocked payload fixtures.
 
-## Runtime behavior in this milestone
+## Behavior in this milestone
 
 - `SwiftSync.sync`: applies source-of-truth payload diff sync (insert/update/delete) for models conforming to `SyncUpdatableModel`.
 - Relationship-aware models can also conform to `SyncRelationshipUpdatableModel` to apply to-one/to-many updates in the same sync pass.
+- Parent-scoped child sync is available for `ParentScopedModel` via `SwiftSync.sync(..., parent:)`.
 
 ## Macro usage
 
 ```swift
-import SwiftSyncMacros
+import Macros
 
 @Syncable
 @Model
@@ -56,6 +57,13 @@ public extension SwiftSync {
         payload: [Any],
         as model: Model.Type,
         in context: ModelContext
+    ) async throws
+
+    static func sync<Model: ParentScopedModel>(
+        payload: [Any],
+        as model: Model.Type,
+        in context: ModelContext,
+        parent: Model.SyncParent
     ) async throws
 }
 ```
