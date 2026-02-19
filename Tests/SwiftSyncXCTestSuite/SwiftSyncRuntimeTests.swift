@@ -225,6 +225,21 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     }
 
     @MainActor
+    func testSyncLenientIntPrimaryKeyCoercesFloatValue() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeUser.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let payload: [Any] = [["id": 42.9, "full_name": "Float ID User"]]
+        try await SwiftSync.sync(payload: payload, as: RuntimeUser.self, in: context)
+
+        let users = try context.fetch(FetchDescriptor<RuntimeUser>())
+        XCTAssertEqual(users.count, 1)
+        XCTAssertEqual(users.first?.id, 42)
+        XCTAssertEqual(users.first?.fullName, "Float ID User")
+    }
+
+    @MainActor
     func testSyncDeletesLocalRowsMissingFromPayload() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: RuntimeUser.self, configurations: configuration)
