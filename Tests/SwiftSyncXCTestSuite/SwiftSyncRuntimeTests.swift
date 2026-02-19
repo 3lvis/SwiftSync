@@ -191,6 +191,73 @@ final class RuntimeEmployee {
     }
 }
 
+@Model
+final class RuntimeNote {
+    @Attribute(.unique) var id: Int
+    var text: String
+
+    init(id: Int, text: String) {
+        self.id = id
+        self.text = text
+    }
+}
+
+@Model
+final class RuntimeUserWithNotes {
+    @Attribute(.unique) var id: Int
+    var name: String
+    var notes: [RuntimeNote]
+
+    init(id: Int, name: String, notes: [RuntimeNote] = []) {
+        self.id = id
+        self.name = name
+        self.notes = notes
+    }
+}
+
+@Model
+final class RuntimeTag {
+    @Attribute(.unique) var id: Int
+    var name: String
+    var usersByObjects: [RuntimeUserTagsByObjects]
+    var usersByIDs: [RuntimeUserTagsByIDs]
+
+    init(id: Int, name: String) {
+        self.id = id
+        self.name = name
+        self.usersByObjects = []
+        self.usersByIDs = []
+    }
+}
+
+@Model
+final class RuntimeUserTagsByObjects {
+    @Attribute(.unique) var id: Int
+    var name: String
+    @Relationship(inverse: \RuntimeTag.usersByObjects)
+    var tags: [RuntimeTag]
+
+    init(id: Int, name: String, tags: [RuntimeTag] = []) {
+        self.id = id
+        self.name = name
+        self.tags = tags
+    }
+}
+
+@Model
+final class RuntimeUserTagsByIDs {
+    @Attribute(.unique) var id: Int
+    var name: String
+    @Relationship(inverse: \RuntimeTag.usersByIDs)
+    var tags: [RuntimeTag]
+
+    init(id: Int, name: String, tags: [RuntimeTag] = []) {
+        self.id = id
+        self.name = name
+        self.tags = tags
+    }
+}
+
 extension RuntimeTeam: SyncUpdatableModel {
     typealias SyncID = Int
     static var syncIdentity: KeyPath<RuntimeTeam, Int> { \.id }
@@ -330,6 +397,194 @@ extension RuntimeEmployee: SyncRelationshipUpdatableModel {
             }
             return false
         }
+    }
+}
+
+extension RuntimeNote: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<RuntimeNote, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> RuntimeNote {
+        RuntimeNote(
+            id: try payload.required(Int.self, for: "id"),
+            text: try payload.required(String.self, for: "text")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        var changed = false
+        let incomingText: String = try payload.required(String.self, for: "text")
+        if text != incomingText {
+            text = incomingText
+            changed = true
+        }
+        return changed
+    }
+}
+
+extension RuntimeUserWithNotes: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<RuntimeUserWithNotes, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> RuntimeUserWithNotes {
+        RuntimeUserWithNotes(
+            id: try payload.required(Int.self, for: "id"),
+            name: try payload.required(String.self, for: "name")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        var changed = false
+        let incomingName: String = try payload.required(String.self, for: "name")
+        if name != incomingName {
+            name = incomingName
+            changed = true
+        }
+        return changed
+    }
+}
+
+extension RuntimeUserWithNotes: SyncRelationshipUpdatableModel {
+    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+        // Support to-many by foreign key scalar array (notes_ids).
+        guard payload.contains("notes_ids") else { return false }
+
+        let desiredIDs: [Int]
+        if let value: [Int] = payload.value(for: "notes_ids") {
+            desiredIDs = value
+        } else {
+            desiredIDs = []
+        }
+
+        let allNotes = try context.fetch(FetchDescriptor<RuntimeNote>())
+        let byID = Dictionary(uniqueKeysWithValues: allNotes.map { ($0.id, $0) })
+        let desiredNotes = desiredIDs.compactMap { byID[$0] }
+
+        if notes.map(\.id) != desiredNotes.map(\.id) {
+            notes = desiredNotes
+            return true
+        }
+        return false
+    }
+}
+
+extension RuntimeTag: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<RuntimeTag, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> RuntimeTag {
+        RuntimeTag(
+            id: try payload.required(Int.self, for: "id"),
+            name: try payload.required(String.self, for: "name")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        var changed = false
+        let incomingName: String = try payload.required(String.self, for: "name")
+        if name != incomingName {
+            name = incomingName
+            changed = true
+        }
+        return changed
+    }
+}
+
+extension RuntimeUserTagsByObjects: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<RuntimeUserTagsByObjects, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> RuntimeUserTagsByObjects {
+        RuntimeUserTagsByObjects(
+            id: try payload.required(Int.self, for: "id"),
+            name: try payload.required(String.self, for: "name")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        var changed = false
+        let incomingName: String = try payload.required(String.self, for: "name")
+        if name != incomingName {
+            name = incomingName
+            changed = true
+        }
+        return changed
+    }
+}
+
+extension RuntimeUserTagsByObjects: SyncRelationshipUpdatableModel {
+    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+        guard payload.contains("tags") else { return false }
+        let desiredTags: [RuntimeTag]
+        if let tagPayloads: [[String: Any]] = payload.value(for: "tags") {
+            var resolved: [RuntimeTag] = []
+            for tagPayload in tagPayloads {
+                resolved.append(try upsertTag(from: tagPayload, in: context))
+            }
+            desiredTags = resolved
+        } else {
+            desiredTags = []
+        }
+        if tags.map(\.id) != desiredTags.map(\.id) {
+            tags = desiredTags
+            return true
+        }
+        return false
+    }
+
+    private func upsertTag(from payload: [String: Any], in context: ModelContext) throws -> RuntimeTag {
+        let syncPayload = SyncPayload(values: payload)
+        let tagID: Int = try syncPayload.required(Int.self, for: "id")
+        let allTags = try context.fetch(FetchDescriptor<RuntimeTag>())
+        if let existing = allTags.first(where: { $0.id == tagID }) {
+            _ = try existing.apply(syncPayload)
+            return existing
+        }
+        let created = try RuntimeTag.make(from: syncPayload)
+        context.insert(created)
+        return created
+    }
+}
+
+extension RuntimeUserTagsByIDs: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<RuntimeUserTagsByIDs, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> RuntimeUserTagsByIDs {
+        RuntimeUserTagsByIDs(
+            id: try payload.required(Int.self, for: "id"),
+            name: try payload.required(String.self, for: "name")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        var changed = false
+        let incomingName: String = try payload.required(String.self, for: "name")
+        if name != incomingName {
+            name = incomingName
+            changed = true
+        }
+        return changed
+    }
+}
+
+extension RuntimeUserTagsByIDs: SyncRelationshipUpdatableModel {
+    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+        guard payload.contains("tags_ids") else { return false }
+        let desiredIDs: [Int]
+        if let ids: [Int] = payload.value(for: "tags_ids") {
+            desiredIDs = ids
+        } else {
+            desiredIDs = []
+        }
+        let allTags = try context.fetch(FetchDescriptor<RuntimeTag>())
+        let byID = Dictionary(uniqueKeysWithValues: allTags.map { ($0.id, $0) })
+        let desiredTags = desiredIDs.compactMap { byID[$0] }
+        if tags.map(\.id) != desiredTags.map(\.id) {
+            tags = desiredTags
+            return true
+        }
+        return false
     }
 }
 
@@ -975,6 +1230,199 @@ final class SwiftSyncRuntimeTests: XCTestCase {
         let allMembers = try context.fetch(FetchDescriptor<RuntimeMember>())
         XCTAssertEqual(allMembers.filter { $0.id == 102 }.count, 1)
         XCTAssertEqual(allMembers.first(where: { $0.id == 102 })?.fullName, "b2")
+    }
+
+    @MainActor
+    func testSyncToManyByIDsReplacesMembershipExactly() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeUserWithNotes.self, RuntimeNote.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 0, "text": "n0"],
+                ["id": 1, "text": "n1"],
+                ["id": 2, "text": "n2"]
+            ],
+            as: RuntimeNote.self,
+            in: context
+        )
+
+        try await SwiftSync.sync(
+            payload: [["id": 10, "name": "U"]],
+            as: RuntimeUserWithNotes.self,
+            in: context
+        )
+
+        let payloadA: [Any] = [[
+            "id": 10,
+            "name": "U",
+            "notes_ids": [0, 1]
+        ]]
+        try await SwiftSync.sync(payload: payloadA, as: RuntimeUserWithNotes.self, in: context)
+
+        var users = try context.fetch(FetchDescriptor<RuntimeUserWithNotes>())
+        XCTAssertEqual(users.count, 1)
+        XCTAssertEqual(Set(users[0].notes.map(\.id)), Set([0, 1]))
+
+        let payloadB: [Any] = [[
+            "id": 10,
+            "name": "U",
+            "notes_ids": [1, 2]
+        ]]
+        try await SwiftSync.sync(payload: payloadB, as: RuntimeUserWithNotes.self, in: context)
+
+        users = try context.fetch(FetchDescriptor<RuntimeUserWithNotes>())
+        XCTAssertEqual(users.count, 1)
+        XCTAssertEqual(Set(users[0].notes.map(\.id)), Set([1, 2]))
+        XCTAssertFalse(Set(users[0].notes.map(\.id)).contains(0))
+    }
+
+    @MainActor
+    func testSyncToManyByIDsIsIdempotentForRepeatedPayload() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeUserWithNotes.self, RuntimeNote.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "text": "n1"],
+                ["id": 2, "text": "n2"]
+            ],
+            as: RuntimeNote.self,
+            in: context
+        )
+        try await SwiftSync.sync(
+            payload: [["id": 10, "name": "U"]],
+            as: RuntimeUserWithNotes.self,
+            in: context
+        )
+
+        let payloadB: [Any] = [[
+            "id": 10,
+            "name": "U",
+            "notes_ids": [1, 2]
+        ]]
+        try await SwiftSync.sync(payload: payloadB, as: RuntimeUserWithNotes.self, in: context)
+        try await SwiftSync.sync(payload: payloadB, as: RuntimeUserWithNotes.self, in: context)
+
+        let users = try context.fetch(FetchDescriptor<RuntimeUserWithNotes>())
+        XCTAssertEqual(users.count, 1)
+        XCTAssertEqual(Set(users[0].notes.map(\.id)), Set([1, 2]))
+
+        let notes = try context.fetch(FetchDescriptor<RuntimeNote>())
+        XCTAssertEqual(notes.count, 2)
+        XCTAssertEqual(Set(notes.map(\.id)), Set([1, 2]))
+    }
+
+    @MainActor
+    func testSyncManyToManyObjectsAndIDsProduceEquivalentFinalGraph() async throws {
+        let objectGraph = try await runManyToManyObjectsScenario()
+        let idsGraph = try await runManyToManyIDsScenario()
+
+        XCTAssertEqual(objectGraph, idsGraph)
+        XCTAssertEqual(objectGraph[1], Set([2, 4]))
+        XCTAssertEqual(objectGraph[2], Set([3]))
+    }
+
+    @MainActor
+    func testSyncManyToManyObjectsAndIDsHaveEquivalentAddRemoveOutcomes() async throws {
+        let objectGraph = try await runManyToManyObjectsScenario()
+        let idsGraph = try await runManyToManyIDsScenario()
+
+        // No duplicate join edges in either graph.
+        XCTAssertEqual(objectGraph[1]?.count, 2)
+        XCTAssertEqual(objectGraph[2]?.count, 1)
+        XCTAssertEqual(idsGraph[1]?.count, 2)
+        XCTAssertEqual(idsGraph[2]?.count, 1)
+
+        // Same add/remove outcomes after update payload.
+        XCTAssertFalse(objectGraph[1]?.contains(1) ?? true)
+        XCTAssertFalse(idsGraph[1]?.contains(1) ?? true)
+        XCTAssertTrue(objectGraph[1]?.contains(4) ?? false)
+        XCTAssertTrue(idsGraph[1]?.contains(4) ?? false)
+    }
+
+    @MainActor
+    private func runManyToManyObjectsScenario() async throws -> [Int: Set<Int>] {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeUserTagsByObjects.self, RuntimeTag.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let payloadA: [Any] = [
+            [
+                "id": 1,
+                "name": "U1",
+                "tags": [
+                    ["id": 1, "name": "t1"],
+                    ["id": 2, "name": "t2"]
+                ]
+            ],
+            [
+                "id": 2,
+                "name": "U2",
+                "tags": [
+                    ["id": 2, "name": "t2"],
+                    ["id": 3, "name": "t3"]
+                ]
+            ]
+        ]
+        try await SwiftSync.sync(payload: payloadA, as: RuntimeUserTagsByObjects.self, in: context)
+
+        let payloadB: [Any] = [
+            [
+                "id": 1,
+                "name": "U1",
+                "tags": [
+                    ["id": 2, "name": "t2"],
+                    ["id": 4, "name": "t4"]
+                ]
+            ],
+            [
+                "id": 2,
+                "name": "U2",
+                "tags": [
+                    ["id": 3, "name": "t3"]
+                ]
+            ]
+        ]
+        try await SwiftSync.sync(payload: payloadB, as: RuntimeUserTagsByObjects.self, in: context)
+
+        let users = try context.fetch(FetchDescriptor<RuntimeUserTagsByObjects>())
+        return Dictionary(uniqueKeysWithValues: users.map { ($0.id, Set($0.tags.map(\.id))) })
+    }
+
+    @MainActor
+    private func runManyToManyIDsScenario() async throws -> [Int: Set<Int>] {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeUserTagsByIDs.self, RuntimeTag.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "name": "t1"],
+                ["id": 2, "name": "t2"],
+                ["id": 3, "name": "t3"],
+                ["id": 4, "name": "t4"]
+            ],
+            as: RuntimeTag.self,
+            in: context
+        )
+
+        let payloadA: [Any] = [
+            ["id": 1, "name": "U1", "tags_ids": [1, 2]],
+            ["id": 2, "name": "U2", "tags_ids": [2, 3]]
+        ]
+        try await SwiftSync.sync(payload: payloadA, as: RuntimeUserTagsByIDs.self, in: context)
+
+        let payloadB: [Any] = [
+            ["id": 1, "name": "U1", "tags_ids": [2, 4]],
+            ["id": 2, "name": "U2", "tags_ids": [3]]
+        ]
+        try await SwiftSync.sync(payload: payloadB, as: RuntimeUserTagsByIDs.self, in: context)
+
+        let users = try context.fetch(FetchDescriptor<RuntimeUserTagsByIDs>())
+        return Dictionary(uniqueKeysWithValues: users.map { ($0.id, Set($0.tags.map(\.id))) })
     }
 
 }

@@ -68,6 +68,15 @@ For to-many nested object arrays (for example, `"messages": [{...}, {...}]`), re
 - overlapping child ids are updated in place (upsert)
 - ids removed from B are no longer related to the parent
 
+For to-many foreign-key scalar arrays (for example, `"notes_ids": [1, 2]`) inside `applyRelationships`:
+
+- relation should match exactly the resolved id list for that parent
+- links not present in the latest `*_ids` payload are removed
+- repeating the same payload is idempotent
+- missing referenced ids should not crash; unresolved ids can be ignored unless your app explicitly supports stubs
+
+For many-to-many relationships, nested-object and `*_ids` forms should converge to the same final join graph when they represent the same intended links.
+
 ### Date Parsing Contract
 
 `SwiftSyncCore` includes `SyncDateParser` for inbound mapping hot paths:
