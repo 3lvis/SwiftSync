@@ -69,6 +69,42 @@ final class RuntimeProfile {
 
 @Syncable
 @Model
+final class RuntimePrimitiveUser {
+    @Attribute(.unique) var id: Int
+    var name: String
+    var age: Int
+    var score: Double
+    var isActive: Bool
+    var updatedAt: Date
+    var token: UUID
+    var bigCount: Int64
+    var nickname: String?
+
+    init(
+        id: Int,
+        name: String,
+        age: Int,
+        score: Double,
+        isActive: Bool,
+        updatedAt: Date,
+        token: UUID,
+        bigCount: Int64,
+        nickname: String?
+    ) {
+        self.id = id
+        self.name = name
+        self.age = age
+        self.score = score
+        self.isActive = isActive
+        self.updatedAt = updatedAt
+        self.token = token
+        self.bigCount = bigCount
+        self.nickname = nickname
+    }
+}
+
+@Syncable
+@Model
 final class RuntimeExternalMappedUser {
     @PrimaryKey(remote: "external_id")
     @Attribute(.unique) var xid: String
@@ -271,6 +307,50 @@ final class SwiftSyncRuntimeTests: XCTestCase {
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows.first?.firstName, "Elvis")
         XCTAssertEqual(rows.first?.updatedAt, ISO8601DateFormatter().date(from: "2014-02-17T00:00:00+00:00"))
+    }
+
+    @MainActor
+    func testSyncNullClearsNonOptionalPrimitiveScalarsToDefaults() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimePrimitiveUser.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let seedPayload: [Any] = [[
+            "id": 1,
+            "name": "Alice",
+            "age": 40,
+            "score": 99.5,
+            "is_active": true,
+            "updated_at": "2014-02-17T00:00:00+00:00",
+            "token": "123E4567-E89B-12D3-A456-426614174000",
+            "big_count": Int64(77),
+            "nickname": "Al"
+        ]]
+        try await SwiftSync.sync(payload: seedPayload, as: RuntimePrimitiveUser.self, in: context)
+
+        let clearPayload: [Any] = [[
+            "id": 1,
+            "name": NSNull(),
+            "age": NSNull(),
+            "score": NSNull(),
+            "is_active": NSNull(),
+            "updated_at": NSNull(),
+            "token": NSNull(),
+            "big_count": NSNull(),
+            "nickname": NSNull()
+        ]]
+        try await SwiftSync.sync(payload: clearPayload, as: RuntimePrimitiveUser.self, in: context)
+
+        let rows = try context.fetch(FetchDescriptor<RuntimePrimitiveUser>())
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.name, "")
+        XCTAssertEqual(rows.first?.age, 0)
+        XCTAssertEqual(rows.first?.score, 0.0)
+        XCTAssertEqual(rows.first?.isActive, false)
+        XCTAssertEqual(rows.first?.updatedAt, Date(timeIntervalSince1970: 0))
+        XCTAssertEqual(rows.first?.token.uuidString, "00000000-0000-0000-0000-000000000000")
+        XCTAssertEqual(rows.first?.bigCount, 0)
+        XCTAssertNil(rows.first?.nickname)
     }
 
     @MainActor

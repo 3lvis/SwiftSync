@@ -47,6 +47,9 @@ public struct SyncPayload {
         if let value: T = value(for: key, as: type) {
             return value
         }
+        if isExplicitNull(for: key), let fallback: T = defaultValueForNull(as: type) {
+            return fallback
+        }
         throw SyncError.invalidPayload(model: "Payload", reason: "Missing or invalid '\(key)'")
     }
 
@@ -59,6 +62,53 @@ public struct SyncPayload {
             keys.append(contentsOf: ["remote_id", "remoteID"])
         }
         return Array(Set(keys))
+    }
+
+    private func isExplicitNull(for key: String) -> Bool {
+        candidateKeys(for: key).contains { candidate in
+            values[candidate] is NSNull
+        }
+    }
+
+    private func defaultValueForNull<T>(as type: T.Type) -> T? {
+        switch type {
+        case is String.Type:
+            return "" as? T
+        case is Bool.Type:
+            return false as? T
+        case is Int.Type:
+            return 0 as? T
+        case is Int8.Type:
+            return Int8(0) as? T
+        case is Int16.Type:
+            return Int16(0) as? T
+        case is Int32.Type:
+            return Int32(0) as? T
+        case is Int64.Type:
+            return Int64(0) as? T
+        case is UInt.Type:
+            return UInt(0) as? T
+        case is UInt8.Type:
+            return UInt8(0) as? T
+        case is UInt16.Type:
+            return UInt16(0) as? T
+        case is UInt32.Type:
+            return UInt32(0) as? T
+        case is UInt64.Type:
+            return UInt64(0) as? T
+        case is Double.Type:
+            return 0.0 as? T
+        case is Float.Type:
+            return Float(0) as? T
+        case is Decimal.Type:
+            return Decimal.zero as? T
+        case is Date.Type:
+            return Date(timeIntervalSince1970: 0) as? T
+        case is UUID.Type:
+            return UUID(uuidString: "00000000-0000-0000-0000-000000000000") as? T
+        default:
+            return nil
+        }
     }
 
     private func snakeCased(_ value: String) -> String {
