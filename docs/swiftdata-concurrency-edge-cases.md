@@ -1,35 +1,38 @@
 # SwiftData Concurrency and Store Edge Cases
 
-Purpose: capture real-world failure cases that `DataStack`-style abstractions previously mitigated, so we can implement and validate them one by one in SwiftSync.
+Purpose: capture high-impact real-world edge cases and define optimistic, deterministic outcomes (`last-write-wins`, queued writers, safe fallback paths) so we can validate them one by one in SwiftSync.
 
 Status legend:
+
 - `[ ]` not started
 - `[-]` in progress
 - `[x]` complete
 
-## P0: Crash / Data Loss / Corruption Risks
+## P0: Core Reliability Guarantees
 
 ### [x] 1. Concurrent sync on the same `ModelContext`
+
 - Test name: `testConcurrentSyncSameContextCausesRaceOrConflict`
 - Real-world scenario: pull-to-refresh and websocket event trigger sync at the same time.
 - Setup:
   - Use one `ModelContext`.
   - Start two concurrent sync calls with overlapping IDs.
 - Expected behavior:
-  - No crash.
+  - Continuous safe operation under concurrency.
   - No overlap on the same `ModelContext`; concurrent requests are queued.
   - Deterministic final state by execution order (last queued writer wins).
 - Why DataStack helped:
   - Writer context serialization prevented concurrent mutation races.
 
 ### [x] 2. Concurrent sync on different contexts targeting one store
+
 - Test name: `testConcurrentSyncDifferentContextsSameStoreUniqueConstraintConflict`
 - Real-world scenario: foreground edit and background import save simultaneously.
 - Setup:
   - Create two `ModelContext` instances on one `ModelContainer`.
   - Both write rows with the same unique ID.
 - Expected behavior:
-  - No crash.
+  - Continuous safe operation under concurrency.
   - No overlap across contexts that share one store/container; requests are queued.
   - Deterministic final state by execution order (last queued writer wins).
 - Why DataStack helped:
@@ -39,52 +42,57 @@ Status legend:
   - Implemented via store-scoped sync lease (container-level), replacing per-context-only locking.
 
 ### [ ] 3. Parent model passed from a different context
-- Test name: `testParentObjectFromDifferentContextFailsDeterministically`
+
+- Test name: `testParentObjectFromDifferentContextHandledDeterministically`
 - Real-world scenario: UI-selected parent object is reused in background sync context.
 - Setup:
   - Fetch/create parent in context A.
   - Call parent-scoped sync in context B using that parent instance.
 - Expected behavior:
-  - Deterministic guard/failure with clear error.
+  - Deterministic handling with a clear diagnostic and a safe fallback path.
 - Why DataStack helped:
   - Context-bound patterns made cross-context object usage easier to detect.
 
 ### [ ] 4. Relationship updates after `await` actor/context hop
+
 - Test name: `testApplyRelationshipsAfterAwaitOnWrongActor`
 - Real-world scenario: relationship mapping awaits network/async work mid-update.
 - Setup:
   - In `applyRelationships`, perform an `await` before context mutation.
   - Validate behavior if execution resumes on a different actor context.
 - Expected behavior:
-  - No undefined behavior.
-  - Deterministic isolation error or enforced single-actor execution.
+  - Actor-safe execution (no undefined behavior).
+  - Deterministic isolation handling or enforced single-actor execution.
 - Why DataStack helped:
   - Queue confinement via `performBlock` reduced accidental hops.
 
 ### [ ] 5. Store corruption recovery
+
 - Test name: `testStoreCorruptionRecoveryPath`
-- Real-world scenario: sqlite/wal corruption after crash or disk issue.
+- Real-world scenario: sqlite/wal corruption after interruption or disk issue.
 - Setup:
   - Initialize against a deliberately corrupted store artifact.
 - Expected behavior:
-  - Predictable recovery strategy (retry, reset, or explicit surfaced error).
+  - Predictable recovery strategy (retry, reset, or explicit recoverable-state signal).
 - Why DataStack helped:
   - Had remove-and-recreate logic and explicit cleanup behavior.
 
 ### [ ] 6. Store erase/reset while sync is in flight
+
 - Test name: `testResetEraseDuringInFlightSync`
 - Real-world scenario: logout/account switch while background sync is active.
 - Setup:
   - Start long-running sync.
   - Trigger erase/reset concurrently.
 - Expected behavior:
-  - Deterministic cancellation/failure mode; no zombie object access.
+  - Deterministic cancellation/completion path; no zombie object access.
 - Why DataStack helped:
   - Coordinated reset/drop sequence reduced race windows.
 
-## P1: Consistency / UX Risks (Stale Reads, Last-Write Ambiguity)
+## P1: Consistency / UX Guarantees (Stale-Read Prevention, Last-Write Clarity)
 
 ### [ ] 7. Background save visibility to main-reader context
+
 - Test name: `testBackgroundWriteNotVisibleToMainReadWithoutRefreshPolicy`
 - Real-world scenario: sync finishes, UI still shows stale values.
 - Setup:
@@ -98,6 +106,7 @@ Status legend:
   - Explicit did-save merge path into main context.
 
 ### [ ] 8. User editing row while background sync updates same row
+
 - Test name: `testRepeatedBackgroundSavesWhileUserEditsSameRow`
 - Real-world scenario: edit screen open while periodic sync writes server changes.
 - Setup:
@@ -108,9 +117,10 @@ Status legend:
 - Why DataStack helped:
   - Merge policy made conflict outcomes explicit.
 
-## P2: Scale / Operational Risks
+## P2: Scale / Operational Confidence
 
 ### [ ] 9. Large sync batch memory pressure
+
 - Test name: `testLongRunningBatchSyncMemoryPressureWithoutPeriodicReset`
 - Real-world scenario: 50k-100k row sync on older devices.
 - Setup:
@@ -121,12 +131,13 @@ Status legend:
   - Disposable/non-merging contexts and reset patterns reduced memory growth.
 
 ### [ ] 10. Cross-process/store contention (app + extension)
+
 - Test name: `testCrossProcessWriterContentionAppAndExtension`
 - Real-world scenario: main app and extension write shared store concurrently.
 - Setup:
   - Simulate process-like concurrent writers against shared store URL.
 - Expected behavior:
-  - Deterministic locking/conflict/retry behavior.
+  - Deterministic writer coordination and retry behavior.
 - Why DataStack helped:
   - More explicit store setup and operational control surfaces.
 
@@ -134,7 +145,7 @@ Status legend:
 
 1. Start with P0 tests 1-3 (highest likelihood + easiest to reproduce).
 2. Add explicit expected-policy comments in each test (pass criteria must be precise).
-3. Implement smallest safety mechanism required for each failing test.
+3. Implement the smallest mechanism required to deliver the expected deterministic outcome for each test.
 4. Re-run full suite after each test/policy change.
 5. Move to P0 tests 4-6, then P1, then P2.
 
@@ -143,6 +154,6 @@ Status legend:
 - Keep each new test independent and in-memory unless file-backed behavior is required.
 - Prefer deterministic coordination primitives (actors, task groups, expectations) over timing sleeps.
 - For each test, capture whether current behavior is:
-  - acceptable and documented,
-  - acceptable with guardrails,
-  - unacceptable and must be fixed.
+  - production-ready and documented,
+  - production-ready with guardrails,
+  - needs implementation work before rollout.
