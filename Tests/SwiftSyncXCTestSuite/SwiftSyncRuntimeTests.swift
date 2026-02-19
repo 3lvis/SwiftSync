@@ -69,6 +69,18 @@ final class RuntimeProfile {
 
 @Syncable
 @Model
+final class RuntimeOptionalDateProfile {
+    @Attribute(.unique) var id: Int
+    var updatedAt: Date?
+
+    init(id: Int, updatedAt: Date?) {
+        self.id = id
+        self.updatedAt = updatedAt
+    }
+}
+
+@Syncable
+@Model
 final class RuntimePrimitiveUser {
     @Attribute(.unique) var id: Int
     var name: String
@@ -364,6 +376,114 @@ final class SwiftSyncRuntimeTests: XCTestCase {
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows.first?.firstName, "Elvis")
         XCTAssertEqual(rows.first?.updatedAt, ISO8601DateFormatter().date(from: "2014-02-17T00:00:00+00:00"))
+    }
+
+    @MainActor
+    func testSyncParsesDateOnlyISOFormat() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeProfile.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let payload: [Any] = [[
+            "id": 1,
+            "first_name": "Elvis",
+            "updated_at": "2014-01-02"
+        ]]
+        try await SwiftSync.sync(payload: payload, as: RuntimeProfile.self, in: context)
+
+        let rows = try context.fetch(FetchDescriptor<RuntimeProfile>())
+        XCTAssertEqual(rows.count, 1)
+
+        var components = DateComponents()
+        components.calendar = Calendar(identifier: .iso8601)
+        components.timeZone = TimeZone(secondsFromGMT: 0)
+        components.year = 2014
+        components.month = 1
+        components.day = 2
+        components.hour = 0
+        components.minute = 0
+        components.second = 0
+        XCTAssertEqual(rows.first?.updatedAt, components.date)
+    }
+
+    @MainActor
+    func testSyncParsesUnixTimestampVariants() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeProfile.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        // Seconds
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 1,
+                "first_name": "A",
+                "updated_at": 1_700_000_000
+            ]],
+            as: RuntimeProfile.self,
+            in: context
+        )
+        var rows = try context.fetch(FetchDescriptor<RuntimeProfile>())
+        XCTAssertEqual(rows.first?.updatedAt, Date(timeIntervalSince1970: 1_700_000_000))
+
+        // Milliseconds
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 1,
+                "first_name": "A",
+                "updated_at": 1_700_000_000_000
+            ]],
+            as: RuntimeProfile.self,
+            in: context
+        )
+        rows = try context.fetch(FetchDescriptor<RuntimeProfile>())
+        XCTAssertEqual(rows.first?.updatedAt, Date(timeIntervalSince1970: 1_700_000_000))
+
+        // Microseconds
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 1,
+                "first_name": "A",
+                "updated_at": 1_700_000_000_000_000
+            ]],
+            as: RuntimeProfile.self,
+            in: context
+        )
+        rows = try context.fetch(FetchDescriptor<RuntimeProfile>())
+        XCTAssertEqual(rows.first?.updatedAt, Date(timeIntervalSince1970: 1_700_000_000))
+    }
+
+    @MainActor
+    func testSyncInvalidDateDefaultsRequiredAndNilForOptional() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeProfile.self, RuntimeOptionalDateProfile.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        // Required Date field defaults to epoch on invalid input.
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 1,
+                "first_name": "Elvis",
+                "updated_at": "not-a-date"
+            ]],
+            as: RuntimeProfile.self,
+            in: context
+        )
+        let requiredRows = try context.fetch(FetchDescriptor<RuntimeProfile>())
+        XCTAssertEqual(requiredRows.count, 1)
+        XCTAssertEqual(requiredRows.first?.updatedAt, Date(timeIntervalSince1970: 0))
+
+        // Optional Date field stays nil on invalid input.
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 2,
+                "updated_at": "not-a-date"
+            ]],
+            as: RuntimeOptionalDateProfile.self,
+            in: context
+        )
+        let optionalRows = try context.fetch(FetchDescriptor<RuntimeOptionalDateProfile>())
+        XCTAssertEqual(optionalRows.count, 1)
+        XCTAssertNil(optionalRows.first?.updatedAt)
     }
 
     @MainActor
