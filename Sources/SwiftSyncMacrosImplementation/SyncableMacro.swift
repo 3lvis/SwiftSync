@@ -1,3 +1,4 @@
+import Foundation
 import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
@@ -7,6 +8,8 @@ private struct SyncedProperty {
     let name: String
     let typeSource: String
     let isOptional: Bool
+    let isPrimaryKey: Bool
+    let primaryKeyRemoteKey: String?
 }
 
 public struct SyncableMacro: ExtensionMacro {
@@ -28,11 +31,17 @@ public struct SyncableMacro: ExtensionMacro {
             return []
         }
 
-        guard let identityProperty = properties.first(where: { $0.name == "id" }) ??
+        let explicitPrimaryKey = properties.first(where: \.isPrimaryKey)
+        guard let identityProperty = explicitPrimaryKey ?? properties.first(where: { $0.name == "id" }) ??
             properties.first(where: { $0.name == "remoteID" })
         else {
             return []
         }
+        let explicitRemoteIdentityKey = identityProperty.primaryKeyRemoteKey.flatMap { key in
+            key.isEmpty ? nil : key
+        }
+        let generatedRemoteIdentityKey = explicitRemoteIdentityKey ?? identityProperty.name
+        let needsCustomRemoteIdentityKeys = explicitPrimaryKey != nil
 
         let makeArguments = properties.map { property -> String in
             "\(property.name): \(payloadReadExpression(for: property))"
@@ -51,6 +60,7 @@ public struct SyncableMacro: ExtensionMacro {
                     typealias SyncID = \(raw: identityProperty.typeSource)
 
                     static var syncIdentity: KeyPath<\(raw: typeName), \(raw: identityProperty.typeSource)> { \\.\(raw: identityProperty.name) }
+                    \(raw: needsCustomRemoteIdentityKeys ? "static var syncIdentityRemoteKeys: [String] { [\"\(generatedRemoteIdentityKey)\"] }" : "")
 
                     static func make(from payload: SyncPayload) throws -> \(raw: typeName) {
                         \(raw: typeName)(
@@ -85,20 +95,55 @@ public struct SyncableMacro: ExtensionMacro {
 
             let typeSource = annotation.type.trimmedDescription
             let isOptional = typeSource.hasSuffix("?")
+            let primaryKeyRemoteKey = primaryKeyRemoteKeyIfPresent(variable)
+            let isPrimaryKey = primaryKeyRemoteKey != nil
 
             return SyncedProperty(
                 name: pattern.identifier.text,
                 typeSource: typeSource,
-                isOptional: isOptional
+                isOptional: isOptional,
+                isPrimaryKey: isPrimaryKey,
+                primaryKeyRemoteKey: primaryKeyRemoteKey
             )
         }
     }
 
-    private static func payloadReadExpression(for property: SyncedProperty) -> String {
-        if property.isOptional {
-            return "payload.value(for: \"\(property.name)\")"
+    private static func primaryKeyRemoteKeyIfPresent(_ variable: VariableDeclSyntax) -> String? {
+        for attribute in variable.attributes {
+            guard let syntax = attribute.as(AttributeSyntax.self) else { continue }
+            let rawName = syntax.attributeName.trimmedDescription
+            guard rawName == "PrimaryKey" || rawName.hasSuffix(".PrimaryKey") else { continue }
+
+            if let arguments = syntax.arguments?.as(LabeledExprListSyntax.self) {
+                for argument in arguments {
+                    guard argument.label?.text == "remote" else { continue }
+                    if let literal = argument.expression.as(StringLiteralExprSyntax.self) {
+                        for segment in literal.segments {
+                            if let stringSegment = segment.as(StringSegmentSyntax.self) {
+                                return stringSegment.content.text
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Marker without explicit remote key defaults to local property name.
+            return ""
         }
-        return "try payload.required(\(property.typeSource).self, for: \"\(property.name)\")"
+        return nil
+    }
+
+    private static func payloadReadExpression(for property: SyncedProperty) -> String {
+        let remoteKey: String
+        if let key = property.primaryKeyRemoteKey, !key.isEmpty {
+            remoteKey = key
+        } else {
+            remoteKey = property.name
+        }
+        if property.isOptional {
+            return "payload.value(for: \"\(remoteKey)\")"
+        }
+        return "try payload.required(\(property.typeSource).self, for: \"\(remoteKey)\")"
     }
 
     private static func applyBlock(for property: SyncedProperty) -> String {
@@ -120,9 +165,23 @@ public struct SyncableMacro: ExtensionMacro {
     }
 }
 
+public struct PrimaryKeyMacro: PeerMacro {
+    public static func expansion(
+        of node: AttributeSyntax,
+        providingPeersOf declaration: some DeclSyntaxProtocol,
+        in context: some MacroExpansionContext
+    ) throws -> [DeclSyntax] {
+        _ = node
+        _ = declaration
+        _ = context
+        return []
+    }
+}
+
 @main
 struct SwiftSyncMacroPlugin: CompilerPlugin {
     let providingMacros: [Macro.Type] = [
-        SyncableMacro.self
+        SyncableMacro.self,
+        PrimaryKeyMacro.self
     ]
 }

@@ -24,6 +24,30 @@ import SwiftSyncMacros
 final class DemoUser { ... }
 ```
 
+Custom primary key:
+
+```swift
+@Syncable
+@Model
+final class ExternalUser {
+    @PrimaryKey
+    @Attribute(.unique) var xid: String
+    var name: String
+}
+```
+
+Remote key mapping:
+
+```swift
+@Syncable
+@Model
+final class ExternalMappedUser {
+    @PrimaryKey(remote: "external_id")
+    @Attribute(.unique) var xid: String
+    var name: String
+}
+```
+
 ## Stable signatures
 
 ```swift

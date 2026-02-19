@@ -42,6 +42,32 @@ final class RuntimeRemoteUser {
 
 @Syncable
 @Model
+final class RuntimeExternalUser {
+    @PrimaryKey
+    @Attribute(.unique) var xid: String
+    var name: String
+
+    init(xid: String, name: String) {
+        self.xid = xid
+        self.name = name
+    }
+}
+
+@Syncable
+@Model
+final class RuntimeExternalMappedUser {
+    @PrimaryKey(remote: "external_id")
+    @Attribute(.unique) var xid: String
+    var name: String
+
+    init(xid: String, name: String) {
+        self.xid = xid
+        self.name = name
+    }
+}
+
+@Syncable
+@Model
 final class RuntimeMember {
     @Attribute(.unique) var id: Int
     var fullName: String
@@ -279,6 +305,42 @@ final class SwiftSyncRuntimeTests: XCTestCase {
         XCTAssertEqual(rows.filter { $0.id == 1 }.count, 1)
         XCTAssertEqual(rows.first?.id, 1)
         XCTAssertEqual(rows.first?.fullName, "single")
+    }
+
+    @MainActor
+    func testSyncUsesCustomPrimaryKeyWithoutIDField() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeExternalUser.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let payloadA: [Any] = [["xid": "abc", "name": "v1"]]
+        try await SwiftSync.sync(payload: payloadA, as: RuntimeExternalUser.self, in: context)
+
+        let payloadB: [Any] = [["xid": "abc", "name": "v2"]]
+        try await SwiftSync.sync(payload: payloadB, as: RuntimeExternalUser.self, in: context)
+
+        let rows = try context.fetch(FetchDescriptor<RuntimeExternalUser>())
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.xid, "abc")
+        XCTAssertEqual(rows.first?.name, "v2")
+    }
+
+    @MainActor
+    func testSyncUsesCustomPrimaryKeyWithRemoteKeyMapping() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeExternalMappedUser.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let payloadA: [Any] = [["external_id": "abc", "name": "v1"]]
+        try await SwiftSync.sync(payload: payloadA, as: RuntimeExternalMappedUser.self, in: context)
+
+        let payloadB: [Any] = [["external_id": "abc", "name": "v2"]]
+        try await SwiftSync.sync(payload: payloadB, as: RuntimeExternalMappedUser.self, in: context)
+
+        let rows = try context.fetch(FetchDescriptor<RuntimeExternalMappedUser>())
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.xid, "abc")
+        XCTAssertEqual(rows.first?.name, "v2")
     }
 
     @MainActor

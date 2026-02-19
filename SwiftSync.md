@@ -45,6 +45,7 @@ Models participating in sync conform to `SyncUpdatableModel`:
 
 `SyncPayload` provides snake_case/camelCase lookup and `id`/`remoteID` identity key conventions.
 Top-level payload rows without a valid identity are skipped during matching/diffing.
+Custom primary keys can be declared with `@PrimaryKey` on a model property (no string key configuration required).
 
 For relationship updates, models can additionally conform to `SyncRelationshipUpdatableModel` and apply to-one/to-many changes during the same sync run.
 
@@ -72,6 +73,32 @@ try await SwiftSync.sync(
   as: User.self,
   in: modelContext
 )
+```
+
+## Custom Primary Key Example
+
+```swift
+@Syncable
+@Model
+final class ExternalUser {
+  @PrimaryKey
+  @Attribute(.unique) var xid: String
+  var name: String
+}
+```
+
+Without `@PrimaryKey`, `@Syncable` falls back to `id`/`remoteID` conventions.
+
+If the remote key differs from the local property name:
+
+```swift
+@Syncable
+@Model
+final class ExternalMappedUser {
+  @PrimaryKey(remote: "external_id")
+  @Attribute(.unique) var xid: String
+  var name: String
+}
 ```
 
 ## Milestones
