@@ -1,23 +1,8 @@
+import Foundation
 import Testing
 @testable import SwiftSyncCore
-import Foundation
 
-struct SwiftSyncCoreTests {
-    @Test("SyncPayload supports id and remoteID conventions")
-    func payloadIdentityConventions() throws {
-        let payload = SyncPayload(values: ["id": 42])
-        let remoteID: Int? = payload.value(for: "remoteID")
-        #expect(remoteID == 42)
-    }
-
-    @Test("SyncPayload throws for missing required keys")
-    func payloadRequiredThrows() {
-        let payload = SyncPayload(values: [:])
-        #expect(throws: SyncError.self) {
-            let _: Int = try payload.required(Int.self, for: "id")
-        }
-    }
-
+struct SyncDateParserTests {
     @Test("Date parser ISO A: timezone-preserving instant")
     func dateParserISOA() {
         assertDate("2015-06-23T14:40:08.123+02:00", equalsUTC: "2015-06-23T12:40:08.123Z")
