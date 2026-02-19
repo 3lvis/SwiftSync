@@ -1,4 +1,9 @@
 import Foundation
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 
 public enum DateType: Sendable {
     case iso8601
@@ -25,11 +30,15 @@ public enum SyncDateParser {
         let trimmed = unixTimestamp.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
-        var chars = Array(trimmed)
-        if chars.first == "+" || chars.first == "-" {
-            chars.removeFirst()
+        let bytes = Array(trimmed.utf8)
+        var start = 0
+        if bytes.first == asciiPlus || bytes.first == asciiMinus {
+            start = 1
         }
-        guard !chars.isEmpty, chars.allSatisfy(\.isNumber) else { return nil }
+        guard start < bytes.count else { return nil }
+        for idx in start..<bytes.count where !isDigit(bytes[idx]) {
+            return nil
+        }
 
         var normalized = trimmed
         if normalized.count > unixTimestampSecondsLength {
@@ -44,157 +53,158 @@ public enum SyncDateParser {
         guard !input.isEmpty else { return nil }
 
         // Date-only input is normalized to UTC midnight.
-        if isDateOnly(input) {
+        if isDateOnly(input.utf8) {
             input += "T00:00:00+00:00"
         }
-
-        // NSDate-description style.
-        if input.count == 19 {
-            var chars = Array(input)
-            if chars.indices.contains(10), chars[10] == " " {
-                chars[10] = "T"
-                input = String(chars)
-            }
-        }
-
         return parseISODate(input)
     }
 
     private static func parseISODate(_ input: String) -> Date? {
-        let chars = Array(input)
-        guard chars.count >= 19 else { return nil }
+        let bytes = Array(input.utf8)
+        guard bytes.count >= 19 else { return nil }
 
-        guard isDigit(chars, 0, 4),
-              chars[safe: 4] == "-",
-              isDigit(chars, 5, 2),
-              chars[safe: 7] == "-",
-              isDigit(chars, 8, 2),
-              chars[safe: 10] == "T",
-              isDigit(chars, 11, 2),
-              chars[safe: 13] == ":",
-              isDigit(chars, 14, 2),
-              chars[safe: 16] == ":",
-              isDigit(chars, 17, 2) else {
+        guard isDigit(bytes, 0, 4),
+              bytes[safe: 4] == asciiHyphen,
+              isDigit(bytes, 5, 2),
+              bytes[safe: 7] == asciiHyphen,
+              isDigit(bytes, 8, 2),
+              (bytes[safe: 10] == asciiT || bytes[safe: 10] == asciiSpace),
+              isDigit(bytes, 11, 2),
+              bytes[safe: 13] == asciiColon,
+              isDigit(bytes, 14, 2),
+              bytes[safe: 16] == asciiColon,
+              isDigit(bytes, 17, 2) else {
             return nil
         }
 
-        guard let year = int(chars, 0, 4),
-              let month = int(chars, 5, 2),
-              let day = int(chars, 8, 2),
-              let hour = int(chars, 11, 2),
-              let minute = int(chars, 14, 2),
-              let second = int(chars, 17, 2) else {
+        guard let year = int(bytes, 0, 4),
+              let month = int(bytes, 5, 2),
+              let day = int(bytes, 8, 2),
+              let hour = int(bytes, 11, 2),
+              let minute = int(bytes, 14, 2),
+              let second = int(bytes, 17, 2) else {
             return nil
         }
+        guard (1...12).contains(month),
+              (1...31).contains(day),
+              (0...23).contains(hour),
+              (0...59).contains(minute),
+              (0...60).contains(second) else { return nil }
 
         var index = 19
         var milliseconds = 0
 
-        if chars[safe: index] == "." {
+        if bytes[safe: index] == asciiDot {
             index += 1
-            let fractionStart = index
-            while let c = chars[safe: index], c.isNumber {
+            var digits = 0
+            var msAccumulator = 0
+
+            while let c = bytes[safe: index], isDigit(c) {
+                if digits < 3 {
+                    msAccumulator = (msAccumulator * 10) + Int(c - asciiZero)
+                }
                 index += 1
+                digits += 1
             }
-            let digits = index - fractionStart
             guard digits > 0 else { return nil }
-            guard let fractionValue = int(chars, fractionStart, digits) else { return nil }
-            milliseconds = fractionToMilliseconds(value: fractionValue, digits: digits)
+            milliseconds = fractionToMilliseconds(prefixValue: msAccumulator, digits: digits)
         }
 
         var timezoneOffsetSeconds = 0
-        if index == chars.count {
+        if index == bytes.count {
             timezoneOffsetSeconds = 0
-        } else if chars[safe: index] == "Z", index + 1 == chars.count {
+        } else if bytes[safe: index] == asciiZ, index + 1 == bytes.count {
             timezoneOffsetSeconds = 0
             index += 1
-        } else if chars[safe: index] == "+" || chars[safe: index] == "-" {
-            guard let signChar = chars[safe: index] else { return nil }
-            let sign = signChar == "-" ? -1 : 1
+        } else if bytes[safe: index] == asciiPlus || bytes[safe: index] == asciiMinus {
+            guard let signByte = bytes[safe: index] else { return nil }
+            let sign = signByte == asciiMinus ? -1 : 1
             index += 1
 
-            guard isDigit(chars, index, 2) else { return nil }
-            guard let tzHour = int(chars, index, 2) else { return nil }
+            guard isDigit(bytes, index, 2) else { return nil }
+            guard let tzHour = int(bytes, index, 2) else { return nil }
             index += 2
 
             let tzMinute: Int
-            if chars[safe: index] == ":" {
+            if bytes[safe: index] == asciiColon {
                 index += 1
-                guard isDigit(chars, index, 2) else { return nil }
-                guard let value = int(chars, index, 2) else { return nil }
+                guard isDigit(bytes, index, 2) else { return nil }
+                guard let value = int(bytes, index, 2) else { return nil }
                 tzMinute = value
                 index += 2
             } else {
-                guard isDigit(chars, index, 2) else { return nil }
-                guard let value = int(chars, index, 2) else { return nil }
+                guard isDigit(bytes, index, 2) else { return nil }
+                guard let value = int(bytes, index, 2) else { return nil }
                 tzMinute = value
                 index += 2
             }
+            guard (0...23).contains(tzHour), (0...59).contains(tzMinute) else { return nil }
 
             timezoneOffsetSeconds = sign * ((tzHour * 3600) + (tzMinute * 60))
         } else {
             return nil
         }
 
-        guard index == chars.count else { return nil }
+        guard index == bytes.count else { return nil }
 
-        var components = DateComponents()
-        components.calendar = Calendar(identifier: .gregorian)
-        components.timeZone = TimeZone(secondsFromGMT: 0)
-        components.year = year
-        components.month = month
-        components.day = day
-        components.hour = hour
-        components.minute = minute
-        components.second = second
-        guard let baseUTC = components.date else { return nil }
+        var utc = tm()
+        utc.tm_year = Int32(year - 1900)
+        utc.tm_mon = Int32(month - 1)
+        utc.tm_mday = Int32(day)
+        utc.tm_hour = Int32(hour)
+        utc.tm_min = Int32(minute)
+        utc.tm_sec = Int32(second)
+        utc.tm_isdst = 0
 
-        let epoch = baseUTC.timeIntervalSince1970 - Double(timezoneOffsetSeconds)
+        let baseEpoch = timegm(&utc)
+        guard baseEpoch != -1 else { return nil }
+
+        let epoch = Double(baseEpoch) - Double(timezoneOffsetSeconds)
         return Date(timeIntervalSince1970: epoch + (Double(milliseconds) / 1000.0))
     }
 
-    private static func fractionToMilliseconds(value: Int, digits: Int) -> Int {
+    private static func fractionToMilliseconds(prefixValue: Int, digits: Int) -> Int {
         switch digits {
         case 1:
-            return value * 100
+            return prefixValue * 100
         case 2:
-            return value * 10
+            return prefixValue * 10
         default:
-            let scale = pow10(digits - 3)
-            return value / scale
+            return prefixValue
         }
     }
 
-    private static func pow10(_ n: Int) -> Int {
-        guard n > 0 else { return 1 }
-        var result = 1
-        for _ in 0..<n {
-            result *= 10
-        }
-        return result
+    private static func isDateOnly(_ utf8: String.UTF8View) -> Bool {
+        let bytes = Array(utf8)
+        guard bytes.count == 10 else { return false }
+        return isDigit(bytes, 0, 4) &&
+            bytes[safe: 4] == asciiHyphen &&
+            isDigit(bytes, 5, 2) &&
+            bytes[safe: 7] == asciiHyphen &&
+            isDigit(bytes, 8, 2)
     }
 
-    private static func isDateOnly(_ value: String) -> Bool {
-        let chars = Array(value)
-        guard chars.count == 10 else { return false }
-        return isDigit(chars, 0, 4) &&
-            chars[safe: 4] == "-" &&
-            isDigit(chars, 5, 2) &&
-            chars[safe: 7] == "-" &&
-            isDigit(chars, 8, 2)
-    }
-
-    private static func isDigit(_ chars: [Character], _ start: Int, _ length: Int) -> Bool {
-        guard start >= 0, length >= 0, start + length <= chars.count else { return false }
-        for i in start..<(start + length) where !chars[i].isNumber {
+    private static func isDigit(_ bytes: [UInt8], _ start: Int, _ length: Int) -> Bool {
+        guard start >= 0, length >= 0, start + length <= bytes.count else { return false }
+        for idx in start..<(start + length) where !isDigit(bytes[idx]) {
             return false
         }
         return true
     }
 
-    private static func int(_ chars: [Character], _ start: Int, _ length: Int) -> Int? {
-        guard start >= 0, length > 0, start + length <= chars.count else { return nil }
-        return Int(String(chars[start..<(start + length)]))
+    private static func isDigit(_ byte: UInt8) -> Bool {
+        byte >= asciiZero && byte <= asciiNine
+    }
+
+    private static func int(_ bytes: [UInt8], _ start: Int, _ length: Int) -> Int? {
+        guard start >= 0, length > 0, start + length <= bytes.count else { return nil }
+        var value = 0
+        for idx in start..<(start + length) {
+            let byte = bytes[idx]
+            guard isDigit(byte) else { return nil }
+            value = (value * 10) + Int(byte - asciiZero)
+        }
+        return value
     }
 }
 
@@ -209,3 +219,14 @@ private extension Array {
         indices.contains(index) ? self[index] : nil
     }
 }
+
+private let asciiZero: UInt8 = 48
+private let asciiNine: UInt8 = 57
+private let asciiSpace: UInt8 = 32
+private let asciiPlus: UInt8 = 43
+private let asciiMinus: UInt8 = 45
+private let asciiDot: UInt8 = 46
+private let asciiColon: UInt8 = 58
+private let asciiT: UInt8 = 84
+private let asciiZ: UInt8 = 90
+private let asciiHyphen: UInt8 = 45
