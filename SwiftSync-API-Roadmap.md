@@ -64,17 +64,9 @@ Included:
 1. Relationship application hook via `SyncRelationshipUpdatableModel`
 2. Source-of-truth replacement semantics for relationship payloads
 
-## Milestone 3: Hardening
+## Milestone 3: Hardening Sync
 
-Shippable:
-- Additional safety and performance validation after real usage feedback
-
-## Milestone 4 (Later / Last): Outbound Export
-
-Shippable:
-- Export API and outbound queue semantics
-
-Only start this phase after Milestones 1-3 are stable in real app usage. This phase will cover syncing locally-created data from app to backend.
+## Milestone 4: Export
 
 ## Guardrails Against Over-Engineering
 

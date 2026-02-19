@@ -94,10 +94,6 @@ try await SwiftSync.sync(
 - common to-one and to-many behavior
 - `SyncRelationshipUpdatableModel` hook for relationship diff application
 
-### Milestone 3: Hardening
+### Milestone 3: Hardening Sync
 
-- additional safety/performance validation in production scenarios
-
-### Later (Last): Outbound Export
-
-Add export only after inbound sync is stable in real usage. This is where locally-created data will be synced upstream (`local -> server`).
+### Milestone 4: Export
