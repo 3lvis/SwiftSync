@@ -154,6 +154,42 @@ public extension SwiftSync {
         }
     }
 
+    static func export<Model: ExportModel>(
+        as model: Model.Type,
+        in context: ModelContext,
+        using options: ExportOptions = ExportOptions()
+    ) throws -> [[String: Any]] {
+        _ = model
+
+        let rows = try context.fetch(FetchDescriptor<Model>())
+        let sorted = rows.sorted { lhs, rhs in
+            identityKey(from: lhs[keyPath: Model.syncIdentity]) < identityKey(from: rhs[keyPath: Model.syncIdentity])
+        }
+        return sorted.map { row in
+            var state = ExportState()
+            return row.exportObject(using: options, state: &state)
+        }
+    }
+
+    static func export<Model: ExportModel & ParentScopedModel>(
+        as model: Model.Type,
+        in context: ModelContext,
+        parent: Model.SyncParent,
+        using options: ExportOptions = ExportOptions()
+    ) throws -> [[String: Any]] {
+        _ = model
+
+        let rows = try context.fetch(FetchDescriptor<Model>())
+            .filter { $0[keyPath: Model.parentRelationship]?.persistentModelID == parent.persistentModelID }
+        let sorted = rows.sorted { lhs, rhs in
+            identityKey(from: lhs[keyPath: Model.syncIdentity]) < identityKey(from: rhs[keyPath: Model.syncIdentity])
+        }
+        return sorted.map { row in
+            var state = ExportState()
+            return row.exportObject(using: options, state: &state)
+        }
+    }
+
     private static func normalize<Model: PersistentModel>(payload: [Any], model: Model.Type) throws -> [[String: Any]] {
         try payload.map { raw in
             guard let map = raw as? [String: Any] else {

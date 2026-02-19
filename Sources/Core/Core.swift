@@ -27,6 +27,171 @@ public protocol ParentScopedModel: SyncUpdatableModel {
     static var parentRelationship: ReferenceWritableKeyPath<Self, SyncParent?> { get }
 }
 
+public enum ExportRelationshipMode: Sendable {
+    case array
+    case nested
+    case none
+}
+
+public enum ExportKeyStyle: Sendable {
+    case snakeCase
+    case camelCase
+
+    public func transform(_ value: String) -> String {
+        switch self {
+        case .camelCase:
+            return value
+        case .snakeCase:
+            return toSnakeCase(value)
+        }
+    }
+
+    private func toSnakeCase(_ value: String) -> String {
+        guard !value.isEmpty else { return value }
+        var output = ""
+        for character in value {
+            let scalarString = String(character)
+            if scalarString == scalarString.uppercased(), scalarString != scalarString.lowercased(), !output.isEmpty {
+                output.append("_")
+            }
+            output.append(scalarString.lowercased())
+        }
+        return output
+    }
+}
+
+public struct ExportOptions: Sendable {
+    public var keyStyle: ExportKeyStyle
+    public var relationshipMode: ExportRelationshipMode
+    public var dateFormatter: DateFormatter
+    public var includeNulls: Bool
+
+    public init(
+        keyStyle: ExportKeyStyle = .snakeCase,
+        relationshipMode: ExportRelationshipMode = .array,
+        dateFormatter: DateFormatter = ExportOptions.defaultDateFormatter(),
+        includeNulls: Bool = true
+    ) {
+        self.keyStyle = keyStyle
+        self.relationshipMode = relationshipMode
+        self.dateFormatter = dateFormatter
+        self.includeNulls = includeNulls
+    }
+
+    public static var camelCase: ExportOptions {
+        var options = ExportOptions()
+        options.keyStyle = .camelCase
+        return options
+    }
+
+    public static var excludedRelationships: ExportOptions {
+        var options = ExportOptions()
+        options.relationshipMode = .none
+        return options
+    }
+
+    public static func defaultDateFormatter() -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSXXXXX"
+        return formatter
+    }
+}
+
+public struct ExportState {
+    private var visiting: Set<String> = []
+
+    public init() {}
+
+    public mutating func enter<Model: PersistentModel>(_ model: Model) -> Bool {
+        let key = String(describing: model.persistentModelID)
+        let inserted = visiting.insert(key).inserted
+        return inserted
+    }
+
+    public mutating func leave<Model: PersistentModel>(_ model: Model) {
+        let key = String(describing: model.persistentModelID)
+        visiting.remove(key)
+    }
+}
+
+public protocol ExportModel: SyncModel {
+    func exportObject(using options: ExportOptions, state: inout ExportState) -> [String: Any]
+}
+
+public func exportEncodeValue(_ raw: Any, options: ExportOptions) -> Any? {
+    switch raw {
+    case let value as String:
+        return value
+    case let value as Bool:
+        return value
+    case let value as Int:
+        return value
+    case let value as Int8:
+        return Int(value)
+    case let value as Int16:
+        return Int(value)
+    case let value as Int32:
+        return Int(value)
+    case let value as Int64:
+        return value
+    case let value as UInt:
+        return value
+    case let value as UInt8:
+        return UInt(value)
+    case let value as UInt16:
+        return UInt(value)
+    case let value as UInt32:
+        return UInt(value)
+    case let value as UInt64:
+        return value
+    case let value as Double:
+        return value
+    case let value as Float:
+        return value
+    case let value as Decimal:
+        return NSDecimalNumber(decimal: value)
+    case let value as Date:
+        return options.dateFormatter.string(from: value)
+    case let value as UUID:
+        return value.uuidString
+    case let value as URL:
+        return value.absoluteString
+    case let value as Data:
+        return value.base64EncodedString()
+    case let value as [String]:
+        return value
+    case let value as [Int]:
+        return value
+    case let value as [Double]:
+        return value
+    case let value as [Bool]:
+        return value
+    case let value as [Any]:
+        return value.compactMap { exportEncodeValue($0, options: options) }
+    default:
+        return nil
+    }
+}
+
+public func exportSetValue(_ value: Any, for keyPath: String, into target: inout [String: Any]) {
+    let parts = keyPath.split(separator: ".").map(String.init)
+    guard !parts.isEmpty else { return }
+    exportSetValue(value, path: parts, into: &target)
+}
+
+private func exportSetValue(_ value: Any, path: [String], into target: inout [String: Any]) {
+    guard let head = path.first else { return }
+    if path.count == 1 {
+        target[head] = value
+        return
+    }
+    var nested = (target[head] as? [String: Any]) ?? [:]
+    exportSetValue(value, path: Array(path.dropFirst()), into: &nested)
+    target[head] = nested
+}
+
 public struct SyncPayload {
     public let values: [String: Any]
 

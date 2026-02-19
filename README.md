@@ -6,12 +6,11 @@ A minimal SwiftData sync framework.
 
 - Proposed
 - Audience: iOS engineers
-- Current scope: inbound sync only (`server -> local`)
-- Deferred: outbound export (`local -> server`)
+- Current scope: inbound sync + outbound export (`server -> local`, `local -> server`)
 
 ## Goal
 
-Ship a reliable `sync` API first.
+Ship a reliable `sync` + `export` API with minimal configuration.
 
 ## Non-Goals (for now)
 
@@ -39,6 +38,19 @@ public extension SwiftSync {
     in context: ModelContext,
     parent: Model.SyncParent
   ) async throws
+
+  static func export<Model: ExportModel>(
+    as model: Model.Type,
+    in context: ModelContext,
+    using options: ExportOptions = ExportOptions()
+  ) throws -> [[String: Any]]
+
+  static func export<Model: ExportModel & ParentScopedModel>(
+    as model: Model.Type,
+    in context: ModelContext,
+    parent: Model.SyncParent,
+    using options: ExportOptions = ExportOptions()
+  ) throws -> [[String: Any]]
 }
 ```
 
@@ -90,6 +102,31 @@ For to-many foreign-key scalar arrays (for example, `"notes_ids": [1, 2]`) insid
 - missing referenced ids should not crash; unresolved ids can be ignored unless your app explicitly supports stubs
 
 For many-to-many relationships, nested-object and `*_ids` forms should converge to the same final join graph when they represent the same intended links.
+
+## Export Contract
+
+`SwiftSync.export` walks model attributes and relationships and produces JSON-ready dictionaries.
+
+Defaults:
+
+- snake_case keys
+- relationship mode `.array` (to-one object, to-many array of objects)
+- ISO-like UTC date string formatting
+- include `null` keys for `nil` values
+
+Options:
+
+- `ExportOptions.keyStyle`: `.snakeCase` or `.camelCase`
+- `ExportOptions.relationshipMode`: `.array`, `.nested`, `.none`
+- `ExportOptions.dateFormatter`: custom formatter
+- `ExportOptions.includeNulls`: include or omit `nil` keys
+
+Macro-driven mapping:
+
+- `@NotExport`: omit field/relationship from export
+- `@PrimaryKey(remote: "...")`: export identity under custom remote key
+- `@RemoteKey("...")`: export under a specific remote key
+- `@RemotePath("a.b.c")`: export into nested JSON path
 
 ### Date Parsing Contract
 
@@ -187,3 +224,8 @@ final class ExternalMappedUser {
 ### Milestone 3: Hardening Sync
 
 ### Milestone 4: Export
+
+- outbound JSON export API
+- relationship modes (`array`, `nested`, `none`)
+- key style options and custom date formatter
+- macro-driven export mapping (`@NotExport`, `@RemoteKey`, `@RemotePath`, `@PrimaryKey(remote:)`)

@@ -1,11 +1,11 @@
 # API Proposal and Roadmap
 
-Lean roadmap focused on shipping inbound sync first.
+Lean roadmap focused on shipping deterministic sync and export.
 
 ## Scope
 
 - Deliver a stable, minimal sync API.
-- Defer outbound export until later phase.
+- Deliver best-effort outbound export API with low configuration.
 
 ## Public API (current)
 
@@ -25,6 +25,19 @@ public extension SwiftSync {
     in context: ModelContext,
     parent: Model.SyncParent
   ) async throws
+
+  static func export<Model: ExportModel>(
+    as model: Model.Type,
+    in context: ModelContext,
+    using options: ExportOptions = ExportOptions()
+  ) throws -> [[String: Any]]
+
+  static func export<Model: ExportModel & ParentScopedModel>(
+    as model: Model.Type,
+    in context: ModelContext,
+    parent: Model.SyncParent,
+    using options: ExportOptions = ExportOptions()
+  ) throws -> [[String: Any]]
 }
 ```
 
@@ -39,6 +52,10 @@ public protocol SyncUpdatableModel: SyncModel {
 public protocol ParentScopedModel: SyncUpdatableModel {
   associatedtype SyncParent: PersistentModel
   static var parentRelationship: ReferenceWritableKeyPath<Self, SyncParent?> { get }
+}
+
+public protocol ExportModel: SyncModel {
+  func exportObject(using options: ExportOptions, state: inout ExportState) -> [String: Any]
 }
 ```
 
@@ -79,6 +96,14 @@ Included:
 ## Milestone 3: Hardening Sync
 
 ## Milestone 4: Export
+
+Shippable:
+- Best-effort JSON export with deterministic ordering by identity
+
+Included:
+1. `SwiftSync.export` (global and parent-scoped)
+2. Export options for key style / relationship mode / date formatting / nulls
+3. Macro mapping controls: `@NotExport`, `@RemoteKey`, `@RemotePath`, `@PrimaryKey(remote:)`
 
 ## Guardrails Against Over-Engineering
 
