@@ -57,7 +57,7 @@ Status legend:
   - Parent is resolved in the target sync context before mutation.
   - If the parent cannot be resolved in that context, sync aborts deterministically with a clear diagnostic and no partial writes.
 
-### [ ] 4. Relationship updates after `await` actor/context hop
+### [x] 4. Relationship updates after `await` actor/context hop
 
 - Test name: `testApplyRelationshipsAfterAwaitOnWrongActor`
 - Real-world scenario: relationship mapping awaits network/async work mid-update.
@@ -69,6 +69,10 @@ Status legend:
   - Deterministic isolation handling or enforced single-actor execution.
 - Why DataStack helped:
   - Queue confinement via `performBlock` reduced accidental hops.
+- SwiftSync status:
+  - Covered by `testApplyRelationshipsAfterAwaitOnWrongActor`.
+  - Hardening coverage added by `testApplyRelationshipsAfterAwaitDeterministicLastWriteWins`.
+  - Relationship update flow uses explicit async preparation followed by a dedicated mutation step, with deterministic last-write-wins behavior.
 
 ### [ ] 5. Store corruption recovery
 
