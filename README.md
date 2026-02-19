@@ -92,6 +92,7 @@ Model:
 final class User {
   @Attribute(.unique) var id: Int
   var name: String
+  var email: String
 }
 ```
 
@@ -99,9 +100,8 @@ JSON:
 
 ```json
 [
-  { "id": 0, "name": "A" },
-  { "id": 1, "name": "B" },
-  { "id": 6, "name": "C" }
+  { "id": 6, "name": "Shawn Merrill", "email": "shawn@ovium.com" },
+  { "id": 9, "name": "Maya Chen", "email": "maya@ovium.com" }
 ]
 ```
 
@@ -116,6 +116,13 @@ try await SwiftSync.sync(payload: payload, as: User.self, in: context)
 Model:
 
 ```swift
+@Syncable
+@Model
+final class User {
+  @Attribute(.unique) var id: Int
+  var name: String
+}
+
 @Syncable
 @Model
 final class Note {
@@ -134,14 +141,16 @@ JSON:
 
 ```json
 [
-  { "id": 10, "text": "n0" },
-  { "id": 11, "text": "n1" }
+  { "id": 301, "text": "Call supplier before Friday" },
+  { "id": 302, "text": "Prepare Q1 budget review" }
 ]
 ```
 
 API call:
 
 ```swift
+let user = try context.fetch(FetchDescriptor<User>()).first { $0.id == 6 }!
+
 try await SwiftSync.sync(
   payload: payload,
   as: Note.self,
@@ -161,13 +170,23 @@ final class Company { @Attribute(.unique) var id: Int; var name: String }
 
 @Syncable
 @Model
-final class Employee { @Attribute(.unique) var id: Int; var company: Company? }
+final class Employee {
+  @Attribute(.unique) var id: Int
+  var fullName: String
+  var company: Company?
+}
 ```
 
 JSON:
 
 ```json
-{ "id": 1, "company": { "id": 10, "name": "Apple" } }
+[
+  {
+    "id": 44,
+    "full_name": "Ariana Patel",
+    "company": { "id": 10, "name": "Apple" }
+  }
+]
 ```
 
 API call:
@@ -189,13 +208,17 @@ final class Employee { @Attribute(.unique) var id: Int; var company: Company? }
 JSON:
 
 ```json
-{ "id": 1, "company_id": 10 }
+[
+  { "id": 44, "company_id": 10 }
+]
 ```
 
 JSON to clear:
 
 ```json
-{ "id": 1, "company_id": null }
+[
+  { "id": 44, "company_id": null }
+]
 ```
 
 API call:
@@ -215,25 +238,47 @@ final class Message { @Attribute(.unique) var id: Int; var text: String }
 
 @Syncable
 @Model
-final class User { @Attribute(.unique) var id: Int; var messages: [Message] }
+final class Chat {
+  @Attribute(.unique) var id: Int
+  var title: String
+  var messages: [Message]
+}
 ```
 
 JSON A:
 
 ```json
-{ "id": 1, "messages": [{"id": 101}, {"id": 102}] }
+[
+  {
+    "id": 77,
+    "title": "Launch Planning",
+    "messages": [
+      { "id": 101, "text": "Draft kickoff agenda" },
+      { "id": 102, "text": "Share timeline v1" }
+    ]
+  }
+]
 ```
 
 JSON B:
 
 ```json
-{ "id": 1, "messages": [{"id": 102}, {"id": 103}] }
+[
+  {
+    "id": 77,
+    "title": "Launch Planning",
+    "messages": [
+      { "id": 102, "text": "Share timeline v2" },
+      { "id": 103, "text": "Book design review" }
+    ]
+  }
+]
 ```
 
 API call:
 
 ```swift
-try await SwiftSync.sync(payload: payload, as: User.self, in: context)
+try await SwiftSync.sync(payload: payload, as: Chat.self, in: context)
 ```
 
 ### Scenario: to-many relationship by `*_ids`
@@ -247,19 +292,27 @@ final class Note { @Attribute(.unique) var id: Int }
 
 @Syncable
 @Model
-final class User { @Attribute(.unique) var id: Int; var notes: [Note] }
+final class User {
+  @Attribute(.unique) var id: Int
+  var name: String
+  var notes: [Note]
+}
 ```
 
 JSON A:
 
 ```json
-{ "id": 1, "notes_ids": [0, 1] }
+[
+  { "id": 6, "notes_ids": [301, 302] }
+]
 ```
 
 JSON B:
 
 ```json
-{ "id": 1, "notes_ids": [1, 2] }
+[
+  { "id": 6, "notes_ids": [302, 305] }
+]
 ```
 
 API call:
@@ -278,6 +331,7 @@ Model:
 final class User {
   @Attribute(.unique) var id: Int
   var firstName: String
+  var lastName: String
 }
 ```
 
@@ -285,7 +339,7 @@ JSON output shape (default):
 
 ```json
 [
-  { "id": 1, "first_name": "Elvis" }
+  { "id": 1, "first_name": "Elvis", "last_name": "Nunez" }
 ]
 ```
 
