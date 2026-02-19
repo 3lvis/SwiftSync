@@ -162,81 +162,22 @@ public struct SyncPayload {
         }
 
         if T.self == Date.self {
-            if let string = raw as? String, let date = parseDate(from: string) {
+            if let string = raw as? String, let date = SyncDateParser.dateFromDateString(string) {
                 return date as? T
             }
-            if let int = raw as? Int {
-                return dateFromUnixTimestamp(Double(int)) as? T
+            if let int = raw as? Int, let date = SyncDateParser.dateFromUnixTimestampNumber(NSNumber(value: int)) {
+                return date as? T
             }
-            if let double = raw as? Double {
-                return dateFromUnixTimestamp(double) as? T
+            if let double = raw as? Double, let date = SyncDateParser.dateFromUnixTimestampNumber(NSNumber(value: double)) {
+                return date as? T
+            }
+            if let number = raw as? NSNumber, let date = SyncDateParser.dateFromUnixTimestampNumber(number) {
+                return date as? T
             }
         }
 
         return nil
     }
-
-    private func parseDate(from string: String) -> Date? {
-        // Fast path: common ISO-8601 datetime forms.
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        if let date = formatter.date(from: string) {
-            return date
-        }
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: string) {
-            return date
-        }
-
-        // Date-only form: YYYY-MM-DD, interpreted as UTC midnight.
-        if let date = dateFromYYYYMMDD(string) {
-            return date
-        }
-
-        // Unix timestamp sent as string (seconds/milliseconds/microseconds).
-        if let numeric = Double(string) {
-            return dateFromUnixTimestamp(numeric)
-        }
-
-        return nil
-    }
-
-    private func dateFromYYYYMMDD(_ string: String) -> Date? {
-        guard string.count == 10 else { return nil }
-        let chars = Array(string)
-        guard chars[4] == "-", chars[7] == "-" else { return nil }
-        let y = Int(String(chars[0...3]))
-        let m = Int(String(chars[5...6]))
-        let d = Int(String(chars[8...9]))
-        guard let year = y, let month = m, let day = d else { return nil }
-        var components = DateComponents()
-        components.calendar = Calendar(identifier: .iso8601)
-        components.timeZone = TimeZone(secondsFromGMT: 0)
-        components.year = year
-        components.month = month
-        components.day = day
-        components.hour = 0
-        components.minute = 0
-        components.second = 0
-        return components.date
-    }
-
-    private func dateFromUnixTimestamp(_ raw: Double) -> Date {
-        let magnitude = abs(raw)
-        let seconds: Double
-        if magnitude >= 1_000_000_000_000_000 {
-            // Microseconds.
-            seconds = raw / 1_000_000
-        } else if magnitude >= 1_000_000_000_000 {
-            // Milliseconds.
-            seconds = raw / 1_000
-        } else {
-            // Seconds.
-            seconds = raw
-        }
-        return Date(timeIntervalSince1970: seconds)
-    }
-
 }
 
 public enum SyncError: Error, Sendable {

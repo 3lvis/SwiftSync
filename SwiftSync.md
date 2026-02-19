@@ -53,6 +53,26 @@ our policy is honestly we do our best without affecting performance.
 
 For relationship updates, models can additionally conform to `SyncRelationshipUpdatableModel` and apply to-one/to-many changes during the same sync run.
 
+### Date Parsing Contract
+
+`SwiftSyncCore` includes `SyncDateParser` for inbound mapping hot paths:
+
+- `SyncDateParser.dateFromDateString(_:)`
+- `SyncDateParser.dateFromISO8601String(_:)`
+- `SyncDateParser.dateFromUnixTimestampString(_:)`
+- `SyncDateParser.dateFromUnixTimestampNumber(_:)`
+- `String.dateType()` (`iso8601` vs `unixTimestamp`)
+
+Behavior:
+
+- Date-only `YYYY-MM-DD` is normalized to UTC midnight.
+- `YYYY-MM-DD HH:MM:SS` is accepted by converting the space to `T`.
+- Timezone forms supported: `Z`, `+00:00`, `+0000`, and no timezone (defaults to UTC).
+- Fractional seconds support includes deciseconds, centiseconds, milliseconds, and microseconds.
+- Microseconds are truncated to millisecond precision.
+- Invalid date text returns `nil`; sync mapping never crashes on invalid date values.
+- Unix timestamps support seconds and long microseconds-like forms (string and numeric input).
+
 ## Principles
 
 1. Keep API small.
