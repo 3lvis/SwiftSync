@@ -82,36 +82,16 @@ That single call will insert, update, and delete based on identity diffing.
 
 ## Scenario -> Way of Use
 
-### Scenario: server payload is source of truth
-
-Model:
-
-```swift
-@Syncable
-@Model
-final class User {
-  @Attribute(.unique) var id: Int
-  var name: String
-  var email: String
-}
-```
-
-JSON:
-
-```json
-[
-  { "id": 6, "name": "Shawn Merrill", "email": "shawn@ovium.com" },
-  { "id": 9, "name": "Maya Chen", "email": "maya@ovium.com" }
-]
-```
-
-API call:
-
-```swift
-try await SwiftSync.sync(payload: payload, as: User.self, in: context)
-```
-
 ### Scenario: payload only contains children for one parent
+
+When to use:
+- You call an endpoint like `/users/6/notes` and it only returns that user’s notes.
+- Payload does not include parent IDs in each child row.
+
+Expected result:
+- Incoming notes are linked to the provided parent.
+- Missing notes for that parent are removed.
+- Notes for other parents are untouched.
 
 Model:
 
@@ -161,6 +141,13 @@ try await SwiftSync.sync(
 
 ### Scenario: to-one relationship by nested object
 
+When to use:
+- Backend sends the related object inline (for example `company` nested inside user/employee).
+
+Expected result:
+- Related object is upserted.
+- To-one link points to that related object.
+
 Model:
 
 ```swift
@@ -197,6 +184,14 @@ try await SwiftSync.sync(payload: payload, as: Employee.self, in: context)
 
 ### Scenario: to-one relationship by `*_id`
 
+When to use:
+- Backend sends only foreign key IDs for a to-one relation.
+
+Expected result:
+- Non-null ID links relation if target exists.
+- `null` clears the relation.
+- Missing key keeps current relation unchanged.
+
 Model:
 
 ```swift
@@ -228,6 +223,14 @@ try await SwiftSync.sync(payload: payload, as: Employee.self, in: context)
 ```
 
 ### Scenario: to-many relationship by objects
+
+When to use:
+- Backend sends full related objects in an array.
+
+Expected result:
+- Membership is replaced by payload membership.
+- Existing children update in place.
+- Removed IDs are no longer related.
 
 Model:
 
@@ -283,6 +286,13 @@ try await SwiftSync.sync(payload: payload, as: Chat.self, in: context)
 
 ### Scenario: to-many relationship by `*_ids`
 
+When to use:
+- Backend sends only IDs for related objects and those rows already exist (or are synced elsewhere).
+
+Expected result:
+- Relationship membership matches exactly the provided ID list.
+- Re-running same payload is idempotent.
+
 Model:
 
 ```swift
@@ -322,6 +332,14 @@ try await SwiftSync.sync(payload: payload, as: User.self, in: context)
 ```
 
 ### Scenario: export local rows to API JSON
+
+When to use:
+- You need outbound JSON for create/update requests.
+
+Expected result:
+- Keys are transformed per export options.
+- Dates and scalars are encoded to JSON-friendly values.
+- Relationships are included/excluded based on export mode.
 
 Model:
 
