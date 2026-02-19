@@ -1,8 +1,6 @@
 import XCTest
 import SwiftData
-import Core
-import Macros
-import SwiftDataBridge
+import SwiftSync
 
 @Syncable
 @Model

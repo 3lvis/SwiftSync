@@ -9,11 +9,11 @@ It is designed for deterministic behavior, low configuration, and clear conventi
 
 ## Installation
 
-Add the package to your project and import the modules you need:
+Add the package to your project and import:
 
-- `Core`: protocols, payload decoding, date parsing, export options
-- `SwiftDataBridge`: `SwiftSync.sync(...)` and `SwiftSync.export(...)`
-- `Macros`: `@Syncable`, `@PrimaryKey`, `@NotExport`, `@RemoteKey`, `@RemotePath`
+- `SwiftSync`
+
+`SwiftSync` is the umbrella module that re-exports the public API, including macros.
 
 ## Public API
 
@@ -53,8 +53,7 @@ public extension SwiftSync {
 
 ```swift
 import SwiftData
-import SwiftDataBridge
-import Macros
+import SwiftSync
 
 @Syncable
 @Model

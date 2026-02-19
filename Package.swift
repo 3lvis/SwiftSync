@@ -9,6 +9,7 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
+        .library(name: "SwiftSync", targets: ["SwiftSync"]),
         .library(name: "Core", targets: ["Core"]),
         .library(name: "SwiftDataBridge", targets: ["SwiftDataBridge"]),
         .library(name: "Macros", targets: ["Macros"]),
@@ -32,6 +33,11 @@ let package = Package(
             path: "Sources/Macros"
         ),
         .target(
+            name: "SwiftSync",
+            dependencies: ["Core", "SwiftDataBridge", "Macros"],
+            path: "Sources/SwiftSync"
+        ),
+        .target(
             name: "Core",
             path: "Sources/Core"
         ),
@@ -52,7 +58,7 @@ let package = Package(
         ),
         .testTarget(
             name: "IntegrationTests",
-            dependencies: ["Core", "SwiftDataBridge", "Macros"],
+            dependencies: ["SwiftSync"],
             path: "Tests/IntegrationTests"
         )
     ]
