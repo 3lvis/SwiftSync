@@ -18,6 +18,18 @@ final class RuntimeUser {
 
 @Syncable
 @Model
+final class RuntimeLooseUser {
+    var id: Int
+    var fullName: String
+
+    init(id: Int, fullName: String) {
+        self.id = id
+        self.fullName = fullName
+    }
+}
+
+@Syncable
+@Model
 final class RuntimeRemoteUser {
     @Attribute(.unique) var remoteID: Int
     var fullName: String
@@ -208,22 +220,95 @@ final class SwiftSyncRuntimeTests: XCTestCase {
     }
 
     @MainActor
-    func testSyncThrowsOnMissingIdentity() async throws {
+    func testSyncPrimaryKeyDiffingInsertUpdateDeleteInSingleRun() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: RuntimeUser.self, configurations: configuration)
         let context = ModelContext(container)
 
-        let payload: [Any] = [["full_name": "No ID"]]
+        let seedPayload: [Any] = [
+            ["id": 0, "full_name": "User 0"],
+            ["id": 1, "full_name": "User 1"],
+            ["id": 2, "full_name": "User 2"],
+            ["id": 3, "full_name": "User 3"],
+            ["id": 4, "full_name": "User 4"]
+        ]
+        try await SwiftSync.sync(payload: seedPayload, as: RuntimeUser.self, in: context)
+
+        let diffPayload: [Any] = [
+            ["id": 0, "full_name": "User 0 Updated"],
+            ["id": 1, "full_name": "User 1 Updated"],
+            ["id": 6, "full_name": "User 6 New"]
+        ]
+        try await SwiftSync.sync(payload: diffPayload, as: RuntimeUser.self, in: context)
+
+        let users = try context.fetch(FetchDescriptor<RuntimeUser>())
+        XCTAssertEqual(users.count, 3)
+
+        let ids = Set(users.map(\.id))
+        XCTAssertEqual(ids, Set([0, 1, 6]))
+        XCTAssertEqual(users.filter { $0.id == 0 }.count, 1)
+        XCTAssertEqual(users.filter { $0.id == 1 }.count, 1)
+        XCTAssertEqual(users.filter { $0.id == 6 }.count, 1)
+
+        XCTAssertEqual(users.first(where: { $0.id == 0 })?.fullName, "User 0 Updated")
+        XCTAssertEqual(users.first(where: { $0.id == 1 })?.fullName, "User 1 Updated")
+        XCTAssertEqual(users.first(where: { $0.id == 6 })?.fullName, "User 6 New")
+    }
+
+    @MainActor
+    func testSyncDeduplicatesLocalDuplicatePrimaryKeys() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeLooseUser.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        context.insert(RuntimeLooseUser(id: 1, fullName: "dup-a"))
+        context.insert(RuntimeLooseUser(id: 1, fullName: "dup-b"))
+        context.insert(RuntimeLooseUser(id: 1, fullName: "dup-c"))
+        context.insert(RuntimeLooseUser(id: 2, fullName: "other"))
+        try context.save()
+
+        let payload: [Any] = [["id": 1, "full_name": "single"]]
+        do {
+            try await SwiftSync.sync(payload: payload, as: RuntimeLooseUser.self, in: context)
+        } catch {
+            XCTFail("Expected sync to dedupe local duplicates without crashing, got error: \(error)")
+        }
+
+        let rows = try context.fetch(FetchDescriptor<RuntimeLooseUser>())
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.filter { $0.id == 1 }.count, 1)
+        XCTAssertEqual(rows.first?.id, 1)
+        XCTAssertEqual(rows.first?.fullName, "single")
+    }
+
+    @MainActor
+    func testSyncSkipsRowsWithNullOrMissingIdentity() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeUser.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let seedPayload: [Any] = [
+            ["id": 1, "full_name": "One"],
+            ["id": 2, "full_name": "Two"]
+        ]
+        try await SwiftSync.sync(payload: seedPayload, as: RuntimeUser.self, in: context)
+
+        let mixedPayload: [Any] = [
+            ["id": NSNull(), "full_name": "Null ID"],
+            ["full_name": "Missing ID"],
+            ["id": 1, "full_name": "One Updated"]
+        ]
 
         do {
-            try await SwiftSync.sync(payload: payload, as: RuntimeUser.self, in: context)
-            XCTFail("Expected missingIdentity error")
-        } catch let error as SyncError {
-            guard case .missingIdentity = error else {
-                XCTFail("Unexpected SyncError: \(error)")
-                return
-            }
+            try await SwiftSync.sync(payload: mixedPayload, as: RuntimeUser.self, in: context)
+        } catch {
+            XCTFail("Expected sync to skip invalid identity rows, got error: \(error)")
         }
+
+        let users = try context.fetch(FetchDescriptor<RuntimeUser>())
+        XCTAssertEqual(users.count, 1)
+        XCTAssertEqual(users.first?.id, 1)
+        XCTAssertEqual(users.first?.fullName, "One Updated")
     }
 
     @MainActor

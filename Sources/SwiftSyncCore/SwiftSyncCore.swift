@@ -106,7 +106,5 @@ public struct SyncPayload {
 }
 
 public enum SyncError: Error, Sendable {
-    case missingIdentity(model: String, key: String)
-    case duplicateIdentity(model: String, identity: String)
     case invalidPayload(model: String, reason: String)
 }

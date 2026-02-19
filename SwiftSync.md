@@ -44,6 +44,7 @@ Models participating in sync conform to `SyncUpdatableModel`:
 - provide `apply(_:)` for updates with field-by-field comparison (return `true` only if a value changed)
 
 `SyncPayload` provides snake_case/camelCase lookup and `id`/`remoteID` identity key conventions.
+Top-level payload rows without a valid identity are skipped during matching/diffing.
 
 For relationship updates, models can additionally conform to `SyncRelationshipUpdatableModel` and apply to-one/to-many changes during the same sync run.
 

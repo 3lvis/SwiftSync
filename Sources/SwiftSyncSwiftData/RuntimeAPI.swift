@@ -14,10 +14,12 @@ public extension SwiftSync {
         let existing = try context.fetch(FetchDescriptor<Model>())
 
         var index: [String: Model] = [:]
+        var duplicates: [Model] = []
         for row in existing {
             let key = identityKey(from: row[keyPath: Model.syncIdentity])
             if index[key] != nil {
-                throw SyncError.duplicateIdentity(model: String(describing: Model.self), identity: key)
+                duplicates.append(row)
+                continue
             }
             index[key] = row
         }
@@ -25,9 +27,19 @@ public extension SwiftSync {
         var changed = false
         var seenKeys: Set<String> = []
 
+        if !duplicates.isEmpty {
+            for duplicate in duplicates {
+                context.delete(duplicate)
+            }
+            changed = true
+        }
+
         for entry in entries {
             let payloadModel = SyncPayload(values: entry)
-            let identity = try resolveIdentity(from: payloadModel, model: Model.self)
+            guard let identity = resolveIdentity(from: payloadModel, model: Model.self) else {
+                // For hardening: rows without valid identity are skipped from matching/diffing.
+                continue
+            }
             let key = identityKey(from: identity)
             seenKeys.insert(key)
 
@@ -79,13 +91,13 @@ public extension SwiftSync {
     private static func resolveIdentity<Model: SyncModel>(
         from payload: SyncPayload,
         model: Model.Type
-    ) throws -> Model.SyncID {
+    ) -> Model.SyncID? {
         for key in model.syncIdentityRemoteKeys {
             if let value = payload.value(for: key, as: Model.SyncID.self) {
                 return value
             }
         }
-        throw SyncError.missingIdentity(model: String(describing: model), key: model.syncIdentityRemoteKeys.joined(separator: ","))
+        return nil
     }
 
     private static func identityKey<ID: Hashable>(from identity: ID) -> String {
