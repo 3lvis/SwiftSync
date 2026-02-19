@@ -118,6 +118,18 @@ final class RuntimeExternalMappedUser {
 
 @Syncable
 @Model
+final class RuntimeStringIDUser {
+    @Attribute(.unique) var id: String
+    var name: String
+
+    init(id: String, name: String) {
+        self.id = id
+        self.name = name
+    }
+}
+
+@Syncable
+@Model
 final class RuntimeMember {
     @Attribute(.unique) var id: Int
     var fullName: String
@@ -287,6 +299,51 @@ final class SwiftSyncRuntimeTests: XCTestCase {
         XCTAssertEqual(users.count, 1)
         XCTAssertEqual(users.first?.id, 42)
         XCTAssertEqual(users.first?.fullName, "Float ID User")
+    }
+
+    @MainActor
+    func testSyncCoercesStringIDToIntAndMatchesLaterNumericID() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeUser.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let payloadA: [Any] = [["id": "42", "full_name": "X"]]
+        try await SwiftSync.sync(payload: payloadA, as: RuntimeUser.self, in: context)
+
+        var rows = try context.fetch(FetchDescriptor<RuntimeUser>())
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.id, 42)
+
+        let payloadB: [Any] = [["id": 42, "full_name": "X Updated"]]
+        try await SwiftSync.sync(payload: payloadB, as: RuntimeUser.self, in: context)
+
+        rows = try context.fetch(FetchDescriptor<RuntimeUser>())
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.id, 42)
+        XCTAssertEqual(rows.first?.fullName, "X Updated")
+    }
+
+    @MainActor
+    func testSyncCoercesNumericIDToStringAndMatchesLaterStringID() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RuntimeStringIDUser.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let payloadA: [Any] = [["id": 42, "name": "X"]]
+        try await SwiftSync.sync(payload: payloadA, as: RuntimeStringIDUser.self, in: context)
+
+        var rows = try context.fetch(FetchDescriptor<RuntimeStringIDUser>())
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.id, "42")
+        XCTAssertEqual(rows.first?.name, "X")
+
+        let payloadB: [Any] = [["id": "42", "name": "X Updated"]]
+        try await SwiftSync.sync(payload: payloadB, as: RuntimeStringIDUser.self, in: context)
+
+        rows = try context.fetch(FetchDescriptor<RuntimeStringIDUser>())
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.id, "42")
+        XCTAssertEqual(rows.first?.name, "X Updated")
     }
 
     @MainActor
