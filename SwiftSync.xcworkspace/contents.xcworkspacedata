@@ -4,13 +4,4 @@
    <FileRef
       location = "group:Demo/Demo.xcodeproj">
    </FileRef>
-   <FileRef
-      location = "group:Package.swift">
-   </FileRef>
-   <FileRef
-      location = "group:README.md">
-   </FileRef>
-   <FileRef
-      location = "group:docs">
-   </FileRef>
 </Workspace>
