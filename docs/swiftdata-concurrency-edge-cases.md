@@ -86,7 +86,7 @@ Status legend:
 
 ## P1: Consistency / UX Guarantees (Stale-Read Prevention, Last-Write Clarity)
 
-### [ ] 7. Background save visibility to main-reader context
+### [x] 7. Background save visibility to main-reader context
 
 - Test name: `testBackgroundWriteNotVisibleToMainReadWithoutRefreshPolicy`
 - Real-world scenario: sync finishes, UI still shows stale values.
@@ -99,6 +99,10 @@ Status legend:
   - Deterministic refresh/merge strategy.
 - Why DataStack helped:
   - Explicit did-save merge path into main context.
+- SwiftSync status:
+  - Covered by test `testBackgroundWriteNotVisibleToMainReadWithoutRefreshPolicy`.
+  - A retained object in the main context can remain stale after a background save.
+  - A fresh `fetch` in the same main context observes the updated value.
 
 ### [ ] 8. User editing row while background sync updates same row
 

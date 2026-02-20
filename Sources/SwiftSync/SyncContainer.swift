@@ -1,0 +1,85 @@
+import Foundation
+import SwiftData
+
+public final class SyncContainer: NSObject, @unchecked Sendable {
+    public let modelContainer: ModelContainer
+    public let mainContext: ModelContext
+
+    @MainActor
+    public init(
+        for modelTypes: any PersistentModel.Type...,
+        migrationPlan: (any SchemaMigrationPlan.Type)? = nil,
+        configurations: ModelConfiguration...
+    ) throws {
+        let schema = Schema(modelTypes)
+        self.modelContainer = try ModelContainer(
+            for: schema,
+            migrationPlan: migrationPlan,
+            configurations: configurations
+        )
+        self.mainContext = modelContainer.mainContext
+        super.init()
+        installDidSaveObserver()
+    }
+
+    @MainActor
+    public init(_ modelContainer: ModelContainer) {
+        self.modelContainer = modelContainer
+        self.mainContext = modelContainer.mainContext
+        super.init()
+        installDidSaveObserver()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    public func makeBackgroundContext() -> ModelContext {
+        ModelContext(modelContainer)
+    }
+
+    private func installDidSaveObserver() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(modelContextDidSave(_:)),
+            name: ModelContext.didSave,
+            object: nil
+        )
+    }
+
+    @objc
+    private func modelContextDidSave(_ notification: Notification) {
+        guard let sourceContext = notification.object as? ModelContext else { return }
+        guard sourceContext.container == modelContainer else { return }
+        guard sourceContext != mainContext else { return }
+
+        let changedIDs = changedIdentifiers(from: notification.userInfo)
+        for identifier in changedIDs {
+            _ = mainContext.model(for: identifier)
+        }
+        mainContext.processPendingChanges()
+    }
+
+    private func changedIdentifiers(from userInfo: [AnyHashable: Any]?) -> Set<PersistentIdentifier> {
+        guard let userInfo else { return [] }
+
+        let keys: [String] = [
+            ModelContext.NotificationKey.insertedIdentifiers.rawValue,
+            ModelContext.NotificationKey.updatedIdentifiers.rawValue,
+            ModelContext.NotificationKey.deletedIdentifiers.rawValue
+        ]
+
+        var ids: Set<PersistentIdentifier> = []
+        for key in keys {
+            guard let value = userInfo[key] else { continue }
+            if let setValue = value as? Set<PersistentIdentifier> {
+                ids.formUnion(setValue)
+                continue
+            }
+            if let arrayValue = value as? [PersistentIdentifier] {
+                ids.formUnion(arrayValue)
+            }
+        }
+        return ids
+    }
+}

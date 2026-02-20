@@ -80,6 +80,29 @@ try await SwiftSync.sync(payload: payload, as: User.self, in: context)
 
 That single call will insert, update, and delete based on identity diffing.
 
+## SyncContainer
+
+`SyncContainer` is a thin SwiftData-based wrapper around `ModelContainer` that:
+- exposes a shared `mainContext`
+- creates background contexts for sync work
+- observes background `ModelContext.didSave` and processes main-context pending changes
+
+```swift
+let syncContainer = try await MainActor.run {
+  try SyncContainer(
+    for: User.self,
+    configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+  )
+}
+
+let background = syncContainer.makeBackgroundContext()
+try await SwiftSync.sync(payload: payload, as: User.self, in: background)
+```
+
+Behavior note:
+- fresh fetches on `mainContext` see background saves
+- retained object references may still need explicit UI rebind/requery
+
 ## Scenario -> Way of Use
 
 ### Scenario: payload only contains children for one parent

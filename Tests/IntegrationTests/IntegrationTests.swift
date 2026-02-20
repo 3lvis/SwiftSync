@@ -1927,6 +1927,89 @@ final class IntegrationTests: XCTestCase {
     }
 
     @MainActor
+    func testBackgroundWriteNotVisibleToMainReadWithoutRefreshPolicy() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: User.self, configurations: configuration)
+        let mainContext = ModelContext(container)
+        let backgroundContext = ModelContext(container)
+        let readerContext = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [["id": 1, "full_name": "Initial Name"]],
+            as: User.self,
+            in: mainContext
+        )
+
+        let firstMainRead = try mainContext.fetch(FetchDescriptor<User>())
+        XCTAssertEqual(firstMainRead.count, 1)
+        XCTAssertEqual(firstMainRead.first?.fullName, "Initial Name")
+        let retainedMainRow = try XCTUnwrap(firstMainRead.first)
+
+        try await SwiftSync.sync(
+            payload: [["id": 1, "full_name": "Background Updated"]],
+            as: User.self,
+            in: backgroundContext
+        )
+
+        XCTAssertEqual(retainedMainRow.fullName, "Initial Name")
+
+        let secondMainRead = try mainContext.fetch(FetchDescriptor<User>())
+        let freshRead = try readerContext.fetch(FetchDescriptor<User>())
+
+        XCTAssertEqual(freshRead.first?.fullName, "Background Updated")
+        XCTAssertEqual(secondMainRead.first?.fullName, "Background Updated")
+    }
+
+    func testSyncContainerInitializesLikeModelContainerAndSyncs() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let syncContainer = try await MainActor.run {
+            try SyncContainer(for: User.self, configurations: configuration)
+        }
+        let writerContext = syncContainer.makeBackgroundContext()
+
+        try await SwiftSync.sync(
+            payload: [["id": 10, "full_name": "From SyncContainer"]],
+            as: User.self,
+            in: writerContext
+        )
+
+        let rows = try syncContainer.mainContext.fetch(FetchDescriptor<User>())
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.id, 10)
+        XCTAssertEqual(rows.first?.fullName, "From SyncContainer")
+    }
+
+    func testSyncContainerBackgroundSaveVisibilityBehavior() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let syncContainer = try await MainActor.run {
+            try SyncContainer(for: User.self, configurations: configuration)
+        }
+        let mainContext = syncContainer.mainContext
+        let backgroundContext = syncContainer.makeBackgroundContext()
+
+        try await SwiftSync.sync(
+            payload: [["id": 11, "full_name": "Main Seed"]],
+            as: User.self,
+            in: backgroundContext
+        )
+
+        let firstMainRead = try mainContext.fetch(FetchDescriptor<User>())
+        let retainedMainRow = try XCTUnwrap(firstMainRead.first)
+        XCTAssertEqual(retainedMainRow.fullName, "Main Seed")
+
+        try await SwiftSync.sync(
+            payload: [["id": 11, "full_name": "Background Write"]],
+            as: User.self,
+            in: backgroundContext
+        )
+
+        XCTAssertEqual(retainedMainRow.fullName, "Main Seed")
+
+        let secondMainRead = try mainContext.fetch(FetchDescriptor<User>())
+        XCTAssertEqual(secondMainRead.first?.fullName, "Background Write")
+    }
+
+    @MainActor
     func testSyncCancellationDuringExecutionRollsBackUnsavedChanges() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: ConcurrentRaceUser.self, configurations: configuration)
