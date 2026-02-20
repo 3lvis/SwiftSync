@@ -9,6 +9,12 @@ Define a practical path to the old "sync and forget" developer experience:
 - minimal app-level plumbing
 - convention-first defaults (Rails-like)
 
+## Scope (Current Iteration)
+
+- SwiftUI-only for now.
+- Target APIs are `@SyncQuery` and `@SyncModel` for reactive reads.
+- UIKit/non-SwiftUI integration is explicitly out of scope for this document.
+
 ## Desired Behavior
 
 ### DX target
@@ -88,13 +94,13 @@ So we need a read-layer convention that is reactive-by-default.
 Principle:
 
 - Never treat retained model references as the UI source of truth.
-- UI renders from query snapshots (fresh fetches / `@Query` / view-model reload).
+- UI renders from query snapshots (fresh fetches / `@Query` / `@SyncQuery` / `@SyncModel`).
 
 Flow:
 
 1. Sync writes in background context.
 2. `SyncContainer` publishes changed IDs.
-3. Screens/view models requery relevant data scope.
+3. SwiftUI read scopes requery relevant data.
 4. SwiftUI diffs collections by stable IDs and animates updates.
 
 Pros:
@@ -231,15 +237,6 @@ var user: User?
 - Uses SwiftData primitives instead of replacing the stack.
 - Preserves convention-first style already used by `@Syncable` and `@PrimaryKey`.
 
-### Fallback API for non-SwiftUI layers
-
-```swift
-syncContainer.onDidSaveChanges = { change in
-  // change.insertedIDs / updatedIDs / deletedIDs
-  // ViewModel chooses targeted reload.
-}
-```
-
 ## Acceptance Criteria
 
 1. Calling sync updates list UI without manual per-screen refresh code.
@@ -249,6 +246,6 @@ syncContainer.onDidSaveChanges = { change in
 
 ## Open Questions
 
-1. Do we want a Combine/Observation publisher API in `SyncContainer`, or callback-only?
+1. Do we want a Combine/Observation publisher API in `SyncContainer`, or keep wrapper-driven invalidation only for SwiftUI?
 2. Should `SyncContainer` expose changed model types in addition to changed IDs?
 3. Do we want an opt-in strict mode that forces detail requery by ID after any background save?
