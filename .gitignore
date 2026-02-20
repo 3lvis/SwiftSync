@@ -6,6 +6,9 @@
 /.swiftpm/
 /Packages/
 Package.resolved
+SwiftSync/.build/
+SwiftSync/.swiftpm/
+SwiftSync/Package.resolved
 
 # Xcode user data
 xcuserdata/

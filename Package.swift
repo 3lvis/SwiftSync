@@ -25,41 +25,41 @@ let package = Package(
                 .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
                 .product(name: "SwiftCompilerPlugin", package: "swift-syntax")
             ],
-            path: "Sources/MacrosImplementation"
+            path: "SwiftSync/Sources/MacrosImplementation"
         ),
         .target(
             name: "Macros",
             dependencies: ["MacrosImplementation", "Core"],
-            path: "Sources/Macros"
+            path: "SwiftSync/Sources/Macros"
         ),
         .target(
             name: "SwiftSync",
             dependencies: ["Core", "SwiftDataBridge", "Macros"],
-            path: "Sources/SwiftSync"
+            path: "SwiftSync/Sources/SwiftSync"
         ),
         .target(
             name: "Core",
-            path: "Sources/Core"
+            path: "SwiftSync/Sources/Core"
         ),
         .target(
             name: "SwiftDataBridge",
             dependencies: ["Core"],
-            path: "Sources/SwiftDataBridge"
+            path: "SwiftSync/Sources/SwiftDataBridge"
         ),
         .target(
             name: "TestingKit",
             dependencies: ["Core"],
-            path: "Sources/TestingKit"
+            path: "SwiftSync/Sources/TestingKit"
         ),
         .testTarget(
             name: "CoreTests",
             dependencies: ["Core"],
-            path: "Tests/CoreTests"
+            path: "SwiftSync/Tests/CoreTests"
         ),
         .testTarget(
             name: "IntegrationTests",
             dependencies: ["SwiftSync"],
-            path: "Tests/IntegrationTests"
+            path: "SwiftSync/Tests/IntegrationTests"
         )
     ]
 )
