@@ -727,6 +727,24 @@ private actor ConcurrentRaceHooks {
     }
 }
 
+private actor CancellationGate {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var released = false
+
+    func wait() async {
+        if released { return }
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func release() {
+        released = true
+        continuation?.resume()
+        continuation = nil
+    }
+}
+
 extension ConcurrentRaceUser: SyncRelationshipUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         _ = payload
@@ -1861,6 +1879,123 @@ final class IntegrationTests: XCTestCase {
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows.first?.id, 500)
         XCTAssertEqual(rows.first?.fullName, "Background Winner")
+    }
+
+    @MainActor
+    func testResetEraseDuringInFlightSync() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: ConcurrentRaceUser.self, configurations: configuration)
+        let syncContext = ModelContext(container)
+        let resetContext = ModelContext(container)
+        let readerContext = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [["id": 1, "full_name": "Seed User"]],
+            as: ConcurrentRaceUser.self,
+            in: syncContext
+        )
+
+        await ConcurrentRaceHooks.shared.installFirstSyncBlocker()
+        defer { Task { await ConcurrentRaceHooks.shared.releaseFirstSync() } }
+
+        let syncTask = Task { @MainActor in
+            try await SwiftSync.sync(
+                payload: [
+                    ["id": 1, "full_name": "Post Reset User"],
+                    ["id": 2, "full_name": "Inserted During Sync"]
+                ],
+                as: ConcurrentRaceUser.self,
+                in: syncContext
+            )
+        }
+
+        await ConcurrentRaceHooks.shared.waitUntilFirstSyncBlocked()
+
+        let existing = try resetContext.fetch(FetchDescriptor<ConcurrentRaceUser>())
+        for row in existing {
+            resetContext.delete(row)
+        }
+        try resetContext.save()
+
+        await ConcurrentRaceHooks.shared.releaseFirstSync()
+        try await syncTask.value
+
+        let rows = try readerContext.fetch(FetchDescriptor<ConcurrentRaceUser>())
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertNil(rows.first(where: { $0.id == 1 }))
+        XCTAssertEqual(rows.first(where: { $0.id == 2 })?.fullName, "Inserted During Sync")
+    }
+
+    @MainActor
+    func testSyncCancellationDuringExecutionRollsBackUnsavedChanges() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: ConcurrentRaceUser.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [["id": 1, "full_name": "Seed User"]],
+            as: ConcurrentRaceUser.self,
+            in: context
+        )
+
+        await ConcurrentRaceHooks.shared.installFirstSyncBlocker()
+        defer { Task { await ConcurrentRaceHooks.shared.releaseFirstSync() } }
+
+        let syncTask = Task { @MainActor in
+            try await SwiftSync.sync(
+                payload: [
+                    ["id": 1, "full_name": "Updated User"],
+                    ["id": 2, "full_name": "Should Rollback"]
+                ],
+                as: ConcurrentRaceUser.self,
+                in: context
+            )
+        }
+
+        await ConcurrentRaceHooks.shared.waitUntilFirstSyncBlocked()
+        syncTask.cancel()
+        await ConcurrentRaceHooks.shared.releaseFirstSync()
+
+        do {
+            try await syncTask.value
+            XCTFail("Expected cancellation to stop sync.")
+        } catch {
+            XCTAssertEqual(error as? SyncError, .cancelled)
+        }
+
+        let rows = try context.fetch(FetchDescriptor<ConcurrentRaceUser>())
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.id, 1)
+        XCTAssertEqual(rows.first?.fullName, "Seed User")
+    }
+
+    @MainActor
+    func testSyncCancellationBeforeExecutionExitsWithoutWrites() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: User.self, configurations: configuration)
+        let context = ModelContext(container)
+        let gate = CancellationGate()
+
+        let task = Task { @MainActor in
+            await gate.wait()
+            try await SwiftSync.sync(
+                payload: [["id": 1, "full_name": "Cancelled Before Sync"]],
+                as: User.self,
+                in: context
+            )
+        }
+        task.cancel()
+        await gate.release()
+
+        do {
+            try await task.value
+            XCTFail("Expected cancellation before execution to skip writes.")
+        } catch {
+            XCTAssertEqual(error as? SyncError, .cancelled)
+        }
+
+        let rows = try context.fetch(FetchDescriptor<User>())
+        XCTAssertEqual(rows.count, 0)
     }
 
 }

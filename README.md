@@ -532,13 +532,33 @@ That row is skipped for matching/diffing. Sync continues for valid rows.
 Flat attributes are automatic with `@Syncable`.
 For relationship behavior, implement `SyncRelationshipUpdatableModel` and define `applyRelationships(...)`.
 
-### What happens if two sync calls run at the same time on the same `ModelContext`?
+### What happens if two sync calls run at the same time?
 
-SwiftSync serializes sync calls per `ModelContext`.
+SwiftSync serializes sync calls per store/container.
 
-- Calls on the same context are queued (no overlap/interleaving on that context).
+- Calls targeting the same `ModelContainer` are queued (no overlap/interleaving).
 - Final state is last-writer-wins by queued execution order.
-- Calls on different contexts are not serialized by this guard.
+- Calls targeting different stores can run concurrently.
+
+### How do I cancel a sync?
+
+Use Swift Concurrency task cancellation:
+
+```swift
+let task = Task {
+  try await SwiftSync.sync(payload: payload, as: User.self, in: context)
+}
+
+task.cancel()
+
+do {
+  try await task.value
+} catch SyncError.cancelled {
+  // expected cooperative cancellation
+}
+```
+
+Cancellation is cooperative. SwiftSync rolls back unsaved in-memory changes for that run, but it does not roll back work that was already saved earlier.
 
 ## API Reference
 
@@ -571,5 +591,10 @@ public extension SwiftSync {
     parent: Model.SyncParent,
     using options: ExportOptions = ExportOptions()
   ) throws -> [[String: Any]]
+}
+
+public enum SyncError: Error, Sendable, Equatable {
+  case invalidPayload(model: String, reason: String)
+  case cancelled
 }
 ```

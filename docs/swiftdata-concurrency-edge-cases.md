@@ -68,7 +68,7 @@ Status legend:
 - Why DataStack helped:
   - Had remove-and-recreate logic and explicit cleanup behavior.
 
-### [ ] 6. Store erase/reset while sync is in flight
+### [x] 6. Store erase/reset while sync is in flight
 
 - Test name: `testResetEraseDuringInFlightSync`
 - Real-world scenario: logout/account switch while background sync is active.
@@ -79,6 +79,10 @@ Status legend:
   - Deterministic cancellation/completion path; no zombie object access.
 - Why DataStack helped:
   - Coordinated reset/drop sequence reduced race windows.
+- SwiftSync status:
+  - Covered by test `testResetEraseDuringInFlightSync`.
+  - Current behavior is deterministic completion without crash, but an in-flight update can be dropped during concurrent reset.
+  - Mitigation now supported: callers can cancel in-flight sync tasks (`Task.cancel()`), and SwiftSync cooperatively stops with `SyncError.cancelled` while rolling back unsaved changes.
 
 ## P1: Consistency / UX Guarantees (Stale-Read Prevention, Last-Write Clarity)
 

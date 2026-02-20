@@ -350,6 +350,7 @@ public struct SyncPayload {
     }
 }
 
-public enum SyncError: Error, Sendable {
+public enum SyncError: Error, Sendable, Equatable {
     case invalidPayload(model: String, reason: String)
+    case cancelled
 }

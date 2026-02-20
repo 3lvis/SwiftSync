@@ -11,6 +11,7 @@ public extension SwiftSync {
         let lease = await acquireSyncLease(for: context)
         _ = model
         do {
+            try throwIfCancelled()
             let entries = try normalize(payload: payload, model: Model.self)
             let existing = try context.fetch(FetchDescriptor<Model>())
 
@@ -29,6 +30,7 @@ public extension SwiftSync {
             var seenKeys: Set<String> = []
 
             if !duplicates.isEmpty {
+                try throwIfCancelled()
                 for duplicate in duplicates {
                     context.delete(duplicate)
                 }
@@ -36,6 +38,7 @@ public extension SwiftSync {
             }
 
             for entry in entries {
+                try throwIfCancelled()
                 let payloadModel = SyncPayload(values: entry)
                 guard let identity = resolveIdentity(from: payloadModel, model: Model.self) else {
                     // For hardening: rows without valid identity are skipped from matching/diffing.
@@ -49,9 +52,11 @@ public extension SwiftSync {
                         changed = true
                     }
                     if let relationshipRow = row as? any SyncRelationshipUpdatableModel {
+                        try throwIfCancelled()
                         if try await relationshipRow.applyRelationships(payloadModel, in: context) {
                             changed = true
                         }
+                        try throwIfCancelled()
                     }
                     continue
                 }
@@ -59,24 +64,33 @@ public extension SwiftSync {
                 let created = try Model.make(from: payloadModel)
                 context.insert(created)
                 if let relationshipRow = created as? any SyncRelationshipUpdatableModel {
+                    try throwIfCancelled()
                     if try await relationshipRow.applyRelationships(payloadModel, in: context) {
                         changed = true
                     }
+                    try throwIfCancelled()
                 }
                 index[key] = created
                 changed = true
             }
 
+            try throwIfCancelled()
             for (key, row) in index where !seenKeys.contains(key) {
                 context.delete(row)
                 changed = true
             }
 
+            try throwIfCancelled()
             if changed {
                 try context.save()
             }
             await releaseSyncLease(lease)
         } catch {
+            if isCancellation(error) {
+                context.rollback()
+                await releaseSyncLease(lease)
+                throw SyncError.cancelled
+            }
             await releaseSyncLease(lease)
             throw error
         }
@@ -91,6 +105,7 @@ public extension SwiftSync {
         let lease = await acquireSyncLease(for: context)
         _ = model
         do {
+            try throwIfCancelled()
             let entries = try normalize(payload: payload, model: Model.self)
             guard let resolvedParent = try resolveParent(parent, in: context) else {
                 throw SyncError.invalidPayload(
@@ -115,6 +130,7 @@ public extension SwiftSync {
             var seenKeys: Set<String> = []
 
             if !duplicates.isEmpty {
+                try throwIfCancelled()
                 for duplicate in duplicates {
                     context.delete(duplicate)
                 }
@@ -122,6 +138,7 @@ public extension SwiftSync {
             }
 
             for entry in entries {
+                try throwIfCancelled()
                 let payloadModel = SyncPayload(values: entry)
                 guard let identity = resolveIdentity(from: payloadModel, model: Model.self) else {
                     continue
@@ -138,9 +155,11 @@ public extension SwiftSync {
                         changed = true
                     }
                     if let relationshipRow = row as? any SyncRelationshipUpdatableModel {
+                        try throwIfCancelled()
                         if try await relationshipRow.applyRelationships(payloadModel, in: context) {
                             changed = true
                         }
+                        try throwIfCancelled()
                     }
                     continue
                 }
@@ -149,24 +168,33 @@ public extension SwiftSync {
                 created[keyPath: Model.parentRelationship] = resolvedParent
                 context.insert(created)
                 if let relationshipRow = created as? any SyncRelationshipUpdatableModel {
+                    try throwIfCancelled()
                     if try await relationshipRow.applyRelationships(payloadModel, in: context) {
                         changed = true
                     }
+                    try throwIfCancelled()
                 }
                 index[key] = created
                 changed = true
             }
 
+            try throwIfCancelled()
             for (key, row) in index where !seenKeys.contains(key) {
                 context.delete(row)
                 changed = true
             }
 
+            try throwIfCancelled()
             if changed {
                 try context.save()
             }
             await releaseSyncLease(lease)
         } catch {
+            if isCancellation(error) {
+                context.rollback()
+                await releaseSyncLease(lease)
+                throw SyncError.cancelled
+            }
             await releaseSyncLease(lease)
             throw error
         }
@@ -242,6 +270,22 @@ public extension SwiftSync {
 
     private static func identityKey<ID: Hashable>(from identity: ID) -> String {
         String(describing: identity)
+    }
+
+    private static func throwIfCancelled() throws {
+        if Task.isCancelled {
+            throw SyncError.cancelled
+        }
+    }
+
+    private static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError {
+            return true
+        }
+        if let syncError = error as? SyncError, syncError == .cancelled {
+            return true
+        }
+        return false
     }
 
     private struct SyncLease {
