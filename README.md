@@ -213,8 +213,10 @@ try await SwiftSync.sync(
 
 Notes:
 - This example keeps `ParentScopedModel`, so scoped identity is the default for `Note`.
-- If `Note` has exactly one to-one relationship to `User`, SwiftSync can infer it at runtime and you can omit `ParentScopedModel`.
-- If there are 0 or >1 candidate relationships to the same parent type, sync fails with a clear error and asks for explicit `parentRelationship`.
+- Parent relationship inference is the default behavior for parent sync.
+- If `Note` has exactly one to-one relationship to `User`, you can omit `ParentScopedModel` and `parentRelationship`.
+- If there are multiple candidate relationships to the same parent type, sync fails and requires explicit `parentRelationship`.
+- If there are zero candidates, sync fails because the requested parent scope cannot be resolved for that model.
 - `identityPolicy` defaults to `.global` for inferred parent sync. Use `.scopedByParent` when duplicate child IDs across different parents are valid.
 - Inferred scoped example: `try await SwiftSync.sync(payload: payload, as: Note.self, in: context, parent: user, identityPolicy: .scopedByParent)`
 

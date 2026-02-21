@@ -9,7 +9,7 @@ Parent sync has two responsibilities:
 2. Scope diff/delete to only that parent's children.
 
 SwiftSync now supports both styles:
-- inferred parent relationship when exactly one candidate exists
+- inferred parent relationship by default when exactly one candidate exists
 - explicit `parentRelationship` when relationship choice is ambiguous
 
 ## Current Behavior
@@ -63,7 +63,7 @@ Models:
 }
 ```
 
-There is exactly one `Comment -> Task?` relationship (`task`), so sync can infer automatically.
+There is exactly one `Comment -> Task?` relationship (`task`), so default parent inference resolves it automatically.
 
 ### Case B: Multiple relationships (explicit key path required)
 
