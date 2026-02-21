@@ -70,7 +70,7 @@ struct TaskDetailView: View {
                     .foregroundStyle(.secondary)
             }
 
-            if let task {
+            if task != nil {
                 Section("Tags") {
                     if tags.isEmpty {
                         Text("No tags")

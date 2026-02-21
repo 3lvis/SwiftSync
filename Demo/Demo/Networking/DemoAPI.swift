@@ -58,9 +58,9 @@ final class FakeDemoAPIClient: DemoAPIClient {
     private let seedData: DemoSeedData
     private var requestCounter = 0
 
-    init(scenario: DemoNetworkScenario = .fastStable, seedData: DemoSeedData = .generate()) {
+    init(scenario: DemoNetworkScenario = .fastStable, seedData: DemoSeedData? = nil) {
         self.scenario = scenario
-        self.seedData = seedData
+        self.seedData = seedData ?? DemoSeedData.generate()
     }
 
     func getProjects() async throws -> [[String: Any]] {
