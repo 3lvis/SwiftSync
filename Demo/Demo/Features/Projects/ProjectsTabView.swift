@@ -86,7 +86,8 @@ private struct ProjectDetailView: View {
             sortBy: [
                 SortDescriptor(\Task.priority, order: .reverse),
                 SortDescriptor(\Task.id)
-            ]
+            ],
+            refreshOn: [\.assignee]
         )
     }
 

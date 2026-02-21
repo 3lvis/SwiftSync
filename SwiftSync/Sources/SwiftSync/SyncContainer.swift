@@ -5,6 +5,7 @@ import Core
 public final class SyncContainer: NSObject, @unchecked Sendable {
     public static let didSaveChangesNotification = Notification.Name("SwiftSync.SyncContainer.didSaveChanges")
     public static let changedIdentifiersUserInfoKey = "changedIdentifiers"
+    public static let changedModelTypeNamesUserInfoKey = "changedModelTypeNames"
 
     public let modelContainer: ModelContainer
     public let mainContext: ModelContext
@@ -91,11 +92,15 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         for identifier in changedIDs {
             _ = mainContext.model(for: identifier)
         }
+        let changedModelTypeNames = changedModelTypeNames(for: changedIDs)
         mainContext.processPendingChanges()
         NotificationCenter.default.post(
             name: Self.didSaveChangesNotification,
             object: self,
-            userInfo: [Self.changedIdentifiersUserInfoKey: changedIDs]
+            userInfo: [
+                Self.changedIdentifiersUserInfoKey: changedIDs,
+                Self.changedModelTypeNamesUserInfoKey: changedModelTypeNames
+            ]
         )
     }
 
@@ -120,5 +125,14 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             }
         }
         return ids
+    }
+
+    private func changedModelTypeNames(for identifiers: Set<PersistentIdentifier>) -> Set<String> {
+        var names: Set<String> = []
+        for identifier in identifiers {
+            let model = mainContext.model(for: identifier)
+            names.insert(String(reflecting: type(of: model)))
+        }
+        return names
     }
 }

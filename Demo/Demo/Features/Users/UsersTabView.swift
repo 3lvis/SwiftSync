@@ -80,7 +80,8 @@ private struct UserDetailView: View {
             sortBy: [
                 SortDescriptor(\Task.priority, order: .reverse),
                 SortDescriptor(\Task.id)
-            ]
+            ],
+            refreshOn: [\.project]
         )
     }
 

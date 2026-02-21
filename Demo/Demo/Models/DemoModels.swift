@@ -467,6 +467,17 @@ extension Comment: SyncUpdatableModel {
 }
 
 extension Project: SyncQuerySortableModel {
+    static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] {
+        [Task.self]
+    }
+
+    static func syncRelatedModelType(for keyPath: PartialKeyPath<Project>) -> (any PersistentModel.Type)? {
+        if keyPath == \Project.tasks {
+            return Task.self
+        }
+        return nil
+    }
+
     static func syncSortDescriptor(for keyPath: PartialKeyPath<Project>) -> SortDescriptor<Project>? {
         if keyPath == \Project.id {
             return SortDescriptor(\Project.id)
@@ -485,6 +496,20 @@ extension Project: SyncQuerySortableModel {
 }
 
 extension User: SyncQuerySortableModel {
+    static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] {
+        [Task.self, Comment.self]
+    }
+
+    static func syncRelatedModelType(for keyPath: PartialKeyPath<User>) -> (any PersistentModel.Type)? {
+        if keyPath == \User.assignedTasks {
+            return Task.self
+        }
+        if keyPath == \User.authoredComments {
+            return Comment.self
+        }
+        return nil
+    }
+
     static func syncSortDescriptor(for keyPath: PartialKeyPath<User>) -> SortDescriptor<User>? {
         if keyPath == \User.id {
             return SortDescriptor(\User.id)
@@ -506,6 +531,17 @@ extension User: SyncQuerySortableModel {
 }
 
 extension Tag: SyncQuerySortableModel {
+    static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] {
+        [Task.self]
+    }
+
+    static func syncRelatedModelType(for keyPath: PartialKeyPath<Tag>) -> (any PersistentModel.Type)? {
+        if keyPath == \Tag.tasks {
+            return Task.self
+        }
+        return nil
+    }
+
     static func syncSortDescriptor(for keyPath: PartialKeyPath<Tag>) -> SortDescriptor<Tag>? {
         if keyPath == \Tag.id {
             return SortDescriptor(\Tag.id)
@@ -524,6 +560,26 @@ extension Tag: SyncQuerySortableModel {
 }
 
 extension Task: SyncQuerySortableModel {
+    static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] {
+        [Project.self, User.self, Tag.self, Comment.self]
+    }
+
+    static func syncRelatedModelType(for keyPath: PartialKeyPath<Task>) -> (any PersistentModel.Type)? {
+        if keyPath == \Task.project {
+            return Project.self
+        }
+        if keyPath == \Task.assignee {
+            return User.self
+        }
+        if keyPath == \Task.tags {
+            return Tag.self
+        }
+        if keyPath == \Task.comments {
+            return Comment.self
+        }
+        return nil
+    }
+
     static func syncSortDescriptor(for keyPath: PartialKeyPath<Task>) -> SortDescriptor<Task>? {
         if keyPath == \Task.id {
             return SortDescriptor(\Task.id)
@@ -557,6 +613,20 @@ extension Task: SyncQuerySortableModel {
 }
 
 extension Comment: SyncQuerySortableModel {
+    static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] {
+        [Task.self, User.self]
+    }
+
+    static func syncRelatedModelType(for keyPath: PartialKeyPath<Comment>) -> (any PersistentModel.Type)? {
+        if keyPath == \Comment.task {
+            return Task.self
+        }
+        if keyPath == \Comment.author {
+            return User.self
+        }
+        return nil
+    }
+
     static func syncSortDescriptor(for keyPath: PartialKeyPath<Comment>) -> SortDescriptor<Comment>? {
         if keyPath == \Comment.id {
             return SortDescriptor(\Comment.id)

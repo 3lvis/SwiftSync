@@ -7,10 +7,30 @@ public protocol SyncModelable: PersistentModel {
     associatedtype SyncID: Hashable & Codable & Sendable
     static var syncIdentity: KeyPath<Self, SyncID> { get }
     static var syncIdentityRemoteKeys: [String] { get }
+    static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] { get }
+    static func syncRelatedModelType(for keyPath: PartialKeyPath<Self>) -> (any PersistentModel.Type)?
 }
 
 public extension SyncModelable {
     static var syncIdentityRemoteKeys: [String] { ["id", "remote_id", "remoteID"] }
+    static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] { [] }
+
+    static func syncRelatedModelType(for keyPath: PartialKeyPath<Self>) -> (any PersistentModel.Type)? {
+        _ = keyPath
+        return nil
+    }
+
+    static var syncDefaultRefreshModelTypeNames: Set<String> {
+        Set(syncDefaultRefreshModelTypes.map { String(reflecting: $0) })
+    }
+
+    static func syncRefreshModelTypes(for keyPaths: [PartialKeyPath<Self>]) -> [any PersistentModel.Type] {
+        keyPaths.compactMap { syncRelatedModelType(for: $0) }
+    }
+
+    static func syncRefreshModelTypeNames(for keyPaths: [PartialKeyPath<Self>]) -> Set<String> {
+        Set(syncRefreshModelTypes(for: keyPaths).map { String(reflecting: $0) })
+    }
 }
 
 public protocol SyncQuerySortableModel: SyncModelable {

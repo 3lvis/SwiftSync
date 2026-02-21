@@ -63,6 +63,8 @@ public struct SyncableMacro: ExtensionMacro {
             .map(exportBlock(for:))
             .joined(separator: "\n\n")
         let sortDescriptorBody = sortDescriptorBlock(for: properties, typeName: typeName)
+        let defaultRefreshModelTypesBody = defaultRefreshModelTypesBlock(for: properties)
+        let relatedModelTypeBody = relatedModelTypeBlock(for: properties, typeName: typeName)
 
         return [
             try ExtensionDeclSyntax(
@@ -72,6 +74,11 @@ public struct SyncableMacro: ExtensionMacro {
 
                     static var syncIdentity: KeyPath<\(raw: typeName), \(raw: identityProperty.typeSource)> { \\.\(raw: identityProperty.name) }
                     \(raw: needsCustomRemoteIdentityKeys ? "static var syncIdentityRemoteKeys: [String] { [\"\(generatedRemoteIdentityKey)\"] }" : "")
+                    static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] { \(raw: defaultRefreshModelTypesBody) }
+
+                    static func syncRelatedModelType(for keyPath: PartialKeyPath<\(raw: typeName)>) -> (any PersistentModel.Type)? {
+                        \(raw: relatedModelTypeBody)
+                    }
 
                     static func syncSortDescriptor(for keyPath: PartialKeyPath<\(raw: typeName)>) -> SortDescriptor<\(raw: typeName)>? {
                         \(raw: sortDescriptorBody)
@@ -245,6 +252,52 @@ public struct SyncableMacro: ExtensionMacro {
         default:
             return false
         }
+    }
+
+    private static func defaultRefreshModelTypesBlock(for properties: [SyncedProperty]) -> String {
+        var relationshipTypes: [String] = []
+        for property in properties where property.isRelationship {
+            guard let relationshipType = relationshipModelTypeName(for: property) else { continue }
+            if !relationshipTypes.contains(relationshipType) {
+                relationshipTypes.append(relationshipType)
+            }
+        }
+        guard !relationshipTypes.isEmpty else {
+            return "[]"
+        }
+        let values = relationshipTypes.map { "\($0).self" }.joined(separator: ", ")
+        return "[\(values)]"
+    }
+
+    private static func relatedModelTypeBlock(for properties: [SyncedProperty], typeName: String) -> String {
+        let relationshipProperties = properties.filter { $0.isRelationship }
+        guard !relationshipProperties.isEmpty else {
+            return "return nil"
+        }
+
+        let blocks = relationshipProperties.compactMap { property -> String? in
+            guard let relationshipType = relationshipModelTypeName(for: property) else { return nil }
+            return """
+            if keyPath == \\\(typeName).\(property.name) {
+                return \(relationshipType).self
+            }
+            """
+        }
+        guard !blocks.isEmpty else {
+            return "return nil"
+        }
+        return "\(blocks.joined(separator: "\n"))\nreturn nil"
+    }
+
+    private static func relationshipModelTypeName(for property: SyncedProperty) -> String? {
+        guard property.isRelationship else { return nil }
+
+        let trimmed = property.typeSource.trimmingCharacters(in: .whitespacesAndNewlines)
+        let unwrapped = unwrapOptional(type: trimmed)
+        if unwrapped.hasPrefix("[") && unwrapped.hasSuffix("]") {
+            return String(unwrapped.dropFirst().dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return unwrapped
     }
 
     private static func sortDescriptorBlock(for properties: [SyncedProperty], typeName: String) -> String {

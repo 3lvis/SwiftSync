@@ -10,6 +10,7 @@ private final class SyncQueryObserver<Model: PersistentModel>: ObservableObject 
     private let syncContainer: SyncContainer
     private let predicate: Predicate<Model>?
     private let sortBy: [SortDescriptor<Model>]
+    private let observedModelTypeNames: Set<String>
     private let animation: Animation?
     private var notificationToken: NSObjectProtocol?
 
@@ -17,11 +18,13 @@ private final class SyncQueryObserver<Model: PersistentModel>: ObservableObject 
         syncContainer: SyncContainer,
         predicate: Predicate<Model>?,
         sortBy: [SortDescriptor<Model>],
+        observedModelTypeNames: Set<String>,
         animation: Animation?
     ) {
         self.syncContainer = syncContainer
         self.predicate = predicate
         self.sortBy = sortBy
+        self.observedModelTypeNames = observedModelTypeNames
         self.animation = animation
         installObserver()
         reload()
@@ -38,9 +41,28 @@ private final class SyncQueryObserver<Model: PersistentModel>: ObservableObject 
             forName: SyncContainer.didSaveChangesNotification,
             object: syncContainer,
             queue: .main
-        ) { [weak self] _ in
-            self?.reload()
+        ) { [weak self] notification in
+            guard let self, self.shouldReload(for: notification) else { return }
+            self.reload()
         }
+    }
+
+    private func shouldReload(for notification: Notification) -> Bool {
+        let changedModelTypeNames = changedModelTypeNames(from: notification.userInfo)
+        if changedModelTypeNames.isEmpty {
+            return true
+        }
+
+        if !observedModelTypeNames.isDisjoint(with: changedModelTypeNames) {
+            return true
+        }
+
+        let changedIDs = changedIdentifiers(from: notification.userInfo)
+        if changedIDs.isEmpty {
+            return false
+        }
+        let loadedIDs = Set(rows.map(\.persistentModelID))
+        return !loadedIDs.isDisjoint(with: changedIDs)
     }
 
     private func reload() {
@@ -65,6 +87,28 @@ private final class SyncQueryObserver<Model: PersistentModel>: ObservableObject 
     }
 }
 
+private func changedIdentifiers(from userInfo: [AnyHashable: Any]?) -> Set<PersistentIdentifier> {
+    guard let raw = userInfo?[SyncContainer.changedIdentifiersUserInfoKey] else { return [] }
+    if let setValue = raw as? Set<PersistentIdentifier> {
+        return setValue
+    }
+    if let arrayValue = raw as? [PersistentIdentifier] {
+        return Set(arrayValue)
+    }
+    return []
+}
+
+private func changedModelTypeNames(from userInfo: [AnyHashable: Any]?) -> Set<String> {
+    guard let raw = userInfo?[SyncContainer.changedModelTypeNamesUserInfoKey] else { return [] }
+    if let setValue = raw as? Set<String> {
+        return setValue
+    }
+    if let arrayValue = raw as? [String] {
+        return Set(arrayValue)
+    }
+    return []
+}
+
 @MainActor
 @propertyWrapper
 public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
@@ -79,13 +123,12 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
         animation: Animation? = nil
     ) {
         _ = model
-        _observer = StateObject(
-            wrappedValue: SyncQueryObserver(
-                syncContainer: syncContainer,
-                predicate: nil,
-                sortBy: sortBy,
-                animation: animation
-            )
+        self.init(
+            syncContainer: syncContainer,
+            predicate: nil,
+            sortBy: sortBy,
+            observedModelTypeNames: Self.defaultObservedModelTypeNames(),
+            animation: animation
         )
     }
 
@@ -97,14 +140,82 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
         animation: Animation? = nil
     ) {
         _ = model
+        self.init(
+            syncContainer: syncContainer,
+            predicate: predicate,
+            sortBy: sortBy,
+            observedModelTypeNames: Self.defaultObservedModelTypeNames(),
+            animation: animation
+        )
+    }
+
+    private init(
+        syncContainer: SyncContainer,
+        predicate: Predicate<Model>?,
+        sortBy: [SortDescriptor<Model>],
+        observedModelTypeNames: Set<String>,
+        animation: Animation?
+    ) {
         _observer = StateObject(
             wrappedValue: SyncQueryObserver(
                 syncContainer: syncContainer,
                 predicate: predicate,
                 sortBy: sortBy,
+                observedModelTypeNames: observedModelTypeNames,
                 animation: animation
             )
         )
+    }
+
+    private static func defaultObservedModelTypeNames() -> Set<String> {
+        var names: Set<String> = [String(reflecting: Model.self)]
+        if let syncModelType = Model.self as? any SyncModelable.Type {
+            names.formUnion(syncModelType.syncDefaultRefreshModelTypeNames)
+        }
+        return names
+    }
+}
+
+public extension SyncQuery where Model: SyncModelable {
+    init(
+        _ model: Model.Type,
+        in syncContainer: SyncContainer,
+        sortBy: [SortDescriptor<Model>] = [],
+        refreshOn: [PartialKeyPath<Model>] = [],
+        animation: Animation? = nil
+    ) {
+        _ = model
+        self.init(
+            syncContainer: syncContainer,
+            predicate: nil,
+            sortBy: sortBy,
+            observedModelTypeNames: Self.observedModelTypeNames(refreshOn: refreshOn),
+            animation: animation
+        )
+    }
+
+    init(
+        _ model: Model.Type,
+        predicate: Predicate<Model>,
+        in syncContainer: SyncContainer,
+        sortBy: [SortDescriptor<Model>] = [],
+        refreshOn: [PartialKeyPath<Model>] = [],
+        animation: Animation? = nil
+    ) {
+        _ = model
+        self.init(
+            syncContainer: syncContainer,
+            predicate: predicate,
+            sortBy: sortBy,
+            observedModelTypeNames: Self.observedModelTypeNames(refreshOn: refreshOn),
+            animation: animation
+        )
+    }
+
+    private static func observedModelTypeNames(refreshOn: [PartialKeyPath<Model>]) -> Set<String> {
+        var names = Self.defaultObservedModelTypeNames()
+        names.formUnion(Model.syncRefreshModelTypeNames(for: refreshOn))
+        return names
     }
 }
 
@@ -113,12 +224,14 @@ public extension SyncQuery where Model: SyncQuerySortableModel {
         _ model: Model.Type,
         in syncContainer: SyncContainer,
         sortBy: [PartialKeyPath<Model>],
+        refreshOn: [PartialKeyPath<Model>] = [],
         animation: Animation? = nil
     ) {
         self.init(
             model,
             in: syncContainer,
             sortBy: Model.syncSortDescriptors(for: sortBy),
+            refreshOn: refreshOn,
             animation: animation
         )
     }
@@ -128,6 +241,7 @@ public extension SyncQuery where Model: SyncQuerySortableModel {
         predicate: Predicate<Model>,
         in syncContainer: SyncContainer,
         sortBy: [PartialKeyPath<Model>],
+        refreshOn: [PartialKeyPath<Model>] = [],
         animation: Animation? = nil
     ) {
         self.init(
@@ -135,6 +249,7 @@ public extension SyncQuery where Model: SyncQuerySortableModel {
             predicate: predicate,
             in: syncContainer,
             sortBy: Model.syncSortDescriptors(for: sortBy),
+            refreshOn: refreshOn,
             animation: animation
         )
     }
@@ -145,12 +260,19 @@ private final class SyncModelObserver<Model: PersistentModel & SyncModelable>: O
 
     private let syncContainer: SyncContainer
     private let id: Model.SyncID
+    private let observedModelTypeNames: Set<String>
     private let animation: Animation?
     private var notificationToken: NSObjectProtocol?
 
-    init(syncContainer: SyncContainer, id: Model.SyncID, animation: Animation?) {
+    init(
+        syncContainer: SyncContainer,
+        id: Model.SyncID,
+        observedModelTypeNames: Set<String>,
+        animation: Animation?
+    ) {
         self.syncContainer = syncContainer
         self.id = id
+        self.observedModelTypeNames = observedModelTypeNames
         self.animation = animation
         installObserver()
         reload()
@@ -167,9 +289,24 @@ private final class SyncModelObserver<Model: PersistentModel & SyncModelable>: O
             forName: SyncContainer.didSaveChangesNotification,
             object: syncContainer,
             queue: .main
-        ) { [weak self] _ in
-            self?.reload()
+        ) { [weak self] notification in
+            guard let self, self.shouldReload(for: notification) else { return }
+            self.reload()
         }
+    }
+
+    private func shouldReload(for notification: Notification) -> Bool {
+        let changedTypeNames = changedModelTypeNames(from: notification.userInfo)
+        if changedTypeNames.isEmpty {
+            return true
+        }
+        if !observedModelTypeNames.isDisjoint(with: changedTypeNames) {
+            return true
+        }
+
+        guard let loadedModel = model else { return false }
+        let changedIDs = changedIdentifiers(from: notification.userInfo)
+        return changedIDs.contains(loadedModel.persistentModelID)
     }
 
     private func reload() {
@@ -204,8 +341,19 @@ public struct SyncModel<Model: PersistentModel & SyncModelable>: DynamicProperty
     ) {
         _ = model
         _observer = StateObject(
-            wrappedValue: SyncModelObserver(syncContainer: syncContainer, id: id, animation: animation)
+            wrappedValue: SyncModelObserver(
+                syncContainer: syncContainer,
+                id: id,
+                observedModelTypeNames: Self.defaultObservedModelTypeNames(),
+                animation: animation
+            )
         )
+    }
+
+    private static func defaultObservedModelTypeNames() -> Set<String> {
+        var names = Model.syncDefaultRefreshModelTypeNames
+        names.insert(String(reflecting: Model.self))
+        return names
     }
 }
 

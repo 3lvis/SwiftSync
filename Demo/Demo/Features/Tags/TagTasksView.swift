@@ -27,7 +27,8 @@ struct TagTasksView: View {
             sortBy: [
                 SortDescriptor(\Task.priority, order: .reverse),
                 SortDescriptor(\Task.id)
-            ]
+            ],
+            refreshOn: [\.tags]
         )
     }
 
