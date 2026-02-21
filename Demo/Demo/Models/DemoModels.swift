@@ -176,14 +176,10 @@ final class Comment {
     }
 }
 
-extension Task: ParentScopedModel {
-    typealias SyncParent = Project
+extension Task: GlobalParentScopedModel {
     static var parentRelationship: ReferenceWritableKeyPath<Task, Project?> { \.project }
-    static var syncIdentityPolicy: SyncIdentityPolicy { .global }
 }
 
-extension Comment: ParentScopedModel {
-    typealias SyncParent = Task
+extension Comment: GlobalParentScopedModel {
     static var parentRelationship: ReferenceWritableKeyPath<Comment, Task?> { \.task }
-    static var syncIdentityPolicy: SyncIdentityPolicy { .global }
 }

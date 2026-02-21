@@ -3,6 +3,7 @@
 This document captures the current design decisions that go beyond the quick FAQ in `README.md`.
 
 Backend payload contract guidance lives in `docs/backend-contract.md`.
+Parent-scope boilerplate follow-up is tracked in `docs/parent-scope-follow-up.md`.
 
 ## 1) Parent-scoped identity vs global identity
 
@@ -16,8 +17,8 @@ Meaning:
 If you want global identity instead, override:
 
 ```swift
-extension Child {
-  static var syncIdentityPolicy: SyncIdentityPolicy { .global }
+extension Child: GlobalParentScopedModel {
+  static var parentRelationship: ReferenceWritableKeyPath<Child, Parent?> { \.parent }
 }
 ```
 

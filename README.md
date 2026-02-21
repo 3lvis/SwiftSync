@@ -187,7 +187,6 @@ final class Note {
 }
 
 extension Note: ParentScopedModel {
-  typealias SyncParent = User
   static var parentRelationship: ReferenceWritableKeyPath<Note, User?> { \.user }
 }
 ```
@@ -487,10 +486,13 @@ Defaults:
 If you need global behavior on a parent-scoped model, override it:
 
 ```swift
-extension Note {
-  static var syncIdentityPolicy: SyncIdentityPolicy { .global }
+extension Note: GlobalParentScopedModel {
+  static var parentRelationship: ReferenceWritableKeyPath<Note, User?> { \.user }
 }
 ```
+
+`GlobalParentScopedModel` is just a convenience protocol that sets
+`syncIdentityPolicy = .global` for `ParentScopedModel`.
 
 ### Custom primary key
 

@@ -535,6 +535,12 @@ public extension ParentScopedModel {
     static var syncIdentityPolicy: SyncIdentityPolicy { .scopedByParent }
 }
 
+public protocol GlobalParentScopedModel: ParentScopedModel {}
+
+public extension GlobalParentScopedModel {
+    static var syncIdentityPolicy: SyncIdentityPolicy { .global }
+}
+
 public enum SyncIdentityPolicy: Sendable {
     case global
     case scopedByParent
