@@ -7,12 +7,14 @@ public protocol SyncModelable: PersistentModel {
     associatedtype SyncID: Hashable & Codable & Sendable
     static var syncIdentity: KeyPath<Self, SyncID> { get }
     static var syncIdentityRemoteKeys: [String] { get }
+    static var syncIdentityPolicy: SyncIdentityPolicy { get }
     static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] { get }
     static func syncRelatedModelType(for keyPath: PartialKeyPath<Self>) -> (any PersistentModel.Type)?
 }
 
 public extension SyncModelable {
     static var syncIdentityRemoteKeys: [String] { ["id", "remote_id", "remoteID"] }
+    static var syncIdentityPolicy: SyncIdentityPolicy { .global }
     static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] { [] }
 
     static func syncRelatedModelType(for keyPath: PartialKeyPath<Self>) -> (any PersistentModel.Type)? {
@@ -52,9 +54,42 @@ public protocol SyncRelationshipUpdatableModel: SyncUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool
 }
 
+public extension SyncRelationshipUpdatableModel {
+    func applyRelationships(
+        _ payload: SyncPayload,
+        in context: ModelContext,
+        operations: SyncRelationshipOperations
+    ) async throws -> Bool {
+        _ = operations
+        return try await applyRelationships(payload, in: context)
+    }
+}
+
 public protocol ParentScopedModel: SyncUpdatableModel {
     associatedtype SyncParent: PersistentModel
     static var parentRelationship: ReferenceWritableKeyPath<Self, SyncParent?> { get }
+}
+
+public extension ParentScopedModel {
+    static var syncIdentityPolicy: SyncIdentityPolicy { .scopedByParent }
+}
+
+public enum SyncIdentityPolicy: Sendable {
+    case global
+    case scopedByParent
+}
+
+public struct SyncRelationshipOperations: OptionSet, Sendable {
+    public let rawValue: Int
+
+    public init(rawValue: Int) {
+        self.rawValue = rawValue
+    }
+
+    public static let insert = SyncRelationshipOperations(rawValue: 1 << 0)
+    public static let update = SyncRelationshipOperations(rawValue: 1 << 1)
+    public static let delete = SyncRelationshipOperations(rawValue: 1 << 2)
+    public static let all: SyncRelationshipOperations = [.insert, .update, .delete]
 }
 
 public enum ExportRelationshipMode: Sendable {
@@ -243,12 +278,35 @@ public struct SyncPayload {
         return nil
     }
 
+    public func strictValue<T>(for key: String, as type: T.Type = T.self) -> T? {
+        for candidate in candidateKeys(for: key) {
+            guard let raw = values[candidate] else { continue }
+            if let value = raw as? T {
+                return value
+            }
+        }
+        return nil
+    }
+
     public func required<T>(_ type: T.Type = T.self, for key: String) throws -> T {
         if let value: T = value(for: key, as: type) {
             return value
         }
         if T.self == Date.self, containsCandidateValue(for: key) {
             // Date parsing is best-effort; invalid values fall back to epoch for required fields.
+            return Date(timeIntervalSince1970: 0) as! T
+        }
+        if isExplicitNull(for: key), let fallback: T = defaultValueForNull(as: type) {
+            return fallback
+        }
+        throw SyncError.invalidPayload(model: "Payload", reason: "Missing or invalid '\(key)'")
+    }
+
+    public func strictRequired<T>(_ type: T.Type = T.self, for key: String) throws -> T {
+        if let value: T = strictValue(for: key, as: type) {
+            return value
+        }
+        if T.self == Date.self, containsCandidateValue(for: key) {
             return Date(timeIntervalSince1970: 0) as! T
         }
         if isExplicitNull(for: key), let fallback: T = defaultValueForNull(as: type) {

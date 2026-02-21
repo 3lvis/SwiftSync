@@ -15,10 +15,7 @@ struct UsersTabView: View {
         _users = SyncQuery(
             User.self,
             in: syncContainer,
-            sortBy: [
-                SortDescriptor(\User.displayName),
-                SortDescriptor(\User.id)
-            ]
+            sortBy: [\.displayName, \.id]
         )
     }
 

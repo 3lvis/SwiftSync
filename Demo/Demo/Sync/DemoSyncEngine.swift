@@ -61,14 +61,14 @@ final class DemoSyncEngine: ObservableObject {
     func syncUserTasks(userID: String) async {
         await syncOperation("userTasks-\(userID)") {
             let payload = try await apiClient.getUserTasks(userID: userID)
-            try await mergePayload(payload, as: Task.self)
+            try await syncPayload(payload, as: Task.self, missingRowPolicy: .keep)
         }
     }
 
     func syncTaskDetail(taskID: String) async {
         await syncOperation("taskDetail-\(taskID)") {
             guard let payload = try await apiClient.getTaskDetail(taskID: taskID) else { return }
-            try await mergePayload([payload], as: Task.self)
+            try await syncPayload([payload], as: Task.self, missingRowPolicy: .keep)
         }
     }
 
@@ -78,35 +78,35 @@ final class DemoSyncEngine: ObservableObject {
 
             if try task(withID: taskID) == nil {
                 if let detailPayload = try await apiClient.getTaskDetail(taskID: taskID) {
-                    try await mergePayload([detailPayload], as: Task.self)
+                    try await syncPayload([detailPayload], as: Task.self, missingRowPolicy: .keep)
                 }
             }
 
             guard let task = try task(withID: taskID) else { return }
-            try await mergePayload(payload, as: Comment.self, parent: task)
+            try await syncPayload(payload, as: Comment.self, parent: task, missingRowPolicy: .keep)
         }
     }
 
     func syncTagTasks(tagID: String) async {
         await syncOperation("tagTasks-\(tagID)") {
             let payload = try await apiClient.getTagTasks(tagID: tagID)
-            try await mergePayload(payload, as: Task.self)
+            try await syncPayload(payload, as: Task.self, missingRowPolicy: .keep)
         }
     }
 
     private func syncProjectsInternal() async throws {
         let payload = try await apiClient.getProjects()
-        try await replacePayload(payload, as: Project.self)
+        try await syncPayload(payload, as: Project.self, missingRowPolicy: .delete)
     }
 
     private func syncUsersInternal() async throws {
         let payload = try await apiClient.getUsers()
-        try await replacePayload(payload, as: User.self)
+        try await syncPayload(payload, as: User.self, missingRowPolicy: .delete)
     }
 
     private func syncTagsInternal() async throws {
         let payload = try await apiClient.getTags()
-        try await replacePayload(payload, as: Tag.self)
+        try await syncPayload(payload, as: Tag.self, missingRowPolicy: .delete)
     }
 
     private func syncProjectTasksInternal(projectID: String) async throws {
@@ -114,11 +114,11 @@ final class DemoSyncEngine: ObservableObject {
 
         if try project(withID: projectID) == nil {
             let projectsPayload = try await apiClient.getProjects()
-            try await replacePayload(projectsPayload, as: Project.self)
+            try await syncPayload(projectsPayload, as: Project.self, missingRowPolicy: .delete)
         }
 
         guard let project = try project(withID: projectID) else { return }
-        try await replacePayload(payload, as: Task.self, parent: project)
+        try await syncPayload(payload, as: Task.self, parent: project, missingRowPolicy: .delete)
     }
 
     private func syncOperation(_ key: String, _ operation: () async throws -> Void) async {
@@ -141,51 +141,29 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    private func replacePayload<Model: SyncUpdatableModel>(
-        _ payload: [[String: Any]],
-        as model: Model.Type
-    ) async throws {
-        try await syncContainer.sync(
-            payload: payload,
-            as: model,
-            missingRowPolicy: .delete
-        )
-    }
-
-    private func mergePayload<Model: SyncUpdatableModel>(
-        _ payload: [[String: Any]],
-        as model: Model.Type
-    ) async throws {
-        try await syncContainer.sync(
-            payload: payload,
-            as: model,
-            missingRowPolicy: .keep
-        )
-    }
-
-    private func replacePayload<Model: ParentScopedModel>(
+    private func syncPayload<Model: SyncUpdatableModel>(
         _ payload: [[String: Any]],
         as model: Model.Type,
-        parent: Model.SyncParent
+        missingRowPolicy: SyncMissingRowPolicy
+    ) async throws {
+        try await syncContainer.sync(
+            payload: payload,
+            as: model,
+            missingRowPolicy: missingRowPolicy
+        )
+    }
+
+    private func syncPayload<Model: ParentScopedModel>(
+        _ payload: [[String: Any]],
+        as model: Model.Type,
+        parent: Model.SyncParent,
+        missingRowPolicy: SyncMissingRowPolicy
     ) async throws {
         try await syncContainer.sync(
             payload: payload,
             as: model,
             parent: parent,
-            missingRowPolicy: .delete
-        )
-    }
-
-    private func mergePayload<Model: ParentScopedModel>(
-        _ payload: [[String: Any]],
-        as model: Model.Type,
-        parent: Model.SyncParent
-    ) async throws {
-        try await syncContainer.sync(
-            payload: payload,
-            as: model,
-            parent: parent,
-            missingRowPolicy: .keep
+            missingRowPolicy: missingRowPolicy
         )
     }
 

@@ -177,6 +177,7 @@ final class Comment {
 extension Task: ParentScopedModel {
     typealias SyncParent = Project
     static var parentRelationship: ReferenceWritableKeyPath<Task, Project?> { \.project }
+    static var syncIdentityPolicy: SyncIdentityPolicy { .global }
 }
 
 extension Task: SyncRelationshipUpdatableModel {
@@ -228,6 +229,7 @@ extension Task: SyncRelationshipUpdatableModel {
 extension Comment: ParentScopedModel {
     typealias SyncParent = Task
     static var parentRelationship: ReferenceWritableKeyPath<Comment, Task?> { \.task }
+    static var syncIdentityPolicy: SyncIdentityPolicy { .global }
 }
 
 extension Comment: SyncRelationshipUpdatableModel {

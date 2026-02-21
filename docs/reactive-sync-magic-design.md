@@ -64,6 +64,16 @@ Relevant tests:
 - `testBackgroundWriteNotVisibleToMainReadWithoutRefreshPolicy`
 - `testSyncContainerBackgroundSaveVisibilityBehavior`
 
+### Current sync policy decisions implemented
+
+- Identity policy is explicit per model:
+  - `SyncModelable` default: `.global`
+  - `ParentScopedModel` default: `.scopedByParent`
+- Parent-scoped sync delete/diff stays inside the parent scope.
+- Relationship work can be controlled per call with `relationshipOperations` (`.insert`, `.update`, `.delete`, `.all`).
+- FK relationship lookup is strict by type (no cross-type coercion at relationship link step).
+- Store-level uniqueness (`@Attribute(.unique)`) can still enforce global uniqueness regardless of scoped identity intent.
+
 ## SwiftData Primitives We Can Piggyback On
 
 - `ModelContainer.mainContext`
@@ -195,7 +205,9 @@ let syncContainer = try SyncContainer(
 ```swift
 try await syncContainer.sync(
   payload: usersPayload,
-  as: User.self
+  as: User.self,
+  missingRowPolicy: .delete,
+  relationshipOperations: .all
 )
 ```
 
@@ -205,7 +217,9 @@ Parent-scoped:
 try await syncContainer.sync(
   payload: notesPayload,
   as: Note.self,
-  parent: user
+  parent: user,
+  missingRowPolicy: .delete,
+  relationshipOperations: .all
 )
 ```
 

@@ -662,6 +662,231 @@ extension SuperNote: ParentScopedModel {
     static var parentRelationship: ReferenceWritableKeyPath<SuperNote, SuperUser?> { \.superUser }
 }
 
+@Model
+final class ScopedBucket {
+    @Attribute(.unique) var id: Int
+    var name: String
+    @Relationship(inverse: \ScopedItem.bucket)
+    var items: [ScopedItem]
+
+    init(id: Int, name: String, items: [ScopedItem] = []) {
+        self.id = id
+        self.name = name
+        self.items = items
+    }
+}
+
+@Model
+final class ScopedItem {
+    var id: Int
+    var text: String
+    var bucket: ScopedBucket?
+
+    init(id: Int, text: String, bucket: ScopedBucket? = nil) {
+        self.id = id
+        self.text = text
+        self.bucket = bucket
+    }
+}
+
+extension ScopedItem: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<ScopedItem, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> ScopedItem {
+        ScopedItem(
+            id: try payload.required(Int.self, for: "id"),
+            text: try payload.required(String.self, for: "text")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        var changed = false
+        if payload.contains("text") {
+            let incoming: String = try payload.required(String.self, for: "text")
+            if text != incoming {
+                text = incoming
+                changed = true
+            }
+        }
+        return changed
+    }
+}
+
+extension ScopedItem: ParentScopedModel {
+    typealias SyncParent = ScopedBucket
+    static var parentRelationship: ReferenceWritableKeyPath<ScopedItem, ScopedBucket?> { \.bucket }
+}
+
+@Model
+final class GlobalBucket {
+    @Attribute(.unique) var id: Int
+    var name: String
+    @Relationship(inverse: \GlobalItem.bucket)
+    var items: [GlobalItem]
+
+    init(id: Int, name: String, items: [GlobalItem] = []) {
+        self.id = id
+        self.name = name
+        self.items = items
+    }
+}
+
+@Model
+final class GlobalItem {
+    @Attribute(.unique) var id: Int
+    var text: String
+    var bucket: GlobalBucket?
+
+    init(id: Int, text: String, bucket: GlobalBucket? = nil) {
+        self.id = id
+        self.text = text
+        self.bucket = bucket
+    }
+}
+
+extension GlobalItem: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<GlobalItem, Int> { \.id }
+    static var syncIdentityPolicy: SyncIdentityPolicy { .global }
+
+    static func make(from payload: SyncPayload) throws -> GlobalItem {
+        GlobalItem(
+            id: try payload.required(Int.self, for: "id"),
+            text: try payload.required(String.self, for: "text")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        var changed = false
+        if payload.contains("text") {
+            let incoming: String = try payload.required(String.self, for: "text")
+            if text != incoming {
+                text = incoming
+                changed = true
+            }
+        }
+        return changed
+    }
+}
+
+extension GlobalItem: ParentScopedModel {
+    typealias SyncParent = GlobalBucket
+    static var parentRelationship: ReferenceWritableKeyPath<GlobalItem, GlobalBucket?> { \.bucket }
+}
+
+@Model
+final class OpsCompany {
+    @Attribute(.unique) var id: Int
+    var name: String
+
+    init(id: Int, name: String) {
+        self.id = id
+        self.name = name
+    }
+}
+
+@Model
+final class OpsEmployee {
+    @Attribute(.unique) var id: Int
+    var name: String
+    var company: OpsCompany?
+
+    init(id: Int, name: String, company: OpsCompany? = nil) {
+        self.id = id
+        self.name = name
+        self.company = company
+    }
+}
+
+extension OpsCompany: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<OpsCompany, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> OpsCompany {
+        OpsCompany(
+            id: try payload.required(Int.self, for: "id"),
+            name: try payload.required(String.self, for: "name")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        var changed = false
+        if payload.contains("name") {
+            let incoming: String = try payload.required(String.self, for: "name")
+            if name != incoming {
+                name = incoming
+                changed = true
+            }
+        }
+        return changed
+    }
+}
+
+extension OpsEmployee: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<OpsEmployee, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> OpsEmployee {
+        OpsEmployee(
+            id: try payload.required(Int.self, for: "id"),
+            name: try payload.required(String.self, for: "name")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        var changed = false
+        if payload.contains("name") {
+            let incoming: String = try payload.required(String.self, for: "name")
+            if name != incoming {
+                name = incoming
+                changed = true
+            }
+        }
+        return changed
+    }
+}
+
+extension OpsEmployee: SyncRelationshipUpdatableModel {
+    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+        try await applyRelationships(payload, in: context, operations: .all)
+    }
+
+    func applyRelationships(
+        _ payload: SyncPayload,
+        in context: ModelContext,
+        operations: SyncRelationshipOperations
+    ) async throws -> Bool {
+        guard !operations.isDisjoint(with: [.insert, .update, .delete]) else { return false }
+        guard payload.contains("company_id") else { return false }
+
+        if payload.value(for: "company_id", as: NSNull.self) != nil {
+            if company != nil {
+                company = nil
+                return true
+            }
+            return false
+        }
+
+        guard let companyID: Int = payload.strictValue(for: "company_id") else {
+            // Strict foreign-key typing: mismatched key type is ignored.
+            return false
+        }
+
+        let companies = try context.fetch(FetchDescriptor<OpsCompany>())
+        let nextCompany = companies.first(where: { $0.id == companyID })
+        guard let nextCompany else {
+            return false
+        }
+
+        if company?.id != nextCompany.id {
+            company = nextCompany
+            return true
+        }
+        return false
+    }
+}
+
 @Syncable
 @Model
 final class ConcurrentRaceUser {
@@ -2145,6 +2370,200 @@ final class IntegrationTests: XCTestCase {
         XCTAssertEqual(notes.count, 2)
         XCTAssertEqual(notes.first(where: { $0.id == 1 })?.text, "First Updated")
         XCTAssertEqual(notes.first(where: { $0.id == 2 })?.text, "Second")
+    }
+
+    @MainActor
+    func testParentScopedSyncScopedIdentityAllowsDuplicateIDsAcrossParents() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: ScopedBucket.self, ScopedItem.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let parentA = ScopedBucket(id: 1, name: "A")
+        let parentB = ScopedBucket(id: 2, name: "B")
+        context.insert(parentA)
+        context.insert(parentB)
+        try context.save()
+
+        try await SwiftSync.sync(
+            payload: [["id": 10, "text": "A-10"]],
+            as: ScopedItem.self,
+            in: context,
+            parent: parentA
+        )
+
+        try await SwiftSync.sync(
+            payload: [["id": 10, "text": "B-10"]],
+            as: ScopedItem.self,
+            in: context,
+            parent: parentB
+        )
+
+        let all = try context.fetch(FetchDescriptor<ScopedItem>())
+        XCTAssertEqual(all.count, 2)
+        XCTAssertEqual(all.filter { $0.id == 10 && $0.bucket?.id == 1 }.first?.text, "A-10")
+        XCTAssertEqual(all.filter { $0.id == 10 && $0.bucket?.id == 2 }.first?.text, "B-10")
+    }
+
+    @MainActor
+    func testParentScopedSyncGlobalIdentityMovesRowAcrossParents() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: GlobalBucket.self, GlobalItem.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let parentA = GlobalBucket(id: 1, name: "A")
+        let parentB = GlobalBucket(id: 2, name: "B")
+        context.insert(parentA)
+        context.insert(parentB)
+        try context.save()
+
+        try await SwiftSync.sync(
+            payload: [["id": 10, "text": "A-10"]],
+            as: GlobalItem.self,
+            in: context,
+            parent: parentA
+        )
+
+        try await SwiftSync.sync(
+            payload: [["id": 10, "text": "B-10"]],
+            as: GlobalItem.self,
+            in: context,
+            parent: parentB
+        )
+
+        let all = try context.fetch(FetchDescriptor<GlobalItem>())
+        XCTAssertEqual(all.count, 1)
+        XCTAssertEqual(all.first?.id, 10)
+        XCTAssertEqual(all.first?.text, "B-10")
+        XCTAssertEqual(all.first?.bucket?.id, 2)
+    }
+
+    @MainActor
+    func testParentScopedDeleteAffectsOnlyCurrentParentScopeWhenScoped() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: ScopedBucket.self, ScopedItem.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let parentA = ScopedBucket(id: 1, name: "A")
+        let parentB = ScopedBucket(id: 2, name: "B")
+        context.insert(parentA)
+        context.insert(parentB)
+        try context.save()
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "text": "A-1"],
+                ["id": 2, "text": "A-2"]
+            ],
+            as: ScopedItem.self,
+            in: context,
+            parent: parentA
+        )
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "text": "B-1"],
+                ["id": 3, "text": "B-3"]
+            ],
+            as: ScopedItem.self,
+            in: context,
+            parent: parentB
+        )
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "text": "A-1 updated"]
+            ],
+            as: ScopedItem.self,
+            in: context,
+            parent: parentA
+        )
+
+        let rows = try context.fetch(FetchDescriptor<ScopedItem>())
+        XCTAssertEqual(Set(rows.filter { $0.bucket?.id == 1 }.map(\.id)), Set([1]))
+        XCTAssertEqual(rows.first(where: { $0.bucket?.id == 1 && $0.id == 1 })?.text, "A-1 updated")
+        XCTAssertEqual(Set(rows.filter { $0.bucket?.id == 2 }.map(\.id)), Set([1, 3]))
+    }
+
+    @MainActor
+    func testRelationshipOperationsSkipRelationshipUpdatesWhenUpdateFlagMissing() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: OpsCompany.self, OpsEmployee.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [["id": 10, "name": "Acme"]],
+            as: OpsCompany.self,
+            in: context
+        )
+
+        try await SwiftSync.sync(
+            payload: [["id": 1, "name": "Ava", "company_id": 10]],
+            as: OpsEmployee.self,
+            in: context,
+            relationshipOperations: [.insert]
+        )
+
+        var rows = try context.fetch(FetchDescriptor<OpsEmployee>())
+        XCTAssertEqual(rows.first?.company?.id, 10)
+
+        try await SwiftSync.sync(
+            payload: [["id": 1, "name": "Ava", "company_id": NSNull()]],
+            as: OpsEmployee.self,
+            in: context,
+            relationshipOperations: [.insert]
+        )
+
+        rows = try context.fetch(FetchDescriptor<OpsEmployee>())
+        XCTAssertEqual(rows.first?.company?.id, 10)
+
+        try await SwiftSync.sync(
+            payload: [["id": 1, "name": "Ava", "company_id": NSNull()]],
+            as: OpsEmployee.self,
+            in: context,
+            relationshipOperations: [.update]
+        )
+
+        rows = try context.fetch(FetchDescriptor<OpsEmployee>())
+        XCTAssertNil(rows.first?.company)
+    }
+
+    @MainActor
+    func testStrictForeignKeyTypingDoesNotCoerceRelationshipIDs() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: OpsCompany.self, OpsEmployee.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [["id": 10, "name": "Acme"]],
+            as: OpsCompany.self,
+            in: context
+        )
+
+        try await SwiftSync.sync(
+            payload: [["id": 1, "name": "Ava"]],
+            as: OpsEmployee.self,
+            in: context
+        )
+
+        try await SwiftSync.sync(
+            payload: [["id": 1, "name": "Ava", "company_id": "10"]],
+            as: OpsEmployee.self,
+            in: context,
+            relationshipOperations: [.update]
+        )
+
+        var rows = try context.fetch(FetchDescriptor<OpsEmployee>())
+        XCTAssertNil(rows.first?.company)
+
+        try await SwiftSync.sync(
+            payload: [["id": 1, "name": "Ava", "company_id": 10]],
+            as: OpsEmployee.self,
+            in: context,
+            relationshipOperations: [.update]
+        )
+
+        rows = try context.fetch(FetchDescriptor<OpsEmployee>())
+        XCTAssertEqual(rows.first?.company?.id, 10)
     }
 
 }

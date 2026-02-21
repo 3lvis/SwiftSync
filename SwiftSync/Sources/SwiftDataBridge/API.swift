@@ -7,7 +7,8 @@ public extension SwiftSync {
         payload: [Any],
         as model: Model.Type,
         in context: ModelContext,
-        missingRowPolicy: SyncMissingRowPolicy = .delete
+        missingRowPolicy: SyncMissingRowPolicy = .delete,
+        relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         let lease = await acquireSyncLease(for: context)
         _ = model
@@ -52,9 +53,15 @@ public extension SwiftSync {
                     if try row.apply(payloadModel) {
                         changed = true
                     }
-                    if let relationshipRow = row as? any SyncRelationshipUpdatableModel {
+                    if !relationshipOperations.isDisjoint(with: [.update, .delete]),
+                        let relationshipRow = row as? any SyncRelationshipUpdatableModel
+                    {
                         try throwIfCancelled()
-                        if try await relationshipRow.applyRelationships(payloadModel, in: context) {
+                        if try await relationshipRow.applyRelationships(
+                            payloadModel,
+                            in: context,
+                            operations: relationshipOperations
+                        ) {
                             changed = true
                         }
                         try throwIfCancelled()
@@ -64,9 +71,15 @@ public extension SwiftSync {
 
                 let created = try Model.make(from: payloadModel)
                 context.insert(created)
-                if let relationshipRow = created as? any SyncRelationshipUpdatableModel {
+                if relationshipOperations.contains(.insert),
+                    let relationshipRow = created as? any SyncRelationshipUpdatableModel
+                {
                     try throwIfCancelled()
-                    if try await relationshipRow.applyRelationships(payloadModel, in: context) {
+                    if try await relationshipRow.applyRelationships(
+                        payloadModel,
+                        in: context,
+                        operations: relationshipOperations
+                    ) {
                         changed = true
                     }
                     try throwIfCancelled()
@@ -104,7 +117,8 @@ public extension SwiftSync {
         as model: Model.Type,
         in context: ModelContext,
         parent: Model.SyncParent,
-        missingRowPolicy: SyncMissingRowPolicy = .delete
+        missingRowPolicy: SyncMissingRowPolicy = .delete,
+        relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         let lease = await acquireSyncLease(for: context)
         _ = model
@@ -118,16 +132,34 @@ public extension SwiftSync {
                 )
             }
             let existing = try context.fetch(FetchDescriptor<Model>())
+            let scopeRows = existing.filter {
+                $0[keyPath: Model.parentRelationship]?.persistentModelID == resolvedParent.persistentModelID
+            }
 
             var index: [String: Model] = [:]
             var duplicates: [Model] = []
-            for row in existing where row[keyPath: Model.parentRelationship]?.persistentModelID == resolvedParent.persistentModelID {
-                let key = identityKey(from: row[keyPath: Model.syncIdentity])
-                if index[key] != nil {
-                    duplicates.append(row)
-                    continue
+            switch Model.syncIdentityPolicy {
+            case .scopedByParent:
+                for row in scopeRows {
+                    let key = scopedIdentityKey(
+                        from: row[keyPath: Model.syncIdentity],
+                        parentPersistentID: resolvedParent.persistentModelID
+                    )
+                    if index[key] != nil {
+                        duplicates.append(row)
+                        continue
+                    }
+                    index[key] = row
                 }
-                index[key] = row
+            case .global:
+                for row in existing {
+                    let key = identityKey(from: row[keyPath: Model.syncIdentity])
+                    if index[key] != nil {
+                        duplicates.append(row)
+                        continue
+                    }
+                    index[key] = row
+                }
             }
 
             var changed = false
@@ -147,7 +179,16 @@ public extension SwiftSync {
                 guard let identity = resolveIdentity(from: payloadModel, model: Model.self) else {
                     continue
                 }
-                let key = identityKey(from: identity)
+                let key: String
+                switch Model.syncIdentityPolicy {
+                case .scopedByParent:
+                    key = scopedIdentityKey(
+                        from: identity,
+                        parentPersistentID: resolvedParent.persistentModelID
+                    )
+                case .global:
+                    key = identityKey(from: identity)
+                }
                 seenKeys.insert(key)
 
                 if let row = index[key] {
@@ -158,9 +199,15 @@ public extension SwiftSync {
                     if try row.apply(payloadModel) {
                         changed = true
                     }
-                    if let relationshipRow = row as? any SyncRelationshipUpdatableModel {
+                    if !relationshipOperations.isDisjoint(with: [.update, .delete]),
+                        let relationshipRow = row as? any SyncRelationshipUpdatableModel
+                    {
                         try throwIfCancelled()
-                        if try await relationshipRow.applyRelationships(payloadModel, in: context) {
+                        if try await relationshipRow.applyRelationships(
+                            payloadModel,
+                            in: context,
+                            operations: relationshipOperations
+                        ) {
                             changed = true
                         }
                         try throwIfCancelled()
@@ -171,9 +218,15 @@ public extension SwiftSync {
                 let created = try Model.make(from: payloadModel)
                 created[keyPath: Model.parentRelationship] = resolvedParent
                 context.insert(created)
-                if let relationshipRow = created as? any SyncRelationshipUpdatableModel {
+                if relationshipOperations.contains(.insert),
+                    let relationshipRow = created as? any SyncRelationshipUpdatableModel
+                {
                     try throwIfCancelled()
-                    if try await relationshipRow.applyRelationships(payloadModel, in: context) {
+                    if try await relationshipRow.applyRelationships(
+                        payloadModel,
+                        in: context,
+                        operations: relationshipOperations
+                    ) {
                         changed = true
                     }
                     try throwIfCancelled()
@@ -184,7 +237,20 @@ public extension SwiftSync {
 
             if missingRowPolicy == .delete {
                 try throwIfCancelled()
-                for (key, row) in index where !seenKeys.contains(key) {
+                for row in scopeRows {
+                    let key: String
+                    switch Model.syncIdentityPolicy {
+                    case .scopedByParent:
+                        key = scopedIdentityKey(
+                            from: row[keyPath: Model.syncIdentity],
+                            parentPersistentID: resolvedParent.persistentModelID
+                        )
+                    case .global:
+                        key = identityKey(from: row[keyPath: Model.syncIdentity])
+                    }
+                    if seenKeys.contains(key) {
+                        continue
+                    }
                     context.delete(row)
                     changed = true
                 }
@@ -276,6 +342,13 @@ public extension SwiftSync {
 
     private static func identityKey<ID: Hashable>(from identity: ID) -> String {
         String(describing: identity)
+    }
+
+    private static func scopedIdentityKey<ID: Hashable>(
+        from identity: ID,
+        parentPersistentID: PersistentIdentifier
+    ) -> String {
+        "\(String(reflecting: ID.self))|\(String(describing: parentPersistentID))|\(identityKey(from: identity))"
     }
 
     private static func throwIfCancelled() throws {

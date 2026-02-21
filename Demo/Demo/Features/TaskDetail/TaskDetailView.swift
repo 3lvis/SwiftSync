@@ -29,10 +29,7 @@ struct TaskDetailView: View {
             Tag.self,
             predicate: tagsPredicate,
             in: syncContainer,
-            sortBy: [
-                SortDescriptor(\Tag.name),
-                SortDescriptor(\Tag.id)
-            ],
+            sortBy: [\.name, \.id],
             refreshOn: [\.tasks]
         )
         _comments = SyncQuery(

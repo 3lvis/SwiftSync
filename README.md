@@ -26,6 +26,7 @@ import SwiftSync
 - [Exporting JSON](#exporting-json)
 - [Date Handling](#date-handling)
 - [FAQ](#faq)
+- [Advanced FAQ](docs/faq.md)
 - [API Reference](#api-reference)
 
 ## Why SwiftSync
@@ -80,6 +81,18 @@ try await SwiftSync.sync(payload: payload, as: User.self, in: context)
 ```
 
 That single call will insert, update, and delete based on identity diffing.
+
+You can also tune behavior per call:
+
+```swift
+try await SwiftSync.sync(
+  payload: payload,
+  as: User.self,
+  in: context,
+  missingRowPolicy: .delete,
+  relationshipOperations: .all
+)
+```
 
 ## SyncContainer
 
@@ -167,7 +180,7 @@ final class User {
 @Syncable
 @Model
 final class Note {
-  @Attribute(.unique) var id: Int
+  var id: Int
   var text: String
   @Relationship var user: User?
 }
@@ -177,6 +190,11 @@ extension Note: ParentScopedModel {
   static var parentRelationship: ReferenceWritableKeyPath<Note, User?> { \.user }
 }
 ```
+
+Why `id` is not unique in this example:
+- `ParentScopedModel` defaults to scoped identity (`(parent, id)` semantics).
+- This allows the same remote child ID under different parents.
+- If you add `@Attribute(.unique)` on `id`, SwiftData enforces global uniqueness and scoped duplicates cannot exist.
 
 API:
 
@@ -444,6 +462,24 @@ Identity selection order:
 2. `id`
 3. `remoteID`
 
+### Identity policy (global vs parent-scoped)
+
+`SyncModelable` supports two identity policies:
+- `.global`: one row per identity for the whole store.
+- `.scopedByParent`: identity is scoped to the parent for `ParentScopedModel`.
+
+Defaults:
+- `SyncUpdatableModel` -> `.global`
+- `ParentScopedModel` -> `.scopedByParent`
+
+If you need global behavior on a parent-scoped model, override it:
+
+```swift
+extension Note {
+  static var syncIdentityPolicy: SyncIdentityPolicy { .global }
+}
+```
+
 ### Custom primary key
 
 ```swift
@@ -585,6 +621,35 @@ That row is skipped for matching/diffing. Sync continues for valid rows.
 Flat attributes are automatic with `@Syncable`.
 For relationship behavior, implement `SyncRelationshipUpdatableModel` and define `applyRelationships(...)`.
 
+### Can two different parents have children with the same `id`?
+
+Yes, by default for `ParentScopedModel`.
+
+- Default identity policy is `.scopedByParent`.
+- Scoped sync diff/delete stays inside that parent scope.
+- If the child model has `@Attribute(.unique)` on raw `id`, SwiftData global uniqueness wins and duplicates across parents are not possible.
+
+### How strict is foreign-key (`*_id`) relationship linking?
+
+Relationship FK linking is strict by type.
+
+- `company_id: 10` links to `Int` identity `10`.
+- `company_id: "10"` does not coerce to `Int` for relationship linking.
+- Scalar attribute coercions are still supported for non-relationship fields.
+
+### Can I control relationship insert/update/delete work per sync call?
+
+Yes. Use `relationshipOperations`:
+
+```swift
+try await SwiftSync.sync(
+  payload: payload,
+  as: Employee.self,
+  in: context,
+  relationshipOperations: [.insert, .update]
+)
+```
+
 ### What happens if two sync calls run at the same time?
 
 SwiftSync serializes sync calls per store/container.
@@ -644,14 +709,18 @@ public extension SwiftSync {
   static func sync<Model: SyncUpdatableModel>(
     payload: [Any],
     as model: Model.Type,
-    in context: ModelContext
+    in context: ModelContext,
+    missingRowPolicy: SyncMissingRowPolicy = .delete,
+    relationshipOperations: SyncRelationshipOperations = .all
   ) async throws
 
   static func sync<Model: ParentScopedModel>(
     payload: [Any],
     as model: Model.Type,
     in context: ModelContext,
-    parent: Model.SyncParent
+    parent: Model.SyncParent,
+    missingRowPolicy: SyncMissingRowPolicy = .delete,
+    relationshipOperations: SyncRelationshipOperations = .all
   ) async throws
 
   static func export<Model: ExportModel>(
@@ -671,5 +740,22 @@ public extension SwiftSync {
 public enum SyncError: Error, Sendable, Equatable {
   case invalidPayload(model: String, reason: String)
   case cancelled
+}
+
+public enum SyncMissingRowPolicy: Sendable {
+  case delete
+  case keep
+}
+
+public struct SyncRelationshipOperations: OptionSet, Sendable {
+  public static let insert: SyncRelationshipOperations
+  public static let update: SyncRelationshipOperations
+  public static let delete: SyncRelationshipOperations
+  public static let all: SyncRelationshipOperations
+}
+
+public enum SyncIdentityPolicy: Sendable {
+  case global
+  case scopedByParent
 }
 ```

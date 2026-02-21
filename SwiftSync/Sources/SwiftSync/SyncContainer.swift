@@ -46,14 +46,16 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     public func sync<Model: SyncUpdatableModel>(
         payload: [Any],
         as model: Model.Type,
-        missingRowPolicy: SyncMissingRowPolicy = .delete
+        missingRowPolicy: SyncMissingRowPolicy = .delete,
+        relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         let context = makeBackgroundContext()
         try await SwiftSync.sync(
             payload: payload,
             as: model,
             in: context,
-            missingRowPolicy: missingRowPolicy
+            missingRowPolicy: missingRowPolicy,
+            relationshipOperations: relationshipOperations
         )
     }
 
@@ -61,7 +63,8 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         payload: [Any],
         as model: Model.Type,
         parent: Model.SyncParent,
-        missingRowPolicy: SyncMissingRowPolicy = .delete
+        missingRowPolicy: SyncMissingRowPolicy = .delete,
+        relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         let context = makeBackgroundContext()
         try await SwiftSync.sync(
@@ -69,7 +72,8 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             as: model,
             in: context,
             parent: parent,
-            missingRowPolicy: missingRowPolicy
+            missingRowPolicy: missingRowPolicy,
+            relationshipOperations: relationshipOperations
         )
     }
 
