@@ -8,6 +8,7 @@ struct TaskDetailView: View {
     @ObservedObject var syncEngine: DemoSyncEngine
 
     @SyncModel private var task: Task?
+    @SyncQuery private var tags: [Tag]
     @SyncQuery private var comments: [Comment]
     @State private var hasTriggeredInitialSync = false
 
@@ -21,6 +22,15 @@ struct TaskDetailView: View {
         let predicate = #Predicate<Comment> { row in
             row.taskID == taskID
         }
+        let tagsPredicate = #Predicate<Tag> { tag in
+            tag.tasks.contains { $0.id == taskID }
+        }
+        _tags = SyncQuery(
+            Tag.self,
+            predicate: tagsPredicate,
+            in: syncContainer,
+            sortBy: [\.name, \.id]
+        )
         _comments = SyncQuery(
             Comment.self,
             predicate: predicate,
@@ -60,11 +70,11 @@ struct TaskDetailView: View {
 
             if let task {
                 Section("Tags") {
-                    if task.tags.isEmpty {
+                    if tags.isEmpty {
                         Text("No tags")
                             .foregroundStyle(.secondary)
                     } else {
-                        ForEach(task.tags.sorted(by: { $0.name < $1.name }), id: \.id) { tag in
+                        ForEach(tags, id: \.id) { tag in
                             NavigationLink {
                                 TagTasksView(tagID: tag.id, syncContainer: syncContainer, syncEngine: syncEngine)
                             } label: {

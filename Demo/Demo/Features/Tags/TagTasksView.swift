@@ -1,3 +1,4 @@
+import SwiftData
 import SwiftSync
 import SwiftUI
 
@@ -7,6 +8,7 @@ struct TagTasksView: View {
     @ObservedObject var syncEngine: DemoSyncEngine
 
     @SyncModel private var tag: Tag?
+    @SyncQuery private var tasks: [Task]
     @State private var hasTriggeredInitialSync = false
 
     init(tagID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
@@ -14,6 +16,19 @@ struct TagTasksView: View {
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
         _tag = SyncModel(Tag.self, id: tagID, in: syncContainer)
+
+        let predicate = #Predicate<Task> { task in
+            task.tags.contains { $0.id == tagID }
+        }
+        _tasks = SyncQuery(
+            Task.self,
+            predicate: predicate,
+            in: syncContainer,
+            sortBy: [
+                SortDescriptor(\Task.priority, order: .reverse),
+                SortDescriptor(\Task.id)
+            ]
+        )
     }
 
     var body: some View {
@@ -22,12 +37,12 @@ struct TagTasksView: View {
                 Section {
                     Text(tag.name)
                         .font(.title3)
-                    Text("\(tag.tasks.count) tasks")
+                    Text("\(tasks.count) tasks")
                         .foregroundStyle(.secondary)
                 }
 
                 Section("Tasks") {
-                    ForEach(tag.tasks.sorted(by: { $0.priority > $1.priority }), id: \.id) { task in
+                    ForEach(tasks, id: \.id) { task in
                         NavigationLink {
                             TaskDetailView(taskID: task.id, syncContainer: syncContainer, syncEngine: syncEngine)
                         } label: {
