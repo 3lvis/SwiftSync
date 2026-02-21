@@ -299,6 +299,7 @@ try await SwiftSync.sync(payload: payload, as: Employee.self, in: context)
 ### Scenario: to-many relationship by objects
 
 You have chats and each chat has many messages. The backend sends each chat with an inline `messages` array.
+SwiftSync treats to-many relationship updates as membership updates (unordered) in SwiftData.
 
 JSON A:
 
@@ -370,6 +371,7 @@ try await SwiftSync.sync(payload: payload, as: Chat.self, in: context)
 ### Scenario: to-many relationship by `*_ids`
 
 You already synced notes separately, and user payloads now include only `notes_ids` to define membership.
+SwiftSync treats this as membership sync (unordered) and does not guarantee payload order persistence.
 
 JSON A:
 
@@ -455,7 +457,16 @@ let rows = try SwiftSync.export(as: User.self, in: context)
 
 ### `@Syncable`
 
-`@Syncable` generates sync and export boilerplate for flat attributes.
+`@Syncable` generates:
+- `SyncUpdatableModel` conformance (make/apply)
+- `SyncRelationshipUpdatableModel` conformance (auto relationship sync)
+- `ExportModel` and `SyncQuerySortableModel` conformance
+
+Built-in relationship sync behavior:
+- to-one by `*_id` (strict typed FK lookup)
+- to-many by `*_ids` (unordered membership updates)
+- nested to-one by relationship key (for example `company`)
+- nested to-many by relationship key (for example `members`)
 
 Identity selection order:
 1. property marked with `@PrimaryKey` (or `@PrimaryKey(remote: ...)`)
@@ -620,19 +631,20 @@ That row is skipped for matching/diffing. Sync continues for valid rows.
 
 `@Syncable` now auto-generates relationship helper logic for the common FK patterns:
 - to-one by `*_id` (strict typed FK lookup)
-- to-many by `*_ids` (authoritative membership replacement)
+- to-many by `*_ids` (unordered membership updates)
+- nested relationship objects by relationship key (`company`, `members`, etc.)
 
-Use a tiny `SyncRelationshipUpdatableModel` wrapper to activate it:
+No wrapper extension is needed when using `@Syncable`.
 
-```swift
-extension Task: SyncRelationshipUpdatableModel {
-  func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
-    try syncApplyGeneratedRelationships(payload, in: context)
-  }
-}
-```
+For custom domain merge policies, implement custom `applyRelationships(...)`.
 
-For nested relationship objects or custom domain merge policies, implement custom `applyRelationships(...)`.
+### Does SwiftSync support ordered to-many relationship syncing?
+
+Not currently.
+
+- SwiftData does not expose Core Data-style ordered relationship metadata for this use case.
+- SwiftSync currently treats to-many relationship sync as unordered membership.
+- If you need deterministic UI order, store an explicit scalar order field (for example `position`) and query with `sortBy`.
 
 ### Can two different parents have children with the same `id`?
 

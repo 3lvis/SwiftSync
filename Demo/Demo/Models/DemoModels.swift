@@ -182,36 +182,8 @@ extension Task: ParentScopedModel {
     static var syncIdentityPolicy: SyncIdentityPolicy { .global }
 }
 
-extension Task: SyncRelationshipUpdatableModel {
-    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
-        try syncApplyGeneratedRelationships(payload, in: context)
-    }
-
-    func applyRelationships(
-        _ payload: SyncPayload,
-        in context: ModelContext,
-        operations: SyncRelationshipOperations
-    ) async throws -> Bool {
-        try syncApplyGeneratedRelationships(payload, in: context, operations: operations)
-    }
-}
-
 extension Comment: ParentScopedModel {
     typealias SyncParent = Task
     static var parentRelationship: ReferenceWritableKeyPath<Comment, Task?> { \.task }
     static var syncIdentityPolicy: SyncIdentityPolicy { .global }
-}
-
-extension Comment: SyncRelationshipUpdatableModel {
-    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
-        try syncApplyGeneratedRelationships(payload, in: context)
-    }
-
-    func applyRelationships(
-        _ payload: SyncPayload,
-        in context: ModelContext,
-        operations: SyncRelationshipOperations
-    ) async throws -> Bool {
-        try syncApplyGeneratedRelationships(payload, in: context, operations: operations)
-    }
 }

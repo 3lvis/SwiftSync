@@ -70,7 +70,7 @@ public struct SyncableMacro: ExtensionMacro {
         return [
             try ExtensionDeclSyntax(
                 """
-                extension \(type.trimmed): SyncUpdatableModel, ExportModel, SyncQuerySortableModel {
+                extension \(type.trimmed): SyncRelationshipUpdatableModel, ExportModel, SyncQuerySortableModel {
                     typealias SyncID = \(raw: identityProperty.typeSource)
 
                     static var syncIdentity: KeyPath<\(raw: typeName), \(raw: identityProperty.typeSource)> { \\.\(raw: identityProperty.name) }
@@ -106,6 +106,18 @@ public struct SyncableMacro: ExtensionMacro {
                         \(raw: relationshipApplyBody.isEmpty ? "return false" : "var changed = false")
                         \(raw: relationshipApplyBody)
                         \(raw: relationshipApplyBody.isEmpty ? "" : "return changed")
+                    }
+
+                    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+                        try syncApplyGeneratedRelationships(payload, in: context, operations: .all)
+                    }
+
+                    func applyRelationships(
+                        _ payload: SyncPayload,
+                        in context: ModelContext,
+                        operations: SyncRelationshipOperations
+                    ) async throws -> Bool {
+                        try syncApplyGeneratedRelationships(payload, in: context, operations: operations)
                     }
 
                     func exportObject(using options: ExportOptions, state: inout ExportState) -> [String: Any] {
@@ -488,33 +500,65 @@ public struct SyncableMacro: ExtensionMacro {
         }
 
         let blocks: [String] = relationshipProperties.compactMap { property in
-            let keys = relationshipInputKeys(for: property)
-            guard !keys.isEmpty else { return nil }
-            let keysLiteral = keys.map { "\"\($0)\"" }.joined(separator: ", ")
+            let fkKeys = relationshipForeignKeyInputKeys(for: property)
+            let nestedKeys = relationshipNestedInputKeys(for: property)
+            guard !fkKeys.isEmpty || !nestedKeys.isEmpty else { return nil }
+            let fkKeysLiteral = fkKeys.map { "\"\($0)\"" }.joined(separator: ", ")
+            let nestedKeysLiteral = nestedKeys.map { "\"\($0)\"" }.joined(separator: ", ")
+            let fkPresence = presenceExpression(for: fkKeys)
+            let nestedPresence = presenceExpression(for: nestedKeys)
 
             if property.isToManyRelationship {
                 return """
-                if try syncApplyToManyForeignKeys(
-                    self,
-                    relationship: \\\(typeName).\(property.name),
-                    payload: payload,
-                    keys: [\(keysLiteral)],
-                    in: context
-                ) {
-                    changed = true
+                if \(fkPresence) {
+                    if try syncApplyToManyForeignKeys(
+                        self,
+                        relationship: \\\(typeName).\(property.name),
+                        payload: payload,
+                        keys: [\(fkKeysLiteral)],
+                        in: context,
+                        operations: operations
+                    ) {
+                        changed = true
+                    }
+                } else if \(nestedPresence) {
+                    if try syncApplyToManyNestedObjects(
+                        self,
+                        relationship: \\\(typeName).\(property.name),
+                        payload: payload,
+                        keys: [\(nestedKeysLiteral)],
+                        in: context,
+                        operations: operations
+                    ) {
+                        changed = true
+                    }
                 }
                 """
             }
 
             return """
-            if try syncApplyToOneForeignKey(
-                self,
-                relationship: \\\(typeName).\(property.name),
-                payload: payload,
-                keys: [\(keysLiteral)],
-                in: context
-            ) {
-                changed = true
+            if \(fkPresence) {
+                if try syncApplyToOneForeignKey(
+                    self,
+                    relationship: \\\(typeName).\(property.name),
+                    payload: payload,
+                    keys: [\(fkKeysLiteral)],
+                    in: context,
+                    operations: operations
+                ) {
+                    changed = true
+                }
+            } else if \(nestedPresence) {
+                if try syncApplyToOneNestedObject(
+                    self,
+                    relationship: \\\(typeName).\(property.name),
+                    payload: payload,
+                    keys: [\(nestedKeysLiteral)],
+                    in: context,
+                    operations: operations
+                ) {
+                    changed = true
+                }
             }
             """
         }
@@ -522,7 +566,7 @@ public struct SyncableMacro: ExtensionMacro {
         return blocks.joined(separator: "\n\n")
     }
 
-    private static func relationshipInputKeys(for property: SyncedProperty) -> [String] {
+    private static func relationshipForeignKeyInputKeys(for property: SyncedProperty) -> [String] {
         if let remoteKey = property.remoteKey, !remoteKey.isEmpty {
             return [remoteKey]
         }
@@ -534,6 +578,19 @@ public struct SyncableMacro: ExtensionMacro {
         }
 
         return ["\(property.name)_id"]
+    }
+
+    private static func relationshipNestedInputKeys(for property: SyncedProperty) -> [String] {
+        var keys: [String] = [property.name]
+        if let remotePath = property.remotePath, !remotePath.isEmpty {
+            keys.append(remotePath)
+        }
+        return Array(Set(keys)).sorted()
+    }
+
+    private static func presenceExpression(for keys: [String]) -> String {
+        guard !keys.isEmpty else { return "false" }
+        return keys.map { "payload.contains(\"\($0)\")" }.joined(separator: " || ")
     }
 
     private static func singularized(_ value: String) -> String {

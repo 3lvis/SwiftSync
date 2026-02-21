@@ -36,14 +36,19 @@ Scalar attributes still support coercion paths where appropriate.
 `@Syncable` auto-generates this helper behavior for common relationship patterns:
 - to-one by `*_id`
 - to-many by `*_ids`
+- nested to-one by relationship key (for example `company`)
+- nested to-many by relationship key (for example `members`)
 
-Use a tiny `SyncRelationshipUpdatableModel` wrapper to call `syncApplyGeneratedRelationships(...)`.
-For nested object payload relationships or custom merge policies, keep manual custom implementations.
+No wrapper extension is required when using `@Syncable`.
+For custom merge policies, keep manual `applyRelationships(...)` implementations.
 
-## 3) Ordered to-many parity
+## 3) Ordered to-many support
 
-When relationship metadata is ordered, SwiftSync should preserve remote order semantics.  
-When unordered, membership semantics are set-based.
+SwiftSync currently does not provide ordered relationship sync semantics.
+
+- SwiftData does not expose Core Data-style ordered relationship metadata for this pipeline.
+- To-many sync is treated as unordered membership.
+- If you need deterministic order in UI, store an explicit scalar order field and use `@SyncQuery(..., sortBy: ...)`.
 
 ## 4) Relationship operation flags
 

@@ -215,12 +215,6 @@ final class AutoEmployee {
     }
 }
 
-extension AutoEmployee: SyncRelationshipUpdatableModel {
-    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
-        try syncApplyGeneratedRelationships(payload, in: context)
-    }
-}
-
 @Syncable
 @Model
 final class AutoTag {
@@ -249,9 +243,31 @@ final class AutoTask {
     }
 }
 
-extension AutoTask: SyncRelationshipUpdatableModel {
-    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
-        try syncApplyGeneratedRelationships(payload, in: context)
+@Syncable
+@Model
+final class AutoNestedMember {
+    @Attribute(.unique) var id: Int
+    var fullName: String
+
+    init(id: Int, fullName: String) {
+        self.id = id
+        self.fullName = fullName
+    }
+}
+
+@Syncable
+@Model
+final class AutoNestedTeam {
+    @Attribute(.unique) var id: Int
+    var name: String
+    var owner: AutoNestedMember?
+    var members: [AutoNestedMember]
+
+    init(id: Int, name: String, owner: AutoNestedMember? = nil, members: [AutoNestedMember] = []) {
+        self.id = id
+        self.name = name
+        self.owner = owner
+        self.members = members
     }
 }
 
@@ -953,7 +969,6 @@ extension OpsEmployee: SyncRelationshipUpdatableModel {
     }
 }
 
-@Syncable
 @Model
 final class ConcurrentRaceUser {
     @Attribute(.unique) var id: Int
@@ -1037,6 +1052,28 @@ private actor CancellationGate {
 }
 
 extension ConcurrentRaceUser: SyncRelationshipUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<ConcurrentRaceUser, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> ConcurrentRaceUser {
+        ConcurrentRaceUser(
+            id: try payload.required(Int.self, for: "id"),
+            fullName: try payload.required(String.self, for: "full_name")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        var changed = false
+        if payload.contains("full_name") {
+            let incoming: String = try payload.required(String.self, for: "full_name")
+            if fullName != incoming {
+                fullName = incoming
+                changed = true
+            }
+        }
+        return changed
+    }
+
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         _ = payload
         _ = context
@@ -1971,6 +2008,69 @@ final class IntegrationTests: XCTestCase {
         )
         tasks = try context.fetch(FetchDescriptor<AutoTask>())
         XCTAssertEqual(tasks[0].tags.count, 0)
+    }
+
+    @MainActor
+    func testSyncableGeneratedNestedRelationshipsUpsertAndReplaceMembership() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: AutoNestedTeam.self, AutoNestedMember.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 10,
+                "name": "Team",
+                "owner": ["id": 1, "full_name": "Owner"],
+                "members": [
+                    ["id": 1, "full_name": "Owner"],
+                    ["id": 2, "full_name": "Member Two"]
+                ]
+            ]],
+            as: AutoNestedTeam.self,
+            in: context
+        )
+
+        var teams = try context.fetch(FetchDescriptor<AutoNestedTeam>())
+        XCTAssertEqual(teams.count, 1)
+        XCTAssertEqual(teams[0].owner?.id, 1)
+        XCTAssertEqual(Set(teams[0].members.map(\.id)), Set([1, 2]))
+
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 10,
+                "name": "Team v2",
+                "owner": ["id": 2, "full_name": "Member Two Updated"],
+                "members": [
+                    ["id": 2, "full_name": "Member Two Updated"],
+                    ["id": 3, "full_name": "Member Three"]
+                ]
+            ]],
+            as: AutoNestedTeam.self,
+            in: context
+        )
+
+        teams = try context.fetch(FetchDescriptor<AutoNestedTeam>())
+        XCTAssertEqual(teams[0].name, "Team v2")
+        XCTAssertEqual(teams[0].owner?.id, 2)
+        XCTAssertEqual(Set(teams[0].members.map(\.id)), Set([2, 3]))
+
+        let allMembers = try context.fetch(FetchDescriptor<AutoNestedMember>())
+        XCTAssertEqual(allMembers.first(where: { $0.id == 2 })?.fullName, "Member Two Updated")
+
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 10,
+                "name": "Team v2",
+                "owner": NSNull(),
+                "members": NSNull()
+            ]],
+            as: AutoNestedTeam.self,
+            in: context
+        )
+
+        teams = try context.fetch(FetchDescriptor<AutoNestedTeam>())
+        XCTAssertNil(teams[0].owner)
+        XCTAssertEqual(teams[0].members.count, 0)
     }
 
     @MainActor

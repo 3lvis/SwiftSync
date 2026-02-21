@@ -94,6 +94,7 @@ What SwiftData + current wrapper does not yet guarantee:
 
 - automatic in-place refresh of already-retained model instances across contexts
 - FRC-style granular change callback contract out of the box
+- ordered to-many relationship sync semantics (SwiftData metadata/API does not expose the needed ordered relationship mode here)
 
 So we need a read-layer convention that is reactive-by-default.
 
