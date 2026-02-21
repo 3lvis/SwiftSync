@@ -24,7 +24,7 @@ extension Child: GlobalParentScopedModel {
 
 Parent relationship inference is the default behavior when you call parent sync without `ParentScopedModel`:
 - if exactly one to-one relationship from child -> parent type exists, SwiftSync uses it
-- if more than one candidate exists, SwiftSync throws and asks for explicit `parentRelationship`
+- `parentRelationship` is only required when more than one candidate exists
 - if zero candidates exist, SwiftSync throws because parent-scoped sync cannot be resolved for that model
 - inferred parent sync defaults to `identityPolicy = .global` unless you pass `.scopedByParent` in the call
 

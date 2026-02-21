@@ -186,8 +186,8 @@ final class Note {
   @Relationship var user: User?
 }
 
-// Optional when this relationship is unambiguous.
 // Keep this extension when you want scoped identity by default for this model.
+// `parentRelationship` is required only for ambiguous parent mappings.
 extension Note: ParentScopedModel {
   static var parentRelationship: ReferenceWritableKeyPath<Note, User?> { \.user }
 }
@@ -214,8 +214,8 @@ try await SwiftSync.sync(
 Notes:
 - This example keeps `ParentScopedModel`, so scoped identity is the default for `Note`.
 - Parent relationship inference is the default behavior for parent sync.
-- If `Note` has exactly one to-one relationship to `User`, you can omit `ParentScopedModel` and `parentRelationship`.
-- If there are multiple candidate relationships to the same parent type, sync fails and requires explicit `parentRelationship`.
+- If `Note` has exactly one to-one relationship to `User`, `parentRelationship` is inferred.
+- `parentRelationship` is only required when there are multiple candidate relationships to the same parent type.
 - If there are zero candidates, sync fails because the requested parent scope cannot be resolved for that model.
 - `identityPolicy` defaults to `.global` for inferred parent sync. Use `.scopedByParent` when duplicate child IDs across different parents are valid.
 - Inferred scoped example: `try await SwiftSync.sync(payload: payload, as: Note.self, in: context, parent: user, identityPolicy: .scopedByParent)`

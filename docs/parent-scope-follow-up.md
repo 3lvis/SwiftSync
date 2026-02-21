@@ -10,7 +10,7 @@ Parent sync has two responsibilities:
 
 SwiftSync now supports both styles:
 - inferred parent relationship by default when exactly one candidate exists
-- explicit `parentRelationship` when relationship choice is ambiguous
+- explicit `parentRelationship` only when relationship choice is ambiguous
 
 ## Current Behavior
 
