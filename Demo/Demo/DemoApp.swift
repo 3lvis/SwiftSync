@@ -1,10 +1,3 @@
-//
-//  DemoApp.swift
-//  Demo
-//
-//  Created by nunez on 20/02/2026.
-//
-
 import SwiftUI
 import SwiftData
 import SwiftSync
