@@ -6,7 +6,8 @@ public extension SwiftSync {
     static func sync<Model: SyncUpdatableModel>(
         payload: [Any],
         as model: Model.Type,
-        in context: ModelContext
+        in context: ModelContext,
+        missingRowPolicy: SyncMissingRowPolicy = .delete
     ) async throws {
         let lease = await acquireSyncLease(for: context)
         _ = model
@@ -74,10 +75,12 @@ public extension SwiftSync {
                 changed = true
             }
 
-            try throwIfCancelled()
-            for (key, row) in index where !seenKeys.contains(key) {
-                context.delete(row)
-                changed = true
+            if missingRowPolicy == .delete {
+                try throwIfCancelled()
+                for (key, row) in index where !seenKeys.contains(key) {
+                    context.delete(row)
+                    changed = true
+                }
             }
 
             try throwIfCancelled()
@@ -100,7 +103,8 @@ public extension SwiftSync {
         payload: [Any],
         as model: Model.Type,
         in context: ModelContext,
-        parent: Model.SyncParent
+        parent: Model.SyncParent,
+        missingRowPolicy: SyncMissingRowPolicy = .delete
     ) async throws {
         let lease = await acquireSyncLease(for: context)
         _ = model
@@ -178,10 +182,12 @@ public extension SwiftSync {
                 changed = true
             }
 
-            try throwIfCancelled()
-            for (key, row) in index where !seenKeys.contains(key) {
-                context.delete(row)
-                changed = true
+            if missingRowPolicy == .delete {
+                try throwIfCancelled()
+                for (key, row) in index where !seenKeys.contains(key) {
+                    context.delete(row)
+                    changed = true
+                }
             }
 
             try throwIfCancelled()

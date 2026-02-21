@@ -1,36 +1,47 @@
-//
-//  DemoTests.swift
-//  DemoTests
-//
-//  Created by nunez on 20/02/2026.
-//
-
+import SwiftData
+import SwiftSync
 import XCTest
 @testable import Demo
 
 final class DemoTests: XCTestCase {
-
-    override func setUpWithError() throws {
-        // Put setup code here. This method is called before the invocation of each test method in the class.
+    @MainActor
+    func testFakeSeedDataCounts() {
+        let seed = DemoSeedData.generate()
+        XCTAssertEqual(seed.projects.count, 30)
+        XCTAssertEqual(seed.users.count, 40)
+        XCTAssertEqual(seed.tags.count, 50)
+        XCTAssertEqual(seed.tasks.count, 300)
+        XCTAssertEqual(seed.comments.count, 2_000)
     }
 
-    override func tearDownWithError() throws {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
-    }
+    @MainActor
+    func testInitialSyncPopulatesCoreDataSets() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let syncContainer = try SyncContainer(
+            for: Project.self,
+            User.self,
+            Task.self,
+            Tag.self,
+            Comment.self,
+            configurations: configuration
+        )
+        let client = FakeDemoAPIClient(scenario: .fastStable, seedData: .generate())
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: client)
 
-    func testExample() throws {
-        // This is an example of a functional test case.
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
-        // Any test you write for XCTest can be annotated as throws and async.
-        // Mark your test throws to produce an unexpected failure when your test encounters an uncaught error.
-        // Mark your test async to allow awaiting for asynchronous code to complete. Check the results with assertions afterwards.
-    }
+        await engine.syncInitialData()
+        XCTAssertNil(engine.lastErrorMessage)
 
-    func testPerformanceExample() throws {
-        // This is an example of a performance test case.
-        self.measure {
-            // Put the code you want to measure the time of here.
-        }
-    }
+        let projects = try syncContainer.mainContext.fetch(FetchDescriptor<Project>())
+        let users = try syncContainer.mainContext.fetch(FetchDescriptor<User>())
+        let tags = try syncContainer.mainContext.fetch(FetchDescriptor<Tag>())
 
+        XCTAssertEqual(projects.count, 30)
+        XCTAssertEqual(users.count, 40)
+        XCTAssertEqual(tags.count, 50)
+
+        await engine.syncProjectTasks(projectID: "project-1")
+        XCTAssertNil(engine.lastErrorMessage)
+        let tasks = try syncContainer.mainContext.fetch(FetchDescriptor<Task>())
+        XCTAssertFalse(tasks.isEmpty)
+    }
 }

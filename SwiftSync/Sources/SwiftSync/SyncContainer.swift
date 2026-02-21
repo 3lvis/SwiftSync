@@ -2,6 +2,9 @@ import Foundation
 import SwiftData
 
 public final class SyncContainer: NSObject, @unchecked Sendable {
+    public static let didSaveChangesNotification = Notification.Name("SwiftSync.SyncContainer.didSaveChanges")
+    public static let changedIdentifiersUserInfoKey = "changedIdentifiers"
+
     public let modelContainer: ModelContainer
     public let mainContext: ModelContext
 
@@ -58,6 +61,11 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             _ = mainContext.model(for: identifier)
         }
         mainContext.processPendingChanges()
+        NotificationCenter.default.post(
+            name: Self.didSaveChangesNotification,
+            object: self,
+            userInfo: [Self.changedIdentifiersUserInfoKey: changedIDs]
+        )
     }
 
     private func changedIdentifiers(from userInfo: [AnyHashable: Any]?) -> Set<PersistentIdentifier> {

@@ -354,3 +354,8 @@ public enum SyncError: Error, Sendable, Equatable {
     case invalidPayload(model: String, reason: String)
     case cancelled
 }
+
+public enum SyncMissingRowPolicy: Sendable {
+    case delete
+    case keep
+}

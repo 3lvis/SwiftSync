@@ -2081,4 +2081,70 @@ final class IntegrationTests: XCTestCase {
         XCTAssertEqual(rows.count, 0)
     }
 
+    @MainActor
+    func testSyncMissingRowPolicyKeepPreservesExistingRows() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: User.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "full_name": "One"],
+                ["id": 2, "full_name": "Two"]
+            ],
+            as: User.self,
+            in: context
+        )
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "full_name": "One Updated"]
+            ],
+            as: User.self,
+            in: context,
+            missingRowPolicy: .keep
+        )
+
+        let rows = try context.fetch(FetchDescriptor<User>())
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertEqual(rows.first(where: { $0.id == 1 })?.fullName, "One Updated")
+        XCTAssertEqual(rows.first(where: { $0.id == 2 })?.fullName, "Two")
+    }
+
+    @MainActor
+    func testParentScopedSyncMissingRowPolicyKeepPreservesExistingRows() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: SuperUser.self, SuperNote.self, configurations: configuration)
+        let context = ModelContext(container)
+        let parent = SuperUser(id: 10, name: "Parent")
+        context.insert(parent)
+        try context.save()
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "text": "First"],
+                ["id": 2, "text": "Second"]
+            ],
+            as: SuperNote.self,
+            in: context,
+            parent: parent
+        )
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "text": "First Updated"]
+            ],
+            as: SuperNote.self,
+            in: context,
+            parent: parent,
+            missingRowPolicy: .keep
+        )
+
+        let notes = try context.fetch(FetchDescriptor<SuperNote>())
+            .filter { $0.superUser?.persistentModelID == parent.persistentModelID }
+        XCTAssertEqual(notes.count, 2)
+        XCTAssertEqual(notes.first(where: { $0.id == 1 })?.text, "First Updated")
+        XCTAssertEqual(notes.first(where: { $0.id == 2 })?.text, "Second")
+    }
+
 }
