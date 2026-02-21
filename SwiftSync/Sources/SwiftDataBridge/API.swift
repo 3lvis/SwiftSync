@@ -254,7 +254,7 @@ public extension SwiftSync {
         }
     }
 
-    private static func resolveIdentity<Model: SyncModel>(
+    private static func resolveIdentity<Model: SyncModelable>(
         from payload: SyncPayload,
         model: Model.Type
     ) -> Model.SyncID? {

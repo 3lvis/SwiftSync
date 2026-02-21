@@ -145,11 +145,9 @@ final class DemoSyncEngine: ObservableObject {
         _ payload: [[String: Any]],
         as model: Model.Type
     ) async throws {
-        let context = syncContainer.makeBackgroundContext()
-        try await SwiftSync.sync(
+        try await syncContainer.sync(
             payload: payload,
             as: model,
-            in: context,
             missingRowPolicy: .delete
         )
     }
@@ -158,11 +156,9 @@ final class DemoSyncEngine: ObservableObject {
         _ payload: [[String: Any]],
         as model: Model.Type
     ) async throws {
-        let context = syncContainer.makeBackgroundContext()
-        try await SwiftSync.sync(
+        try await syncContainer.sync(
             payload: payload,
             as: model,
-            in: context,
             missingRowPolicy: .keep
         )
     }
@@ -172,11 +168,9 @@ final class DemoSyncEngine: ObservableObject {
         as model: Model.Type,
         parent: Model.SyncParent
     ) async throws {
-        let context = syncContainer.makeBackgroundContext()
-        try await SwiftSync.sync(
+        try await syncContainer.sync(
             payload: payload,
             as: model,
-            in: context,
             parent: parent,
             missingRowPolicy: .delete
         )
@@ -187,11 +181,9 @@ final class DemoSyncEngine: ObservableObject {
         as model: Model.Type,
         parent: Model.SyncParent
     ) async throws {
-        let context = syncContainer.makeBackgroundContext()
-        try await SwiftSync.sync(
+        try await syncContainer.sync(
             payload: payload,
             as: model,
-            in: context,
             parent: parent,
             missingRowPolicy: .keep
         )

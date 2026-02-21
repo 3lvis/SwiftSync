@@ -12,13 +12,17 @@ struct ProjectsTabView: View {
     init(syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
-        _projects = SyncQuery(Project.self, in: syncContainer)
+        _projects = SyncQuery(
+            Project.self,
+            in: syncContainer,
+            sortBy: [SortDescriptor(\Project.name), SortDescriptor(\Project.id)]
+        )
     }
 
     var body: some View {
         NavigationStack {
             List {
-                ForEach(projects.sorted(by: { $0.name < $1.name }), id: \.id) { project in
+                ForEach(projects, id: \.id) { project in
                     NavigationLink {
                         ProjectDetailView(
                             projectID: project.id,
@@ -61,7 +65,7 @@ private struct ProjectDetailView: View {
     let syncContainer: SyncContainer
     @ObservedObject var syncEngine: DemoSyncEngine
 
-    @SyncModelValue private var project: Project?
+    @SyncModel private var project: Project?
     @SyncQuery private var tasks: [Task]
     @State private var hasTriggeredInitialSync = false
 
@@ -70,12 +74,20 @@ private struct ProjectDetailView: View {
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
 
-        _project = SyncModelValue(Project.self, id: projectID, in: syncContainer)
+        _project = SyncModel(Project.self, id: projectID, in: syncContainer)
 
         let predicate = #Predicate<Task> { row in
             row.projectID == projectID
         }
-        _tasks = SyncQuery(Task.self, predicate: predicate, in: syncContainer)
+        _tasks = SyncQuery(
+            Task.self,
+            predicate: predicate,
+            in: syncContainer,
+            sortBy: [
+                SortDescriptor(\Task.priority, order: .reverse),
+                SortDescriptor(\Task.id)
+            ]
+        )
     }
 
     var body: some View {
@@ -96,7 +108,7 @@ private struct ProjectDetailView: View {
             }
 
             Section("Tasks") {
-                ForEach(tasks.sorted(by: { $0.priority > $1.priority }), id: \.id) { task in
+                ForEach(tasks, id: \.id) { task in
                     NavigationLink {
                         TaskDetailView(taskID: task.id, syncContainer: syncContainer, syncEngine: syncEngine)
                     } label: {

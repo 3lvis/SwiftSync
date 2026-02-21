@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import Core
 
 public final class SyncContainer: NSObject, @unchecked Sendable {
     public static let didSaveChangesNotification = Notification.Name("SwiftSync.SyncContainer.didSaveChanges")
@@ -39,6 +40,36 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
 
     public func makeBackgroundContext() -> ModelContext {
         ModelContext(modelContainer)
+    }
+
+    public func sync<Model: SyncUpdatableModel>(
+        payload: [Any],
+        as model: Model.Type,
+        missingRowPolicy: SyncMissingRowPolicy = .delete
+    ) async throws {
+        let context = makeBackgroundContext()
+        try await SwiftSync.sync(
+            payload: payload,
+            as: model,
+            in: context,
+            missingRowPolicy: missingRowPolicy
+        )
+    }
+
+    public func sync<Model: ParentScopedModel>(
+        payload: [Any],
+        as model: Model.Type,
+        parent: Model.SyncParent,
+        missingRowPolicy: SyncMissingRowPolicy = .delete
+    ) async throws {
+        let context = makeBackgroundContext()
+        try await SwiftSync.sync(
+            payload: payload,
+            as: model,
+            in: context,
+            parent: parent,
+            missingRowPolicy: missingRowPolicy
+        )
     }
 
     private func installDidSaveObserver() {

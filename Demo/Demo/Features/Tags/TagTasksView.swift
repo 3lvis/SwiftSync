@@ -6,14 +6,14 @@ struct TagTasksView: View {
     let syncContainer: SyncContainer
     @ObservedObject var syncEngine: DemoSyncEngine
 
-    @SyncModelValue private var tag: Tag?
+    @SyncModel private var tag: Tag?
     @State private var hasTriggeredInitialSync = false
 
     init(tagID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.tagID = tagID
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
-        _tag = SyncModelValue(Tag.self, id: tagID, in: syncContainer)
+        _tag = SyncModel(Tag.self, id: tagID, in: syncContainer)
     }
 
     var body: some View {

@@ -7,7 +7,7 @@ struct TaskDetailView: View {
     let syncContainer: SyncContainer
     @ObservedObject var syncEngine: DemoSyncEngine
 
-    @SyncModelValue private var task: Task?
+    @SyncModel private var task: Task?
     @SyncQuery private var comments: [Comment]
     @State private var hasTriggeredInitialSync = false
 
@@ -16,12 +16,20 @@ struct TaskDetailView: View {
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
 
-        _task = SyncModelValue(Task.self, id: taskID, in: syncContainer)
+        _task = SyncModel(Task.self, id: taskID, in: syncContainer)
 
         let predicate = #Predicate<Comment> { row in
             row.taskID == taskID
         }
-        _comments = SyncQuery(Comment.self, predicate: predicate, in: syncContainer)
+        _comments = SyncQuery(
+            Comment.self,
+            predicate: predicate,
+            in: syncContainer,
+            sortBy: [
+                SortDescriptor(\Comment.createdAt, order: .reverse),
+                SortDescriptor(\Comment.id)
+            ]
+        )
     }
 
     var body: some View {
@@ -73,7 +81,7 @@ struct TaskDetailView: View {
                     Text("No comments")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(comments.sorted(by: { $0.createdAt > $1.createdAt }), id: \.id) { comment in
+                    ForEach(comments, id: \.id) { comment in
                         VStack(alignment: .leading, spacing: 4) {
                             Text(comment.body)
                             Text("\(comment.author?.displayName ?? comment.authorUserID) · \(comment.createdAt.formatted(date: .numeric, time: .shortened))")

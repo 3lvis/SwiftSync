@@ -3,17 +3,17 @@ import SwiftData
 
 public enum SwiftSync {}
 
-public protocol SyncModel: PersistentModel {
+public protocol SyncModelable: PersistentModel {
     associatedtype SyncID: Hashable & Codable & Sendable
     static var syncIdentity: KeyPath<Self, SyncID> { get }
     static var syncIdentityRemoteKeys: [String] { get }
 }
 
-public extension SyncModel {
+public extension SyncModelable {
     static var syncIdentityRemoteKeys: [String] { ["id", "remote_id", "remoteID"] }
 }
 
-public protocol SyncUpdatableModel: SyncModel {
+public protocol SyncUpdatableModel: SyncModelable {
     static func make(from payload: SyncPayload) throws -> Self
     func apply(_ payload: SyncPayload) throws -> Bool
 }
@@ -116,7 +116,7 @@ public struct ExportState {
     }
 }
 
-public protocol ExportModel: SyncModel {
+public protocol ExportModel: SyncModelable {
     func exportObject(using options: ExportOptions, state: inout ExportState) -> [String: Any]
 }
 

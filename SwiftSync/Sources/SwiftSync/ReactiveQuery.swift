@@ -1,4 +1,5 @@
 import Combine
+import Core
 import Foundation
 import SwiftData
 import SwiftUI
@@ -8,16 +9,19 @@ private final class SyncQueryObserver<Model: PersistentModel>: ObservableObject 
 
     private let syncContainer: SyncContainer
     private let predicate: Predicate<Model>?
+    private let sortBy: [SortDescriptor<Model>]
     private let animation: Animation?
     private var notificationToken: NSObjectProtocol?
 
     init(
         syncContainer: SyncContainer,
         predicate: Predicate<Model>?,
+        sortBy: [SortDescriptor<Model>],
         animation: Animation?
     ) {
         self.syncContainer = syncContainer
         self.predicate = predicate
+        self.sortBy = sortBy
         self.animation = animation
         installObserver()
         reload()
@@ -43,17 +47,17 @@ private final class SyncQueryObserver<Model: PersistentModel>: ObservableObject 
         do {
             let descriptor: FetchDescriptor<Model>
             if let predicate {
-                descriptor = FetchDescriptor(predicate: predicate)
+                descriptor = FetchDescriptor(predicate: predicate, sortBy: sortBy)
             } else {
-                descriptor = FetchDescriptor<Model>()
+                descriptor = FetchDescriptor(sortBy: sortBy)
             }
-            let fetched = try syncContainer.mainContext.fetch(descriptor)
+            let resolved = try syncContainer.mainContext.fetch(descriptor)
             if let animation {
                 withAnimation(animation) {
-                    rows = fetched
+                    rows = resolved
                 }
             } else {
-                rows = fetched
+                rows = resolved
             }
         } catch {
             rows = []
@@ -71,6 +75,7 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
     public init(
         _ model: Model.Type,
         in syncContainer: SyncContainer,
+        sortBy: [SortDescriptor<Model>] = [],
         animation: Animation? = nil
     ) {
         _ = model
@@ -78,6 +83,7 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
             wrappedValue: SyncQueryObserver(
                 syncContainer: syncContainer,
                 predicate: nil,
+                sortBy: sortBy,
                 animation: animation
             )
         )
@@ -87,6 +93,7 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
         _ model: Model.Type,
         predicate: Predicate<Model>,
         in syncContainer: SyncContainer,
+        sortBy: [SortDescriptor<Model>] = [],
         animation: Animation? = nil
     ) {
         _ = model
@@ -94,13 +101,14 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
             wrappedValue: SyncQueryObserver(
                 syncContainer: syncContainer,
                 predicate: predicate,
+                sortBy: sortBy,
                 animation: animation
             )
         )
     }
 }
 
-private final class SyncModelObserver<Model: PersistentModel & SyncModel>: ObservableObject {
+private final class SyncModelObserver<Model: PersistentModel & SyncModelable>: ObservableObject {
     @Published var model: Model?
 
     private let syncContainer: SyncContainer
@@ -151,7 +159,7 @@ private final class SyncModelObserver<Model: PersistentModel & SyncModel>: Obser
 
 @MainActor
 @propertyWrapper
-public struct SyncModelValue<Model: PersistentModel & SyncModel>: DynamicProperty {
+public struct SyncModel<Model: PersistentModel & SyncModelable>: DynamicProperty {
     @StateObject private var observer: SyncModelObserver<Model>
 
     public var wrappedValue: Model? { observer.model }
@@ -166,5 +174,23 @@ public struct SyncModelValue<Model: PersistentModel & SyncModel>: DynamicPropert
         _observer = StateObject(
             wrappedValue: SyncModelObserver(syncContainer: syncContainer, id: id, animation: animation)
         )
+    }
+}
+
+@MainActor
+@propertyWrapper
+@available(*, deprecated, renamed: "SyncModel")
+public struct SyncModelValue<Model: PersistentModel & SyncModelable>: DynamicProperty {
+    @SyncModel private var model: Model?
+
+    public var wrappedValue: Model? { model }
+
+    public init(
+        _ modelType: Model.Type,
+        id: Model.SyncID,
+        in syncContainer: SyncContainer,
+        animation: Animation? = nil
+    ) {
+        _model = SyncModel(modelType, id: id, in: syncContainer, animation: animation)
     }
 }
