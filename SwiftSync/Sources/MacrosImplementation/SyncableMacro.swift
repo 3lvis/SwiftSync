@@ -54,7 +54,7 @@ public struct SyncableMacro: ExtensionMacro {
         .joined(separator: ",\n            ")
 
         let applyBody = properties
-            .filter { $0.name != identityProperty.name }
+            .filter { $0.name != identityProperty.name && !$0.isRelationship }
             .map(applyBlock(for:))
             .joined(separator: "\n\n")
 
@@ -433,34 +433,50 @@ public struct SyncableMacro: ExtensionMacro {
     }
 
     private static func payloadReadExpression(for property: SyncedProperty) -> String {
-        let remoteKey: String
-        if let key = property.primaryKeyRemoteKey, !key.isEmpty {
-            remoteKey = key
-        } else {
-            remoteKey = property.name
+        let inputKey = syncInputKey(for: property)
+        if property.isRelationship {
+            if property.isToManyRelationship {
+                return "[]"
+            }
+            if property.isOptional {
+                return "nil"
+            }
         }
         if property.isOptional {
-            return "payload.value(for: \"\(remoteKey)\")"
+            return "payload.value(for: \"\(inputKey)\")"
         }
-        return "try payload.required(\(property.typeSource).self, for: \"\(remoteKey)\")"
+        return "try payload.required(\(property.typeSource).self, for: \"\(inputKey)\")"
     }
 
     private static func applyBlock(for property: SyncedProperty) -> String {
+        let inputKey = syncInputKey(for: property)
         let incoming = "incoming\(property.name.prefix(1).uppercased())\(property.name.dropFirst())"
         let read: String
         if property.isOptional {
-            read = "let \(incoming): \(property.typeSource) = payload.value(for: \"\(property.name)\")"
+            read = "let \(incoming): \(property.typeSource) = payload.value(for: \"\(inputKey)\")"
         } else {
-            read = "let \(incoming): \(property.typeSource) = try payload.required(\(property.typeSource).self, for: \"\(property.name)\")"
+            read = "let \(incoming): \(property.typeSource) = try payload.required(\(property.typeSource).self, for: \"\(inputKey)\")"
         }
 
         return """
-        \(read)
-        if \(property.name) != \(incoming) {
-            \(property.name) = \(incoming)
-            changed = true
+        if payload.contains("\(inputKey)") {
+            \(read)
+            if \(property.name) != \(incoming) {
+                \(property.name) = \(incoming)
+                changed = true
+            }
         }
         """
+    }
+
+    private static func syncInputKey(for property: SyncedProperty) -> String {
+        if let primaryKeyRemoteKey = property.primaryKeyRemoteKey, !primaryKeyRemoteKey.isEmpty {
+            return primaryKeyRemoteKey
+        }
+        if let remoteKey = property.remoteKey, !remoteKey.isEmpty {
+            return remoteKey
+        }
+        return property.name
     }
 }
 

@@ -15,7 +15,10 @@ struct ProjectsTabView: View {
         _projects = SyncQuery(
             Project.self,
             in: syncContainer,
-            sortBy: [\.name, \.id]
+            sortBy: [
+                SortDescriptor(\Project.name),
+                SortDescriptor(\Project.id)
+            ]
         )
     }
 
