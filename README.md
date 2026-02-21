@@ -20,6 +20,7 @@ import SwiftSync
 
 - [Why SwiftSync](#why-swiftsync)
 - [Basic Example](#basic-example)
+- [Reactive Reads (SwiftUI)](#reactive-reads-swiftui)
 - [Scenario -> Way of Use](#scenario---way-of-use)
 - [Modeling and Mapping](#modeling-and-mapping)
 - [Exporting JSON](#exporting-json)
@@ -102,6 +103,35 @@ try await SwiftSync.sync(payload: payload, as: User.self, in: background)
 Behavior note:
 - fresh fetches on `mainContext` see background saves
 - retained object references may still need explicit UI rebind/requery
+
+## Reactive Reads (SwiftUI)
+
+Use `@SyncQuery` for list reads and `@SyncModel` for detail reads.
+
+Shorthand ascending sort:
+
+```swift
+@SyncQuery(
+  User.self,
+  in: syncContainer,
+  sortBy: [\.displayName, \.id]
+)
+var users: [User]
+```
+
+Descending or mixed sort order:
+
+```swift
+@SyncQuery(
+  Task.self,
+  in: syncContainer,
+  sortBy: [
+    SortDescriptor(\Task.priority, order: .reverse),
+    SortDescriptor(\Task.id)
+  ]
+)
+var tasks: [Task]
+```
 
 ## Scenario -> Way of Use
 
@@ -582,6 +612,28 @@ do {
 ```
 
 Cancellation is cooperative. SwiftSync rolls back unsaved in-memory changes for that run, but it does not roll back work that was already saved earlier.
+
+### Can I still control sort direction with `@SyncQuery`?
+
+Yes. Use explicit `SortDescriptor` values when you need direction:
+
+```swift
+@SyncQuery(
+  Task.self,
+  in: syncContainer,
+  sortBy: [
+    SortDescriptor(\Task.priority, order: .reverse),
+    SortDescriptor(\Task.id)
+  ]
+)
+var tasks: [Task]
+```
+
+### When should I use `sortBy: [\.field]` vs `sortBy: [SortDescriptor(...)]`?
+
+- Use `sortBy: [\.field]` for concise default ascending sort.
+- Use `sortBy: [SortDescriptor(...)]` for descending or mixed ordering.
+- If your model is not `@Syncable`, shorthand requires `SyncQuerySortableModel` conformance; explicit `SortDescriptor` works directly.
 
 ## API Reference
 
