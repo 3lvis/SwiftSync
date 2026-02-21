@@ -20,6 +20,18 @@ final class ExportTask {
 
 @Syncable
 @Model
+final class ExportAcronymRecord {
+    @Attribute(.unique) var id: Int
+    var projectID: String
+
+    init(id: Int, projectID: String) {
+        self.id = id
+        self.projectID = projectID
+    }
+}
+
+@Syncable
+@Model
 final class ExportRemotePrimary {
     @PrimaryKey(remote: "external_id")
     @Attribute(.unique) var xid: String
@@ -159,6 +171,18 @@ final class ExportTests: XCTestCase {
         let rows = try SwiftSync.export(as: ExportTask.self, in: context, using: options)
         XCTAssertNotNil(rows[0]["createdAt"])
         XCTAssertNil(rows[0]["created_at"])
+    }
+
+    @MainActor
+    func testExportSnakeCaseNormalizesAcronyms() throws {
+        let context = try makeContext(for: ExportAcronymRecord.self)
+        context.insert(ExportAcronymRecord(id: 1, projectID: "P-100"))
+        try context.save()
+
+        let rows = try SwiftSync.export(as: ExportAcronymRecord.self, in: context)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0]["project_id"] as? String, "P-100")
+        XCTAssertNil(rows[0]["project_i_d"])
     }
 
     @MainActor

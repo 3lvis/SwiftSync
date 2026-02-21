@@ -40,7 +40,12 @@ Relationship FK lookup is strict by type:
 - no automatic cross-type coercion at relationship-link step
 
 This is intentional to avoid ambiguous linking.  
-Scalar attributes still support coercion paths where appropriate.
+Scalar attributes still support deterministic coercion paths where appropriate:
+- parseable string -> numeric (`Int`, `Double`, `Float`, `Decimal`)
+- numeric -> numeric (`Int`, `Double`, `Float`, `Decimal`)
+- string/0/1 numeric -> `Bool`
+- string -> `UUID`, `URL`
+- common primitives -> `String`
 
 `@Syncable` auto-generates this helper behavior for common relationship patterns:
 - to-one by `*_id`
@@ -93,3 +98,32 @@ This is a hard contract for payload semantics:
 - explicit `[]` on to-many => clear membership
 
 If backend wants to remove/clear, it should send explicit `null` (or `[]` for to-many), not omit the key.
+
+## 7) Deep-path mapping (`@RemotePath`)
+
+`@RemotePath` is supported for both import and export.
+
+- Example: `@RemotePath("profile.contact.email") var email: String?`
+- Inbound sync resolves dotted keys from nested dictionaries.
+- Outbound export writes nested dictionaries for dotted paths.
+- Missing vs `null` semantics are unchanged for deep paths.
+
+## 8) Input key style (`snake_case` vs `camelCase`)
+
+Configure inbound key style once at `SyncContainer`:
+- `.snakeCase` (default)
+- `.camelCase`
+
+The configured style is applied across attributes and relationship mapping, including deep paths.
+
+## 9) Blocked model property names
+
+For `@Syncable` models, SwiftSync emits compile-time diagnostics for blocked names:
+- `description`
+- `hashValue`
+
+Recommended replacements:
+- `descriptionText`
+- `hashValueRaw`
+
+Use `@RemoteKey` if backend keys still use the blocked names.

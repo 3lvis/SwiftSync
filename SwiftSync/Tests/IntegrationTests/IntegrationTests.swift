@@ -1006,6 +1006,56 @@ final class KeyStyleRecord {
 
 @Syncable
 @Model
+final class RemotePathContactRecord {
+    @Attribute(.unique) var id: Int
+    @RemotePath("profile.contact.email") var email: String?
+
+    init(id: Int, email: String?) {
+        self.id = id
+        self.email = email
+    }
+}
+
+@Syncable
+@Model
+final class RemotePathCamelRecord {
+    @Attribute(.unique) var id: Int
+    @RemotePath("profile.contact_email") var contactEmail: String?
+
+    init(id: Int, contactEmail: String?) {
+        self.id = id
+        self.contactEmail = contactEmail
+    }
+}
+
+@Syncable
+@Model
+final class RemotePathOwner {
+    @Attribute(.unique) var id: Int
+    var fullName: String
+
+    init(id: Int, fullName: String) {
+        self.id = id
+        self.fullName = fullName
+    }
+}
+
+@Syncable
+@Model
+final class RemotePathIssue {
+    @Attribute(.unique) var id: Int
+    var title: String
+    @RemotePath("relationships.owner") var owner: RemotePathOwner?
+
+    init(id: Int, title: String, owner: RemotePathOwner? = nil) {
+        self.id = id
+        self.title = title
+        self.owner = owner
+    }
+}
+
+@Syncable
+@Model
 final class InferredTask {
     @Attribute(.unique) var id: Int
     var title: String
@@ -2817,6 +2867,166 @@ final class IntegrationTests: XCTestCase {
 
         tasks = try syncContainer.mainContext.fetch(FetchDescriptor<AutoTask>())
         XCTAssertEqual(Set(tasks[0].tags.map(\.id)), Set([2]))
+    }
+
+    @MainActor
+    func testSyncRemotePathScalarImportsDeepValueWithMissingAndNullSemantics() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let syncContainer = try SyncContainer(for: RemotePathContactRecord.self, configurations: configuration)
+
+        try await syncContainer.sync(
+            payload: [[
+                "id": 1,
+                "profile": [
+                    "contact": [
+                        "email": "first@example.com"
+                    ]
+                ]
+            ]],
+            as: RemotePathContactRecord.self
+        )
+
+        var rows = try syncContainer.mainContext.fetch(FetchDescriptor<RemotePathContactRecord>())
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0].email, "first@example.com")
+
+        try await syncContainer.sync(
+            payload: [["id": 1]],
+            as: RemotePathContactRecord.self
+        )
+
+        rows = try syncContainer.mainContext.fetch(FetchDescriptor<RemotePathContactRecord>())
+        XCTAssertEqual(rows[0].email, "first@example.com")
+
+        try await syncContainer.sync(
+            payload: [[
+                "id": 1,
+                "profile": [
+                    "contact": [
+                        "email": NSNull()
+                    ]
+                ]
+            ]],
+            as: RemotePathContactRecord.self
+        )
+
+        rows = try syncContainer.mainContext.fetch(FetchDescriptor<RemotePathContactRecord>())
+        XCTAssertNil(rows[0].email)
+    }
+
+    @MainActor
+    func testSyncRemotePathScalarRespectsContainerCamelCaseMode() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let syncContainer = try SyncContainer(
+            for: RemotePathCamelRecord.self,
+            inputKeyStyle: .camelCase,
+            configurations: configuration
+        )
+
+        try await syncContainer.sync(
+            payload: [[
+                "id": 1,
+                "profile": [
+                    "contactEmail": "camel@example.com"
+                ]
+            ]],
+            as: RemotePathCamelRecord.self
+        )
+
+        let rows = try syncContainer.mainContext.fetch(FetchDescriptor<RemotePathCamelRecord>())
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0].contactEmail, "camel@example.com")
+    }
+
+    @MainActor
+    func testSyncRemotePathToOneNestedRelationshipImportsAndClearsFromDeepPath() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let syncContainer = try SyncContainer(
+            for: RemotePathIssue.self,
+            RemotePathOwner.self,
+            configurations: configuration
+        )
+
+        try await syncContainer.sync(
+            payload: [[
+                "id": 1,
+                "title": "Issue 1",
+                "relationships": [
+                    "owner": [
+                        "id": 10,
+                        "full_name": "Alice"
+                    ]
+                ]
+            ]],
+            as: RemotePathIssue.self
+        )
+
+        var issues = try syncContainer.mainContext.fetch(FetchDescriptor<RemotePathIssue>())
+        XCTAssertEqual(issues.count, 1)
+        XCTAssertEqual(issues[0].owner?.id, 10)
+        XCTAssertEqual(issues[0].owner?.fullName, "Alice")
+
+        try await syncContainer.sync(
+            payload: [["id": 1, "title": "Issue 1 updated"]],
+            as: RemotePathIssue.self
+        )
+
+        issues = try syncContainer.mainContext.fetch(FetchDescriptor<RemotePathIssue>())
+        XCTAssertEqual(issues[0].owner?.id, 10)
+
+        try await syncContainer.sync(
+            payload: [[
+                "id": 1,
+                "title": "Issue 1 updated",
+                "relationships": [
+                    "owner": NSNull()
+                ]
+            ]],
+            as: RemotePathIssue.self
+        )
+
+        issues = try syncContainer.mainContext.fetch(FetchDescriptor<RemotePathIssue>())
+        XCTAssertNil(issues[0].owner)
+    }
+
+    func testSyncableMakeUsesRemotePathForScalarProperty() throws {
+        let payload = SyncPayload(
+            values: [
+                "id": 1,
+                "profile": [
+                    "contact": [
+                        "email": "from-make@example.com"
+                    ]
+                ]
+            ]
+        )
+
+        let row = try RemotePathContactRecord.make(from: payload)
+        XCTAssertEqual(row.email, "from-make@example.com")
+    }
+
+    @MainActor
+    func testSyncRemotePathScalarWithDirectContext() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RemotePathContactRecord.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 1,
+                "profile": [
+                    "contact": [
+                        "email": "direct@example.com"
+                    ]
+                ]
+            ]],
+            as: RemotePathContactRecord.self,
+            in: context
+        )
+
+        let rows = try context.fetch(FetchDescriptor<RemotePathContactRecord>())
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0].email, "direct@example.com")
     }
 
     func testSyncContainerBackgroundSaveVisibilityBehavior() async throws {

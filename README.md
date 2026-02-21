@@ -19,6 +19,7 @@ import SwiftSync
 ## Table of Contents
 
 - [Why SwiftSync](#why-swiftsync)
+- [Property Mapping Rollout](#property-mapping-rollout)
 - [Basic Example](#basic-example)
 - [Reactive Reads (SwiftUI)](#reactive-reads-swiftui)
 - [Scenario -> Way of Use](#scenario---way-of-use)
@@ -28,6 +29,7 @@ import SwiftSync
 - [FAQ](#faq)
 - [Advanced FAQ](docs/faq.md)
 - [Backend Contract](docs/backend-contract.md)
+- [Property Mapping Migration Notes](docs/property-mapping-migration-notes.md)
 - [API Reference](#api-reference)
 
 ## Why SwiftSync
@@ -39,6 +41,18 @@ Syncing JSON into a local store is repetitive:
 - avoid unnecessary writes
 
 SwiftSync handles that core flow so app code can stay focused on domain behavior.
+
+## Property Mapping Rollout
+
+Current defaults and behavior:
+- convention-first mapping is expected
+- inbound key style is configured once at `SyncContainer` (`.snakeCase` default, `.camelCase` optional)
+- acronym-aware snake mapping (`projectID` -> `project_id`, `remoteURL` -> `remote_url`)
+- deep-path import/export is supported via `@RemotePath("a.b.c")`
+- scalar coercions are deterministic; relationship FK linking remains strict
+
+Migration guide:
+- `docs/property-mapping-migration-notes.md`
 
 ## Basic Example
 
@@ -101,11 +115,13 @@ try await SwiftSync.sync(
 - exposes a shared `mainContext`
 - creates background contexts for sync work
 - observes background `ModelContext.didSave` and processes main-context pending changes
+- configures inbound key style once (`.snakeCase` default, `.camelCase` optional)
 
 ```swift
 let syncContainer = try await MainActor.run {
   try SyncContainer(
     for: User.self,
+    inputKeyStyle: .snakeCase, // default
     configurations: ModelConfiguration(isStoredInMemoryOnly: true)
   )
 }
@@ -540,7 +556,7 @@ final class ExternalMappedUser {
 }
 ```
 
-### Custom export mapping
+### Custom property mapping (import + export)
 
 ```swift
 @Syncable
@@ -559,6 +575,11 @@ final class Account {
   }
 }
 ```
+
+Notes:
+- `@RemoteKey` and `@RemotePath` affect inbound sync mapping and export mapping.
+- `@RemotePath("a.b.c")` reads/writes nested payload paths.
+- Deep paths are resolved from nested dictionaries and keep normal missing/null semantics.
 
 ## Exporting JSON
 
@@ -687,6 +708,23 @@ Relationship FK linking is strict by type.
 - `company_id: 10` links to `Int` identity `10`.
 - `company_id: "10"` does not coerce to `Int` for relationship linking.
 - Scalar attribute coercions are still supported for non-relationship fields.
+
+Current scalar coercions include:
+- parseable string -> `Int`, `Double`, `Float`, `Decimal`
+- numeric -> `Int`, `Double`, `Float`, `Decimal`
+- string/0/1 numeric -> `Bool`
+- string -> `UUID`, `URL`
+- scalar -> `String` for common primitives (`Int`, `Double`, `Decimal`, `Bool`, `UUID`, `URL`)
+
+Relationship FK matching stays strict (`strictValue`) even when scalar coercions are available.
+
+### Are any model property names blocked?
+
+Yes for `@Syncable` models, SwiftSync emits compile-time diagnostics for:
+- `description` (rename to `descriptionText`)
+- `hashValue` (rename to `hashValueRaw`)
+
+If your API still uses those payload keys, use `@RemoteKey` on the renamed property.
 
 ### Can I control relationship insert/update/delete work per sync call?
 

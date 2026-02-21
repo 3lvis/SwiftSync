@@ -85,10 +85,8 @@ final class Tag {
 final class Task {
     @Attribute(.unique) var id: String
 
-    @RemoteKey("project_id")
     var projectID: String
 
-    @RemoteKey("assignee_id")
     var assigneeID: String?
 
     var title: String
@@ -141,10 +139,8 @@ final class Task {
 final class Comment {
     @Attribute(.unique) var id: String
 
-    @RemoteKey("task_id")
     var taskID: String
 
-    @RemoteKey("author_user_id")
     var authorUserID: String
 
     var body: String

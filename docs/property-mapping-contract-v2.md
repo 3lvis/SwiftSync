@@ -10,6 +10,7 @@ This contract defines current behavior for:
 - relationship key conventions
 - container-level input key style
 - export key emission contract
+- scalar type coercion policy
 
 It also marks deferred items that are planned but not part of this phase.
 
@@ -62,6 +63,11 @@ Dispatch order for relationships:
 1. if FK key is present, process FK path
 2. else if nested key is present, process nested object path
 
+Deep-path behavior:
+- dotted keys (for example `relationships.owner`) are resolved against nested dictionaries on import.
+- deep-path lookup uses the same key-style candidate pipeline (`snakeCase`/`camelCase`) as flat keys.
+- nested relationship payload processing keeps the parent sync key-style configuration.
+
 ## Null and Missing Semantics
 
 - Missing key: no change.
@@ -78,6 +84,14 @@ Relationship operation flags still gate insert/update/delete behavior.
 - FK parsing is strict for relationship IDs.
 - Unknown FK references are soft no-ops (no placeholder creation, no forced clear).
 
+## Reserved Name Diagnostics
+
+For `@Syncable` models, SwiftSync emits compile-time diagnostics for blocked names:
+- `description` (suggested replacement: `descriptionText`)
+- `hashValue` (suggested replacement: `hashValueRaw`)
+
+When payload keys still use blocked names, map them with `@RemoteKey`.
+
 ## Export Key Contract
 
 Export key precedence:
@@ -93,8 +107,23 @@ Defaults:
 Round-trip expectation:
 - if import/export use matching conventions and no divergent overrides, exported keys match expected API keys.
 
+## Scalar Coercion Matrix
+
+Supported scalar coercions on inbound attribute reads include:
+- string -> numeric (`Int`, `Double`, `Float`, `Decimal`) when parseable
+- integer/number -> `Double`, `Float`, `Decimal`
+- number -> `Int` (truncating numeric conversion)
+- string -> `Bool` (`true/false`, `1/0`, `yes/no`)
+- numeric `0/1` -> `Bool`
+- string -> `UUID`
+- string -> `URL`
+- `UUID`/`URL`/numeric/bool/decimal -> `String`
+- string/number -> `Date` via parser and unix timestamp handling
+
+Strict reads (`strictValue`, relationship FK linking) remain non-coercive by design.
+
 ## Deferred (Later Phases)
 
-- Full deep-path import symmetry for scalar attributes (export already supports deep-path emission).
-- Additional coercion matrix hardening beyond current conversions.
-- Reserved-name diagnostics expansion.
+- Deep-path import test expansion for additional to-many nested relationship variants.
+- Additional coercion matrix hardening beyond the current deterministic set.
+- Reserved-name diagnostics expansion if new SwiftData/Swift collisions are identified.

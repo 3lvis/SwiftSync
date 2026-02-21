@@ -4,14 +4,34 @@ This is the implementation plan for improving SwiftSync property mapping using t
 
 ## Status (2026-02-21)
 
-Completed in current implementation pass:
+## Progress Checklist
+
+- [x] Step 1: Define Mapping Contract v2
+- [x] Step 2: Build Inflection Engine v2
+- [x] Step 3: Unify Key Resolution Across Attributes and Relationships
+- [x] Step 4: Reserved Name Strategy (SwiftData-Specific)
+- [x] Step 5: Deep Mapping and Export Symmetry
+- [x] Step 6: Type Conversion Policy Hardening (initial deterministic matrix implemented)
+- [x] Step 7: Test Matrix Expansion (major planned cases implemented)
+- [x] Step 8: Demo + Documentation + Migration Rollout
+
+## Completed In Current Pass
+
 - Step 1 deliverable: `docs/property-mapping-contract-v2.md`
-- Step 2 initial implementation: acronym-aware inflection + container-level input key style (`.snakeCase` default, `.camelCase` optional)
-- Step 7 initial subset: tests for acronym mapping and container key style behavior (attributes + relationship FK keys)
+- Step 2 implementation: acronym-aware inflection + container-level input key style (`.snakeCase` default, `.camelCase` optional)
+- Step 3 implementation: unified key resolution pipeline for attributes/relationships, including deep-path key lookup and nested payload key-style propagation
+- Step 4 implementation: compile-time diagnostics for blocked model property names (`description`, `hashValue`) in `@Syncable` macro expansion
+- Step 5 implementation: `@RemotePath` deep import/export symmetry for scalar attributes and to-one nested relationship paths
+- Step 6 initial implementation: deterministic scalar coercion matrix codified in `SyncPayload` (while preserving strict relationship FK typing)
+- Step 7 expanded coverage: acronym mapping, key-style modes, deep-path scalar/relationship mapping, export acronym normalization, and coercion matrix tests
+- Step 8 partial rollout: demo models cleaned to remove now-redundant `@RemoteKey` annotations where convention mapping is now sufficient
+- Step 8 migration handoff: `docs/property-mapping-migration-notes.md` with before/after examples
+- Step 8 release summary: README section `Property Mapping Rollout`
 
 ## Goal
 
 Make mapping behavior predictable, convention-first, and low-boilerplate:
+
 - fewer required `@RemoteKey` annotations
 - consistent snake_case/camelCase handling
 - safer handling for reserved property names in SwiftData models
@@ -22,16 +42,20 @@ Make mapping behavior predictable, convention-first, and low-boilerplate:
 ## Current Findings We Must Address
 
 1. Reserved names in SwiftData models:
+
 - `description` is not allowed in `@Model`.
 - `hashValue` is problematic/ambiguous in `@Model`.
 
 2. Inflection gap:
+
 - Current snake conversion is naive for acronyms (`projectID` can become `project_i_d`), causing unnecessary `@RemoteKey` usage.
 
 3. Mapping consistency gaps:
+
 - Attribute, FK, nested relationship, and deep-path behavior should share one coherent key-resolution policy.
 
 4. Input style configuration:
+
 - Inbound key style should be configured once at `SyncContainer` level.
 - Supported modes should be only:
 - `.snakeCase` (default)
@@ -40,16 +64,19 @@ Make mapping behavior predictable, convention-first, and low-boilerplate:
 ## Scope and Principles
 
 What we keep from legacy:
+
 - convention-first mapping
 - missing key = no-op, explicit `null` = clear
 - FK conventions (`*_id`, `*_ids`)
 - strict relationship FK typing
 
 What we do not copy blindly:
+
 - Objective-C/Core Data internals
 - legacy reserved-word list that does not apply to SwiftData
 
 Core principle:
+
 - "absent = ignore" applies to payload fields, not to unresolved model mapping.
 - If model mapping cannot be resolved safely, fail fast with actionable diagnostics.
 
@@ -58,6 +85,7 @@ Core principle:
 ## Step 1: Define Mapping Contract v2
 
 Deliver a single written contract for inbound/outbound mapping precedence:
+
 - precedence order for keys (`RemotePath`, `RemoteKey`, convention candidates)
 - null/missing semantics
 - deep-path behavior
@@ -67,25 +95,32 @@ Deliver a single written contract for inbound/outbound mapping precedence:
 - export key contract (which outbound keys are emitted by default and when overrides apply)
 
 Exit criteria:
+
 - approved spec document used as source of truth for implementation and tests.
 
 ## Step 2: Build Inflection Engine v2
 
-Replace naive inflection with acronym-aware normalization:
+Replace naive inflection with acronym-aware normalization for key candidates:
+
 - `projectID` -> `project_id`
+- `projectId` -> `project_id`
 - `remoteURL` -> `remote_url`
+- `remoteUrl` -> `remote_url`
 - `uuidValue` -> `uuid_value`
 
 Apply inflection based on `SyncContainer` input style mode:
+
 - `.snakeCase` mode resolves normalized snake keys
 - `.camelCase` mode resolves camel keys
 
 Exit criteria:
+
 - core inflection utility introduced and used by mapping paths.
 
 ## Step 3: Unify Key Resolution Across Attributes and Relationships
 
 Implement one shared key-resolution pipeline used by:
+
 - scalar attributes
 - to-one FK mapping
 - to-many FK mapping
@@ -95,21 +130,25 @@ Preserve strict FK typing for relationships.
 Ensure this pipeline reads `SyncContainer` input style once and applies consistently.
 
 Exit criteria:
+
 - no divergent key-resolution rules between scalar and relationship paths unless explicitly documented.
 
 ## Step 4: Reserved Name Strategy (SwiftData-Specific)
 
 Introduce a clear policy for blocked/sensitive model property names:
+
 - enforce known blocked names (`description`, `hashValue`) with compile-time diagnostics where possible
 - document canonical alternatives (`descriptionText`, etc.)
 - keep remote payload mapping seamless via `@RemoteKey`/convention
 
 Exit criteria:
+
 - reserved-name behavior is documented, validated, and discoverable in error messages.
 
 ## Step 5: Deep Mapping and Export Symmetry
 
 Align `@RemotePath` behavior for import/export:
+
 - nested attribute paths
 - nested relationship paths
 - explicit null handling through deep paths
@@ -117,11 +156,13 @@ Align `@RemotePath` behavior for import/export:
 - export behavior must support deterministic round-trip with the chosen API contract
 
 Exit criteria:
+
 - deep-path import and export behavior is symmetric and covered by tests.
 
 ## Step 6: Type Conversion Policy Hardening
 
 Codify and test a coercion matrix:
+
 - scalar coercions that are supported
 - relationship FK conversions that remain strict
 - date parsing behavior and fallback policy
@@ -129,11 +170,13 @@ Codify and test a coercion matrix:
 Add only conversions that are deterministic and safe.
 
 Exit criteria:
+
 - conversion matrix is documented and backed by tests.
 
 ## Step 7: Test Matrix Expansion (Legacy-Parity-Informed)
 
 Add focused tests for:
+
 - acronym normalization candidates
 - reserved-name diagnostics
 - missing vs null semantics
@@ -144,21 +187,25 @@ Add focused tests for:
 - container-level style mode behavior (`snakeCase` default, `camelCase` mode)
 
 Exit criteria:
+
 - regression suite covers all contract-critical mapping paths.
 
 ## Step 8: Demo + Documentation + Migration Rollout
 
 Update demo models/payloads/docs to reflect new defaults:
+
 - remove no-longer-needed `@RemoteKey` where conventions now cover mapping
 - keep explicit keys where domain naming intentionally diverges
 - publish migration notes with before/after examples
 
 Exit criteria:
+
 - demo compiles/tests pass, docs match runtime behavior, migration guidance is published.
 
 ## Implementation Order Recommendation
 
 Run steps in this order:
+
 1. Step 1
 2. Step 2
 3. Step 3

@@ -2,6 +2,7 @@ import Foundation
 import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
+import SwiftDiagnostics
 import SwiftCompilerPlugin
 
 private struct SyncedProperty {
@@ -17,6 +18,24 @@ private struct SyncedProperty {
     let isToManyRelationship: Bool
 }
 
+private struct ReservedModelPropertyNameDiagnostic: DiagnosticMessage {
+    let propertyName: String
+    let suggestedName: String
+
+    var message: String {
+        """
+        '\(propertyName)' is a blocked SwiftData/Swift property name for @Syncable models. \
+        Rename it to '\(suggestedName)' and map the API key with @RemoteKey("\(propertyName)").
+        """
+    }
+
+    var diagnosticID: MessageID {
+        MessageID(domain: "SwiftSync.SyncableMacro", id: "blocked-property-name-\(propertyName)")
+    }
+
+    var severity: DiagnosticSeverity { .error }
+}
+
 public struct SyncableMacro: ExtensionMacro {
     public static func expansion(
         of node: AttributeSyntax,
@@ -28,6 +47,8 @@ public struct SyncableMacro: ExtensionMacro {
         guard let classDecl = declaration.as(ClassDeclSyntax.self) else {
             return []
         }
+
+        emitBlockedNameDiagnostics(in: classDecl, context: context)
 
         let typeName = classDecl.name.text
         let properties = syncedProperties(from: classDecl)
@@ -134,6 +155,37 @@ public struct SyncableMacro: ExtensionMacro {
                 """
             )
         ]
+    }
+
+    private static let blockedPropertyNameSuggestions: [String: String] = [
+        "description": "descriptionText",
+        "hashValue": "hashValueRaw"
+    ]
+
+    private static func emitBlockedNameDiagnostics(
+        in classDecl: ClassDeclSyntax,
+        context: some MacroExpansionContext
+    ) {
+        for member in classDecl.memberBlock.members {
+            guard let variable = member.decl.as(VariableDeclSyntax.self),
+                variable.bindings.count == 1,
+                let binding = variable.bindings.first,
+                let pattern = binding.pattern.as(IdentifierPatternSyntax.self)
+            else {
+                continue
+            }
+
+            let propertyName = pattern.identifier.text
+            guard let suggestedName = blockedPropertyNameSuggestions[propertyName] else {
+                continue
+            }
+
+            let message = ReservedModelPropertyNameDiagnostic(
+                propertyName: propertyName,
+                suggestedName: suggestedName
+            )
+            context.diagnose(Diagnostic(node: Syntax(pattern.identifier), message: message))
+        }
     }
 
     private static func syncedProperties(from classDecl: ClassDeclSyntax) -> [SyncedProperty] {
@@ -612,6 +664,9 @@ public struct SyncableMacro: ExtensionMacro {
     private static func syncInputKey(for property: SyncedProperty) -> String {
         if let primaryKeyRemoteKey = property.primaryKeyRemoteKey, !primaryKeyRemoteKey.isEmpty {
             return primaryKeyRemoteKey
+        }
+        if let remotePath = property.remotePath, !remotePath.isEmpty {
+            return remotePath
         }
         if let remoteKey = property.remoteKey, !remoteKey.isEmpty {
             return remoteKey

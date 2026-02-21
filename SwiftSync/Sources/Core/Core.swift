@@ -321,7 +321,7 @@ public func syncApplyToOneNestedObject<Owner, Related: SyncUpdatableModel>(
     guard let nestedValues: [String: Any] = payload.strictValue(for: key) else {
         return false
     }
-    let nestedPayload = SyncPayload(values: nestedValues)
+    let nestedPayload = SyncPayload(values: nestedValues, keyStyle: payload.keyStyle)
     var changed = false
     let relatedRows = try context.fetch(FetchDescriptor<Related>())
     var relatedByID: [String: Related] = Dictionary(
@@ -420,7 +420,7 @@ public func syncApplyToManyNestedObjects<Owner, Related: SyncUpdatableModel>(
     var desired: [Related] = []
     var desiredIDs: Set<PersistentIdentifier> = []
     for nestedValue in nestedValues {
-        let nestedPayload = SyncPayload(values: nestedValue)
+        let nestedPayload = SyncPayload(values: nestedValue, keyStyle: payload.keyStyle)
         var resolved: Related?
 
         if let nestedIdentity = resolveIdentity(from: nestedPayload, model: Related.self),
@@ -581,14 +581,41 @@ public enum ExportKeyStyle: Sendable {
     private func toSnakeCase(_ value: String) -> String {
         guard !value.isEmpty else { return value }
         var output = ""
-        for character in value {
-            let scalarString = String(character)
-            if scalarString == scalarString.uppercased(), scalarString != scalarString.lowercased(), !output.isEmpty {
-                output.append("_")
+        let scalars = Array(value.unicodeScalars)
+        for (index, scalar) in scalars.enumerated() {
+            let current = scalarClass(scalar)
+            if index > 0, current == .upper {
+                let previous = scalarClass(scalars[index - 1])
+                let next = index + 1 < scalars.count ? scalarClass(scalars[index + 1]) : nil
+                let startsNewWord = previous == .lower || previous == .digit
+                let endsAcronym = previous == .upper && next == .lower
+                if (startsNewWord || endsAcronym), output.last != "_" {
+                    output.append("_")
+                }
             }
-            output.append(scalarString.lowercased())
+            output.append(String(scalar).lowercased())
         }
         return output
+    }
+
+    private func scalarClass(_ scalar: UnicodeScalar) -> ScalarClass {
+        if CharacterSet.uppercaseLetters.contains(scalar) {
+            return .upper
+        }
+        if CharacterSet.lowercaseLetters.contains(scalar) {
+            return .lower
+        }
+        if CharacterSet.decimalDigits.contains(scalar) {
+            return .digit
+        }
+        return .other
+    }
+
+    private enum ScalarClass {
+        case upper
+        case lower
+        case digit
+        case other
     }
 }
 
@@ -734,12 +761,14 @@ public struct SyncPayload {
     }
 
     public func contains(_ key: String) -> Bool {
-        candidateKeys(for: key).contains { values[$0] != nil }
+        candidateKeys(for: key).contains { candidate in
+            rawValue(for: candidate) != nil
+        }
     }
 
     public func value<T>(for key: String, as type: T.Type = T.self) -> T? {
         for candidate in candidateKeys(for: key) {
-            guard let raw = values[candidate] else { continue }
+            guard let raw = rawValue(for: candidate) else { continue }
             if let value = cast(raw, as: T.self) {
                 return value
             }
@@ -749,7 +778,7 @@ public struct SyncPayload {
 
     public func strictValue<T>(for key: String, as type: T.Type = T.self) -> T? {
         for candidate in candidateKeys(for: key) {
-            guard let raw = values[candidate] else { continue }
+            guard let raw = rawValue(for: candidate) else { continue }
             if let value = raw as? T {
                 return value
             }
@@ -819,14 +848,37 @@ public struct SyncPayload {
 
     private func containsCandidateValue(for key: String) -> Bool {
         candidateKeys(for: key).contains { candidate in
-            values.keys.contains(candidate)
+            rawValue(for: candidate) != nil
         }
     }
 
     private func isExplicitNull(for key: String) -> Bool {
         candidateKeys(for: key).contains { candidate in
-            values[candidate] is NSNull
+            rawValue(for: candidate) is NSNull
         }
+    }
+
+    private func rawValue(for keyPath: String) -> Any? {
+        if let direct = values[keyPath] {
+            return direct
+        }
+
+        let segments = keyPath.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
+        guard segments.count > 1 else { return nil }
+
+        var current: Any = values
+        for segment in segments {
+            if let dictionary = current as? [String: Any], let next = dictionary[segment] {
+                current = next
+                continue
+            }
+            if let dictionary = current as? NSDictionary, let next = dictionary[segment] {
+                current = next
+                continue
+            }
+            return nil
+        }
+        return current
     }
 
     private func defaultValueForNull<T>(as type: T.Type) -> T? {
@@ -950,19 +1002,98 @@ public struct SyncPayload {
             if let double = raw as? Double {
                 return Int(double) as? T
             }
+            if let number = raw as? NSNumber {
+                return number.intValue as? T
+            }
         }
 
         if T.self == String.self {
             if let int = raw as? Int {
                 return String(int) as? T
             }
+            if let double = raw as? Double {
+                return String(double) as? T
+            }
+            if let decimal = raw as? Decimal {
+                return NSDecimalNumber(decimal: decimal).stringValue as? T
+            }
+            if let bool = raw as? Bool {
+                return String(bool) as? T
+            }
+            if let url = raw as? URL {
+                return url.absoluteString as? T
+            }
             if let uuid = raw as? UUID {
                 return uuid.uuidString as? T
             }
         }
 
+        if T.self == Bool.self {
+            if let int = raw as? Int {
+                if int == 1 { return true as? T }
+                if int == 0 { return false as? T }
+            }
+            if let number = raw as? NSNumber {
+                if number.intValue == 1 { return true as? T }
+                if number.intValue == 0 { return false as? T }
+            }
+            if let string = raw as? String {
+                switch string.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+                case "true", "1", "yes":
+                    return true as? T
+                case "false", "0", "no":
+                    return false as? T
+                default:
+                    break
+                }
+            }
+        }
+
         if T.self == UUID.self, let string = raw as? String, let value = UUID(uuidString: string) {
             return value as? T
+        }
+
+        if T.self == URL.self, let string = raw as? String, let value = URL(string: string) {
+            return value as? T
+        }
+
+        if T.self == Double.self {
+            if let string = raw as? String, let value = Double(string) {
+                return value as? T
+            }
+            if let int = raw as? Int {
+                return Double(int) as? T
+            }
+            if let number = raw as? NSNumber {
+                return number.doubleValue as? T
+            }
+        }
+
+        if T.self == Float.self {
+            if let string = raw as? String, let value = Float(string) {
+                return value as? T
+            }
+            if let int = raw as? Int {
+                return Float(int) as? T
+            }
+            if let number = raw as? NSNumber {
+                return number.floatValue as? T
+            }
+        }
+
+        if T.self == Decimal.self {
+            if let string = raw as? String, let value = Decimal(string: string, locale: Locale(identifier: "en_US_POSIX")) {
+                return value as? T
+            }
+            if let int = raw as? Int {
+                return Decimal(int) as? T
+            }
+            if let double = raw as? Double {
+                return NSDecimalNumber(value: double).decimalValue as? T
+            }
+            if let number = raw as? NSNumber {
+                return number.decimalValue as? T
+            }
         }
 
         if T.self == Date.self {
