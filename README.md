@@ -164,6 +164,36 @@ Descending or mixed sort order:
 var tasks: [Task]
 ```
 
+Parent-scoped query shorthand:
+
+```swift
+@SyncQuery(
+  Comment.self,
+  parent: task,
+  in: syncContainer,
+  sortBy: [SortDescriptor(\Comment.id)]
+)
+var comments: [Comment]
+```
+
+If parent inference is ambiguous, pass the relationship explicitly:
+
+```swift
+@SyncQuery(
+  Ticket.self,
+  parent: user,
+  parentRelationship: \.assignee,
+  in: syncContainer,
+  sortBy: [SortDescriptor(\Ticket.id)]
+)
+var assignedTickets: [Ticket]
+```
+
+Keep using `predicate` when parent-scoped query is not the right shape:
+- many-to-many membership filters (for example `task.tags.contains(...)`)
+- screens that only have scalar IDs (no parent model instance)
+- non-parent filters (for example `assigneeID == userID`)
+
 ## Scenario -> Way of Use
 
 ### Scenario: payload only contains children for one parent

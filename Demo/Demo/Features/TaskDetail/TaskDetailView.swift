@@ -3,25 +3,24 @@ import SwiftSync
 import SwiftUI
 
 struct TaskDetailView: View {
-    let taskID: String
+    let task: Task
     let syncContainer: SyncContainer
     @ObservedObject var syncEngine: DemoSyncEngine
 
-    @SyncModel private var task: Task?
+    @SyncModel private var taskModel: Task?
     @SyncQuery private var tags: [Tag]
     @SyncQuery private var comments: [Comment]
     @State private var hasTriggeredInitialSync = false
 
-    init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
-        self.taskID = taskID
+    init(task: Task, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
+        self.task = task
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
 
-        _task = SyncModel(Task.self, id: taskID, in: syncContainer)
+        let taskID = task.id
 
-        let predicate = #Predicate<Comment> { row in
-            row.taskID == taskID
-        }
+        _taskModel = SyncModel(Task.self, id: taskID, in: syncContainer)
+
         let tagsPredicate = #Predicate<Tag> { tag in
             tag.tasks.contains { $0.id == taskID }
         }
@@ -34,7 +33,7 @@ struct TaskDetailView: View {
         )
         _comments = SyncQuery(
             Comment.self,
-            predicate: predicate,
+            parent: task,
             in: syncContainer,
             sortBy: [
                 SortDescriptor(\Comment.createdAt, order: .reverse),
@@ -47,15 +46,15 @@ struct TaskDetailView: View {
     var body: some View {
         List {
             Section("Task") {
-                if let task {
-                    Text(task.title)
+                if let taskModel {
+                    Text(taskModel.title)
                         .font(.title3)
-                    Text("State: \(task.state)")
-                    Text("Priority: \(task.priority)")
-                    if let assignee = task.assignee?.displayName {
+                    Text("State: \(taskModel.state)")
+                    Text("Priority: \(taskModel.priority)")
+                    if let assignee = taskModel.assignee?.displayName {
                         Text("Assignee: \(assignee)")
                     }
-                    if let dueDate = task.dueDate {
+                    if let dueDate = taskModel.dueDate {
                         Text("Due: \(dueDate.formatted(date: .abbreviated, time: .omitted))")
                     }
                 } else {
@@ -65,12 +64,12 @@ struct TaskDetailView: View {
             }
 
             Section("Description") {
-                Text(task?.descriptionText ?? "")
+                Text(taskModel?.descriptionText ?? "")
                     .font(.body)
                     .foregroundStyle(.secondary)
             }
 
-            if task != nil {
+            if taskModel != nil {
                 Section("Tags") {
                     if tags.isEmpty {
                         Text("No tags")
@@ -104,16 +103,16 @@ struct TaskDetailView: View {
                 }
             }
         }
-        .navigationTitle(task?.title ?? "Task")
+        .navigationTitle(taskModel?.title ?? "Task")
         .refreshable {
-            await syncEngine.syncTaskDetail(taskID: taskID)
-            await syncEngine.syncTaskComments(taskID: taskID)
+            await syncEngine.syncTaskDetail(taskID: task.id)
+            await syncEngine.syncTaskComments(taskID: task.id)
         }
         .task {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
-            await syncEngine.syncTaskDetail(taskID: taskID)
-            await syncEngine.syncTaskComments(taskID: taskID)
+            await syncEngine.syncTaskDetail(taskID: task.id)
+            await syncEngine.syncTaskComments(taskID: task.id)
         }
     }
 }

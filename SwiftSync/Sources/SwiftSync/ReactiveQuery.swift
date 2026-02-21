@@ -4,12 +4,13 @@ import Foundation
 import SwiftData
 import SwiftUI
 
-private final class SyncQueryObserver<Model: PersistentModel>: ObservableObject {
+private final class SyncQueryObserver<Model: PersistentModel>: ObservableObject, @unchecked Sendable {
     @Published var rows: [Model] = []
 
     private let syncContainer: SyncContainer
     private let predicate: Predicate<Model>?
     private let sortBy: [SortDescriptor<Model>]
+    private let postFetchFilter: ((Model) -> Bool)?
     private let observedModelTypeNames: Set<String>
     private let animation: Animation?
     private var notificationToken: NSObjectProtocol?
@@ -18,12 +19,14 @@ private final class SyncQueryObserver<Model: PersistentModel>: ObservableObject 
         syncContainer: SyncContainer,
         predicate: Predicate<Model>?,
         sortBy: [SortDescriptor<Model>],
+        postFetchFilter: ((Model) -> Bool)?,
         observedModelTypeNames: Set<String>,
         animation: Animation?
     ) {
         self.syncContainer = syncContainer
         self.predicate = predicate
         self.sortBy = sortBy
+        self.postFetchFilter = postFetchFilter
         self.observedModelTypeNames = observedModelTypeNames
         self.animation = animation
         installObserver()
@@ -73,7 +76,10 @@ private final class SyncQueryObserver<Model: PersistentModel>: ObservableObject 
             } else {
                 descriptor = FetchDescriptor(sortBy: sortBy)
             }
-            let resolved = try syncContainer.mainContext.fetch(descriptor)
+            var resolved = try syncContainer.mainContext.fetch(descriptor)
+            if let postFetchFilter {
+                resolved = resolved.filter(postFetchFilter)
+            }
             if let animation {
                 withAnimation(animation) {
                     rows = resolved
@@ -127,6 +133,7 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
             syncContainer: syncContainer,
             predicate: nil,
             sortBy: sortBy,
+            postFetchFilter: nil,
             observedModelTypeNames: Self.defaultObservedModelTypeNames(),
             animation: animation
         )
@@ -144,6 +151,44 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
             syncContainer: syncContainer,
             predicate: predicate,
             sortBy: sortBy,
+            postFetchFilter: nil,
+            observedModelTypeNames: Self.defaultObservedModelTypeNames(),
+            animation: animation
+        )
+    }
+
+    public init<Parent: PersistentModel>(
+        _ model: Model.Type,
+        parent: Parent,
+        in syncContainer: SyncContainer,
+        sortBy: [SortDescriptor<Model>] = [],
+        animation: Animation? = nil
+    ) {
+        _ = model
+        self.init(
+            syncContainer: syncContainer,
+            predicate: nil,
+            sortBy: sortBy,
+            postFetchFilter: Self.inferredParentFilter(parent: parent),
+            observedModelTypeNames: Self.defaultObservedModelTypeNames(),
+            animation: animation
+        )
+    }
+
+    public init<Parent: PersistentModel>(
+        _ model: Model.Type,
+        parent: Parent,
+        parentRelationship: ReferenceWritableKeyPath<Model, Parent?>,
+        in syncContainer: SyncContainer,
+        sortBy: [SortDescriptor<Model>] = [],
+        animation: Animation? = nil
+    ) {
+        _ = model
+        self.init(
+            syncContainer: syncContainer,
+            predicate: nil,
+            sortBy: sortBy,
+            postFetchFilter: Self.explicitParentFilter(parent: parent, relationship: parentRelationship),
             observedModelTypeNames: Self.defaultObservedModelTypeNames(),
             animation: animation
         )
@@ -153,6 +198,7 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
         syncContainer: SyncContainer,
         predicate: Predicate<Model>?,
         sortBy: [SortDescriptor<Model>],
+        postFetchFilter: ((Model) -> Bool)?,
         observedModelTypeNames: Set<String>,
         animation: Animation?
     ) {
@@ -161,6 +207,7 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
                 syncContainer: syncContainer,
                 predicate: predicate,
                 sortBy: sortBy,
+                postFetchFilter: postFetchFilter,
                 observedModelTypeNames: observedModelTypeNames,
                 animation: animation
             )
@@ -174,6 +221,28 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
         }
         return names
     }
+
+    private static func inferredParentFilter<Parent: PersistentModel>(
+        parent: Parent
+    ) -> (Model) -> Bool {
+        do {
+            let relationship = try SwiftSync.inferParentRelationship(for: Model.self, parent: Parent.self)
+            return explicitParentFilter(parent: parent, relationship: relationship)
+        } catch {
+            preconditionFailure("SyncQuery parent inference failed for \(Model.self): \(error)")
+        }
+    }
+
+    private static func explicitParentFilter<Parent: PersistentModel>(
+        parent: Parent,
+        relationship: ReferenceWritableKeyPath<Model, Parent?>
+    ) -> (Model) -> Bool {
+        let parentID = parent.persistentModelID
+        return { row in
+            row[keyPath: relationship]?.persistentModelID == parentID
+        }
+    }
+
 }
 
 public extension SyncQuery where Model: SyncModelable {
@@ -189,6 +258,7 @@ public extension SyncQuery where Model: SyncModelable {
             syncContainer: syncContainer,
             predicate: nil,
             sortBy: sortBy,
+            postFetchFilter: nil,
             observedModelTypeNames: Self.observedModelTypeNames(refreshOn: refreshOn),
             animation: animation
         )
@@ -207,6 +277,46 @@ public extension SyncQuery where Model: SyncModelable {
             syncContainer: syncContainer,
             predicate: predicate,
             sortBy: sortBy,
+            postFetchFilter: nil,
+            observedModelTypeNames: Self.observedModelTypeNames(refreshOn: refreshOn),
+            animation: animation
+        )
+    }
+
+    init<Parent: PersistentModel>(
+        _ model: Model.Type,
+        parent: Parent,
+        in syncContainer: SyncContainer,
+        sortBy: [SortDescriptor<Model>] = [],
+        refreshOn: [PartialKeyPath<Model>] = [],
+        animation: Animation? = nil
+    ) {
+        _ = model
+        self.init(
+            syncContainer: syncContainer,
+            predicate: nil,
+            sortBy: sortBy,
+            postFetchFilter: Self.inferredParentFilter(parent: parent),
+            observedModelTypeNames: Self.observedModelTypeNames(refreshOn: refreshOn),
+            animation: animation
+        )
+    }
+
+    init<Parent: PersistentModel>(
+        _ model: Model.Type,
+        parent: Parent,
+        parentRelationship: ReferenceWritableKeyPath<Model, Parent?>,
+        in syncContainer: SyncContainer,
+        sortBy: [SortDescriptor<Model>] = [],
+        refreshOn: [PartialKeyPath<Model>] = [],
+        animation: Animation? = nil
+    ) {
+        _ = model
+        self.init(
+            syncContainer: syncContainer,
+            predicate: nil,
+            sortBy: sortBy,
+            postFetchFilter: Self.explicitParentFilter(parent: parent, relationship: parentRelationship),
             observedModelTypeNames: Self.observedModelTypeNames(refreshOn: refreshOn),
             animation: animation
         )
@@ -253,9 +363,47 @@ public extension SyncQuery where Model: SyncQuerySortableModel {
             animation: animation
         )
     }
+
+    init<Parent: PersistentModel>(
+        _ model: Model.Type,
+        parent: Parent,
+        in syncContainer: SyncContainer,
+        sortBy: [PartialKeyPath<Model>],
+        refreshOn: [PartialKeyPath<Model>] = [],
+        animation: Animation? = nil
+    ) {
+        self.init(
+            model,
+            parent: parent,
+            in: syncContainer,
+            sortBy: Model.syncSortDescriptors(for: sortBy),
+            refreshOn: refreshOn,
+            animation: animation
+        )
+    }
+
+    init<Parent: PersistentModel>(
+        _ model: Model.Type,
+        parent: Parent,
+        parentRelationship: ReferenceWritableKeyPath<Model, Parent?>,
+        in syncContainer: SyncContainer,
+        sortBy: [PartialKeyPath<Model>],
+        refreshOn: [PartialKeyPath<Model>] = [],
+        animation: Animation? = nil
+    ) {
+        self.init(
+            model,
+            parent: parent,
+            parentRelationship: parentRelationship,
+            in: syncContainer,
+            sortBy: Model.syncSortDescriptors(for: sortBy),
+            refreshOn: refreshOn,
+            animation: animation
+        )
+    }
 }
 
-private final class SyncModelObserver<Model: PersistentModel & SyncModelable>: ObservableObject {
+private final class SyncModelObserver<Model: PersistentModel & SyncModelable>: ObservableObject, @unchecked Sendable {
     @Published var model: Model?
 
     private let syncContainer: SyncContainer

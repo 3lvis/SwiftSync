@@ -24,7 +24,7 @@ struct UsersTabView: View {
             List {
                 ForEach(users, id: \.id) { user in
                     NavigationLink {
-                        UserDetailView(userID: user.id, syncContainer: syncContainer, syncEngine: syncEngine)
+                        UserDetailView(user: user, syncContainer: syncContainer, syncEngine: syncEngine)
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(user.displayName)
@@ -55,27 +55,23 @@ struct UsersTabView: View {
 }
 
 private struct UserDetailView: View {
-    let userID: String
+    let user: User
     let syncContainer: SyncContainer
     @ObservedObject var syncEngine: DemoSyncEngine
 
-    @SyncModel private var user: User?
+    @SyncModel private var userModel: User?
     @SyncQuery private var tasks: [Task]
     @State private var hasTriggeredInitialSync = false
 
-    init(userID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
-        self.userID = userID
+    init(user: User, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
+        self.user = user
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
 
-        _user = SyncModel(User.self, id: userID, in: syncContainer)
-
-        let predicate = #Predicate<Task> { row in
-            row.assigneeID == userID
-        }
+        _userModel = SyncModel(User.self, id: user.id, in: syncContainer)
         _tasks = SyncQuery(
             Task.self,
-            predicate: predicate,
+            parent: user,
             in: syncContainer,
             sortBy: [
                 SortDescriptor(\Task.priority, order: .reverse),
@@ -88,11 +84,11 @@ private struct UserDetailView: View {
     var body: some View {
         List {
             Section {
-                if let user {
+                if let userModel {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(user.displayName)
+                        Text(userModel.displayName)
                             .font(.title3)
-                        Text(user.role)
+                        Text(userModel.role)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -105,7 +101,7 @@ private struct UserDetailView: View {
             Section("Assigned Tasks") {
                 ForEach(tasks, id: \.id) { task in
                     NavigationLink {
-                        TaskDetailView(taskID: task.id, syncContainer: syncContainer, syncEngine: syncEngine)
+                        TaskDetailView(task: task, syncContainer: syncContainer, syncEngine: syncEngine)
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(task.title)
@@ -118,14 +114,14 @@ private struct UserDetailView: View {
                 }
             }
         }
-        .navigationTitle(user?.displayName ?? "User")
+        .navigationTitle(userModel?.displayName ?? "User")
         .refreshable {
-            await syncEngine.syncUserTasks(userID: userID)
+            await syncEngine.syncUserTasks(userID: user.id)
         }
         .task {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
-            await syncEngine.syncUserTasks(userID: userID)
+            await syncEngine.syncUserTasks(userID: user.id)
         }
     }
 }

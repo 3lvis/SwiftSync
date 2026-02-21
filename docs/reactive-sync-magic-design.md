@@ -231,6 +231,31 @@ try await syncContainer.sync(
 var users: [User]
 ```
 
+Parent-scoped list:
+
+```swift
+@SyncQuery(
+  Comment.self,
+  parent: task,
+  in: syncContainer,
+  sortBy: [SortDescriptor(\Comment.createdAt, order: .reverse)]
+)
+var comments: [Comment]
+```
+
+Ambiguous parent mapping can be made explicit:
+
+```swift
+@SyncQuery(
+  Ticket.self,
+  parent: user,
+  parentRelationship: \.assignee,
+  in: syncContainer,
+  sortBy: [SortDescriptor(\Ticket.id)]
+)
+var assignedTickets: [Ticket]
+```
+
 Descending or mixed ordering still uses explicit `SortDescriptor` values:
 
 ```swift

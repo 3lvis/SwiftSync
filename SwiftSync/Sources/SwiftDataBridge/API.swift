@@ -3,6 +3,15 @@ import SwiftData
 import Core
 
 public extension SwiftSync {
+    static func inferParentRelationship<Model: PersistentModel, Parent: PersistentModel>(
+        for model: Model.Type,
+        parent: Parent.Type
+    ) throws -> ReferenceWritableKeyPath<Model, Parent?> {
+        _ = model
+        _ = parent
+        return try inferSingleParentRelationship(for: Model.self, parent: Parent.self).keyPath
+    }
+
     static func sync<Model: SyncUpdatableModel>(
         payload: [Any],
         as model: Model.Type,
@@ -146,13 +155,13 @@ public extension SwiftSync {
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         _ = model
-        let inferred = try inferSingleParentRelationship(for: Model.self, parent: Parent.self)
+        let inferred = try inferParentRelationship(for: Model.self, parent: Parent.self)
         try await sync(
             payload: payload,
             as: model,
             in: context,
             parent: parent,
-            parentRelationship: inferred.keyPath,
+            parentRelationship: inferred,
             identityPolicy: identityPolicy,
             inputKeyStyle: inputKeyStyle,
             missingRowPolicy: missingRowPolicy,

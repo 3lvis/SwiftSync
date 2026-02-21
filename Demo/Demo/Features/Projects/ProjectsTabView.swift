@@ -25,7 +25,7 @@ struct ProjectsTabView: View {
                 ForEach(projects, id: \.id) { project in
                     NavigationLink {
                         ProjectDetailView(
-                            projectID: project.id,
+                            project: project,
                             syncContainer: syncContainer,
                             syncEngine: syncEngine
                         )
@@ -61,27 +61,23 @@ struct ProjectsTabView: View {
 }
 
 private struct ProjectDetailView: View {
-    let projectID: String
+    let project: Project
     let syncContainer: SyncContainer
     @ObservedObject var syncEngine: DemoSyncEngine
 
-    @SyncModel private var project: Project?
+    @SyncModel private var projectModel: Project?
     @SyncQuery private var tasks: [Task]
     @State private var hasTriggeredInitialSync = false
 
-    init(projectID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
-        self.projectID = projectID
+    init(project: Project, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
+        self.project = project
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
 
-        _project = SyncModel(Project.self, id: projectID, in: syncContainer)
-
-        let predicate = #Predicate<Task> { row in
-            row.projectID == projectID
-        }
+        _projectModel = SyncModel(Project.self, id: project.id, in: syncContainer)
         _tasks = SyncQuery(
             Task.self,
-            predicate: predicate,
+            parent: project,
             in: syncContainer,
             sortBy: [
                 SortDescriptor(\Task.priority, order: .reverse),
@@ -94,11 +90,11 @@ private struct ProjectDetailView: View {
     var body: some View {
         List {
             Section {
-                if let project {
+                if let projectModel {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(project.name)
+                        Text(projectModel.name)
                             .font(.title3)
-                        Text("Status: \(project.status)")
+                        Text("Status: \(projectModel.status)")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -111,7 +107,7 @@ private struct ProjectDetailView: View {
             Section("Tasks") {
                 ForEach(tasks, id: \.id) { task in
                     NavigationLink {
-                        TaskDetailView(taskID: task.id, syncContainer: syncContainer, syncEngine: syncEngine)
+                        TaskDetailView(task: task, syncContainer: syncContainer, syncEngine: syncEngine)
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(task.title)
@@ -129,14 +125,14 @@ private struct ProjectDetailView: View {
                 }
             }
         }
-        .navigationTitle(project?.name ?? "Project")
+        .navigationTitle(projectModel?.name ?? "Project")
         .refreshable {
-            await syncEngine.syncProjectTasks(projectID: projectID)
+            await syncEngine.syncProjectTasks(projectID: project.id)
         }
         .task {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
-            await syncEngine.syncProjectTasks(projectID: projectID)
+            await syncEngine.syncProjectTasks(projectID: project.id)
         }
     }
 }

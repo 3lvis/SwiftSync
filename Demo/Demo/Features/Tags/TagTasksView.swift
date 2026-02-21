@@ -45,7 +45,7 @@ struct TagTasksView: View {
                 Section("Tasks") {
                     ForEach(tasks, id: \.id) { task in
                         NavigationLink {
-                            TaskDetailView(taskID: task.id, syncContainer: syncContainer, syncEngine: syncEngine)
+                            TaskDetailView(task: task, syncContainer: syncContainer, syncEngine: syncEngine)
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(task.title)

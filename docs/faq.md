@@ -127,3 +127,27 @@ Recommended replacements:
 - `hashValueRaw`
 
 Use `@RemoteKey` if backend keys still use the blocked names.
+
+## 10) `@SyncQuery` with `parent`
+
+`@SyncQuery` supports parent-scoped reads:
+
+```swift
+@SyncQuery(
+  Comment.self,
+  parent: task,
+  in: syncContainer,
+  sortBy: [SortDescriptor(\Comment.id)]
+)
+var comments: [Comment]
+```
+
+Inference rule is the same as parent sync:
+- exactly one to-one relationship to the parent type => inferred automatically
+- ambiguous (more than one) => pass `parentRelationship:` explicitly
+- none => fail fast with a clear diagnostic
+
+Use `predicate` instead when:
+- filtering by many-to-many membership
+- filtering by scalar FK values without a parent object instance
+- applying non-parent business filters
