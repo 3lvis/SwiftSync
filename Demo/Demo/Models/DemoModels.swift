@@ -175,11 +175,3 @@ final class Comment {
         self.author = author
     }
 }
-
-extension Task: GlobalParentScopedModel {
-    static var parentRelationship: ReferenceWritableKeyPath<Task, Project?> { \.project }
-}
-
-extension Comment: GlobalParentScopedModel {
-    static var parentRelationship: ReferenceWritableKeyPath<Comment, Task?> { \.task }
-}

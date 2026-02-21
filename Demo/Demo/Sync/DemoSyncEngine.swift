@@ -153,10 +153,10 @@ final class DemoSyncEngine: ObservableObject {
         )
     }
 
-    private func syncPayload<Model: ParentScopedModel>(
+    private func syncPayload<Model: SyncUpdatableModel, Parent: PersistentModel>(
         _ payload: [[String: Any]],
         as model: Model.Type,
-        parent: Model.SyncParent,
+        parent: Parent,
         missingRowPolicy: SyncMissingRowPolicy
     ) async throws {
         try await syncContainer.sync(
