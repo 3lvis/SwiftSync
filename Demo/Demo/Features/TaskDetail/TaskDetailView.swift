@@ -40,7 +40,7 @@ struct TaskDetailView: View {
                 SortDescriptor(\Comment.createdAt, order: .reverse),
                 SortDescriptor(\Comment.id)
             ],
-            refreshOn: [\.author]
+            refreshOn: [\.authorUser]
         )
     }
 
@@ -96,7 +96,7 @@ struct TaskDetailView: View {
                     ForEach(comments, id: \.id) { comment in
                         VStack(alignment: .leading, spacing: 4) {
                             Text(comment.body)
-                            Text("\(comment.author?.displayName ?? comment.authorUserID) · \(comment.createdAt.formatted(date: .numeric, time: .shortened))")
+                            Text("\(comment.authorUser?.displayName ?? comment.authorUserID) · \(comment.createdAt.formatted(date: .numeric, time: .shortened))")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

@@ -30,6 +30,26 @@ var descriptionText: String
 
 Why: local name (`descriptionText`) intentionally differs from payload key (`description`).
 
+If you control backend keys, prefer renaming payload key to convention and remove `@RemoteKey`:
+
+Before (backend key):
+
+```json
+{ "description": "..." }
+```
+
+After (backend key):
+
+```json
+{ "description_text": "..." }
+```
+
+Then model can stay convention-only:
+
+```swift
+var descriptionText: String
+```
+
 ## 3) Configure inbound key style once at container level
 
 Default snake_case:
@@ -81,3 +101,14 @@ Relationship IDs remain strict:
 - `company_id: "10"` does not link to `Int` identity
 
 Scalar attribute coercions are broader, but relationship FK matching still uses strict reads.
+
+## 7) Relationship naming to avoid explicit key mapping
+
+If backend sends `author_user_id`, prefer relationship/property names that map by convention:
+
+```swift
+var authorUserID: String
+var authorUser: User?
+```
+
+This avoids explicit `@RemoteKey("author_user_id")` on relationship fields.

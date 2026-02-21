@@ -24,7 +24,7 @@ This is the implementation plan for improving SwiftSync property mapping using t
 - Step 5 implementation: `@RemotePath` deep import/export symmetry for scalar attributes and to-one nested relationship paths
 - Step 6 initial implementation: deterministic scalar coercion matrix codified in `SyncPayload` (while preserving strict relationship FK typing)
 - Step 7 expanded coverage: acronym mapping, key-style modes, deep-path scalar/relationship mapping, export acronym normalization, and coercion matrix tests
-- Step 8 partial rollout: demo models cleaned to remove now-redundant `@RemoteKey` annotations where convention mapping is now sufficient
+- Step 8 rollout completion: demo models now rely on automatic convention mapping (no `@RemoteKey`/`@RemotePath` needed in demo models)
 - Step 8 migration handoff: `docs/property-mapping-migration-notes.md` with before/after examples
 - Step 8 release summary: README section `Property Mapping Rollout`
 

@@ -50,6 +50,7 @@ Current defaults and behavior:
 - acronym-aware snake mapping (`projectID` -> `project_id`, `remoteURL` -> `remote_url`)
 - deep-path import/export is supported via `@RemotePath("a.b.c")`
 - scalar coercions are deterministic; relationship FK linking remains strict
+- Demo models in this repo are now convention-only (custom remote mapping removed where avoidable)
 
 Migration guide:
 - `docs/property-mapping-migration-notes.md`

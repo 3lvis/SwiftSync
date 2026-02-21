@@ -91,7 +91,6 @@ final class Task {
 
     var title: String
 
-    @RemoteKey("description")
     var descriptionText: String
 
     var state: String
@@ -148,8 +147,7 @@ final class Comment {
     var updatedAt: Date
     var task: Task?
 
-    @RemoteKey("author_user_id")
-    var author: User?
+    var authorUser: User?
 
     init(
         id: String,
@@ -159,7 +157,7 @@ final class Comment {
         createdAt: Date,
         updatedAt: Date,
         task: Task? = nil,
-        author: User? = nil
+        authorUser: User? = nil
     ) {
         self.id = id
         self.taskID = taskID
@@ -168,6 +166,6 @@ final class Comment {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.task = task
-        self.author = author
+        self.authorUser = authorUser
     }
 }
