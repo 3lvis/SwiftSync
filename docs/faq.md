@@ -22,6 +22,11 @@ extension Child: GlobalParentScopedModel {
 }
 ```
 
+If you do not conform to `ParentScopedModel`, parent sync can still work through runtime relationship inference:
+- if exactly one to-one relationship from child -> parent type exists, SwiftSync uses it
+- if 0 or >1 candidates exist, SwiftSync throws and asks for explicit `parentRelationship`
+- inferred parent sync defaults to `identityPolicy = .global` unless you pass `.scopedByParent` in the call
+
 Important:
 - `@Attribute(.unique)` on raw `id` is a SwiftData store-level global uniqueness rule.
 - If you set that on a scoped entity, global uniqueness wins and scoped duplicates are not possible.

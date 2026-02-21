@@ -186,6 +186,8 @@ final class Note {
   @Relationship var user: User?
 }
 
+// Optional when this relationship is unambiguous.
+// Keep this extension when you want scoped identity by default for this model.
 extension Note: ParentScopedModel {
   static var parentRelationship: ReferenceWritableKeyPath<Note, User?> { \.user }
 }
@@ -208,6 +210,13 @@ try await SwiftSync.sync(
   parent: user
 )
 ```
+
+Notes:
+- This example keeps `ParentScopedModel`, so scoped identity is the default for `Note`.
+- If `Note` has exactly one to-one relationship to `User`, SwiftSync can infer it at runtime and you can omit `ParentScopedModel`.
+- If there are 0 or >1 candidate relationships to the same parent type, sync fails with a clear error and asks for explicit `parentRelationship`.
+- `identityPolicy` defaults to `.global` for inferred parent sync. Use `.scopedByParent` when duplicate child IDs across different parents are valid.
+- Inferred scoped example: `try await SwiftSync.sync(payload: payload, as: Note.self, in: context, parent: user, identityPolicy: .scopedByParent)`
 
 ### Scenario: to-one relationship by nested object
 
@@ -482,6 +491,7 @@ Identity selection order:
 Defaults:
 - `SyncUpdatableModel` -> `.global`
 - `ParentScopedModel` -> `.scopedByParent`
+- inferred parent sync (`sync(... parent: Parent)`) -> `.global` unless you pass `identityPolicy: .scopedByParent`
 
 If you need global behavior on a parent-scoped model, override it:
 
@@ -665,6 +675,7 @@ Yes, by default for `ParentScopedModel`.
 
 - Default identity policy is `.scopedByParent`.
 - Scoped sync diff/delete stays inside that parent scope.
+- In inferred parent sync (no `ParentScopedModel`), pass `identityPolicy: .scopedByParent` to get the same duplicate-ID-across-parents behavior.
 - If the child model has `@Attribute(.unique)` on raw `id`, SwiftData global uniqueness wins and duplicates across parents are not possible.
 
 ### How strict is foreign-key (`*_id`) relationship linking?
@@ -757,6 +768,16 @@ public extension SwiftSync {
     as model: Model.Type,
     in context: ModelContext,
     parent: Model.SyncParent,
+    missingRowPolicy: SyncMissingRowPolicy = .delete,
+    relationshipOperations: SyncRelationshipOperations = .all
+  ) async throws
+
+  static func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
+    payload: [Any],
+    as model: Model.Type,
+    in context: ModelContext,
+    parent: Parent,
+    identityPolicy: SyncIdentityPolicy = .global,
     missingRowPolicy: SyncMissingRowPolicy = .delete,
     relationshipOperations: SyncRelationshipOperations = .all
   ) async throws

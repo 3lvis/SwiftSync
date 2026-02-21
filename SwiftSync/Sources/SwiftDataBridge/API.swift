@@ -120,6 +120,51 @@ public extension SwiftSync {
         missingRowPolicy: SyncMissingRowPolicy = .delete,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
+        try await sync(
+            payload: payload,
+            as: model,
+            in: context,
+            parent: parent,
+            parentRelationship: Model.parentRelationship,
+            identityPolicy: Model.syncIdentityPolicy,
+            missingRowPolicy: missingRowPolicy,
+            relationshipOperations: relationshipOperations
+        )
+    }
+
+    static func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
+        payload: [Any],
+        as model: Model.Type,
+        in context: ModelContext,
+        parent: Parent,
+        identityPolicy: SyncIdentityPolicy = .global,
+        missingRowPolicy: SyncMissingRowPolicy = .delete,
+        relationshipOperations: SyncRelationshipOperations = .all
+    ) async throws {
+        _ = model
+        let inferred = try inferSingleParentRelationship(for: Model.self, parent: Parent.self)
+        try await sync(
+            payload: payload,
+            as: model,
+            in: context,
+            parent: parent,
+            parentRelationship: inferred.keyPath,
+            identityPolicy: identityPolicy,
+            missingRowPolicy: missingRowPolicy,
+            relationshipOperations: relationshipOperations
+        )
+    }
+
+    private static func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
+        payload: [Any],
+        as model: Model.Type,
+        in context: ModelContext,
+        parent: Parent,
+        parentRelationship: ReferenceWritableKeyPath<Model, Parent?>,
+        identityPolicy: SyncIdentityPolicy,
+        missingRowPolicy: SyncMissingRowPolicy,
+        relationshipOperations: SyncRelationshipOperations
+    ) async throws {
         let lease = await acquireSyncLease(for: context)
         _ = model
         do {
@@ -133,12 +178,12 @@ public extension SwiftSync {
             }
             let existing = try context.fetch(FetchDescriptor<Model>())
             let scopeRows = existing.filter {
-                $0[keyPath: Model.parentRelationship]?.persistentModelID == resolvedParent.persistentModelID
+                $0[keyPath: parentRelationship]?.persistentModelID == resolvedParent.persistentModelID
             }
 
             var index: [String: Model] = [:]
             var duplicates: [Model] = []
-            switch Model.syncIdentityPolicy {
+            switch identityPolicy {
             case .scopedByParent:
                 for row in scopeRows {
                     let key = scopedIdentityKey(
@@ -180,7 +225,7 @@ public extension SwiftSync {
                     continue
                 }
                 let key: String
-                switch Model.syncIdentityPolicy {
+                switch identityPolicy {
                 case .scopedByParent:
                     key = scopedIdentityKey(
                         from: identity,
@@ -192,8 +237,8 @@ public extension SwiftSync {
                 seenKeys.insert(key)
 
                 if let row = index[key] {
-                    if row[keyPath: Model.parentRelationship]?.persistentModelID != resolvedParent.persistentModelID {
-                        row[keyPath: Model.parentRelationship] = resolvedParent
+                    if row[keyPath: parentRelationship]?.persistentModelID != resolvedParent.persistentModelID {
+                        row[keyPath: parentRelationship] = resolvedParent
                         changed = true
                     }
                     if try row.apply(payloadModel) {
@@ -216,7 +261,7 @@ public extension SwiftSync {
                 }
 
                 let created = try Model.make(from: payloadModel)
-                created[keyPath: Model.parentRelationship] = resolvedParent
+                created[keyPath: parentRelationship] = resolvedParent
                 context.insert(created)
                 if relationshipOperations.contains(.insert),
                     let relationshipRow = created as? any SyncRelationshipUpdatableModel
@@ -239,7 +284,7 @@ public extension SwiftSync {
                 try throwIfCancelled()
                 for row in scopeRows {
                     let key: String
-                    switch Model.syncIdentityPolicy {
+                    switch identityPolicy {
                     case .scopedByParent:
                         key = scopedIdentityKey(
                             from: row[keyPath: Model.syncIdentity],
@@ -338,6 +383,57 @@ public extension SwiftSync {
     ) throws -> Parent? {
         let parents = try context.fetch(FetchDescriptor<Parent>())
         return parents.first { $0.persistentModelID == parent.persistentModelID }
+    }
+
+    private struct ParentRelationshipCandidate<Model: PersistentModel, Parent: PersistentModel> {
+        let name: String
+        let keyPath: ReferenceWritableKeyPath<Model, Parent?>
+    }
+
+    private static func inferSingleParentRelationship<Model: PersistentModel, Parent: PersistentModel>(
+        for model: Model.Type,
+        parent: Parent.Type
+    ) throws -> ParentRelationshipCandidate<Model, Parent> {
+        _ = model
+        _ = parent
+
+        var candidates: [ParentRelationshipCandidate<Model, Parent>] = []
+        for metadata in Model.schemaMetadata {
+            let metadataMirror = Mirror(reflecting: metadata)
+            let name = metadataMirror.children.first(where: { $0.label == "name" })?.value as? String ?? "<unknown>"
+            guard let keyPathAny = metadataMirror.children.first(where: { $0.label == "keypath" })?.value else {
+                continue
+            }
+            guard let keyPath = keyPathAny as? ReferenceWritableKeyPath<Model, Parent?> else {
+                continue
+            }
+            candidates.append(ParentRelationshipCandidate(name: name, keyPath: keyPath))
+        }
+
+        if candidates.isEmpty {
+            throw SyncError.invalidPayload(
+                model: String(describing: Model.self),
+                reason: """
+                Could not infer a parent relationship to \(String(describing: Parent.self)). \
+                Found 0 candidate to-one relationships. \
+                Add explicit ParentScopedModel.parentRelationship for this model.
+                """
+            )
+        }
+
+        if candidates.count > 1 {
+            let names = candidates.map(\.name).sorted().joined(separator: ", ")
+            throw SyncError.invalidPayload(
+                model: String(describing: Model.self),
+                reason: """
+                Ambiguous parent relationship to \(String(describing: Parent.self)). \
+                Found \(candidates.count) candidates: \(names). \
+                Add explicit ParentScopedModel.parentRelationship for this model.
+                """
+            )
+        }
+
+        return candidates[0]
     }
 
     private static func identityKey<ID: Hashable>(from identity: ID) -> String {

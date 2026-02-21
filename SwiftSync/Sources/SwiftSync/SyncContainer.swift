@@ -77,6 +77,26 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         )
     }
 
+    public func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
+        payload: [Any],
+        as model: Model.Type,
+        parent: Parent,
+        identityPolicy: SyncIdentityPolicy = .global,
+        missingRowPolicy: SyncMissingRowPolicy = .delete,
+        relationshipOperations: SyncRelationshipOperations = .all
+    ) async throws {
+        let context = makeBackgroundContext()
+        try await SwiftSync.sync(
+            payload: payload,
+            as: model,
+            in: context,
+            parent: parent,
+            identityPolicy: identityPolicy,
+            missingRowPolicy: missingRowPolicy,
+            relationshipOperations: relationshipOperations
+        )
+    }
+
     private func installDidSaveObserver() {
         NotificationCenter.default.addObserver(
             self,

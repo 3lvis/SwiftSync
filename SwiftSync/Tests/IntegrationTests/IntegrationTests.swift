@@ -992,6 +992,86 @@ final class DifferentContextConflictUser {
     }
 }
 
+@Syncable
+@Model
+final class InferredTask {
+    @Attribute(.unique) var id: Int
+    var title: String
+    @Relationship(inverse: \InferredComment.task)
+    var comments: [InferredComment]
+
+    init(id: Int, title: String, comments: [InferredComment] = []) {
+        self.id = id
+        self.title = title
+        self.comments = comments
+    }
+}
+
+@Syncable
+@Model
+final class InferredComment {
+    @Attribute(.unique) var id: Int
+    var text: String
+    var task: InferredTask?
+
+    init(id: Int, text: String, task: InferredTask? = nil) {
+        self.id = id
+        self.text = text
+        self.task = task
+    }
+}
+
+@Syncable
+@Model
+final class InferredOrphanRecord {
+    @Attribute(.unique) var id: Int
+    var text: String
+
+    init(id: Int, text: String) {
+        self.id = id
+        self.text = text
+    }
+}
+
+@Syncable
+@Model
+final class RoleUser {
+    @Attribute(.unique) var id: Int
+    var name: String
+    @Relationship(inverse: \RoleTicket.assignee)
+    var assignedTickets: [RoleTicket]
+    @Relationship(inverse: \RoleTicket.reviewer)
+    var reviewTickets: [RoleTicket]
+
+    init(
+        id: Int,
+        name: String,
+        assignedTickets: [RoleTicket] = [],
+        reviewTickets: [RoleTicket] = []
+    ) {
+        self.id = id
+        self.name = name
+        self.assignedTickets = assignedTickets
+        self.reviewTickets = reviewTickets
+    }
+}
+
+@Syncable
+@Model
+final class RoleTicket {
+    @Attribute(.unique) var id: Int
+    var title: String
+    var assignee: RoleUser?
+    var reviewer: RoleUser?
+
+    init(id: Int, title: String, assignee: RoleUser? = nil, reviewer: RoleUser? = nil) {
+        self.id = id
+        self.title = title
+        self.assignee = assignee
+        self.reviewer = reviewer
+    }
+}
+
 private actor ConcurrentRaceHooks {
     static let shared = ConcurrentRaceHooks()
 
@@ -2254,6 +2334,120 @@ final class IntegrationTests: XCTestCase {
     }
 
     @MainActor
+    func testParentSyncInfersSingleRelationshipWithoutParentScopedModelConformance() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: InferredTask.self, InferredComment.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let taskA = InferredTask(id: 1, title: "A")
+        let taskB = InferredTask(id: 2, title: "B")
+        context.insert(taskA)
+        context.insert(taskB)
+        try context.save()
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "text": "A-1"],
+                ["id": 2, "text": "A-2"]
+            ],
+            as: InferredComment.self,
+            in: context,
+            parent: taskA
+        )
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 3, "text": "B-3"]
+            ],
+            as: InferredComment.self,
+            in: context,
+            parent: taskB
+        )
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "text": "A-1 Updated"]
+            ],
+            as: InferredComment.self,
+            in: context,
+            parent: taskA
+        )
+
+        let rows = try context.fetch(FetchDescriptor<InferredComment>())
+        XCTAssertEqual(Set(rows.filter { $0.task?.id == 1 }.map(\.id)), Set([1]))
+        XCTAssertEqual(rows.first(where: { $0.id == 1 })?.text, "A-1 Updated")
+        XCTAssertEqual(Set(rows.filter { $0.task?.id == 2 }.map(\.id)), Set([3]))
+    }
+
+    @MainActor
+    func testParentSyncInferenceThrowsWhenNoRelationshipCandidateExists() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: InferredTask.self, InferredOrphanRecord.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let task = InferredTask(id: 1, title: "A")
+        context.insert(task)
+        try context.save()
+
+        var capturedError: Error?
+        do {
+            try await SwiftSync.sync(
+                payload: [["id": 1, "text": "orphan"]],
+                as: InferredOrphanRecord.self,
+                in: context,
+                parent: task
+            )
+        } catch {
+            capturedError = error
+        }
+
+        guard let syncError = capturedError as? SyncError else {
+            XCTFail("Expected SyncError, got: \(String(describing: capturedError))")
+            return
+        }
+        guard case .invalidPayload(_, let reason) = syncError else {
+            XCTFail("Expected invalidPayload, got: \(syncError)")
+            return
+        }
+        XCTAssertTrue(reason.contains("Found 0 candidate to-one relationships"), "Unexpected reason: \(reason)")
+        XCTAssertTrue(reason.contains("ParentScopedModel.parentRelationship"), "Unexpected reason: \(reason)")
+    }
+
+    @MainActor
+    func testParentSyncInferenceThrowsWhenRelationshipCandidatesAreAmbiguous() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: RoleUser.self, RoleTicket.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let user = RoleUser(id: 1, name: "U1")
+        context.insert(user)
+        try context.save()
+
+        var capturedError: Error?
+        do {
+            try await SwiftSync.sync(
+                payload: [["id": 10, "title": "T-10"]],
+                as: RoleTicket.self,
+                in: context,
+                parent: user
+            )
+        } catch {
+            capturedError = error
+        }
+
+        guard let syncError = capturedError as? SyncError else {
+            XCTFail("Expected SyncError, got: \(String(describing: capturedError))")
+            return
+        }
+        guard case .invalidPayload(_, let reason) = syncError else {
+            XCTFail("Expected invalidPayload, got: \(syncError)")
+            return
+        }
+        XCTAssertTrue(reason.contains("Ambiguous parent relationship"), "Unexpected reason: \(reason)")
+        XCTAssertTrue(reason.contains("assignee"), "Unexpected reason: \(reason)")
+        XCTAssertTrue(reason.contains("reviewer"), "Unexpected reason: \(reason)")
+    }
+
+    @MainActor
     private func runManyToManyObjectsScenario() async throws -> [Int: Set<Int>] {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: UserTagsByObjects.self, Tag.self, configurations: configuration)
@@ -2538,6 +2732,45 @@ final class IntegrationTests: XCTestCase {
 
         let secondMainRead = try mainContext.fetch(FetchDescriptor<User>())
         XCTAssertEqual(secondMainRead.first?.fullName, "Background Write")
+    }
+
+    @MainActor
+    func testSyncContainerInfersSingleParentRelationship() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let syncContainer = try SyncContainer(for: InferredTask.self, InferredComment.self, configurations: configuration)
+
+        let taskA = InferredTask(id: 1, title: "A")
+        let taskB = InferredTask(id: 2, title: "B")
+        syncContainer.mainContext.insert(taskA)
+        syncContainer.mainContext.insert(taskB)
+        try syncContainer.mainContext.save()
+
+        try await syncContainer.sync(
+            payload: [
+                ["id": 1, "text": "A-1"],
+                ["id": 2, "text": "A-2"]
+            ],
+            as: InferredComment.self,
+            parent: taskA
+        )
+        try await syncContainer.sync(
+            payload: [
+                ["id": 3, "text": "B-3"]
+            ],
+            as: InferredComment.self,
+            parent: taskB
+        )
+        try await syncContainer.sync(
+            payload: [
+                ["id": 1, "text": "A-1 Updated"]
+            ],
+            as: InferredComment.self,
+            parent: taskA
+        )
+
+        let rows = try syncContainer.mainContext.fetch(FetchDescriptor<InferredComment>())
+        XCTAssertEqual(Set(rows.filter { $0.task?.id == 1 }.map(\.id)), Set([1]))
+        XCTAssertEqual(Set(rows.filter { $0.task?.id == 2 }.map(\.id)), Set([3]))
     }
 
     @MainActor

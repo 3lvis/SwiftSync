@@ -1,185 +1,116 @@
 # Parent Scope Follow-up
 
-This document tracks what we removed now, and what still cannot be removed safely yet.
+This document explains current parent-scope behavior after the inference update.
 
-## Why This Exists
+## TL;DR
+
+Parent sync has two responsibilities:
+1. Attach child rows to the provided parent.
+2. Scope diff/delete to only that parent's children.
+
+SwiftSync now supports both styles:
+- inferred parent relationship when exactly one candidate exists
+- explicit `parentRelationship` when relationship choice is ambiguous
+
+## Current Behavior
 
 When you call:
 
 ```swift
-try await container.sync(payload, as: LineItem.self, parent: order)
-```
-
-your expectation is correct: SwiftSync should sync `LineItem` rows for that `order`.
-
-But parent sync has two jobs, not one:
-1. Attach created/updated child rows to the parent.
-2. Scope diff/delete to only that parent's children.
-
-`parentRelationship` is the single typed key path that tells SwiftSync how to do both safely.
-
-## Mental Model
-
-Think of parent sync as:
-1. "Which relationship field stores the parent on the child?"
-2. "Which existing rows are inside this parent scope?"
-3. "Apply upserts for payload rows."
-4. "If `missingRowPolicy == .delete`, delete only missing rows from that same scope."
-
-Without an explicit relationship key path, step 2 and step 4 can target the wrong rows.
-
-## Minimal Usage Today
-
-In many models, this is all you need:
-
-```swift
-extension Task: GlobalParentScopedModel {
-  static var parentRelationship: ReferenceWritableKeyPath<Task, Project?> { \.project }
-}
-```
-
-What you do not need anymore in this common case:
-- No `typealias SyncParent`.
-- No explicit `syncIdentityPolicy` override.
-
-## Real-World Scenarios
-
-### Scenario A: E-commerce Order and Line Items
-
-Models:
-- Parent: `Order`
-- Child: `LineItem`
-- Relationship: `LineItem.order`
-
-Sync call:
-
-```swift
 try await SwiftSync.sync(
-  payload: [
-    ["id": 1, "sku": "A-100", "qty": 2],
-    ["id": 2, "sku": "B-200", "qty": 1]
-  ],
-  as: LineItem.self,
+  payload: payload,
+  as: Child.self,
   in: context,
-  parent: order123
+  parent: parentObject
 )
 ```
 
-What should happen:
-1. Rows `1` and `2` are created/updated.
-2. Each row gets `lineItem.order = order123`.
-3. Delete pass (default `.delete`) only considers existing rows where `lineItem.order == order123`.
-4. Rows for `order999` are untouched.
+SwiftSync resolves the child->parent relationship using this rule:
+1. Find to-one relationships on `Child` that match the runtime parent type.
+2. If exactly 1 exists: use it automatically.
+3. If 0 exist: throw a typed `invalidPayload` error.
+4. If more than 1 exist: throw a typed `invalidPayload` error listing candidates.
 
-Why scoping matters:
-- If scoped delete accidentally ran against all `LineItem` rows, syncing one order could wipe other orders.
+No fallback guessing is used for ambiguous cases.
 
-### Scenario B: CRM Account and Contacts With Scoped Identity
+## Why This Matters
 
-Models:
-- Parent: `Account`
-- Child: `Contact`
-- Identity is scoped (`.scopedByParent`)
+With `missingRowPolicy: .delete`, parent sync must compute:
 
-Business rule:
-- Different accounts may both have `contact.id = 10` from different external systems.
+```text
+toDelete = (rows belonging to this parent scope) - (payload identities)
+```
 
-What scoped identity enables:
-- `(accountA, id: 10)` and `(accountB, id: 10)` can coexist.
-- Syncing account A does not rewrite or delete account B contact rows.
+If scope resolution is wrong, delete can target valid rows from another logical scope.
 
-### Scenario C: Global Identity That Moves a Child
+## Minimal Real-World Scenario
+
+### Case A: Single relationship (inference succeeds)
 
 Models:
-- Parent: `Warehouse`
-- Child: `ProductLocation`
-- Identity is global (`.global`)
-
-Behavior:
-1. Sync `id: 10` under warehouse A.
-2. Later sync same `id: 10` under warehouse B.
-3. Result is one row that now points to warehouse B.
-
-Why this is valid:
-- Global identity means "this child is unique across all parents."
-- Parent sync still needs explicit parent relationship to perform the reassignment intentionally.
-
-### Scenario D: Project Tasks With Ambiguous Relationships
-
-Models:
-- Parent: `Project`
-- Child: `Task`
-- Child has two references to `Project`:
-- `task.project` (owner)
-- `task.reviewProject` (secondary relation)
-
-If SwiftSync guessed:
-- It might attach using `reviewProject` instead of `project`.
-- Scoped delete could then diff on `reviewProject` and delete wrong tasks.
-
-Explicit declaration removes ambiguity:
 
 ```swift
-extension Task: ParentScopedModel {
-  static var parentRelationship: ReferenceWritableKeyPath<Task, Project?> { \.project }
+@Model final class Task {
+  @Attribute(.unique) var id: Int
+  var title: String
+  @Relationship(inverse: \Comment.task) var comments: [Comment]
+}
+
+@Model final class Comment {
+  @Attribute(.unique) var id: Int
+  var text: String
+  var task: Task?
 }
 ```
 
-### Scenario E: Restaurant Menus
+There is exactly one `Comment -> Task?` relationship (`task`), so sync can infer automatically.
+
+### Case B: Multiple relationships (explicit key path required)
 
 Models:
-- Parent: `Restaurant`
-- Child: `MenuItem`
 
-Daily sync payload for Restaurant A includes only today's active menu items.
+```swift
+@Model final class User {
+  @Attribute(.unique) var id: Int
+  var name: String
+}
 
-Desired result:
-- Remove stale items for Restaurant A.
-- Keep Restaurant B menu untouched.
+@Model final class Ticket {
+  @Attribute(.unique) var id: Int
+  var title: String
+  var assignee: User?
+  var reviewer: User?
+}
+```
 
-This only works safely if delete pass is strictly parent-scoped.
+If parent passed is a `User`, both `assignee` and `reviewer` are valid candidates.
+SwiftSync throws and asks for explicit configuration:
 
-## Why Parent Object Alone Is Not Enough
+```swift
+extension Ticket: ParentScopedModel {
+  static var parentRelationship: ReferenceWritableKeyPath<Ticket, User?> { \.assignee }
+}
+```
 
-`parent: someParent` gives SwiftSync the parent instance.
-It does not tell SwiftSync which child property should be treated as "the parent link."
+## Identity Policy Notes
 
-The system still needs:
-- A writable key path to assign parent on create/update.
-- The same key path to filter existing rows for scoped diff/delete.
+- `ParentScopedModel` defaults to `.scopedByParent`.
+- Inferred parent sync (no `ParentScopedModel` conformance) defaults to `.global`.
+- If inferred sync should allow duplicate child IDs across different parents, pass:
 
-That is exactly what `parentRelationship` provides.
+```swift
+identityPolicy: .scopedByParent
+```
 
-## What Still Cannot Be Removed Safely
+## What Was Removed vs Kept
 
-`parentRelationship` is still required because:
-1. Parent assignment on insert/update must target a concrete property.
-2. Scoped delete must filter by that exact property.
-3. Multiple candidate relationships are common in real schemas.
-4. Guessing wrong can cause cross-scope deletes (data loss risk).
+Removed for unambiguous models:
+- mandatory explicit `parentRelationship`
 
-## How Old Runtime Inference Worked (And Why We Avoid It)
+Still required for ambiguous models:
+- explicit `parentRelationship` (deterministic scope selection)
 
-Old behavior in Core Data style sync was often:
-1. Find relationships to parent entity.
-2. Pick first match.
-3. Use it for attach + scoped delete.
+## Safety Contract
 
-Problems:
-1. "First match" depends on model ordering.
-2. Multiple matches are ambiguous.
-3. Zero matches can silently degrade behavior.
-4. Errors are discovered late, sometimes only after data corruption.
-
-SwiftSync chooses deterministic typed configuration over guessing.
-
-## Future Work
-
-Potential safe inference path:
-1. Infer only when exactly one candidate relationship exists.
-2. Throw typed error for zero or multiple candidates.
-3. Keep explicit `parentRelationship` as an override escape hatch.
-
-## Goal
-
-Convention-first ergonomics for simple models, explicit configuration for ambiguous models, and no silent cross-parent deletes.
+SwiftSync does not silently guess between multiple candidate parent relationships.
+Ambiguity is surfaced as an error to avoid cross-scope delete mistakes.
