@@ -149,19 +149,19 @@ This demo intentionally highlights multiple relationship types.
 
 ### Tab 1: Projects
 
-- Projects list via `@SyncQuery(Project.self, in: syncContainer, sort: \.name)`.
+- Projects list via `@SyncQuery(Project.self, in: syncContainer, sortBy: [\.name, \.id])`.
 - On first appearance: trigger `syncProjects()`.
 - Project detail:
   - Header via `@SyncModel(Project.self, id: projectID, in: syncContainer)`.
-  - Task list via `@SyncQuery(Task.self, predicate: #Predicate { $0.projectID == projectID }, in: syncContainer, sort: \.priority)`.
+  - Task list via `@SyncQuery(Task.self, predicate: #Predicate { $0.projectID == projectID }, in: syncContainer, sortBy: [SortDescriptor(\Task.priority, order: .reverse), SortDescriptor(\Task.id)])`.
   - On first appearance: trigger `syncProjectTasks(projectID:)`.
 
 ### Tab 2: Users
 
-- Users list via `@SyncQuery(User.self, in: syncContainer, sort: \.displayName)`.
+- Users list via `@SyncQuery(User.self, in: syncContainer, sortBy: [\.displayName, \.id])`.
 - On first appearance: trigger `syncUsers()`.
 - User detail task list via assignee filter:
-  - `@SyncQuery(Task.self, predicate: #Predicate { $0.assigneeID == userID }, in: syncContainer, sort: \.dueDate)`.
+  - `@SyncQuery(Task.self, predicate: #Predicate { $0.assigneeID == userID }, in: syncContainer, sortBy: [SortDescriptor(\Task.priority, order: .reverse), SortDescriptor(\Task.id)])`.
 - Optionally trigger `syncUserTasks(userID:)` when entering screen.
 
 ### Task Detail
@@ -169,7 +169,7 @@ This demo intentionally highlights multiple relationship types.
 - Task core model via `@SyncModel(Task.self, id: taskID, in: syncContainer)`.
 - Assignee display via task relation or `@SyncModel(User.self, id: assigneeID, in: syncContainer)`.
 - Tag chips from task-tag relation.
-- Comments list via `@SyncQuery(Comment.self, predicate: #Predicate { $0.taskID == taskID }, in: syncContainer, sort: \.createdAt)`.
+- Comments list via `@SyncQuery(Comment.self, predicate: #Predicate { $0.taskID == taskID }, in: syncContainer, sortBy: [SortDescriptor(\Comment.createdAt, order: .reverse), SortDescriptor(\Comment.id)])`.
 - On first appearance:
   - `syncTaskDetail(taskID:)`
   - `syncTaskComments(taskID:)`.

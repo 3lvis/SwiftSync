@@ -212,8 +212,22 @@ try await syncContainer.sync(
 ### Reactive reads (SwiftUI-facing)
 
 ```swift
-@SyncQuery(User.self, in: syncContainer, sort: \.id)
+@SyncQuery(User.self, in: syncContainer, sortBy: [\.id])
 var users: [User]
+```
+
+Descending or mixed ordering still uses explicit `SortDescriptor` values:
+
+```swift
+@SyncQuery(
+  Task.self,
+  in: syncContainer,
+  sortBy: [
+    SortDescriptor(\Task.priority, order: .reverse),
+    SortDescriptor(\Task.id)
+  ]
+)
+var tasks: [Task]
 ```
 
 Detail:
