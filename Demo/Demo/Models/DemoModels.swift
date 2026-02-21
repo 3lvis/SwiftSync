@@ -466,6 +466,120 @@ extension Comment: SyncUpdatableModel {
     }
 }
 
+extension Project: SyncQuerySortableModel {
+    static func syncSortDescriptor(for keyPath: PartialKeyPath<Project>) -> SortDescriptor<Project>? {
+        if keyPath == \Project.id {
+            return SortDescriptor(\Project.id)
+        }
+        if keyPath == \Project.name {
+            return SortDescriptor(\Project.name)
+        }
+        if keyPath == \Project.status {
+            return SortDescriptor(\Project.status)
+        }
+        if keyPath == \Project.serverUpdatedAt {
+            return SortDescriptor(\Project.serverUpdatedAt)
+        }
+        return nil
+    }
+}
+
+extension User: SyncQuerySortableModel {
+    static func syncSortDescriptor(for keyPath: PartialKeyPath<User>) -> SortDescriptor<User>? {
+        if keyPath == \User.id {
+            return SortDescriptor(\User.id)
+        }
+        if keyPath == \User.displayName {
+            return SortDescriptor(\User.displayName)
+        }
+        if keyPath == \User.avatarSeed {
+            return SortDescriptor(\User.avatarSeed)
+        }
+        if keyPath == \User.role {
+            return SortDescriptor(\User.role)
+        }
+        if keyPath == \User.serverUpdatedAt {
+            return SortDescriptor(\User.serverUpdatedAt)
+        }
+        return nil
+    }
+}
+
+extension Tag: SyncQuerySortableModel {
+    static func syncSortDescriptor(for keyPath: PartialKeyPath<Tag>) -> SortDescriptor<Tag>? {
+        if keyPath == \Tag.id {
+            return SortDescriptor(\Tag.id)
+        }
+        if keyPath == \Tag.name {
+            return SortDescriptor(\Tag.name)
+        }
+        if keyPath == \Tag.colorHex {
+            return SortDescriptor(\Tag.colorHex)
+        }
+        if keyPath == \Tag.serverUpdatedAt {
+            return SortDescriptor(\Tag.serverUpdatedAt)
+        }
+        return nil
+    }
+}
+
+extension Task: SyncQuerySortableModel {
+    static func syncSortDescriptor(for keyPath: PartialKeyPath<Task>) -> SortDescriptor<Task>? {
+        if keyPath == \Task.id {
+            return SortDescriptor(\Task.id)
+        }
+        if keyPath == \Task.projectID {
+            return SortDescriptor(\Task.projectID)
+        }
+        if keyPath == \Task.assigneeID {
+            return SortDescriptor(\Task.assigneeID)
+        }
+        if keyPath == \Task.title {
+            return SortDescriptor(\Task.title)
+        }
+        if keyPath == \Task.descriptionText {
+            return SortDescriptor(\Task.descriptionText)
+        }
+        if keyPath == \Task.state {
+            return SortDescriptor(\Task.state)
+        }
+        if keyPath == \Task.priority {
+            return SortDescriptor(\Task.priority)
+        }
+        if keyPath == \Task.dueDate {
+            return SortDescriptor(\Task.dueDate)
+        }
+        if keyPath == \Task.serverUpdatedAt {
+            return SortDescriptor(\Task.serverUpdatedAt)
+        }
+        return nil
+    }
+}
+
+extension Comment: SyncQuerySortableModel {
+    static func syncSortDescriptor(for keyPath: PartialKeyPath<Comment>) -> SortDescriptor<Comment>? {
+        if keyPath == \Comment.id {
+            return SortDescriptor(\Comment.id)
+        }
+        if keyPath == \Comment.taskID {
+            return SortDescriptor(\Comment.taskID)
+        }
+        if keyPath == \Comment.authorUserID {
+            return SortDescriptor(\Comment.authorUserID)
+        }
+        if keyPath == \Comment.body {
+            return SortDescriptor(\Comment.body)
+        }
+        if keyPath == \Comment.createdAt {
+            return SortDescriptor(\Comment.createdAt)
+        }
+        if keyPath == \Comment.serverUpdatedAt {
+            return SortDescriptor(\Comment.serverUpdatedAt)
+        }
+        return nil
+    }
+}
+
 extension Task: SyncRelationshipUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         var changed = false

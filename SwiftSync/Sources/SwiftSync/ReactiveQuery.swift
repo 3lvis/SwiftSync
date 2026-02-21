@@ -108,6 +108,38 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
     }
 }
 
+public extension SyncQuery where Model: SyncQuerySortableModel {
+    init(
+        _ model: Model.Type,
+        in syncContainer: SyncContainer,
+        sortBy: [PartialKeyPath<Model>],
+        animation: Animation? = nil
+    ) {
+        self.init(
+            model,
+            in: syncContainer,
+            sortBy: Model.syncSortDescriptors(for: sortBy),
+            animation: animation
+        )
+    }
+
+    init(
+        _ model: Model.Type,
+        predicate: Predicate<Model>,
+        in syncContainer: SyncContainer,
+        sortBy: [PartialKeyPath<Model>],
+        animation: Animation? = nil
+    ) {
+        self.init(
+            model,
+            predicate: predicate,
+            in: syncContainer,
+            sortBy: Model.syncSortDescriptors(for: sortBy),
+            animation: animation
+        )
+    }
+}
+
 private final class SyncModelObserver<Model: PersistentModel & SyncModelable>: ObservableObject {
     @Published var model: Model?
 

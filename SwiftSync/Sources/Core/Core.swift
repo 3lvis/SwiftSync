@@ -13,6 +13,16 @@ public extension SyncModelable {
     static var syncIdentityRemoteKeys: [String] { ["id", "remote_id", "remoteID"] }
 }
 
+public protocol SyncQuerySortableModel: SyncModelable {
+    static func syncSortDescriptor(for keyPath: PartialKeyPath<Self>) -> SortDescriptor<Self>?
+}
+
+public extension SyncQuerySortableModel {
+    static func syncSortDescriptors(for keyPaths: [PartialKeyPath<Self>]) -> [SortDescriptor<Self>] {
+        keyPaths.compactMap { syncSortDescriptor(for: $0) }
+    }
+}
+
 public protocol SyncUpdatableModel: SyncModelable {
     static func make(from payload: SyncPayload) throws -> Self
     func apply(_ payload: SyncPayload) throws -> Bool

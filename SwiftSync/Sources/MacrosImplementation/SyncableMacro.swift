@@ -62,15 +62,20 @@ public struct SyncableMacro: ExtensionMacro {
             .filter { !$0.isNotExport }
             .map(exportBlock(for:))
             .joined(separator: "\n\n")
+        let sortDescriptorBody = sortDescriptorBlock(for: properties, typeName: typeName)
 
         return [
             try ExtensionDeclSyntax(
                 """
-                extension \(type.trimmed): SyncUpdatableModel, ExportModel {
+                extension \(type.trimmed): SyncUpdatableModel, ExportModel, SyncQuerySortableModel {
                     typealias SyncID = \(raw: identityProperty.typeSource)
 
                     static var syncIdentity: KeyPath<\(raw: typeName), \(raw: identityProperty.typeSource)> { \\.\(raw: identityProperty.name) }
                     \(raw: needsCustomRemoteIdentityKeys ? "static var syncIdentityRemoteKeys: [String] { [\"\(generatedRemoteIdentityKey)\"] }" : "")
+
+                    static func syncSortDescriptor(for keyPath: PartialKeyPath<\(raw: typeName)>) -> SortDescriptor<\(raw: typeName)>? {
+                        \(raw: sortDescriptorBody)
+                    }
 
                     static func make(from payload: SyncPayload) throws -> \(raw: typeName) {
                         \(raw: typeName)(
@@ -236,6 +241,45 @@ public struct SyncableMacro: ExtensionMacro {
         case "String", "Bool", "Int", "Int8", "Int16", "Int32", "Int64",
             "UInt", "UInt8", "UInt16", "UInt32", "UInt64",
             "Double", "Float", "Decimal", "Date", "UUID", "URL", "Data":
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func sortDescriptorBlock(for properties: [SyncedProperty], typeName: String) -> String {
+        let sortableProperties = properties.filter(isSortComparableProperty(_:))
+        guard !sortableProperties.isEmpty else {
+            return "return nil"
+        }
+
+        let blocks = sortableProperties.map { property in
+            """
+            if keyPath == \\\(typeName).\(property.name) {
+                return SortDescriptor(\\\(typeName).\(property.name))
+            }
+            """
+        }
+
+        return "\(blocks.joined(separator: "\n"))\nreturn nil"
+    }
+
+    private static func isSortComparableProperty(_ property: SyncedProperty) -> Bool {
+        if property.isRelationship {
+            return false
+        }
+
+        let trimmed = property.typeSource.trimmingCharacters(in: .whitespacesAndNewlines)
+        let unwrapped = unwrapOptional(type: trimmed)
+        let normalized = unwrapped.replacingOccurrences(of: "Foundation.", with: "")
+        return isSortComparableScalarType(normalized)
+    }
+
+    private static func isSortComparableScalarType(_ type: String) -> Bool {
+        switch type {
+        case "String", "Int", "Int8", "Int16", "Int32", "Int64",
+            "UInt", "UInt8", "UInt16", "UInt32", "UInt64",
+            "Double", "Float", "Decimal", "Date", "UUID":
             return true
         default:
             return false

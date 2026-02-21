@@ -1,6 +1,6 @@
 import Core
 
-@attached(extension, conformances: SyncUpdatableModel, ExportModel, names: named(SyncID), named(syncIdentity), named(syncIdentityRemoteKeys), named(make), named(apply), named(exportObject))
+@attached(extension, conformances: SyncUpdatableModel, ExportModel, SyncQuerySortableModel, names: named(SyncID), named(syncIdentity), named(syncIdentityRemoteKeys), named(syncSortDescriptor), named(make), named(apply), named(exportObject))
 public macro Syncable() = #externalMacro(module: "MacrosImplementation", type: "SyncableMacro")
 
 @attached(peer)
