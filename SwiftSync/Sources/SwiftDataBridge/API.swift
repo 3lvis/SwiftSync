@@ -7,6 +7,7 @@ public extension SwiftSync {
         payload: [Any],
         as model: Model.Type,
         in context: ModelContext,
+        inputKeyStyle: SyncInputKeyStyle = .snakeCase,
         missingRowPolicy: SyncMissingRowPolicy = .delete,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
@@ -41,7 +42,7 @@ public extension SwiftSync {
 
             for entry in entries {
                 try throwIfCancelled()
-                let payloadModel = SyncPayload(values: entry)
+                let payloadModel = SyncPayload(values: entry, keyStyle: inputKeyStyle)
                 guard let identity = resolveIdentity(from: payloadModel, model: Model.self) else {
                     // For hardening: rows without valid identity are skipped from matching/diffing.
                     continue
@@ -117,6 +118,7 @@ public extension SwiftSync {
         as model: Model.Type,
         in context: ModelContext,
         parent: Model.SyncParent,
+        inputKeyStyle: SyncInputKeyStyle = .snakeCase,
         missingRowPolicy: SyncMissingRowPolicy = .delete,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
@@ -127,6 +129,7 @@ public extension SwiftSync {
             parent: parent,
             parentRelationship: Model.parentRelationship,
             identityPolicy: Model.syncIdentityPolicy,
+            inputKeyStyle: inputKeyStyle,
             missingRowPolicy: missingRowPolicy,
             relationshipOperations: relationshipOperations
         )
@@ -138,6 +141,7 @@ public extension SwiftSync {
         in context: ModelContext,
         parent: Parent,
         identityPolicy: SyncIdentityPolicy = .global,
+        inputKeyStyle: SyncInputKeyStyle = .snakeCase,
         missingRowPolicy: SyncMissingRowPolicy = .delete,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
@@ -150,6 +154,7 @@ public extension SwiftSync {
             parent: parent,
             parentRelationship: inferred.keyPath,
             identityPolicy: identityPolicy,
+            inputKeyStyle: inputKeyStyle,
             missingRowPolicy: missingRowPolicy,
             relationshipOperations: relationshipOperations
         )
@@ -162,6 +167,7 @@ public extension SwiftSync {
         parent: Parent,
         parentRelationship: ReferenceWritableKeyPath<Model, Parent?>,
         identityPolicy: SyncIdentityPolicy,
+        inputKeyStyle: SyncInputKeyStyle,
         missingRowPolicy: SyncMissingRowPolicy,
         relationshipOperations: SyncRelationshipOperations
     ) async throws {
@@ -220,7 +226,7 @@ public extension SwiftSync {
 
             for entry in entries {
                 try throwIfCancelled()
-                let payloadModel = SyncPayload(values: entry)
+                let payloadModel = SyncPayload(values: entry, keyStyle: inputKeyStyle)
                 guard let identity = resolveIdentity(from: payloadModel, model: Model.self) else {
                     continue
                 }

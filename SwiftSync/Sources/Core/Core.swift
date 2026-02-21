@@ -726,9 +726,11 @@ private func exportSetValue(_ value: Any, path: [String], into target: inout [St
 
 public struct SyncPayload {
     public let values: [String: Any]
+    public let keyStyle: SyncInputKeyStyle
 
-    public init(values: [String: Any]) {
+    public init(values: [String: Any], keyStyle: SyncInputKeyStyle = .snakeCase) {
         self.values = values
+        self.keyStyle = keyStyle
     }
 
     public func contains(_ key: String) -> Bool {
@@ -783,14 +785,36 @@ public struct SyncPayload {
     }
 
     private func candidateKeys(for key: String) -> [String] {
-        var keys = [key, snakeCased(key)]
+        var keys: [String] = []
+        switch keyStyle {
+        case .snakeCase:
+            keys.append(transformKeyPathToSnakeCase(key))
+        case .camelCase:
+            keys.append(transformKeyPathToCamelCase(key))
+        }
+        keys.append(key)
         if key == "remoteID" {
-            keys.append(contentsOf: ["remote_id", "id"])
+            switch keyStyle {
+            case .snakeCase:
+                keys.append(contentsOf: ["remote_id", "id"])
+            case .camelCase:
+                keys.append(contentsOf: ["remoteID", "id"])
+            }
         }
         if key == "id" {
-            keys.append(contentsOf: ["remote_id", "remoteID"])
+            switch keyStyle {
+            case .snakeCase:
+                keys.append("remote_id")
+            case .camelCase:
+                keys.append("remoteID")
+            }
         }
-        return Array(Set(keys))
+        var ordered: [String] = []
+        var seen: Set<String> = []
+        for candidate in keys where seen.insert(candidate).inserted {
+            ordered.append(candidate)
+        }
+        return ordered
     }
 
     private func containsCandidateValue(for key: String) -> Bool {
@@ -846,17 +870,72 @@ public struct SyncPayload {
         }
     }
 
+    private func transformKeyPathToSnakeCase(_ value: String) -> String {
+        value
+            .split(separator: ".", omittingEmptySubsequences: false)
+            .map { snakeCased(String($0)) }
+            .joined(separator: ".")
+    }
+
+    private func transformKeyPathToCamelCase(_ value: String) -> String {
+        value
+            .split(separator: ".", omittingEmptySubsequences: false)
+            .map { segment in
+                let normalizedSnake = snakeCased(String(segment))
+                return camelCased(normalizedSnake)
+            }
+            .joined(separator: ".")
+    }
+
     private func snakeCased(_ value: String) -> String {
         guard !value.isEmpty else { return value }
         var output = ""
-        for character in value {
-            let scalarString = String(character)
-            if scalarString == scalarString.uppercased(), scalarString != scalarString.lowercased(), !output.isEmpty {
-                output.append("_")
+        let scalars = Array(value.unicodeScalars)
+        for (index, scalar) in scalars.enumerated() {
+            let current = scalarClass(scalar)
+            if index > 0, current == .upper {
+                let previous = scalarClass(scalars[index - 1])
+                let next = index + 1 < scalars.count ? scalarClass(scalars[index + 1]) : nil
+                let startsNewWord = previous == .lower || previous == .digit
+                let endsAcronym = previous == .upper && next == .lower
+                if (startsNewWord || endsAcronym), output.last != "_" {
+                    output.append("_")
+                }
             }
-            output.append(scalarString.lowercased())
+            output.append(String(scalar).lowercased())
         }
         return output
+    }
+
+    private func camelCased(_ value: String) -> String {
+        guard value.contains("_") else { return value }
+        let parts = value.split(separator: "_", omittingEmptySubsequences: true)
+        guard let first = parts.first else { return value }
+        let tail = parts.dropFirst().map { part in
+            guard let leading = part.first else { return "" }
+            return String(leading).uppercased() + part.dropFirst().lowercased()
+        }
+        return String(first).lowercased() + tail.joined()
+    }
+
+    private func scalarClass(_ scalar: UnicodeScalar) -> ScalarClass {
+        if CharacterSet.uppercaseLetters.contains(scalar) {
+            return .upper
+        }
+        if CharacterSet.lowercaseLetters.contains(scalar) {
+            return .lower
+        }
+        if CharacterSet.decimalDigits.contains(scalar) {
+            return .digit
+        }
+        return .other
+    }
+
+    private enum ScalarClass {
+        case upper
+        case lower
+        case digit
+        case other
     }
 
     private func cast<T>(_ raw: Any, as type: T.Type) -> T? {
@@ -913,4 +992,9 @@ public enum SyncError: Error, Sendable, Equatable {
 public enum SyncMissingRowPolicy: Sendable {
     case delete
     case keep
+}
+
+public enum SyncInputKeyStyle: Sendable {
+    case snakeCase
+    case camelCase
 }

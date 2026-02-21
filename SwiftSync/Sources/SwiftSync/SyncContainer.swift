@@ -9,10 +9,12 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
 
     public let modelContainer: ModelContainer
     public let mainContext: ModelContext
+    public let inputKeyStyle: SyncInputKeyStyle
 
     @MainActor
     public init(
         for modelTypes: any PersistentModel.Type...,
+        inputKeyStyle: SyncInputKeyStyle = .snakeCase,
         migrationPlan: (any SchemaMigrationPlan.Type)? = nil,
         configurations: ModelConfiguration...
     ) throws {
@@ -23,14 +25,16 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             configurations: configurations
         )
         self.mainContext = modelContainer.mainContext
+        self.inputKeyStyle = inputKeyStyle
         super.init()
         installDidSaveObserver()
     }
 
     @MainActor
-    public init(_ modelContainer: ModelContainer) {
+    public init(_ modelContainer: ModelContainer, inputKeyStyle: SyncInputKeyStyle = .snakeCase) {
         self.modelContainer = modelContainer
         self.mainContext = modelContainer.mainContext
+        self.inputKeyStyle = inputKeyStyle
         super.init()
         installDidSaveObserver()
     }
@@ -54,6 +58,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             payload: payload,
             as: model,
             in: context,
+            inputKeyStyle: inputKeyStyle,
             missingRowPolicy: missingRowPolicy,
             relationshipOperations: relationshipOperations
         )
@@ -72,6 +77,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             as: model,
             in: context,
             parent: parent,
+            inputKeyStyle: inputKeyStyle,
             missingRowPolicy: missingRowPolicy,
             relationshipOperations: relationshipOperations
         )
@@ -92,6 +98,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             in: context,
             parent: parent,
             identityPolicy: identityPolicy,
+            inputKeyStyle: inputKeyStyle,
             missingRowPolicy: missingRowPolicy,
             relationshipOperations: relationshipOperations
         )

@@ -2,6 +2,13 @@
 
 This is the implementation plan for improving SwiftSync property mapping using the legacy Core Data notes as input, while keeping SwiftData-first design.
 
+## Status (2026-02-21)
+
+Completed in current implementation pass:
+- Step 1 deliverable: `docs/property-mapping-contract-v2.md`
+- Step 2 initial implementation: acronym-aware inflection + container-level input key style (`.snakeCase` default, `.camelCase` optional)
+- Step 7 initial subset: tests for acronym mapping and container key style behavior (attributes + relationship FK keys)
+
 ## Goal
 
 Make mapping behavior predictable, convention-first, and low-boilerplate:

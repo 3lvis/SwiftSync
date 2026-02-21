@@ -994,6 +994,18 @@ final class DifferentContextConflictUser {
 
 @Syncable
 @Model
+final class KeyStyleRecord {
+    @Attribute(.unique) var id: Int
+    var projectID: String
+
+    init(id: Int, projectID: String) {
+        self.id = id
+        self.projectID = projectID
+    }
+}
+
+@Syncable
+@Model
 final class InferredTask {
     @Attribute(.unique) var id: Int
     var title: String
@@ -2702,6 +2714,109 @@ final class IntegrationTests: XCTestCase {
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows.first?.id, 10)
         XCTAssertEqual(rows.first?.fullName, "From SyncContainer")
+    }
+
+    @MainActor
+    func testSyncContainerDefaultInputKeyStyleSnakeCaseMapsAcronymPropertyName() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let syncContainer = try SyncContainer(for: KeyStyleRecord.self, configurations: configuration)
+
+        try await syncContainer.sync(
+            payload: [["id": 1, "project_id": "P-1"]],
+            as: KeyStyleRecord.self
+        )
+
+        let rows = try syncContainer.mainContext.fetch(FetchDescriptor<KeyStyleRecord>())
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.projectID, "P-1")
+    }
+
+    @MainActor
+    func testSyncContainerCamelCaseInputKeyStyleMapsCamelPayload() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let syncContainer = try SyncContainer(
+            for: KeyStyleRecord.self,
+            inputKeyStyle: .camelCase,
+            configurations: configuration
+        )
+
+        try await syncContainer.sync(
+            payload: [["id": 1, "projectId": "P-2"]],
+            as: KeyStyleRecord.self
+        )
+
+        let rows = try syncContainer.mainContext.fetch(FetchDescriptor<KeyStyleRecord>())
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.projectID, "P-2")
+    }
+
+    @MainActor
+    func testSyncContainerCamelCaseInputKeyStyleMapsCamelToOneForeignKey() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let syncContainer = try SyncContainer(
+            for: AutoEmployee.self,
+            AutoCompany.self,
+            inputKeyStyle: .camelCase,
+            configurations: configuration
+        )
+
+        try await syncContainer.sync(
+            payload: [["id": 10, "name": "Acme"]],
+            as: AutoCompany.self
+        )
+
+        try await syncContainer.sync(
+            payload: [["id": 1, "name": "Ava", "companyId": 10]],
+            as: AutoEmployee.self
+        )
+
+        var employees = try syncContainer.mainContext.fetch(FetchDescriptor<AutoEmployee>())
+        XCTAssertEqual(employees.count, 1)
+        XCTAssertEqual(employees[0].company?.id, 10)
+
+        try await syncContainer.sync(
+            payload: [["id": 1, "name": "Ava", "companyId": NSNull()]],
+            as: AutoEmployee.self
+        )
+
+        employees = try syncContainer.mainContext.fetch(FetchDescriptor<AutoEmployee>())
+        XCTAssertNil(employees[0].company)
+    }
+
+    @MainActor
+    func testSyncContainerCamelCaseInputKeyStyleMapsCamelToManyForeignKeys() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let syncContainer = try SyncContainer(
+            for: AutoTask.self,
+            AutoTag.self,
+            inputKeyStyle: .camelCase,
+            configurations: configuration
+        )
+
+        try await syncContainer.sync(
+            payload: [
+                ["id": 1, "name": "Urgent"],
+                ["id": 2, "name": "Client"]
+            ],
+            as: AutoTag.self
+        )
+
+        try await syncContainer.sync(
+            payload: [["id": 100, "title": "Launch", "tagIds": [1, 2]]],
+            as: AutoTask.self
+        )
+
+        var tasks = try syncContainer.mainContext.fetch(FetchDescriptor<AutoTask>())
+        XCTAssertEqual(tasks.count, 1)
+        XCTAssertEqual(Set(tasks[0].tags.map(\.id)), Set([1, 2]))
+
+        try await syncContainer.sync(
+            payload: [["id": 100, "title": "Launch", "tagIds": [2]]],
+            as: AutoTask.self
+        )
+
+        tasks = try syncContainer.mainContext.fetch(FetchDescriptor<AutoTask>())
+        XCTAssertEqual(Set(tasks[0].tags.map(\.id)), Set([2]))
     }
 
     func testSyncContainerBackgroundSaveVisibilityBehavior() async throws {
