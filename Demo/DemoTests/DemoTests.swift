@@ -85,7 +85,7 @@ final class DemoTests: XCTestCase {
         XCTAssertNotNil(row["assignee_id"])
         XCTAssertNotNil(row["due_date"])
         XCTAssertNotNil(row["tag_ids"])
-        XCTAssertNotNil(row["description_text"])
+        XCTAssertNotNil(row["description"])
         XCTAssertNotNil(row["updated_at"])
 
         XCTAssertTrue(row["assignee_id"] is NSNull)
@@ -136,7 +136,7 @@ final class DemoTests: XCTestCase {
         XCTAssertNotNil(taskRows[0]["project_id"])
         XCTAssertNotNil(taskRows[0]["assignee_id"])
         XCTAssertNotNil(taskRows[0]["tag_ids"])
-        XCTAssertNotNil(taskRows[0]["description_text"])
+        XCTAssertNotNil(taskRows[0]["description"])
         XCTAssertNil(taskRows[0]["project"])
         XCTAssertNil(taskRows[0]["assignee"])
         XCTAssertNil(taskRows[0]["tags"])

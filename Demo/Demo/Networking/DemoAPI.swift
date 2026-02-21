@@ -151,7 +151,7 @@ final class FakeDemoAPIClient: DemoAPIClient {
             "project_id": task.projectID,
             "assignee_id": jsonOrNull(task.assigneeID),
             "title": task.title,
-            "description_text": task.descriptionText,
+            "description": task.descriptionText,
             "state": task.state,
             "priority": task.priority,
             "due_date": jsonOrNull(task.dueDate.map(iso8601)),

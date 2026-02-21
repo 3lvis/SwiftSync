@@ -91,6 +91,7 @@ final class Task {
 
     var title: String
 
+    @RemoteKey("description")
     var descriptionText: String
 
     var state: String

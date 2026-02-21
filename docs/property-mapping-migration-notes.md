@@ -30,26 +30,6 @@ var descriptionText: String
 
 Why: local name (`descriptionText`) intentionally differs from payload key (`description`).
 
-If you control backend keys, prefer renaming payload key to convention and remove `@RemoteKey`:
-
-Before (backend key):
-
-```json
-{ "description": "..." }
-```
-
-After (backend key):
-
-```json
-{ "description_text": "..." }
-```
-
-Then model can stay convention-only:
-
-```swift
-var descriptionText: String
-```
-
 ## 3) Configure inbound key style once at container level
 
 Default snake_case:
