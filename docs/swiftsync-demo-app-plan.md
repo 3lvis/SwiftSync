@@ -38,7 +38,7 @@ This demo intentionally highlights multiple relationship types.
 - `id: String` (`@PrimaryKey`)
 - `name: String`
 - `status: String`
-- `serverUpdatedAt: Date`
+- `updatedAt: Date`
 - relationship: `tasks: [Task]`
 
 ### `User`
@@ -47,7 +47,7 @@ This demo intentionally highlights multiple relationship types.
 - `displayName: String`
 - `avatarSeed: String`
 - `role: String`
-- `serverUpdatedAt: Date`
+- `updatedAt: Date`
 - inverse relationship: `assignedTasks: [Task]`
 
 ### `Task`
@@ -60,7 +60,7 @@ This demo intentionally highlights multiple relationship types.
 - `state: String` (`todo`, `inProgress`, `done`)
 - `priority: Int`
 - `dueDate: Date?`
-- `serverUpdatedAt: Date`
+- `updatedAt: Date`
 - relationships:
   - `project: Project?`
   - `assignee: User?`
@@ -72,7 +72,7 @@ This demo intentionally highlights multiple relationship types.
 - `id: String` (`@PrimaryKey`)
 - `name: String` (e.g. `frontend`)
 - `colorHex: String`
-- `serverUpdatedAt: Date`
+- `updatedAt: Date`
 - inverse relationship: `tasks: [Task]`
 
 ### `Comment`
@@ -82,7 +82,7 @@ This demo intentionally highlights multiple relationship types.
 - `authorUserID: String`
 - `body: String`
 - `createdAt: Date`
-- `serverUpdatedAt: Date`
+- `updatedAt: Date`
 - relationships:
   - `task: Task?`
   - `author: User?`
@@ -116,7 +116,7 @@ This demo intentionally highlights multiple relationship types.
   - `slowNetwork`
   - `flakyNetwork`
   - `offline`
-- Conflict simulation via `serverUpdatedAt` and optional `version` field.
+- Conflict simulation via `updatedAt` and optional `version` field.
 - Large seeded dataset for realistic list stress:
   - 30+ projects
   - 300+ tasks

@@ -8,20 +8,20 @@ final class Project {
     @Attribute(.unique) var id: String
     var name: String
     var status: String
-    var serverUpdatedAt: Date
+    var updatedAt: Date
     var tasks: [Task]
 
     init(
         id: String,
         name: String,
         status: String,
-        serverUpdatedAt: Date,
+        updatedAt: Date,
         tasks: [Task] = []
     ) {
         self.id = id
         self.name = name
         self.status = status
-        self.serverUpdatedAt = serverUpdatedAt
+        self.updatedAt = updatedAt
         self.tasks = tasks
     }
 }
@@ -33,7 +33,7 @@ final class User {
     var displayName: String
     var avatarSeed: String
     var role: String
-    var serverUpdatedAt: Date
+    var updatedAt: Date
     var assignedTasks: [Task]
     var authoredComments: [Comment]
 
@@ -42,7 +42,7 @@ final class User {
         displayName: String,
         avatarSeed: String,
         role: String,
-        serverUpdatedAt: Date,
+        updatedAt: Date,
         assignedTasks: [Task] = [],
         authoredComments: [Comment] = []
     ) {
@@ -50,7 +50,7 @@ final class User {
         self.displayName = displayName
         self.avatarSeed = avatarSeed
         self.role = role
-        self.serverUpdatedAt = serverUpdatedAt
+        self.updatedAt = updatedAt
         self.assignedTasks = assignedTasks
         self.authoredComments = authoredComments
     }
@@ -62,20 +62,20 @@ final class Tag {
     @Attribute(.unique) var id: String
     var name: String
     var colorHex: String
-    var serverUpdatedAt: Date
+    var updatedAt: Date
     var tasks: [Task]
 
     init(
         id: String,
         name: String,
         colorHex: String,
-        serverUpdatedAt: Date,
+        updatedAt: Date,
         tasks: [Task] = []
     ) {
         self.id = id
         self.name = name
         self.colorHex = colorHex
-        self.serverUpdatedAt = serverUpdatedAt
+        self.updatedAt = updatedAt
         self.tasks = tasks
     }
 }
@@ -99,7 +99,7 @@ final class Task {
     var state: String
     var priority: Int
     var dueDate: Date?
-    var serverUpdatedAt: Date
+    var updatedAt: Date
     var project: Project?
     var assignee: User?
     var tags: [Tag]
@@ -114,7 +114,7 @@ final class Task {
         state: String,
         priority: Int,
         dueDate: Date?,
-        serverUpdatedAt: Date,
+        updatedAt: Date,
         project: Project? = nil,
         assignee: User? = nil,
         tags: [Tag] = [],
@@ -128,7 +128,7 @@ final class Task {
         self.state = state
         self.priority = priority
         self.dueDate = dueDate
-        self.serverUpdatedAt = serverUpdatedAt
+        self.updatedAt = updatedAt
         self.project = project
         self.assignee = assignee
         self.tags = tags
@@ -149,7 +149,7 @@ final class Comment {
 
     var body: String
     var createdAt: Date
-    var serverUpdatedAt: Date
+    var updatedAt: Date
     var task: Task?
 
     @RemoteKey("author_user_id")
@@ -161,7 +161,7 @@ final class Comment {
         authorUserID: String,
         body: String,
         createdAt: Date,
-        serverUpdatedAt: Date,
+        updatedAt: Date,
         task: Task? = nil,
         author: User? = nil
     ) {
@@ -170,7 +170,7 @@ final class Comment {
         self.authorUserID = authorUserID
         self.body = body
         self.createdAt = createdAt
-        self.serverUpdatedAt = serverUpdatedAt
+        self.updatedAt = updatedAt
         self.task = task
         self.author = author
     }

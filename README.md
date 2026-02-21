@@ -27,6 +27,7 @@ import SwiftSync
 - [Date Handling](#date-handling)
 - [FAQ](#faq)
 - [Advanced FAQ](docs/faq.md)
+- [Backend Contract](docs/backend-contract.md)
 - [API Reference](#api-reference)
 
 ## Why SwiftSync
@@ -626,6 +627,16 @@ That row is skipped for matching/diffing. Sync continues for valid rows.
 
 - optional scalar -> `nil`
 - non-optional primitive scalar -> default value (`""`, `0`, `false`, epoch date, zero UUID)
+
+### Is missing field the same as `null`?
+
+No, and this is a core contract.
+
+- missing key => do not touch existing local value/relationship
+- key present with `null` => clear value/relationship
+- key present with `[]` for to-many => clear membership
+
+If backend wants to nullify/remove, it must send explicit `null` (not omission).
 
 ### Does relationship sync happen automatically for complex graphs?
 

@@ -2,6 +2,8 @@
 
 This document captures the current design decisions that go beyond the quick FAQ in `README.md`.
 
+Backend payload contract guidance lives in `docs/backend-contract.md`.
+
 ## 1) Parent-scoped identity vs global identity
 
 `ParentScopedModel` defaults to:
@@ -75,3 +77,12 @@ Use this to run root-row sync while narrowing relationship-side work for a speci
 - `.keep`: do not delete missing local rows
 
 For parent-scoped sync, delete behavior is scoped to that parent subset.
+
+## 6) Missing key vs `null` (field-level updates)
+
+This is a hard contract for payload semantics:
+- missing key => no-op (do not mutate existing local value)
+- explicit `null` => clear value/relationship
+- explicit `[]` on to-many => clear membership
+
+If backend wants to remove/clear, it should send explicit `null` (or `[]` for to-many), not omit the key.

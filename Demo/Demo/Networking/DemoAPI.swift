@@ -70,7 +70,7 @@ final class FakeDemoAPIClient: DemoAPIClient {
                 "id": project.id,
                 "name": project.name,
                 "status": project.status,
-                "server_updated_at": iso8601(project.serverUpdatedAt)
+                "updated_at": iso8601(project.updatedAt)
             ]
         }
     }
@@ -90,7 +90,7 @@ final class FakeDemoAPIClient: DemoAPIClient {
                 "display_name": user.displayName,
                 "avatar_seed": user.avatarSeed,
                 "role": user.role,
-                "server_updated_at": iso8601(user.serverUpdatedAt)
+                "updated_at": iso8601(user.updatedAt)
             ]
         }
     }
@@ -121,7 +121,7 @@ final class FakeDemoAPIClient: DemoAPIClient {
                     "author_user_id": comment.authorUserID,
                     "body": comment.body,
                     "created_at": iso8601(comment.createdAt),
-                    "server_updated_at": iso8601(comment.serverUpdatedAt)
+                    "updated_at": iso8601(comment.updatedAt)
                 ]
             }
     }
@@ -133,7 +133,7 @@ final class FakeDemoAPIClient: DemoAPIClient {
                 "id": tag.id,
                 "name": tag.name,
                 "color_hex": tag.colorHex,
-                "server_updated_at": iso8601(tag.serverUpdatedAt)
+                "updated_at": iso8601(tag.updatedAt)
             ]
         }
     }
@@ -149,15 +149,22 @@ final class FakeDemoAPIClient: DemoAPIClient {
         [
             "id": task.id,
             "project_id": task.projectID,
-            "assignee_id": task.assigneeID as Any,
+            "assignee_id": jsonOrNull(task.assigneeID),
             "title": task.title,
             "description": task.descriptionText,
             "state": task.state,
             "priority": task.priority,
-            "due_date": task.dueDate.map(iso8601) as Any,
+            "due_date": jsonOrNull(task.dueDate.map(iso8601)),
             "tag_ids": task.tagIDs,
-            "server_updated_at": iso8601(task.serverUpdatedAt)
+            "updated_at": iso8601(task.updatedAt)
         ]
+    }
+
+    private func jsonOrNull<T>(_ value: T?) -> Any {
+        if let value {
+            return value
+        }
+        return NSNull()
     }
 
     private func networkGate(endpoint: String) async throws {
@@ -214,7 +221,7 @@ struct DemoSeedData {
         let id: String
         let name: String
         let status: String
-        let serverUpdatedAt: Date
+        let updatedAt: Date
     }
 
     struct SeedUser {
@@ -222,14 +229,14 @@ struct DemoSeedData {
         let displayName: String
         let avatarSeed: String
         let role: String
-        let serverUpdatedAt: Date
+        let updatedAt: Date
     }
 
     struct SeedTag {
         let id: String
         let name: String
         let colorHex: String
-        let serverUpdatedAt: Date
+        let updatedAt: Date
     }
 
     struct SeedTask {
@@ -242,7 +249,7 @@ struct DemoSeedData {
         let priority: Int
         let dueDate: Date?
         let tagIDs: [String]
-        let serverUpdatedAt: Date
+        let updatedAt: Date
     }
 
     struct SeedComment {
@@ -251,7 +258,7 @@ struct DemoSeedData {
         let authorUserID: String
         let body: String
         let createdAt: Date
-        let serverUpdatedAt: Date
+        let updatedAt: Date
     }
 
     let projects: [SeedProject]
@@ -274,7 +281,7 @@ struct DemoSeedData {
                     id: "project-\(index)",
                     name: "Project \(index)",
                     status: statuses[index % statuses.count],
-                    serverUpdatedAt: baseDate.addingTimeInterval(TimeInterval(index * 90))
+                    updatedAt: baseDate.addingTimeInterval(TimeInterval(index * 90))
                 )
             )
         }
@@ -287,7 +294,7 @@ struct DemoSeedData {
                     displayName: "User \(index)",
                     avatarSeed: "seed-\(index)",
                     role: roles[index % roles.count],
-                    serverUpdatedAt: baseDate.addingTimeInterval(TimeInterval(index * 75))
+                    updatedAt: baseDate.addingTimeInterval(TimeInterval(index * 75))
                 )
             )
         }
@@ -300,7 +307,7 @@ struct DemoSeedData {
                     id: "tag-\(index)",
                     name: "tag-\(index)",
                     colorHex: color,
-                    serverUpdatedAt: baseDate.addingTimeInterval(TimeInterval(index * 42))
+                    updatedAt: baseDate.addingTimeInterval(TimeInterval(index * 42))
                 )
             )
         }
@@ -338,7 +345,7 @@ struct DemoSeedData {
                     priority: (index % 5) + 1,
                     dueDate: dueDate,
                     tagIDs: tagIDs,
-                    serverUpdatedAt: baseDate.addingTimeInterval(TimeInterval(index * 120))
+                    updatedAt: baseDate.addingTimeInterval(TimeInterval(index * 120))
                 )
             )
         }
@@ -352,7 +359,7 @@ struct DemoSeedData {
                     authorUserID: "user-\(((index * 5) % users.count) + 1)",
                     body: "Comment \(index): seeded for deterministic offline/read-only phase one coverage.",
                     createdAt: baseDate.addingTimeInterval(TimeInterval(index * 30)),
-                    serverUpdatedAt: baseDate.addingTimeInterval(TimeInterval(index * 30 + 5))
+                    updatedAt: baseDate.addingTimeInterval(TimeInterval(index * 30 + 5))
                 )
             )
         }
