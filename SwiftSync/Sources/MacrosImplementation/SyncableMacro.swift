@@ -65,6 +65,7 @@ public struct SyncableMacro: ExtensionMacro {
         let sortDescriptorBody = sortDescriptorBlock(for: properties, typeName: typeName)
         let defaultRefreshModelTypesBody = defaultRefreshModelTypesBlock(for: properties)
         let relatedModelTypeBody = relatedModelTypeBlock(for: properties, typeName: typeName)
+        let relationshipApplyBody = relationshipApplyBlock(for: properties, typeName: typeName)
 
         return [
             try ExtensionDeclSyntax(
@@ -94,6 +95,17 @@ public struct SyncableMacro: ExtensionMacro {
                         var changed = false
                         \(raw: applyBody)
                         return changed
+                    }
+
+                    func syncApplyGeneratedRelationships(
+                        _ payload: SyncPayload,
+                        in context: ModelContext,
+                        operations: SyncRelationshipOperations = .all
+                    ) throws -> Bool {
+                        guard !operations.isDisjoint(with: [.insert, .update, .delete]) else { return false }
+                        \(raw: relationshipApplyBody.isEmpty ? "return false" : "var changed = false")
+                        \(raw: relationshipApplyBody)
+                        \(raw: relationshipApplyBody.isEmpty ? "" : "return changed")
                     }
 
                     func exportObject(using options: ExportOptions, state: inout ExportState) -> [String: Any] {
@@ -467,6 +479,77 @@ public struct SyncableMacro: ExtensionMacro {
             }
         }
         """
+    }
+
+    private static func relationshipApplyBlock(for properties: [SyncedProperty], typeName: String) -> String {
+        let relationshipProperties = properties.filter { $0.isRelationship }
+        guard !relationshipProperties.isEmpty else {
+            return ""
+        }
+
+        let blocks: [String] = relationshipProperties.compactMap { property in
+            let keys = relationshipInputKeys(for: property)
+            guard !keys.isEmpty else { return nil }
+            let keysLiteral = keys.map { "\"\($0)\"" }.joined(separator: ", ")
+
+            if property.isToManyRelationship {
+                return """
+                if try syncApplyToManyForeignKeys(
+                    self,
+                    relationship: \\\(typeName).\(property.name),
+                    payload: payload,
+                    keys: [\(keysLiteral)],
+                    in: context
+                ) {
+                    changed = true
+                }
+                """
+            }
+
+            return """
+            if try syncApplyToOneForeignKey(
+                self,
+                relationship: \\\(typeName).\(property.name),
+                payload: payload,
+                keys: [\(keysLiteral)],
+                in: context
+            ) {
+                changed = true
+            }
+            """
+        }
+
+        return blocks.joined(separator: "\n\n")
+    }
+
+    private static func relationshipInputKeys(for property: SyncedProperty) -> [String] {
+        if let remoteKey = property.remoteKey, !remoteKey.isEmpty {
+            return [remoteKey]
+        }
+
+        if property.isToManyRelationship {
+            let plural = "\(property.name)_ids"
+            let singular = "\(singularized(property.name))_ids"
+            return Array(Set([plural, singular])).sorted()
+        }
+
+        return ["\(property.name)_id"]
+    }
+
+    private static func singularized(_ value: String) -> String {
+        guard value.count > 1 else { return value }
+        if value.hasSuffix("ies") {
+            return String(value.dropLast(3)) + "y"
+        }
+        if value.hasSuffix("ses") || value.hasSuffix("xes") || value.hasSuffix("zes") ||
+            value.hasSuffix("ches") || value.hasSuffix("shes")
+        {
+            return String(value.dropLast(2))
+        }
+        if value.hasSuffix("s") {
+            return String(value.dropLast())
+        }
+        return value
     }
 
     private static func syncInputKey(for property: SyncedProperty) -> String {

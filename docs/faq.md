@@ -33,6 +33,13 @@ Relationship FK lookup is strict by type:
 This is intentional to avoid ambiguous linking.  
 Scalar attributes still support coercion paths where appropriate.
 
+`@Syncable` auto-generates this helper behavior for common relationship patterns:
+- to-one by `*_id`
+- to-many by `*_ids`
+
+Use a tiny `SyncRelationshipUpdatableModel` wrapper to call `syncApplyGeneratedRelationships(...)`.
+For nested object payload relationships or custom merge policies, keep manual custom implementations.
+
 ## 3) Ordered to-many parity
 
 When relationship metadata is ordered, SwiftSync should preserve remote order semantics.  

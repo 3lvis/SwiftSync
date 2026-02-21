@@ -151,6 +151,8 @@ final class Comment {
     var createdAt: Date
     var serverUpdatedAt: Date
     var task: Task?
+
+    @RemoteKey("author_user_id")
     var author: User?
 
     init(
@@ -182,47 +184,15 @@ extension Task: ParentScopedModel {
 
 extension Task: SyncRelationshipUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
-        var changed = false
+        try syncApplyGeneratedRelationships(payload, in: context)
+    }
 
-        if payload.contains("project_id") {
-            let projects = try context.fetch(FetchDescriptor<Project>())
-            let projectByID = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0) })
-            let nextProjectID: String = try payload.required(String.self, for: "project_id")
-            let nextProject = projectByID[nextProjectID]
-            if project?.id != nextProject?.id {
-                project = nextProject
-                changed = true
-            }
-        }
-
-        if payload.contains("assignee_id") {
-            let users = try context.fetch(FetchDescriptor<User>())
-            let userByID = Dictionary(uniqueKeysWithValues: users.map { ($0.id, $0) })
-            let nextAssigneeID: String? = payload.value(for: "assignee_id")
-            let nextAssignee = nextAssigneeID.flatMap { userByID[$0] }
-            if assignee?.id != nextAssignee?.id {
-                assignee = nextAssignee
-                changed = true
-            }
-        }
-
-        if payload.contains("tag_ids") {
-            let tagsInStore = try context.fetch(FetchDescriptor<Tag>())
-            let tagsByID = Dictionary(uniqueKeysWithValues: tagsInStore.map { ($0.id, $0) })
-            let desiredTagIDs: [String]
-            if let ids: [String] = payload.value(for: "tag_ids") {
-                desiredTagIDs = ids
-            } else {
-                desiredTagIDs = []
-            }
-            let desiredTags = desiredTagIDs.compactMap { tagsByID[$0] }
-            if tags.map(\.id) != desiredTags.map(\.id) {
-                tags = desiredTags
-                changed = true
-            }
-        }
-
-        return changed
+    func applyRelationships(
+        _ payload: SyncPayload,
+        in context: ModelContext,
+        operations: SyncRelationshipOperations
+    ) async throws -> Bool {
+        try syncApplyGeneratedRelationships(payload, in: context, operations: operations)
     }
 }
 
@@ -234,30 +204,14 @@ extension Comment: ParentScopedModel {
 
 extension Comment: SyncRelationshipUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
-        var changed = false
+        try syncApplyGeneratedRelationships(payload, in: context)
+    }
 
-        if payload.contains("task_id") {
-            let tasks = try context.fetch(FetchDescriptor<Task>())
-            let taskByID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
-            let nextTaskID: String = try payload.required(String.self, for: "task_id")
-            let nextTask = taskByID[nextTaskID]
-            if task?.id != nextTask?.id {
-                task = nextTask
-                changed = true
-            }
-        }
-
-        if payload.contains("author_user_id") {
-            let users = try context.fetch(FetchDescriptor<User>())
-            let userByID = Dictionary(uniqueKeysWithValues: users.map { ($0.id, $0) })
-            let nextAuthorID: String = try payload.required(String.self, for: "author_user_id")
-            let nextAuthor = userByID[nextAuthorID]
-            if author?.id != nextAuthor?.id {
-                author = nextAuthor
-                changed = true
-            }
-        }
-
-        return changed
+    func applyRelationships(
+        _ payload: SyncPayload,
+        in context: ModelContext,
+        operations: SyncRelationshipOperations
+    ) async throws -> Bool {
+        try syncApplyGeneratedRelationships(payload, in: context, operations: operations)
     }
 }

@@ -618,8 +618,21 @@ That row is skipped for matching/diffing. Sync continues for valid rows.
 
 ### Does relationship sync happen automatically for complex graphs?
 
-Flat attributes are automatic with `@Syncable`.
-For relationship behavior, implement `SyncRelationshipUpdatableModel` and define `applyRelationships(...)`.
+`@Syncable` now auto-generates relationship helper logic for the common FK patterns:
+- to-one by `*_id` (strict typed FK lookup)
+- to-many by `*_ids` (authoritative membership replacement)
+
+Use a tiny `SyncRelationshipUpdatableModel` wrapper to activate it:
+
+```swift
+extension Task: SyncRelationshipUpdatableModel {
+  func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+    try syncApplyGeneratedRelationships(payload, in: context)
+  }
+}
+```
+
+For nested relationship objects or custom domain merge policies, implement custom `applyRelationships(...)`.
 
 ### Can two different parents have children with the same `id`?
 

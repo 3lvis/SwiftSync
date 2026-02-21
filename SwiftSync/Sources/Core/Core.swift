@@ -52,6 +52,11 @@ public protocol SyncUpdatableModel: SyncModelable {
 
 public protocol SyncRelationshipUpdatableModel: SyncUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool
+    func applyRelationships(
+        _ payload: SyncPayload,
+        in context: ModelContext,
+        operations: SyncRelationshipOperations
+    ) async throws -> Bool
 }
 
 public extension SyncRelationshipUpdatableModel {
@@ -63,6 +68,210 @@ public extension SyncRelationshipUpdatableModel {
         _ = operations
         return try await applyRelationships(payload, in: context)
     }
+}
+
+@discardableResult
+public func syncApplyToOneForeignKey<Owner, Related: PersistentModel>(
+    _ owner: Owner,
+    relationship: ReferenceWritableKeyPath<Owner, Related?>,
+    payload: SyncPayload,
+    keys: [String],
+    in context: ModelContext
+) throws -> Bool {
+    _ = context
+    guard let key = firstPresentPayloadKey(payload, keys: keys) else { return false }
+    guard payload.value(for: key, as: NSNull.self) != nil else { return false }
+    if owner[keyPath: relationship] != nil {
+        owner[keyPath: relationship] = nil
+        return true
+    }
+    return false
+}
+
+@discardableResult
+public func syncApplyToOneForeignKey<Owner, Related: SyncModelable>(
+    _ owner: Owner,
+    relationship: ReferenceWritableKeyPath<Owner, Related?>,
+    payload: SyncPayload,
+    keys: [String],
+    in context: ModelContext
+) throws -> Bool {
+    guard let key = firstPresentPayloadKey(payload, keys: keys) else { return false }
+
+    if payload.value(for: key, as: NSNull.self) != nil {
+        if owner[keyPath: relationship] != nil {
+            owner[keyPath: relationship] = nil
+            return true
+        }
+        return false
+    }
+
+    guard let nextID: Related.SyncID = payload.strictValue(for: key) else {
+        return false
+    }
+
+    let relatedRows = try context.fetch(FetchDescriptor<Related>())
+    let relatedByID = Dictionary(
+        uniqueKeysWithValues: relatedRows.map { row in
+            (syncIdentityKey(from: row[keyPath: Related.syncIdentity]), row)
+        }
+    )
+
+    guard let nextRelated = relatedByID[syncIdentityKey(from: nextID)] else {
+        // Old Sync parity: unknown FK row is a soft no-op.
+        return false
+    }
+
+    if owner[keyPath: relationship]?.persistentModelID != nextRelated.persistentModelID {
+        owner[keyPath: relationship] = nextRelated
+        return true
+    }
+    return false
+}
+
+@discardableResult
+public func syncApplyToOneForeignKey<Owner, Related: PersistentModel>(
+    _ owner: Owner,
+    relationship: ReferenceWritableKeyPath<Owner, Related>,
+    payload: SyncPayload,
+    keys: [String],
+    in context: ModelContext
+) throws -> Bool {
+    _ = owner
+    _ = relationship
+    _ = payload
+    _ = keys
+    _ = context
+    return false
+}
+
+@discardableResult
+public func syncApplyToOneForeignKey<Owner, Related: SyncModelable>(
+    _ owner: Owner,
+    relationship: ReferenceWritableKeyPath<Owner, Related>,
+    payload: SyncPayload,
+    keys: [String],
+    in context: ModelContext
+) throws -> Bool {
+    guard let key = firstPresentPayloadKey(payload, keys: keys) else { return false }
+
+    if payload.value(for: key, as: NSNull.self) != nil {
+        // Non-optional to-one relationships cannot be cleared.
+        return false
+    }
+
+    guard let nextID: Related.SyncID = payload.strictValue(for: key) else {
+        return false
+    }
+
+    let relatedRows = try context.fetch(FetchDescriptor<Related>())
+    let relatedByID = Dictionary(
+        uniqueKeysWithValues: relatedRows.map { row in
+            (syncIdentityKey(from: row[keyPath: Related.syncIdentity]), row)
+        }
+    )
+    guard let nextRelated = relatedByID[syncIdentityKey(from: nextID)] else {
+        return false
+    }
+
+    if owner[keyPath: relationship].persistentModelID != nextRelated.persistentModelID {
+        owner[keyPath: relationship] = nextRelated
+        return true
+    }
+    return false
+}
+
+@discardableResult
+public func syncApplyToManyForeignKeys<Owner, Related: PersistentModel>(
+    _ owner: Owner,
+    relationship: ReferenceWritableKeyPath<Owner, [Related]>,
+    payload: SyncPayload,
+    keys: [String],
+    in context: ModelContext
+) throws -> Bool {
+    _ = context
+    guard let key = firstPresentPayloadKey(payload, keys: keys) else { return false }
+
+    if payload.value(for: key, as: NSNull.self) != nil {
+        if !owner[keyPath: relationship].isEmpty {
+            owner[keyPath: relationship] = []
+            return true
+        }
+        return false
+    }
+
+    if let anyIDs: [Any] = payload.strictValue(for: key), anyIDs.isEmpty {
+        if !owner[keyPath: relationship].isEmpty {
+            owner[keyPath: relationship] = []
+            return true
+        }
+    }
+
+    return false
+}
+
+@discardableResult
+public func syncApplyToManyForeignKeys<Owner, Related: SyncModelable>(
+    _ owner: Owner,
+    relationship: ReferenceWritableKeyPath<Owner, [Related]>,
+    payload: SyncPayload,
+    keys: [String],
+    in context: ModelContext
+) throws -> Bool {
+    guard let key = firstPresentPayloadKey(payload, keys: keys) else { return false }
+
+    if payload.value(for: key, as: NSNull.self) != nil {
+        if !owner[keyPath: relationship].isEmpty {
+            owner[keyPath: relationship] = []
+            return true
+        }
+        return false
+    }
+
+    guard let rawIDs: [Related.SyncID] = payload.strictValue(for: key) else {
+        return false
+    }
+
+    // Old Sync behavior avoids duplicate membership; dedupe input deterministically.
+    let desiredIDs = dedupePreservingOrder(rawIDs)
+    let relatedRows = try context.fetch(FetchDescriptor<Related>())
+    let relatedByID = Dictionary(
+        uniqueKeysWithValues: relatedRows.map { row in
+            (syncIdentityKey(from: row[keyPath: Related.syncIdentity]), row)
+        }
+    )
+    let desiredRelated = desiredIDs.compactMap { relatedByID[syncIdentityKey(from: $0)] }
+
+    let currentIDs = owner[keyPath: relationship].map(\.persistentModelID)
+    let desiredModelIDs = desiredRelated.map(\.persistentModelID)
+    if currentIDs != desiredModelIDs {
+        owner[keyPath: relationship] = desiredRelated
+        return true
+    }
+    return false
+}
+
+private func firstPresentPayloadKey(_ payload: SyncPayload, keys: [String]) -> String? {
+    for key in keys where payload.contains(key) {
+        return key
+    }
+    return nil
+}
+
+private func dedupePreservingOrder<ID: Hashable>(_ input: [ID]) -> [ID] {
+    var seen: Set<ID> = []
+    var output: [ID] = []
+    output.reserveCapacity(input.count)
+    for value in input {
+        if seen.insert(value).inserted {
+            output.append(value)
+        }
+    }
+    return output
+}
+
+private func syncIdentityKey<ID: Hashable>(from identity: ID) -> String {
+    String(describing: identity)
 }
 
 public protocol ParentScopedModel: SyncUpdatableModel {

@@ -189,6 +189,72 @@ final class Employee {
     }
 }
 
+@Syncable
+@Model
+final class AutoCompany {
+    @Attribute(.unique) var id: Int
+    var name: String
+
+    init(id: Int, name: String) {
+        self.id = id
+        self.name = name
+    }
+}
+
+@Syncable
+@Model
+final class AutoEmployee {
+    @Attribute(.unique) var id: Int
+    var name: String
+    var company: AutoCompany?
+
+    init(id: Int, name: String, company: AutoCompany? = nil) {
+        self.id = id
+        self.name = name
+        self.company = company
+    }
+}
+
+extension AutoEmployee: SyncRelationshipUpdatableModel {
+    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+        try syncApplyGeneratedRelationships(payload, in: context)
+    }
+}
+
+@Syncable
+@Model
+final class AutoTag {
+    @Attribute(.unique) var id: Int
+    var name: String
+
+    init(id: Int, name: String) {
+        self.id = id
+        self.name = name
+    }
+}
+
+@Syncable
+@Model
+final class AutoTask {
+    @Attribute(.unique) var id: Int
+    var title: String
+
+    @RemoteKey("tag_ids")
+    var tags: [AutoTag]
+
+    init(id: Int, title: String, tags: [AutoTag] = []) {
+        self.id = id
+        self.title = title
+        self.tags = tags
+    }
+}
+
+extension AutoTask: SyncRelationshipUpdatableModel {
+    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+        try syncApplyGeneratedRelationships(payload, in: context)
+    }
+}
+
 @Model
 final class Note {
     @Attribute(.unique) var id: Int
@@ -1682,6 +1748,90 @@ final class IntegrationTests: XCTestCase {
     }
 
     @MainActor
+    func testSyncableGeneratedToOneForeignKeySupportsStrictNullMissingAndUnknown() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: AutoEmployee.self, AutoCompany.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [["id": 10, "name": "Acme"]],
+            as: AutoCompany.self,
+            in: context
+        )
+        try await SwiftSync.sync(
+            payload: [["id": 1, "name": "Ava"]],
+            as: AutoEmployee.self,
+            in: context
+        )
+
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 1,
+                "name": "Ava",
+                "company_id": 10
+            ]],
+            as: AutoEmployee.self,
+            in: context
+        )
+
+        var employees = try context.fetch(FetchDescriptor<AutoEmployee>())
+        XCTAssertEqual(employees.count, 1)
+        XCTAssertEqual(employees[0].company?.id, 10)
+
+        // Strict FK typing: string payload for Int FK should be ignored.
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 1,
+                "name": "Ava",
+                "company_id": "10"
+            ]],
+            as: AutoEmployee.self,
+            in: context
+        )
+        employees = try context.fetch(FetchDescriptor<AutoEmployee>())
+        XCTAssertEqual(employees[0].company?.id, 10)
+
+        // Missing key should not clear existing relationship.
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 1,
+                "name": "Ava Updated"
+            ]],
+            as: AutoEmployee.self,
+            in: context
+        )
+        employees = try context.fetch(FetchDescriptor<AutoEmployee>())
+        XCTAssertEqual(employees[0].name, "Ava Updated")
+        XCTAssertEqual(employees[0].company?.id, 10)
+
+        // Unknown FK keeps current relation unchanged.
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 1,
+                "name": "Ava Updated",
+                "company_id": 999
+            ]],
+            as: AutoEmployee.self,
+            in: context
+        )
+        employees = try context.fetch(FetchDescriptor<AutoEmployee>())
+        XCTAssertEqual(employees[0].company?.id, 10)
+
+        // Explicit null clears relation.
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 1,
+                "name": "Ava Updated",
+                "company_id": NSNull()
+            ]],
+            as: AutoEmployee.self,
+            in: context
+        )
+        employees = try context.fetch(FetchDescriptor<AutoEmployee>())
+        XCTAssertNil(employees[0].company)
+    }
+
+    @MainActor
     func testSyncToManyNestedObjectArrayReplacesMembershipAndUpdatesExistingChild() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: Team.self, Member.self, configurations: configuration)
@@ -1765,6 +1915,62 @@ final class IntegrationTests: XCTestCase {
         XCTAssertEqual(users.count, 1)
         XCTAssertEqual(Set(users[0].notes.map(\.id)), Set([1, 2]))
         XCTAssertFalse(Set(users[0].notes.map(\.id)).contains(0))
+    }
+
+    @MainActor
+    func testSyncableGeneratedToManyIDsDedupeUnknownMissingAndNull() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: AutoTask.self, AutoTag.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "name": "Tag 1"],
+                ["id": 2, "name": "Tag 2"]
+            ],
+            as: AutoTag.self,
+            in: context
+        )
+
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 5,
+                "title": "Task A",
+                "tag_ids": [1, 2, 2, 999]
+            ]],
+            as: AutoTask.self,
+            in: context
+        )
+
+        var tasks = try context.fetch(FetchDescriptor<AutoTask>())
+        XCTAssertEqual(tasks.count, 1)
+        XCTAssertEqual(Set(tasks[0].tags.map(\.id)), Set([1, 2]))
+
+        // Missing key should preserve current to-many links.
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 5,
+                "title": "Task A Updated"
+            ]],
+            as: AutoTask.self,
+            in: context
+        )
+        tasks = try context.fetch(FetchDescriptor<AutoTask>())
+        XCTAssertEqual(tasks[0].title, "Task A Updated")
+        XCTAssertEqual(Set(tasks[0].tags.map(\.id)), Set([1, 2]))
+
+        // Explicit null clears links.
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 5,
+                "title": "Task A Updated",
+                "tag_ids": NSNull()
+            ]],
+            as: AutoTask.self,
+            in: context
+        )
+        tasks = try context.fetch(FetchDescriptor<AutoTask>())
+        XCTAssertEqual(tasks[0].tags.count, 0)
     }
 
     @MainActor
