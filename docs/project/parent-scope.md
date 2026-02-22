@@ -1,6 +1,6 @@
-# Parent Scope Follow-up
+# Parent-Scoped Sync and Query Behavior
 
-This document explains current parent-scope behavior after the inference update.
+This document explains current parent-scoped behavior and the relationship inference rules used by SwiftSync.
 
 ## TL;DR
 

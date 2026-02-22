@@ -1,4 +1,4 @@
-# Property Mapping Contract v2
+# Property Mapping Contract
 
 This document is the source of truth for property mapping behavior in SwiftSync.
 
@@ -12,14 +12,17 @@ This contract defines current behavior for:
 - export key emission contract
 - scalar type coercion policy
 
-It also marks deferred items that are planned but not part of this phase.
-
 ## Core Rules
 
 - Convention-first mapping is expected.
 - `absent = ignore` for payload fields.
 - `null = clear` for optional fields/relationships when delete semantics apply.
 - Explicit overrides (`@PrimaryKey(remote:)`, `@RemoteKey`, `@RemotePath`) take precedence over conventions.
+
+Practical defaults:
+- Prefer convention mapping first; add `@RemoteKey` only when local naming intentionally differs.
+- Prefer `projectID`, `remoteURL`, `uuidValue` style names; SwiftSync normalizes acronyms for snake/camel mapping.
+- Configure inbound key style once at `SyncContainer` (`.snakeCase` default, `.camelCase` optional).
 
 ## Container Input Key Style
 
@@ -121,9 +124,3 @@ Supported scalar coercions on inbound attribute reads include:
 - string/number -> `Date` via parser and unix timestamp handling
 
 Strict reads (`strictValue`, relationship FK linking) remain non-coercive by design.
-
-## Deferred (Later Phases)
-
-- Deep-path import test expansion for additional to-many nested relationship variants.
-- Additional coercion matrix hardening beyond the current deterministic set.
-- Reserved-name diagnostics expansion if new SwiftData/Swift collisions are identified.

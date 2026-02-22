@@ -75,11 +75,11 @@ Recommended next step for incremental sync:
 Optional for soft-delete flows:
 - add `deleted_at` tombstones with explicit retention policy
 
-## 8) Compatibility / Rollout Guidance
+## 8) Integration Guidance
 
 For existing APIs:
 - preserve backward compatibility with versioned endpoints
-- migrate resource-by-resource to this contract
+- align resource-by-resource to this contract
 - add fixture-based contract tests to avoid drift
 
 ---

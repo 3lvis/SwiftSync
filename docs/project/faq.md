@@ -1,9 +1,10 @@
-# SwiftSync FAQ (Advanced)
+# SwiftSync FAQ
 
-This document captures the current design decisions that go beyond the quick FAQ in `README.md`.
+This is the single FAQ for SwiftSync.
 
-Backend payload contract guidance lives in `docs/backend-contract.md`.
-Parent-scope boilerplate follow-up is tracked in `docs/parent-scope-follow-up.md`.
+Related docs:
+- backend payload contract: `docs/project/backend-contract.md`
+- parent-scoped sync/query behavior: `docs/project/parent-scope.md`
 
 ## 1) Parent-scoped identity vs global identity
 
@@ -165,3 +166,80 @@ Inference rule is the same idea as parent sync:
 Use `predicate` instead when:
 - filtering by scalar FK values without a parent object instance
 - applying non-parent business filters
+
+## 11) Do I have to import multiple modules?
+
+No. Use only:
+
+```swift
+import SwiftSync
+```
+
+## 12) What if payload has duplicate items with the same identity?
+
+SwiftSync applies payload rows in order. If the same identity appears more than once, later rows win.
+
+## 13) What if local DB already has duplicate rows for the same primary key?
+
+SwiftSync deduplicates local identity collisions during sync and keeps one logical row per identity.
+
+## 14) What if a row has missing or `null` primary key?
+
+That row is skipped for matching/diffing. Sync continues for valid rows.
+
+## 15) What happens when payload value is `null` for a scalar?
+
+- optional scalar -> `nil`
+- non-optional primitive scalar -> default value (`""`, `0`, `false`, epoch date, zero UUID)
+
+## 16) What happens if two sync calls run at the same time?
+
+SwiftSync serializes sync calls per store/container.
+
+- Calls targeting the same `ModelContainer` are queued (no overlap/interleaving).
+- Final state is last-writer-wins by queued execution order.
+- Calls targeting different stores can run concurrently.
+
+More internal test-planning detail lives in `docs/planning/swiftdata-concurrency-edge-cases.md`.
+
+## 17) How do I cancel a sync?
+
+Use Swift Concurrency task cancellation:
+
+```swift
+let task = Task {
+  try await SwiftSync.sync(payload: payload, as: User.self, in: context)
+}
+
+task.cancel()
+
+do {
+  try await task.value
+} catch SyncError.cancelled {
+  // expected cooperative cancellation
+}
+```
+
+Cancellation is cooperative. SwiftSync rolls back unsaved in-memory changes for that run, but it does not roll back work that was already saved earlier.
+
+## 18) Can I still control sort direction with `@SyncQuery`?
+
+Yes. Use explicit `SortDescriptor` values when you need direction:
+
+```swift
+@SyncQuery(
+  Task.self,
+  in: syncContainer,
+  sortBy: [
+    SortDescriptor(\Task.priority, order: .reverse),
+    SortDescriptor(\Task.id)
+  ]
+)
+var tasks: [Task]
+```
+
+## 19) When should I use `sortBy: [\.field]` vs `sortBy: [SortDescriptor(...)]`?
+
+- Use `sortBy: [\.field]` for concise default ascending sort.
+- Use `sortBy: [SortDescriptor(...)]` for descending or mixed ordering.
+- If your model is not `@Syncable`, shorthand requires `SyncQuerySortableModel` conformance; explicit `SortDescriptor` works directly.

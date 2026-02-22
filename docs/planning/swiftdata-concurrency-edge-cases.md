@@ -1,5 +1,8 @@
 # SwiftData Concurrency and Store Edge Cases
 
+Internal planning/test-tracking document.
+User-facing behavior guarantees should be documented in `README.md` and `docs/project/faq.md`.
+
 Purpose: capture high-impact real-world edge cases and define optimistic, deterministic outcomes (`last-write-wins`, queued writers, safe fallback paths) so we can validate them one by one in SwiftSync.
 
 Status legend:
