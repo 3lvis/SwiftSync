@@ -10,3 +10,7 @@ Rule of thumb:
 - If you are working on SwiftSync internals, check `docs/planning/` as needed.
 
 Completed implementation plans are removed once the behavior is implemented and documented in `docs/project/` and `README.md`.
+
+Current planning docs:
+- `docs/planning/swiftdata-concurrency-edge-cases.md`
+- `docs/planning/swiftsync-demo-app-plan.md`

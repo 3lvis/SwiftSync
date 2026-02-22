@@ -1,6 +1,11 @@
 # Reactive Reads (SwiftData + SwiftUI)
 
-This document explains the user-facing mental model for SwiftSync reactive reads.
+This document explains both:
+
+- the user-facing mental model for SwiftSync reactive reads
+- the design rationale/tradeoffs behind the current reactive read approach
+
+## User-Facing Mental Model / Usage
 
 ## What `@SyncQuery` / `@SyncModel` are
 
@@ -103,3 +108,116 @@ High level flow:
 4. SwiftUI re-renders using fresh local snapshots.
 
 This is the "sync and forget" experience: sync updates local storage, and reactive reads update UI.
+
+## Design Rationale / Tradeoffs
+
+This section keeps the key design reasoning in one place so users and maintainers can understand why the reactive APIs look the way they do.
+
+## Goal
+
+Provide a practical "sync and forget" experience for SwiftUI apps:
+
+- background sync writes local data
+- UI updates automatically from local reads
+- minimal app-level invalidation plumbing
+
+## Current Constraints and Observations
+
+### What SwiftSync already has
+
+- `SyncContainer` with main/background context separation
+- save observation and changed-ID processing
+- reliable background sync execution/cancellation behavior
+
+### Observed behavior (important)
+
+- fresh main-context fetches can see background writes
+- long-lived retained model references can still become stale
+
+Implication:
+- reactive UI should be query-snapshot driven, not retained-object-reference driven
+
+## SwiftData Constraints (Why not FRC semantics)
+
+SwiftData gives us useful primitives (`fetch`, `save`, save notifications, changed identifiers), but not a full FRC-style list-change contract.
+
+What it does not give us here:
+
+- automatic in-place refresh of all retained model references across contexts
+- an FRC-style granular insert/update/delete callback contract
+- ordered to-many sync semantics needed by this pipeline
+
+So SwiftSync favors query-driven reactive reads instead of trying to recreate FRC behavior.
+
+## Candidate Approaches Considered
+
+### A) Query-Driven Read Layer + Sync Events (Current Direction)
+
+Principle:
+- UI renders from query snapshots (`@SyncQuery`, `@SyncModel`)
+- sync writes trigger invalidation/refetch via `SyncContainer`
+
+Pros:
+- smallest custom infrastructure
+- aligns with SwiftUI + SwiftData
+- easy to reason about and document
+
+Tradeoffs:
+- not object-reference live-merge semantics
+- refetch precision depends on invalidation heuristics and `refreshOn`
+
+### B) Observable Query Store Layer (Future Option)
+
+Principle:
+- internal query registry owns descriptors + cached snapshots and invalidation
+
+Pros:
+- more targeted invalidation
+- may scale better for larger apps
+
+Tradeoffs:
+- more framework complexity and maintenance
+
+### C) FRC-Style Diff Engine (Avoid Unless Required)
+
+Pros:
+- closest to legacy FRC behavior
+- richer non-SwiftUI callback possibilities
+
+Tradeoffs:
+- highest complexity
+- easy to introduce subtle bugs
+- duplicates work SwiftUI already handles with identity-based list diffs
+
+## Why A Is the Default Choice
+
+It gives the best balance of:
+
+- reliability
+- API simplicity
+- maintainability
+- alignment with SwiftUI
+
+Core convention:
+- treat query wrappers as the UI source of truth
+- avoid relying on retained model instances staying fresh automatically
+
+## Current Limitations / Non-Goals
+
+- SwiftSync does not try to provide FRC-style granular diff callbacks.
+- Reactive read wrappers are the primary intended SwiftUI integration path.
+- Ordered to-many sync semantics are not part of this reactive read design.
+
+## Revisit Triggers (When to Reconsider the Design)
+
+Revisit the architecture if we repeatedly see:
+
+- performance issues from broad refetches
+- invalidation precision problems affecting UX
+- real demand for non-SwiftUI granular change callbacks
+
+## Open Questions
+
+1. Should `SyncContainer` expose a public publisher/stream for changed IDs/types, or keep invalidation wrapper-internal?
+2. Should we expose a stricter detail-view refresh mode as an opt-in?
+3. What metrics/logging would best reveal over-refetching before adding a query registry?
