@@ -5,11 +5,6 @@ import SwiftSync
 
 @MainActor
 final class DemoSyncEngine: ObservableObject {
-    enum OperationResult: Equatable {
-        case success
-        case failure(String)
-    }
-
     @Published private(set) var isSyncing = false
     @Published private(set) var lastErrorMessage: String?
     @Published private(set) var lastSyncDate: Date?
@@ -81,7 +76,6 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    @discardableResult
     func createTask(
         projectID: String,
         title: String,
@@ -89,8 +83,8 @@ final class DemoSyncEngine: ObservableObject {
         state: String,
         assigneeID: String?,
         tagIDs: [String]
-    ) async -> OperationResult {
-        await syncOperationResult("createTask-\(projectID)") {
+    ) async throws {
+        try await syncOperationThrowing("createTask-\(projectID)") {
             _ = try await apiClient.createTask(
                 projectID: projectID,
                 title: title,
@@ -110,9 +104,8 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    @discardableResult
-    func updateTaskDescription(taskID: String, projectID: String?, descriptionText: String) async -> OperationResult {
-        await syncOperationResult("patchTaskDescription-\(taskID)") {
+    func updateTaskDescription(taskID: String, projectID: String?, descriptionText: String) async throws {
+        try await syncOperationThrowing("patchTaskDescription-\(taskID)") {
             _ = try await apiClient.patchTaskDescription(taskID: taskID, descriptionText: descriptionText)
             try await syncTaskDetailInternal(taskID: taskID)
             if let projectID {
@@ -121,9 +114,8 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    @discardableResult
-    func updateTaskState(taskID: String, projectID: String?, state: String) async -> OperationResult {
-        await syncOperationResult("patchTaskState-\(taskID)") {
+    func updateTaskState(taskID: String, projectID: String?, state: String) async throws {
+        try await syncOperationThrowing("patchTaskState-\(taskID)") {
             _ = try await apiClient.patchTaskState(taskID: taskID, state: state)
             try await syncTaskDetailInternal(taskID: taskID)
             if let projectID {
@@ -132,9 +124,8 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    @discardableResult
-    func updateTaskAssignee(taskID: String, projectID: String?, assigneeID: String?) async -> OperationResult {
-        await syncOperationResult("patchTaskAssignee-\(taskID)") {
+    func updateTaskAssignee(taskID: String, projectID: String?, assigneeID: String?) async throws {
+        try await syncOperationThrowing("patchTaskAssignee-\(taskID)") {
             _ = try await apiClient.patchTaskAssignee(taskID: taskID, assigneeID: assigneeID)
             try await syncTaskDetailInternal(taskID: taskID)
             if let projectID {
@@ -143,9 +134,8 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    @discardableResult
-    func replaceTaskTags(taskID: String, projectID: String?, tagIDs: [String]) async -> OperationResult {
-        await syncOperationResult("replaceTaskTags-\(taskID)") {
+    func replaceTaskTags(taskID: String, projectID: String?, tagIDs: [String]) async throws {
+        try await syncOperationThrowing("replaceTaskTags-\(taskID)") {
             _ = try await apiClient.replaceTaskTags(taskID: taskID, tagIDs: tagIDs)
             try await syncTaskDetailInternal(taskID: taskID)
             if let projectID {
@@ -154,9 +144,8 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    @discardableResult
-    func createComment(taskID: String, authorUserID: String, body: String) async -> OperationResult {
-        await syncOperationResult("createComment-\(taskID)") {
+    func createComment(taskID: String, authorUserID: String, body: String) async throws {
+        try await syncOperationThrowing("createComment-\(taskID)") {
             _ = try await apiClient.createTaskComment(taskID: taskID, authorUserID: authorUserID, body: body)
             try await syncTaskCommentsInternal(taskID: taskID)
         }
@@ -219,11 +208,15 @@ final class DemoSyncEngine: ObservableObject {
     }
 
     private func syncOperation(_ key: String, _ operation: () async throws -> Void) async {
-        _ = await syncOperationResult(key, operation)
+        do {
+            try await syncOperationThrowing(key, operation)
+        } catch {
+            // Background refresh callers rely on global sync status, not thrown errors.
+        }
     }
 
-    private func syncOperationResult(_ key: String, _ operation: () async throws -> Void) async -> OperationResult {
-        guard !inFlightOperations.contains(key) else { return .success }
+    private func syncOperationThrowing(_ key: String, _ operation: () async throws -> Void) async throws {
+        guard !inFlightOperations.contains(key) else { return }
 
         inFlightOperations.insert(key)
         isSyncing = true
@@ -237,11 +230,10 @@ final class DemoSyncEngine: ObservableObject {
             try await operation()
             lastErrorMessage = nil
             lastSyncDate = Date()
-            return .success
         } catch {
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             lastErrorMessage = message
-            return .failure(message)
+            throw error
         }
     }
 

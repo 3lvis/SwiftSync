@@ -237,7 +237,7 @@ struct TaskDetailView: View {
             ForEach(DemoTaskStateOption.allCases) { option in
                 Button {
                     _Concurrency.Task {
-                        await syncEngine.updateTaskState(
+                        try? await syncEngine.updateTaskState(
                             taskID: taskID,
                             projectID: projectID,
                             state: option.rawValue
@@ -341,16 +341,18 @@ private struct EditTaskDescriptionSheet: View {
                         isSaving = true
                         saveErrorMessage = nil
                         _Concurrency.Task {
-                            let result = await syncEngine.updateTaskDescription(
-                                taskID: taskID,
-                                projectID: taskModel?.projectID,
-                                descriptionText: trimmed
-                            )
-                            await MainActor.run {
-                                switch result {
-                                case .success:
+                            do {
+                                try await syncEngine.updateTaskDescription(
+                                    taskID: taskID,
+                                    projectID: taskModel?.projectID,
+                                    descriptionText: trimmed
+                                )
+                                await MainActor.run {
                                     dismiss()
-                                case .failure(let message):
+                                }
+                            } catch {
+                                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                                await MainActor.run {
                                     isSaving = false
                                     saveErrorMessage = message
                                 }
@@ -462,16 +464,18 @@ private struct AssigneePickerSheet: View {
                         isSaving = true
                         saveErrorMessage = nil
                         _Concurrency.Task {
-                            let result = await syncEngine.updateTaskAssignee(
-                                taskID: taskID,
-                                projectID: projectID,
-                                assigneeID: selection
-                            )
-                            await MainActor.run {
-                                switch result {
-                                case .success:
+                            do {
+                                try await syncEngine.updateTaskAssignee(
+                                    taskID: taskID,
+                                    projectID: projectID,
+                                    assigneeID: selection
+                                )
+                                await MainActor.run {
                                     dismiss()
-                                case .failure(let message):
+                                }
+                            } catch {
+                                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                                await MainActor.run {
                                     isSaving = false
                                     saveErrorMessage = message
                                 }
@@ -585,16 +589,18 @@ private struct EditTaskTagsSheet: View {
                         saveErrorMessage = nil
                         let tagIDs = pendingTagIDs.sorted()
                         _Concurrency.Task {
-                            let result = await syncEngine.replaceTaskTags(
-                                taskID: taskID,
-                                projectID: taskModel?.projectID,
-                                tagIDs: tagIDs
-                            )
-                            await MainActor.run {
-                                switch result {
-                                case .success:
+                            do {
+                                try await syncEngine.replaceTaskTags(
+                                    taskID: taskID,
+                                    projectID: taskModel?.projectID,
+                                    tagIDs: tagIDs
+                                )
+                                await MainActor.run {
                                     dismiss()
-                                case .failure(let message):
+                                }
+                            } catch {
+                                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                                await MainActor.run {
                                     isSaving = false
                                     saveErrorMessage = message
                                 }
@@ -691,16 +697,18 @@ private struct CreateCommentSheet: View {
                         isSaving = true
                         saveErrorMessage = nil
                         _Concurrency.Task {
-                            let result = await syncEngine.createComment(
-                                taskID: taskID,
-                                authorUserID: authorUserID,
-                                body: trimmedBody
-                            )
-                            await MainActor.run {
-                                switch result {
-                                case .success:
+                            do {
+                                try await syncEngine.createComment(
+                                    taskID: taskID,
+                                    authorUserID: authorUserID,
+                                    body: trimmedBody
+                                )
+                                await MainActor.run {
                                     dismiss()
-                                case .failure(let message):
+                                }
+                            } catch {
+                                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                                await MainActor.run {
                                     isSaving = false
                                     saveErrorMessage = message
                                 }

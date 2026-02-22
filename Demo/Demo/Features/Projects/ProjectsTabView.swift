@@ -443,20 +443,22 @@ private struct CreateTaskSheet: View {
                         isSaving = true
                         saveErrorMessage = nil
                         _Concurrency.Task {
-                            let result = await syncEngine.createTask(
-                                projectID: projectID,
-                                title: trimmedTitle,
-                                descriptionText: trimmedDescription.isEmpty ? "No description yet." : trimmedDescription,
-                                state: state.rawValue,
-                                assigneeID: assigneeID,
-                                tagIDs: []
-                            )
-                            await MainActor.run {
-                                switch result {
-                                case .success:
+                            do {
+                                try await syncEngine.createTask(
+                                    projectID: projectID,
+                                    title: trimmedTitle,
+                                    descriptionText: trimmedDescription.isEmpty ? "No description yet." : trimmedDescription,
+                                    state: state.rawValue,
+                                    assigneeID: assigneeID,
+                                    tagIDs: []
+                                )
+                                await MainActor.run {
                                     isSaving = false
                                     dismiss()
-                                case .failure(let message):
+                                }
+                            } catch {
+                                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                                await MainActor.run {
                                     isSaving = false
                                     saveErrorMessage = message
                                 }
