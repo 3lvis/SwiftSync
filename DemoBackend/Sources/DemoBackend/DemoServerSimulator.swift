@@ -713,7 +713,6 @@ public final class DemoServerSimulator {
 
     private static func prepareSchema(_ sqlite: DemoSQLiteDatabase, seedData: DemoSeedData) throws {
         try createSchemaIfNeeded(sqlite: sqlite)
-        try migrateSchemaIfNeeded(sqlite: sqlite)
         try seedIfNeeded(sqlite, seedData: seedData)
     }
 
@@ -779,26 +778,6 @@ public final class DemoServerSimulator {
                 created_at REAL NOT NULL,
                 FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE,
                 FOREIGN KEY(author_user_id) REFERENCES users(id) ON DELETE RESTRICT
-            );
-            """
-        )
-    }
-
-    private static func migrateSchemaIfNeeded(sqlite: DemoSQLiteDatabase) throws {
-        let taskColumns = try sqlite.query("PRAGMA table_info(tasks)")
-        let hasReviewerColumn = taskColumns.contains { $0.string("name") == "reviewer_id" }
-        if !hasReviewerColumn {
-            try sqlite.execute("ALTER TABLE tasks ADD COLUMN reviewer_id TEXT NULL")
-        }
-
-        try sqlite.executeScript(
-            """
-            CREATE TABLE IF NOT EXISTS task_watchers (
-                task_id TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-                PRIMARY KEY (task_id, user_id),
-                FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
             );
             """
         )
