@@ -150,6 +150,7 @@ final class Tag {
     @Attribute(.unique) var id: String
     var name: String
     var updatedAt: Date
+    @Relationship(inverse: \Task.tags)
     var tasks: [Task]
 
     init(

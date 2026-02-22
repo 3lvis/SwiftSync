@@ -694,7 +694,6 @@ private struct EditTaskTagsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @SyncModel private var taskModel: Task?
     @SyncQuery private var allTags: [Tag]
-    @SyncQuery private var selectedTags: [Tag]
     @State private var pendingTagIDs: Set<String> = []
     @State private var hasLoadedInitialSelection = false
     @State private var isSaving = false
@@ -708,15 +707,6 @@ private struct EditTaskTagsSheet: View {
             Tag.self,
             in: syncContainer,
             sortBy: [\.name, \.id],
-            animation: .snappy(duration: 0.22)
-        )
-        _selectedTags = SyncQuery(
-            Tag.self,
-            relatedTo: Task.self,
-            relatedID: taskID,
-            in: syncContainer,
-            sortBy: [\.name, \.id],
-            refreshOn: [\.tasks],
             animation: .snappy(duration: 0.22)
         )
     }
@@ -786,9 +776,9 @@ private struct EditTaskTagsSheet: View {
                 }
             }
         }
-        .task(id: selectedTags.map(\.id).sorted()) {
-            guard !hasLoadedInitialSelection, taskModel != nil else { return }
-            pendingTagIDs = Set(selectedTags.map(\.id))
+        .task(id: taskModel?.tags.map(\.id).sorted() ?? []) {
+            guard !hasLoadedInitialSelection, let taskModel else { return }
+            pendingTagIDs = Set(taskModel.tags.map(\.id))
             hasLoadedInitialSelection = true
         }
         .alert(
