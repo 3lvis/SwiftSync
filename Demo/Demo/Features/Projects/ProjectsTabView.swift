@@ -28,7 +28,11 @@ struct ProjectsTabView: View {
                     Button {
                         navigationPath.append(project.id)
                     } label: {
-                        ProjectListRow(project: project)
+                        ProjectListRow(
+                            name: project.name,
+                            status: project.status,
+                            taskCount: project.taskCount
+                        )
                     }
                     .buttonStyle(.plain)
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
@@ -54,37 +58,34 @@ struct ProjectsTabView: View {
                 await syncEngine.syncTags()
             }
             .navigationDestination(for: String.self) { projectID in
-                if let project = projects.first(where: { $0.id == projectID }) {
-                    ProjectDetailView(
-                        project: project,
-                        syncContainer: syncContainer,
-                        syncEngine: syncEngine
-                    )
-                } else {
-                    Text("Project not found")
-                        .foregroundStyle(.secondary)
-                }
+                ProjectDetailView(
+                    projectID: projectID,
+                    syncContainer: syncContainer,
+                    syncEngine: syncEngine
+                )
             }
         }
     }
 }
 
 private struct ProjectListRow: View {
-    let project: Project
+    let name: String
+    let status: String
+    let taskCount: Int
 
     private var taskCountLabel: String {
-        project.taskCount == 1 ? "1 task" : "\(project.taskCount) tasks"
+        taskCount == 1 ? "1 task" : "\(taskCount) tasks"
     }
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 10) {
-                Text(project.name)
+                Text(name)
                     .font(.headline)
                     .foregroundStyle(.primary)
                     .lineLimit(2)
 
-                Text(project.status)
+                Text(status)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -122,26 +123,23 @@ private struct ProjectDetailView: View {
 
     @SyncModel private var projectModel: Project?
     @SyncQuery private var tasks: [Task]
-    @SyncQuery private var users: [User]
     @State private var hasTriggeredInitialSync = false
     @State private var isShowingCreateTaskSheet = false
     @State private var taskPendingDelete: TaskDeletePrompt?
     @State private var selectedTaskRoute: ProjectDetailTaskRoute?
 
-    init(project: Project, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
-        self.projectID = project.id
+    init(projectID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
+        self.projectID = projectID
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
 
-        _projectModel = SyncModel(Project.self, id: project.id, in: syncContainer)
-        _users = SyncQuery(
-            User.self,
-            in: syncContainer,
-            sortBy: [\.displayName, \.id]
-        )
+        _projectModel = SyncModel(Project.self, id: projectID, in: syncContainer)
+        let tasksPredicate = #Predicate<Task> { row in
+            row.projectID == projectID
+        }
         _tasks = SyncQuery(
             Task.self,
-            toOne: project,
+            predicate: tasksPredicate,
             in: syncContainer,
             sortBy: [
                 SortDescriptor(\Task.updatedAt, order: .reverse),
@@ -156,7 +154,11 @@ private struct ProjectDetailView: View {
         List {
             Section {
                 if let projectModel {
-                    ProjectDetailHeaderCard(project: projectModel)
+                    ProjectDetailHeaderCard(
+                        name: projectModel.name,
+                        status: projectModel.status,
+                        taskCount: projectModel.taskCount
+                    )
                 } else {
                     Text("Project not found")
                         .foregroundStyle(.secondary)
@@ -171,7 +173,11 @@ private struct ProjectDetailView: View {
                     Button {
                         selectedTaskRoute = ProjectDetailTaskRoute(id: task.id)
                     } label: {
-                        ProjectTaskListRow(task: task)
+                        ProjectTaskListRow(
+                            title: task.title,
+                            state: task.state,
+                            assigneeName: task.assignee?.displayName
+                        )
                     }
                     .buttonStyle(.plain)
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
@@ -224,18 +230,11 @@ private struct ProjectDetailView: View {
         }
         .sheet(isPresented: $isShowingCreateTaskSheet) {
             CreateTaskSheet(
-                users: users,
+                projectID: projectID,
+                syncContainer: syncContainer,
+                syncEngine: syncEngine,
                 defaultAssigneeID: nil
-            ) { title, descriptionText, state, assigneeID in
-                await syncEngine.createTask(
-                    projectID: projectID,
-                    title: title,
-                    descriptionText: descriptionText,
-                    state: state,
-                    assigneeID: assigneeID,
-                    tagIDs: []
-                )
-            }
+            )
         }
         .alert(
             "Delete Task?",
@@ -267,20 +266,22 @@ private struct ProjectDetailTaskRoute: Identifiable, Hashable {
 }
 
 private struct ProjectDetailHeaderCard: View {
-    let project: Project
+    let name: String
+    let status: String
+    let taskCount: Int
 
     private var taskCountLabel: String {
-        project.taskCount == 1 ? "1 task" : "\(project.taskCount) tasks"
+        taskCount == 1 ? "1 task" : "\(taskCount) tasks"
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(project.name)
+            Text(name)
                 .font(.title2.weight(.semibold))
                 .lineLimit(3)
 
             HStack(spacing: 10) {
-                Text(project.status)
+                Text(status)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
 
@@ -302,10 +303,12 @@ private struct ProjectDetailHeaderCard: View {
 }
 
 private struct ProjectTaskListRow: View {
-    let task: Task
+    let title: String
+    let state: String
+    let assigneeName: String?
 
     private var stateLabel: String {
-        switch task.state {
+        switch state {
         case "todo":
             return "To do"
         case "inProgress":
@@ -313,14 +316,14 @@ private struct ProjectTaskListRow: View {
         case "done":
             return "Done"
         default:
-            return task.state
+            return state
         }
     }
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 10) {
-                Text(task.title)
+                Text(title)
                     .font(.headline)
                     .foregroundStyle(.primary)
                     .lineLimit(3)
@@ -336,7 +339,7 @@ private struct ProjectTaskListRow: View {
                                 .fill(Color(.secondarySystemFill))
                         )
 
-                    if let assignee = task.assignee?.displayName {
+                    if let assignee = assigneeName {
                         Text("Assignee: \(assignee)")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
@@ -365,11 +368,12 @@ private struct TaskDeletePrompt: Equatable {
 }
 
 private struct CreateTaskSheet: View {
-    let users: [User]
+    let projectID: String
+    let syncEngine: DemoSyncEngine
     let defaultAssigneeID: String?
-    let onCreate: (_ title: String, _ descriptionText: String, _ state: String, _ assigneeID: String?) async -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @SyncQuery private var users: [User]
 
     @State private var title = ""
     @State private var descriptionText = ""
@@ -378,13 +382,20 @@ private struct CreateTaskSheet: View {
     @State private var isSaving = false
 
     init(
-        users: [User],
+        projectID: String,
+        syncContainer: SyncContainer,
+        syncEngine: DemoSyncEngine,
         defaultAssigneeID: String?,
-        onCreate: @escaping (_ title: String, _ descriptionText: String, _ state: String, _ assigneeID: String?) async -> Void
     ) {
-        self.users = users
+        self.projectID = projectID
+        self.syncEngine = syncEngine
         self.defaultAssigneeID = defaultAssigneeID
-        self.onCreate = onCreate
+        _users = SyncQuery(
+            User.self,
+            in: syncContainer,
+            sortBy: [\.displayName, \.id],
+            animation: .snappy(duration: 0.22)
+        )
         _assigneeID = State(initialValue: defaultAssigneeID)
     }
 
@@ -430,11 +441,13 @@ private struct CreateTaskSheet: View {
 
                         isSaving = true
                         _Concurrency.Task {
-                            await onCreate(
-                                trimmedTitle,
-                                trimmedDescription.isEmpty ? "No description yet." : trimmedDescription,
-                                state.rawValue,
-                                assigneeID
+                            await syncEngine.createTask(
+                                projectID: projectID,
+                                title: trimmedTitle,
+                                descriptionText: trimmedDescription.isEmpty ? "No description yet." : trimmedDescription,
+                                state: state.rawValue,
+                                assigneeID: assigneeID,
+                                tagIDs: []
                             )
                             await MainActor.run {
                                 isSaving = false
