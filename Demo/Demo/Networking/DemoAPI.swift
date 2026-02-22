@@ -102,7 +102,8 @@ final class FakeDemoAPIClient: DemoAPIClient {
             }
             self.backend = try DemoServerSimulator(
                 databaseURL: databaseURL,
-                seedData: seedData ?? DemoSeedData.generate()
+                seedData: seedData ?? DemoSeedData.generate(),
+                enableAmbientProjectMutationsOnRead: seedData == nil
             )
         } catch {
             fatalError("Failed to initialize fake demo backend: \(error)")

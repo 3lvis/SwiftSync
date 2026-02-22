@@ -21,7 +21,7 @@ struct TaskDetailView: View {
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
 
-        _taskModel = SyncModel(Task.self, id: taskID, in: syncContainer)
+        _taskModel = SyncModel(Task.self, id: taskID, in: syncContainer, animation: .snappy(duration: 0.22))
         _allUsers = SyncQuery(
             User.self,
             in: syncContainer,
@@ -38,7 +38,8 @@ struct TaskDetailView: View {
             toMany: task,
             in: syncContainer,
             sortBy: [\.name, \.id],
-            refreshOn: [\.tasks]
+            refreshOn: [\.tasks],
+            animation: .snappy(duration: 0.22)
         )
         _comments = SyncQuery(
             Comment.self,
@@ -47,7 +48,8 @@ struct TaskDetailView: View {
             sortBy: [
                 SortDescriptor(\Comment.createdAt, order: .reverse),
                 SortDescriptor(\Comment.id)
-            ]
+            ],
+            animation: .snappy(duration: 0.22)
         )
     }
 
@@ -73,6 +75,14 @@ struct TaskDetailView: View {
             hasTriggeredInitialSync = true
             await syncEngine.syncTaskDetail(taskID: taskID)
             await syncEngine.syncTaskComments(taskID: taskID)
+        }
+        .task(id: taskID) {
+            while !_Concurrency.Task.isCancelled {
+                try? await _Concurrency.Task.sleep(nanoseconds: 6_000_000_000)
+                guard !_Concurrency.Task.isCancelled else { break }
+                await syncEngine.syncTaskDetail(taskID: taskID)
+                await syncEngine.syncTaskComments(taskID: taskID)
+            }
         }
         .sheet(item: $activeSheet) { sheet in
             presentedSheet(for: sheet)

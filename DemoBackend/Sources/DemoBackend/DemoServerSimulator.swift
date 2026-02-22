@@ -27,9 +27,16 @@ public enum DemoBackendError: LocalizedError {
 public final class DemoServerSimulator {
     private let sqlite: DemoSQLiteDatabase
     private let formatter = ISO8601DateFormatter()
+    private let enableAmbientProjectMutationsOnRead: Bool
+    private var ambientProjectReadCounters: [String: Int] = [:]
 
-    public init(databaseURL: URL, seedData: DemoSeedData) throws {
+    public init(
+        databaseURL: URL,
+        seedData: DemoSeedData,
+        enableAmbientProjectMutationsOnRead: Bool = false
+    ) throws {
         self.sqlite = try DemoSQLiteDatabase(databaseURL: databaseURL)
+        self.enableAmbientProjectMutationsOnRead = enableAmbientProjectMutationsOnRead
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
         try self.sqlite.execute("PRAGMA foreign_keys = ON;")
@@ -55,6 +62,16 @@ public final class DemoServerSimulator {
     }
 
     public func getProjectTasksPayload(projectID: String) throws -> [[String: Any]] {
+        if enableAmbientProjectMutationsOnRead {
+            let next = (ambientProjectReadCounters[projectID] ?? 0) + 1
+            ambientProjectReadCounters[projectID] = next
+            try applyAmbientProjectMutation(projectID: projectID, step: next)
+        }
+
+        return try getProjectTasksPayloadRaw(projectID: projectID)
+    }
+
+    private func getProjectTasksPayloadRaw(projectID: String) throws -> [[String: Any]] {
         try getTasksPayload(
             whereClause: "WHERE project_id = ?",
             bind: { stmt in self.sqlite.bind(text: projectID, at: 1, in: stmt) }
@@ -412,6 +429,26 @@ public final class DemoServerSimulator {
         )
     }
 
+    private func applyAmbientProjectMutation(projectID: String, step: Int) throws {
+        guard try exists(in: "projects", id: projectID) else { return }
+
+        let currentTasks = try getProjectTasksPayloadRaw(projectID: projectID)
+        let operation = step % 3
+
+        switch operation {
+        case 0:
+            try ambientUpdateTask(in: projectID, tasks: currentTasks, step: step)
+        case 1:
+            try ambientCreateTask(in: projectID, step: step)
+        default:
+            if currentTasks.count > 2 {
+                try ambientDeleteTask(tasks: currentTasks, step: step)
+            } else {
+                try ambientUpdateTask(in: projectID, tasks: currentTasks, step: step)
+            }
+        }
+    }
+
     private func getTasksPayload(
         whereClause: String,
         bind: ((OpaquePointer?) throws -> Void)?
@@ -427,6 +464,80 @@ public final class DemoServerSimulator {
             bind: bind
         )
         return try rows.map(taskPayload(from:))
+    }
+
+    private func ambientUpdateTask(in projectID: String, tasks: [[String: Any]], step: Int) throws {
+        guard !tasks.isEmpty else {
+            try ambientCreateTask(in: projectID, step: step)
+            return
+        }
+
+        let task = tasks[step % tasks.count]
+        guard let taskID = task["id"] as? String else { return }
+        let updateKind = (step / 3) % 2
+
+        if updateKind == 0 {
+            let currentState = (task["state"] as? String) ?? "todo"
+            let nextState: String
+            switch currentState {
+            case "todo":
+                nextState = "inProgress"
+            case "inProgress":
+                nextState = "done"
+            default:
+                nextState = "todo"
+            }
+            _ = try patchTaskState(taskID: taskID, state: nextState)
+        } else {
+            let userIDs = try allIDs(in: "users")
+            guard !userIDs.isEmpty else { return }
+            let shouldClear = (step % 5) == 0
+            if shouldClear {
+                _ = try patchTaskAssignee(taskID: taskID, assigneeID: nil)
+            } else {
+                let assigneeID = userIDs[(step / 2) % userIDs.count]
+                _ = try patchTaskAssignee(taskID: taskID, assigneeID: assigneeID)
+            }
+        }
+    }
+
+    private func ambientCreateTask(in projectID: String, step: Int) throws {
+        let tagIDs = try allIDs(in: "tags")
+        let userIDs = try allIDs(in: "users")
+        guard !tagIDs.isEmpty else { return }
+
+        let titles = [
+            "Review sync behavior after background refresh",
+            "Tighten payload validation before rollout",
+            "Polish empty state after scoped delete",
+            "Add regression check for task list animation",
+            "Confirm assignee clear flow matches API contract",
+            "Re-run parent-scoped sync smoke test"
+        ]
+        let states = ["todo", "inProgress", "done"]
+        let selectedTitle = titles[step % titles.count]
+        let state = states[(step / 2) % states.count]
+        let assigneeID: String? = userIDs.isEmpty || (step % 4 == 0) ? nil : userIDs[step % userIDs.count]
+
+        let firstTag = tagIDs[step % tagIDs.count]
+        let secondTag = tagIDs[(step + 3) % tagIDs.count]
+        let selectedTags = Array(Set([firstTag, secondTag])).sorted()
+
+        _ = try createTask(
+            projectID: projectID,
+            title: selectedTitle,
+            descriptionText: "Ambient backend update generated for the demo live-sync effect.",
+            state: state,
+            assigneeID: assigneeID,
+            tagIDs: selectedTags
+        )
+    }
+
+    private func ambientDeleteTask(tasks: [[String: Any]], step: Int) throws {
+        guard !tasks.isEmpty else { return }
+        let task = tasks[(step / 2) % tasks.count]
+        guard let taskID = task["id"] as? String else { return }
+        try deleteTask(taskID: taskID)
     }
 
     private func taskPayload(from row: DemoSQLiteRow) throws -> [String: Any] {
@@ -466,6 +577,13 @@ public final class DemoServerSimulator {
             }
         )
         return !rows.isEmpty
+    }
+
+    private func allIDs(in table: String) throws -> [String] {
+        let rows = try self.sqlite.query(
+            "SELECT id FROM \(table) ORDER BY id ASC"
+        )
+        return rows.map { $0.string("id") }
     }
 
     private func userDisplayName(for userID: String) throws -> String {

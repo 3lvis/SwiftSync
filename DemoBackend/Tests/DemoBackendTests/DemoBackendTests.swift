@@ -180,6 +180,30 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(tag1TasksAfterDelete.map { $0["id"] as? String }, ["task-1"])
     }
 
+    func testSQLiteBackendAmbientProjectMutationKeepsSliceValid() async throws {
+        let url = makeTemporaryDatabaseURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let backend = try DemoServerSimulator(
+            databaseURL: url,
+            seedData: smallSeedData(),
+            enableAmbientProjectMutationsOnRead: true
+        )
+
+        for _ in 1...8 {
+            _ = try backend.getProjectTasksPayload(projectID: "project-1")
+        }
+
+        let projectTasks = try backend.getProjectTasksPayload(projectID: "project-1")
+        XCTAssertFalse(projectTasks.isEmpty)
+        XCTAssertTrue(projectTasks.allSatisfy { ($0["project_id"] as? String) == "project-1" })
+
+        for task in projectTasks {
+            let state = task["state"] as? String
+            XCTAssertTrue(["todo", "inProgress", "done"].contains(state ?? ""))
+        }
+    }
+
     private func makeTemporaryDatabaseURL() -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("DemoBackendTests-\(UUID().uuidString)")

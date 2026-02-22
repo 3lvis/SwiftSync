@@ -15,7 +15,7 @@ struct TagTasksView: View {
         self.tagID = tag.id
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
-        _tagModel = SyncModel(Tag.self, id: tag.id, in: syncContainer)
+        _tagModel = SyncModel(Tag.self, id: tag.id, in: syncContainer, animation: .snappy(duration: 0.22))
 
         _tasks = SyncQuery(
             Task.self,
@@ -25,7 +25,8 @@ struct TagTasksView: View {
                 SortDescriptor(\Task.updatedAt, order: .reverse),
                 SortDescriptor(\Task.id)
             ],
-            refreshOn: [\.tags]
+            refreshOn: [\.tags],
+            animation: .snappy(duration: 0.22)
         )
     }
 
@@ -67,6 +68,13 @@ struct TagTasksView: View {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
             await syncEngine.syncTagTasks(tagID: tagID)
+        }
+        .task(id: tagID) {
+            while !_Concurrency.Task.isCancelled {
+                try? await _Concurrency.Task.sleep(nanoseconds: 6_500_000_000)
+                guard !_Concurrency.Task.isCancelled else { break }
+                await syncEngine.syncTagTasks(tagID: tagID)
+            }
         }
     }
 }

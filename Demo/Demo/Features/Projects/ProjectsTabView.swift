@@ -15,7 +15,8 @@ struct ProjectsTabView: View {
         _projects = SyncQuery(
             Project.self,
             in: syncContainer,
-            sortBy: [\.name, \.id]
+            sortBy: [\.name, \.id],
+            animation: .snappy(duration: 0.24)
         )
     }
 
@@ -91,7 +92,8 @@ private struct ProjectDetailView: View {
                 SortDescriptor(\Task.updatedAt, order: .reverse),
                 SortDescriptor(\Task.id)
             ],
-            refreshOn: [\.assignee]
+            refreshOn: [\.assignee],
+            animation: .snappy(duration: 0.24)
         )
     }
 
@@ -157,6 +159,13 @@ private struct ProjectDetailView: View {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
             await syncEngine.syncProjectTasks(projectID: projectID)
+        }
+        .task(id: projectID) {
+            while !_Concurrency.Task.isCancelled {
+                try? await _Concurrency.Task.sleep(nanoseconds: 4_500_000_000)
+                guard !_Concurrency.Task.isCancelled else { break }
+                await syncEngine.syncProjectTasks(projectID: projectID)
+            }
         }
         .sheet(isPresented: $isShowingCreateTaskSheet) {
             CreateTaskSheet(
