@@ -126,6 +126,7 @@ private struct ProjectDetailView: View {
     @State private var hasTriggeredInitialSync = false
     @State private var isShowingCreateTaskSheet = false
     @State private var taskPendingDelete: TaskDeletePrompt?
+    @State private var selectedTaskRoute: ProjectDetailTaskRoute?
 
     init(project: Project, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.projectID = project.id
@@ -155,37 +156,27 @@ private struct ProjectDetailView: View {
         List {
             Section {
                 if let projectModel {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(projectModel.name)
-                            .font(.title3)
-                        Text("Status: \(projectModel.status)")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
+                    ProjectDetailHeaderCard(project: projectModel)
                 } else {
                     Text("Project not found")
                         .foregroundStyle(.secondary)
                 }
             }
+            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
 
             Section("Tasks") {
                 ForEach(tasks, id: \.id) { task in
-                    NavigationLink {
-                        TaskDetailView(task: task, syncContainer: syncContainer, syncEngine: syncEngine)
+                    Button {
+                        selectedTaskRoute = ProjectDetailTaskRoute(id: task.id)
                     } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(task.title)
-                                .font(.headline)
-                            Text(task.state)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            if let assignee = task.assignee?.displayName {
-                                Text("Assignee: \(assignee)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
+                        ProjectTaskListRow(task: task)
                     }
+                    .buttonStyle(.plain)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
                             taskPendingDelete = TaskDeletePrompt(id: task.id, title: task.title)
@@ -196,7 +187,9 @@ private struct ProjectDetailView: View {
                 }
             }
         }
-        .navigationTitle(projectModel?.name ?? "Project")
+        .listStyle(.plain)
+        .navigationTitle("Project")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -219,6 +212,14 @@ private struct ProjectDetailView: View {
                 try? await _Concurrency.Task.sleep(nanoseconds: 4_500_000_000)
                 guard !_Concurrency.Task.isCancelled else { break }
                 await syncEngine.syncProjectTasks(projectID: projectID)
+            }
+        }
+        .navigationDestination(item: $selectedTaskRoute) { route in
+            if let task = tasks.first(where: { $0.id == route.id }) {
+                TaskDetailView(task: task, syncContainer: syncContainer, syncEngine: syncEngine)
+            } else {
+                Text("Task not found")
+                    .foregroundStyle(.secondary)
             }
         }
         .sheet(isPresented: $isShowingCreateTaskSheet) {
@@ -258,6 +259,103 @@ private struct ProjectDetailView: View {
         } message: { prompt in
             Text("Delete \"\(prompt.title)\" from this project?")
         }
+    }
+}
+
+private struct ProjectDetailTaskRoute: Identifiable, Hashable {
+    let id: String
+}
+
+private struct ProjectDetailHeaderCard: View {
+    let project: Project
+
+    private var taskCountLabel: String {
+        project.taskCount == 1 ? "1 task" : "\(project.taskCount) tasks"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(project.name)
+                .font(.title2.weight(.semibold))
+                .lineLimit(3)
+
+            HStack(spacing: 10) {
+                Text(project.status)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+
+                Text(taskCountLabel)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(Color(.secondarySystemFill))
+                    )
+
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(16)
+    }
+}
+
+private struct ProjectTaskListRow: View {
+    let task: Task
+
+    private var stateLabel: String {
+        switch task.state {
+        case "todo":
+            return "To do"
+        case "inProgress":
+            return "In progress"
+        case "done":
+            return "Done"
+        default:
+            return task.state
+        }
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(task.title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(3)
+
+                HStack(alignment: .center, spacing: 8) {
+                    Text(stateLabel)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(Color(.secondarySystemFill))
+                        )
+
+                    if let assignee = task.assignee?.displayName {
+                        Text("Assignee: \(assignee)")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+            }
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
     }
 }
 
