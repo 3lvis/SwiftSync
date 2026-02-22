@@ -109,6 +109,65 @@ High level flow:
 
 This is the "sync and forget" experience: sync updates local storage, and reactive reads update UI.
 
+## App Best Practices (SwiftUI + SwiftData + SwiftSync)
+
+These are application-layer conventions that work well with the reactive read model.
+
+## Views React, Domain Layer Persists
+
+Treat SwiftUI views as reactive readers of local state.
+
+- views read from `@SyncQuery` / `@SyncModel`
+- views render UI and collect user intent
+- views should not own persistence or sync orchestration logic
+
+Put persistence + sync behavior in a domain/service layer (for example, a `syncEngine`).
+
+- domain layer performs backend mutations
+- domain layer syncs refreshed backend data into local storage
+- views update automatically from local reactive reads
+
+## Pass IDs/Scalars, Not SwiftData Model Objects
+
+Default rule for navigation destinations, sheets, and modals:
+
+- pass scalar IDs and simple values (`String`, enums, booleans, etc.)
+- child view queries/owns the models it needs
+- avoid passing SwiftData model objects across view boundaries
+
+Why:
+
+- it keeps data ownership local to the view
+- it avoids stale retained model-reference assumptions
+- it makes modal/detail flows easier to reason about and test
+
+Render-only leaf subviews may take scalar display values derived by the parent (`title`, `status`, `count`, etc.) instead of full models.
+
+## Save Flow (Detail -> Modal -> Sync)
+
+Recommended flow for edit sheets/modals:
+
+1. Detail view presents modal and passes IDs/scalars.
+2. Modal owns form draft state and submits "save" intent.
+3. Domain layer performs backend mutation + targeted sync.
+4. Detail view re-renders from local store changes.
+
+Practical rule:
+
+- modal initiates save intent
+- domain layer performs save/sync
+- detail view reacts; it does not manually re-fetch the backend
+
+## Reload Source of Truth After Save
+
+UI should refresh from the local store, not directly from the backend response path in the view.
+
+- local SwiftData store is the UI read source of truth
+- backend remains authoritative for mutation confirmation
+- domain layer decides sync strategy (targeted re-fetch, response-driven sync, optimistic write + reconciliation)
+
+The key invariant is stable: views read local reactive state; the domain layer keeps that local state current.
+
 ## Design Rationale / Tradeoffs
 
 This section keeps the key design reasoning in one place so users and maintainers can understand why the reactive APIs look the way they do.

@@ -157,3 +157,25 @@ SwiftSync cooperatively cancels and rolls back unsaved in-memory work for that r
 - `sortBy: [\.field]` => concise ascending sort
 - `sortBy: [SortDescriptor(...)]` => descending/mixed ordering
 - shorthand requires `SyncQuerySortableModel` (or `@Syncable` generated support)
+
+## 20) In app code, should views perform saves directly?
+
+Recommended pattern: no.
+
+- views collect intent and display local reactive state
+- a domain/service layer performs backend mutations and syncs local storage
+- views re-render from `@SyncQuery` / `@SyncModel`
+
+See `docs/project/reactive-reads.md` ("App Best Practices").
+
+## 21) Should I pass SwiftData model objects between views/sheets?
+
+Recommended default: no.
+
+- pass IDs/scalars
+- child view owns/queries the data it needs
+- avoid model-object handoff across navigation/sheet boundaries
+
+This keeps view ownership explicit and avoids stale retained-reference assumptions.
+
+See `docs/project/reactive-reads.md` ("App Best Practices").
