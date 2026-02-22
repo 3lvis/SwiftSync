@@ -11,6 +11,10 @@ final class Project {
     var status: String
     @RemoteKey("status.label")
     var statusLabel: String
+    @RemoteKey("priority.id")
+    var priority: String
+    @RemoteKey("priority.label")
+    var priorityLabel: String
     var taskCount: Int
     var updatedAt: Date
     var tasks: [Task]
@@ -20,6 +24,8 @@ final class Project {
         name: String,
         status: String,
         statusLabel: String,
+        priority: String,
+        priorityLabel: String,
         taskCount: Int = 0,
         updatedAt: Date,
         tasks: [Task] = []
@@ -28,6 +34,8 @@ final class Project {
         self.name = name
         self.status = status
         self.statusLabel = statusLabel
+        self.priority = priority
+        self.priorityLabel = priorityLabel
         self.taskCount = taskCount
         self.updatedAt = updatedAt
         self.tasks = tasks
@@ -90,6 +98,54 @@ final class TaskStateOption {
 
 @Syncable
 @Model
+final class PriorityOption {
+    @Attribute(.unique) var id: String
+    var label: String
+    var sortOrder: Int
+    var updatedAt: Date
+
+    init(id: String, label: String, sortOrder: Int, updatedAt: Date) {
+        self.id = id
+        self.label = label
+        self.sortOrder = sortOrder
+        self.updatedAt = updatedAt
+    }
+}
+
+@Syncable
+@Model
+final class ProjectStatusOption {
+    @Attribute(.unique) var id: String
+    var label: String
+    var sortOrder: Int
+    var updatedAt: Date
+
+    init(id: String, label: String, sortOrder: Int, updatedAt: Date) {
+        self.id = id
+        self.label = label
+        self.sortOrder = sortOrder
+        self.updatedAt = updatedAt
+    }
+}
+
+@Syncable
+@Model
+final class UserRoleOption {
+    @Attribute(.unique) var id: String
+    var label: String
+    var sortOrder: Int
+    var updatedAt: Date
+
+    init(id: String, label: String, sortOrder: Int, updatedAt: Date) {
+        self.id = id
+        self.label = label
+        self.sortOrder = sortOrder
+        self.updatedAt = updatedAt
+    }
+}
+
+@Syncable
+@Model
 final class Tag {
     @Attribute(.unique) var id: String
     var name: String
@@ -128,6 +184,10 @@ final class Task {
     var state: String
     @RemoteKey("state.label")
     var stateLabel: String
+    @RemoteKey("priority.id")
+    var priority: String
+    @RemoteKey("priority.label")
+    var priorityLabel: String
     var updatedAt: Date
     var project: Project?
     var assignee: User?
@@ -145,6 +205,8 @@ final class Task {
         descriptionText: String,
         state: String,
         stateLabel: String,
+        priority: String,
+        priorityLabel: String,
         updatedAt: Date,
         project: Project? = nil,
         assignee: User? = nil,
@@ -161,6 +223,8 @@ final class Task {
         self.descriptionText = descriptionText
         self.state = state
         self.stateLabel = stateLabel
+        self.priority = priority
+        self.priorityLabel = priorityLabel
         self.updatedAt = updatedAt
         self.project = project
         self.assignee = assignee

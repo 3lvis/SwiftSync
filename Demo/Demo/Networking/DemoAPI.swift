@@ -53,6 +53,9 @@ protocol DemoAPIClient: AnyObject {
     func getTags() async throws -> [[String: Any]]
     func getTagTasks(tagID: String) async throws -> [[String: Any]]
     func getTaskStateOptions() async throws -> [[String: Any]]
+    func getPriorityOptions() async throws -> [[String: Any]]
+    func getProjectStatusOptions() async throws -> [[String: Any]]
+    func getUserRoleOptions() async throws -> [[String: Any]]
 
     func patchTaskDescription(taskID: String, descriptionText: String) async throws -> [String: Any]?
     func patchTaskState(taskID: String, state: String) async throws -> [String: Any]?
@@ -149,6 +152,21 @@ final class FakeDemoAPIClient: DemoAPIClient {
     func getTaskStateOptions() async throws -> [[String: Any]] {
         try await networkGate(endpoint: "GET /task-state-options")
         return try backend.getTaskStateOptionsPayload()
+    }
+
+    func getPriorityOptions() async throws -> [[String: Any]] {
+        try await networkGate(endpoint: "GET /priority-options")
+        return try backend.getPriorityOptionsPayload()
+    }
+
+    func getProjectStatusOptions() async throws -> [[String: Any]] {
+        try await networkGate(endpoint: "GET /project-status-options")
+        return try backend.getProjectStatusOptionsPayload()
+    }
+
+    func getUserRoleOptions() async throws -> [[String: Any]] {
+        try await networkGate(endpoint: "GET /user-role-options")
+        return try backend.getUserRoleOptionsPayload()
     }
 
     func patchTaskDescription(taskID: String, descriptionText: String) async throws -> [String: Any]? {

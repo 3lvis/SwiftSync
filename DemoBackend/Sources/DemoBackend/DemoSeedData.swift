@@ -5,12 +5,14 @@ public struct DemoSeedData {
         public let id: String
         public let name: String
         public let status: String
+        public let priority: String
         public let updatedAt: Date
 
-        public init(id: String, name: String, status: String, updatedAt: Date) {
+        public init(id: String, name: String, status: String, priority: String = "medium", updatedAt: Date) {
             self.id = id
             self.name = name
             self.status = status
+            self.priority = priority
             self.updatedAt = updatedAt
         }
     }
@@ -49,6 +51,7 @@ public struct DemoSeedData {
         public let title: String
         public let descriptionText: String
         public let state: String
+        public let priority: String
         public let tagIDs: [String]
         public let watcherIDs: [String]
         public let updatedAt: Date
@@ -61,6 +64,7 @@ public struct DemoSeedData {
             title: String,
             descriptionText: String,
             state: String,
+            priority: String = "medium",
             tagIDs: [String],
             watcherIDs: [String] = [],
             updatedAt: Date
@@ -72,6 +76,7 @@ public struct DemoSeedData {
             self.title = title
             self.descriptionText = descriptionText
             self.state = state
+            self.priority = priority
             self.tagIDs = tagIDs
             self.watcherIDs = watcherIDs
             self.updatedAt = updatedAt

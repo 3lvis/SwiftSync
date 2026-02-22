@@ -51,11 +51,12 @@ public final class DemoServerSimulator {
                 projects.id,
                 projects.name,
                 projects.status,
+                projects.priority,
                 projects.updated_at,
                 COUNT(tasks.id) AS task_count
             FROM projects
             LEFT JOIN tasks ON tasks.project_id = projects.id
-            GROUP BY projects.id, projects.name, projects.status, projects.updated_at
+            GROUP BY projects.id, projects.name, projects.status, projects.priority, projects.updated_at
             ORDER BY projects.id ASC
             """
         )
@@ -64,6 +65,7 @@ public final class DemoServerSimulator {
                 "id": row.string("id"),
                 "name": row.string("name"),
                 "status": labeledValuePayload(id: row.string("status"), label: row.string("status")),
+                "priority": priorityPayload(id: row.string("priority")),
                 "task_count": Int(row.int64("task_count")),
                 "updated_at": iso8601(row.double("updated_at"))
             ]
@@ -132,10 +134,44 @@ public final class DemoServerSimulator {
         ]
     }
 
+    public func getPriorityOptionsPayload() throws -> [[String: Any]] {
+        let updatedAt = iso8601(0)
+        return [
+            ["id": "low", "label": "Low", "sort_order": 0, "updated_at": updatedAt],
+            ["id": "medium", "label": "Medium", "sort_order": 1, "updated_at": updatedAt],
+            ["id": "high", "label": "High", "sort_order": 2, "updated_at": updatedAt],
+            ["id": "urgent", "label": "Urgent", "sort_order": 3, "updated_at": updatedAt]
+        ]
+    }
+
+    public func getProjectStatusOptionsPayload() throws -> [[String: Any]] {
+        try optionsPayload(
+            rows: self.sqlite.query(
+                """
+                SELECT DISTINCT status AS id
+                FROM projects
+                ORDER BY status ASC
+                """
+            )
+        )
+    }
+
+    public func getUserRoleOptionsPayload() throws -> [[String: Any]] {
+        try optionsPayload(
+            rows: self.sqlite.query(
+                """
+                SELECT DISTINCT role AS id
+                FROM users
+                ORDER BY role ASC
+                """
+            )
+        )
+    }
+
     public func getTaskDetailPayload(taskID: String) throws -> [String: Any]? {
         let rows = try self.sqlite.query(
             """
-            SELECT id, project_id, assignee_id, reviewer_id, title, description, state, updated_at
+            SELECT id, project_id, assignee_id, reviewer_id, title, description, state, priority, updated_at
             FROM tasks
             WHERE id = ?
             LIMIT 1
@@ -384,6 +420,7 @@ public final class DemoServerSimulator {
         title: String,
         descriptionText: String,
         state: String,
+        priority: String = "medium",
         assigneeID: String?,
         tagIDs: [String]
     ) throws -> [String: Any] {
@@ -396,6 +433,7 @@ public final class DemoServerSimulator {
         let normalizedTitle = try validatedNonEmpty(title, field: "title")
         let normalizedDescription = try validatedNonEmpty(descriptionText, field: "description")
         let normalizedState = try validatedTaskState(state)
+        let normalizedPriority = try validatedPriority(priority)
         let uniqueTagIDs = Array(Set(tagIDs)).sorted()
         for tagID in uniqueTagIDs where !(try exists(in: "tags", id: tagID)) {
             throw DemoBackendError.invalidReference(entity: "tag_id", id: tagID)
@@ -409,8 +447,8 @@ public final class DemoServerSimulator {
         do {
             try self.sqlite.execute(
                 """
-                INSERT INTO tasks (id, project_id, assignee_id, reviewer_id, title, description, state, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO tasks (id, project_id, assignee_id, reviewer_id, title, description, state, priority, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 bind: { stmt in
                     self.sqlite.bind(text: newID, at: 1, in: stmt)
@@ -420,7 +458,8 @@ public final class DemoServerSimulator {
                     self.sqlite.bind(text: normalizedTitle, at: 5, in: stmt)
                     self.sqlite.bind(text: normalizedDescription, at: 6, in: stmt)
                     self.sqlite.bind(text: normalizedState, at: 7, in: stmt)
-                    self.sqlite.bind(double: now.timeIntervalSince1970, at: 8, in: stmt)
+                    self.sqlite.bind(text: normalizedPriority, at: 8, in: stmt)
+                    self.sqlite.bind(double: now.timeIntervalSince1970, at: 9, in: stmt)
                 }
             )
 
@@ -501,7 +540,7 @@ public final class DemoServerSimulator {
         let rows = try self.sqlite.query(
             """
             SELECT tasks.id, tasks.project_id, tasks.assignee_id, tasks.reviewer_id, tasks.title, tasks.description, tasks.state,
-                   tasks.updated_at
+                   tasks.priority, tasks.updated_at
             FROM tasks
             \(whereClause)
             ORDER BY tasks.id ASC
@@ -560,8 +599,10 @@ public final class DemoServerSimulator {
             "Re-run parent-scoped sync smoke test"
         ]
         let states = ["todo", "inProgress", "done"]
+        let priorities = ["low", "medium", "high", "urgent"]
         let selectedTitle = titles[step % titles.count]
         let state = states[(step / 2) % states.count]
+        let priority = priorities[(step / 3) % priorities.count]
         let assigneeID: String? = userIDs.isEmpty || (step % 4 == 0) ? nil : userIDs[step % userIDs.count]
 
         let firstTag = tagIDs[step % tagIDs.count]
@@ -573,6 +614,7 @@ public final class DemoServerSimulator {
             title: selectedTitle,
             descriptionText: "Ambient backend update generated for the demo live-sync effect.",
             state: state,
+            priority: priority,
             assigneeID: assigneeID,
             tagIDs: selectedTags
         )
@@ -588,6 +630,7 @@ public final class DemoServerSimulator {
     private func taskPayload(from row: DemoSQLiteRow) throws -> [String: Any] {
         let taskID = row.string("id")
         let stateID = row.string("state")
+        let priorityID = row.string("priority")
         return [
             "id": taskID,
             "project_id": row.string("project_id"),
@@ -596,6 +639,7 @@ public final class DemoServerSimulator {
             "title": row.string("title"),
             "description": row.string("description"),
             "state": taskStatePayload(id: stateID),
+            "priority": priorityPayload(id: priorityID),
             "tag_ids": try tagIDs(forTaskID: taskID),
             "watcher_ids": try watcherIDs(forTaskID: taskID),
             "updated_at": iso8601(row.double("updated_at"))
@@ -619,11 +663,43 @@ public final class DemoServerSimulator {
         }
     }
 
+    private func priorityPayload(id priorityID: String) -> [String: Any] {
+        labeledValuePayload(id: priorityID, label: priorityLabel(id: priorityID))
+    }
+
+    private func priorityLabel(id priorityID: String) -> String {
+        switch priorityID {
+        case "low":
+            return "Low"
+        case "medium":
+            return "Medium"
+        case "high":
+            return "High"
+        case "urgent":
+            return "Urgent"
+        default:
+            return priorityID
+        }
+    }
+
     private func labeledValuePayload(id: String, label: String) -> [String: Any] {
         [
             "id": id,
             "label": label
         ]
+    }
+
+    private func optionsPayload(rows: [DemoSQLiteRow]) throws -> [[String: Any]] {
+        let updatedAt = iso8601(0)
+        return rows.enumerated().map { index, row in
+            let id = row.string("id")
+            return [
+                "id": id,
+                "label": id,
+                "sort_order": index,
+                "updated_at": updatedAt
+            ]
+        }
     }
 
     private func tagIDs(forTaskID taskID: String) throws -> [String] {
@@ -731,6 +807,14 @@ public final class DemoServerSimulator {
         return state
     }
 
+    private func validatedPriority(_ priority: String) throws -> String {
+        let allowed = ["low", "medium", "high", "urgent"]
+        guard allowed.contains(priority) else {
+            throw DemoBackendError.validation(message: "priority must be one of \(allowed.joined(separator: ", "))")
+        }
+        return priority
+    }
+
     private func parseISO8601(_ value: Any?) throws -> Date? {
         guard let string = value as? String else { return nil }
         if let date = formatter.date(from: string) {
@@ -772,6 +856,7 @@ public final class DemoServerSimulator {
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 status TEXT NOT NULL,
+                priority TEXT NOT NULL,
                 updated_at REAL NOT NULL
             );
 
@@ -796,6 +881,7 @@ public final class DemoServerSimulator {
                 title TEXT NOT NULL,
                 description TEXT NOT NULL,
                 state TEXT NOT NULL,
+                priority TEXT NOT NULL,
                 updated_at REAL NOT NULL,
                 FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE RESTRICT,
                 FOREIGN KEY(assignee_id) REFERENCES users(id) ON DELETE SET NULL,
@@ -842,14 +928,15 @@ public final class DemoServerSimulator {
             for project in seedData.projects {
                 try sqlite.execute(
                     """
-                    INSERT INTO projects (id, name, status, updated_at)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO projects (id, name, status, priority, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
                     """,
                     bind: { stmt in
                         sqlite.bind(text: project.id, at: 1, in: stmt)
                         sqlite.bind(text: project.name, at: 2, in: stmt)
                         sqlite.bind(text: project.status, at: 3, in: stmt)
-                        sqlite.bind(double: project.updatedAt.timeIntervalSince1970, at: 4, in: stmt)
+                        sqlite.bind(text: project.priority, at: 4, in: stmt)
+                        sqlite.bind(double: project.updatedAt.timeIntervalSince1970, at: 5, in: stmt)
                     }
                 )
             }
@@ -886,8 +973,8 @@ public final class DemoServerSimulator {
             for task in seedData.tasks {
                 try sqlite.execute(
                     """
-                    INSERT INTO tasks (id, project_id, assignee_id, reviewer_id, title, description, state, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO tasks (id, project_id, assignee_id, reviewer_id, title, description, state, priority, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     bind: { stmt in
                         sqlite.bind(text: task.id, at: 1, in: stmt)
@@ -897,7 +984,8 @@ public final class DemoServerSimulator {
                         sqlite.bind(text: task.title, at: 5, in: stmt)
                         sqlite.bind(text: task.descriptionText, at: 6, in: stmt)
                         sqlite.bind(text: task.state, at: 7, in: stmt)
-                        sqlite.bind(double: task.updatedAt.timeIntervalSince1970, at: 8, in: stmt)
+                        sqlite.bind(text: task.priority, at: 8, in: stmt)
+                        sqlite.bind(double: task.updatedAt.timeIntervalSince1970, at: 9, in: stmt)
                     }
                 )
 

@@ -32,6 +32,9 @@ final class DemoSyncEngine: ObservableObject {
             try await syncUsersInternal()
             try await syncTagsInternal()
             try await syncTaskStatesInternal()
+            try await syncPrioritiesInternal()
+            try await syncProjectStatusesInternal()
+            try await syncUserRolesInternal()
         }
     }
 
@@ -56,6 +59,24 @@ final class DemoSyncEngine: ObservableObject {
     func syncTaskStates() async {
         await syncOperation("taskStates") {
             try await syncTaskStatesInternal()
+        }
+    }
+
+    func syncPriorities() async {
+        await syncOperation("priorities") {
+            try await syncPrioritiesInternal()
+        }
+    }
+
+    func syncProjectStatuses() async {
+        await syncOperation("projectStatuses") {
+            try await syncProjectStatusesInternal()
+        }
+    }
+
+    func syncUserRoles() async {
+        await syncOperation("userRoles") {
+            try await syncUserRolesInternal()
         }
     }
 
@@ -183,6 +204,21 @@ final class DemoSyncEngine: ObservableObject {
     private func syncTaskStatesInternal() async throws {
         let payload = try await apiClient.getTaskStateOptions()
         try await syncPayload(payload, as: TaskStateOption.self, missingRowPolicy: .delete)
+    }
+
+    private func syncPrioritiesInternal() async throws {
+        let payload = try await apiClient.getPriorityOptions()
+        try await syncPayload(payload, as: PriorityOption.self, missingRowPolicy: .delete)
+    }
+
+    private func syncProjectStatusesInternal() async throws {
+        let payload = try await apiClient.getProjectStatusOptions()
+        try await syncPayload(payload, as: ProjectStatusOption.self, missingRowPolicy: .delete)
+    }
+
+    private func syncUserRolesInternal() async throws {
+        let payload = try await apiClient.getUserRoleOptions()
+        try await syncPayload(payload, as: UserRoleOption.self, missingRowPolicy: .delete)
     }
 
     private func syncProjectTasksInternal(projectID: String) async throws {

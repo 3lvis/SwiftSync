@@ -13,6 +13,9 @@ final class DemoBackendTests: XCTestCase {
         let users = try backend.getUsersPayload()
         let tags = try backend.getTagsPayload()
         let taskStates = try backend.getTaskStateOptionsPayload()
+        let priorities = try backend.getPriorityOptionsPayload()
+        let projectStatuses = try backend.getProjectStatusOptionsPayload()
+        let userRoles = try backend.getUserRoleOptionsPayload()
         let projectTasks = try backend.getProjectTasksPayload(projectID: "project-1")
         let taskComments = try backend.getTaskCommentsPayload(taskID: "task-1")
 
@@ -20,27 +23,36 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(users.count, 1)
         XCTAssertEqual(tags.count, 2)
         XCTAssertEqual(taskStates.count, 3)
+        XCTAssertEqual(priorities.count, 4)
+        XCTAssertEqual(projectStatuses.count, 1)
+        XCTAssertEqual(userRoles.count, 1)
         XCTAssertEqual(projectTasks.count, 1)
         XCTAssertEqual(taskComments.count, 1)
 
         XCTAssertEqual(projectStatusID(in: projects.first), "active")
         XCTAssertEqual(projectStatusLabel(in: projects.first), "active")
+        XCTAssertEqual(projectPriorityID(in: projects.first), "medium")
+        XCTAssertEqual(projectPriorityLabel(in: projects.first), "Medium")
         XCTAssertEqual(userRoleID(in: users.first), "Engineer")
         XCTAssertEqual(userRoleLabel(in: users.first), "Engineer")
         XCTAssertNil(users.first?["avatar_seed"])
         XCTAssertNil(tags.first?["color_hex"])
         XCTAssertNil(projectTasks.first?["due_date"])
-        XCTAssertNil(projectTasks.first?["priority"])
         XCTAssertEqual(projectTasks.first?["reviewer_id"] as? String, "user-1")
         XCTAssertEqual(projectTasks.first?["tag_ids"] as? [String], ["tag-1", "tag-2"])
         XCTAssertEqual(projectTasks.first?["watcher_ids"] as? [String], ["user-1"])
         XCTAssertEqual(stateID(in: projectTasks.first), "todo")
         XCTAssertEqual(stateLabel(in: projectTasks.first), "To Do")
+        XCTAssertEqual(taskPriorityID(in: projectTasks.first), "medium")
+        XCTAssertEqual(taskPriorityLabel(in: projectTasks.first), "Medium")
         XCTAssertNotNil(projectTasks.first?["description"])
         XCTAssertNotNil(projectTasks.first?["updated_at"])
         XCTAssertEqual(taskComments.first?["author_name"] as? String, "User")
         XCTAssertEqual(taskStates.map { $0["id"] as? String }, ["todo", "inProgress", "done"])
         XCTAssertEqual(taskStates.map { ($0["label"] as? String) ?? "" }, ["To Do", "In Progress", "Done"])
+        XCTAssertEqual(priorities.map { $0["id"] as? String }, ["low", "medium", "high", "urgent"])
+        XCTAssertEqual(projectStatuses.map { $0["id"] as? String }, ["active"])
+        XCTAssertEqual(userRoles.map { $0["id"] as? String }, ["Engineer"])
     }
 
     func testSQLiteBackendPatchTaskDescriptionPersistsAcrossReopen() async throws {
@@ -178,6 +190,8 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(created["watcher_ids"] as? [String], [])
         XCTAssertEqual(stateID(in: created), "todo")
         XCTAssertEqual(stateLabel(in: created), "To Do")
+        XCTAssertEqual(taskPriorityID(in: created), "medium")
+        XCTAssertEqual(taskPriorityLabel(in: created), "Medium")
 
         let projectTasksAfterCreate = try backend.getProjectTasksPayload(projectID: "project-1")
         XCTAssertEqual(projectTasksAfterCreate.count, 2)
@@ -246,6 +260,22 @@ final class DemoBackendTests: XCTestCase {
 
     private func userRoleLabel(in user: [String: Any]?) -> String? {
         (user?["role"] as? [String: Any])?["label"] as? String
+    }
+
+    private func projectPriorityID(in project: [String: Any]?) -> String? {
+        (project?["priority"] as? [String: Any])?["id"] as? String
+    }
+
+    private func projectPriorityLabel(in project: [String: Any]?) -> String? {
+        (project?["priority"] as? [String: Any])?["label"] as? String
+    }
+
+    private func taskPriorityID(in task: [String: Any]?) -> String? {
+        (task?["priority"] as? [String: Any])?["id"] as? String
+    }
+
+    private func taskPriorityLabel(in task: [String: Any]?) -> String? {
+        (task?["priority"] as? [String: Any])?["label"] as? String
     }
 
     private func makeTemporaryDatabaseURL() -> URL {
