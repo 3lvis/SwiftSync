@@ -1,0 +1,3 @@
+module DemoBackend {
+    header "/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/include/DemoBackend-Swift.h"
+}

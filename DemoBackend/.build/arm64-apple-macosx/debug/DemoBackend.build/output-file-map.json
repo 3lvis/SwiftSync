@@ -1,0 +1,19 @@
+{
+  "": {
+    "swift-dependencies": "/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/master.swiftdeps"
+  },
+  "/Users/nunez/code/ios/SwiftSync/DemoBackend/Sources/DemoBackend/DemoSeedData.swift": {
+    "dependencies": "/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/DemoSeedData.d",
+    "object": "/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/DemoSeedData.swift.o",
+    "swiftmodule": "/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/DemoSeedData~partial.swiftmodule",
+    "swift-dependencies": "/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/DemoSeedData.swiftdeps",
+    "diagnostics": "/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/DemoSeedData.dia"
+  },
+  "/Users/nunez/code/ios/SwiftSync/DemoBackend/Sources/DemoBackend/DemoServerSimulator.swift": {
+    "dependencies": "/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/DemoServerSimulator.d",
+    "object": "/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/DemoServerSimulator.swift.o",
+    "swiftmodule": "/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/DemoServerSimulator~partial.swiftmodule",
+    "swift-dependencies": "/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/DemoServerSimulator.swiftdeps",
+    "diagnostics": "/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/DemoServerSimulator.dia"
+  }
+}

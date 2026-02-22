@@ -1,0 +1,112 @@
+client:
+  name: basic
+  file-system: device-agnostic
+tools: {}
+targets:
+  "DemoBackend-arm64-apple-macosx26.0-debug.module": ["<DemoBackend-arm64-apple-macosx26.0-debug.module>"]
+  "DemoBackendPackageTests-arm64-apple-macosx26.0-debug.module": ["<DemoBackendPackageTests-arm64-apple-macosx26.0-debug.module>"]
+  "DemoBackendPackageTests-arm64-apple-macosx26.0-debug.test": ["<DemoBackendPackageTests-arm64-apple-macosx26.0-debug.test>"]
+  "DemoBackendTests-arm64-apple-macosx26.0-debug.module": ["<DemoBackendTests-arm64-apple-macosx26.0-debug.module>"]
+  "PackageStructure": ["<PackageStructure>"]
+  "main": ["<DemoBackend-arm64-apple-macosx26.0-debug.module>"]
+  "test": ["<DemoBackend-arm64-apple-macosx26.0-debug.module>","<DemoBackendPackageTests-arm64-apple-macosx26.0-debug.test>","<DemoBackendTests-arm64-apple-macosx26.0-debug.module>"]
+default: "main"
+nodes:
+  "/Users/nunez/code/ios/SwiftSync/DemoBackend/Sources/DemoBackend/":
+    is-directory-structure: true
+    content-exclusion-patterns: [".git",".build"]
+  "/Users/nunez/code/ios/SwiftSync/DemoBackend/Tests/DemoBackendTests/":
+    is-directory-structure: true
+    content-exclusion-patterns: [".git",".build"]
+commands:
+  "/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/sources":
+    tool: write-auxiliary-file
+    inputs: ["<sources-file-list>","/Users/nunez/code/ios/SwiftSync/DemoBackend/Sources/DemoBackend/DemoSeedData.swift","/Users/nunez/code/ios/SwiftSync/DemoBackend/Sources/DemoBackend/DemoServerSimulator.swift"]
+    outputs: ["/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/sources"]
+    description: "Write auxiliary file /Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/sources"
+
+  "/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.build/sources":
+    tool: write-auxiliary-file
+    inputs: ["<sources-file-list>","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.derived/runner.swift"]
+    outputs: ["/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.build/sources"]
+    description: "Write auxiliary file /Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.build/sources"
+
+  "/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.derived/runner.swift":
+    tool: test-entry-point-tool
+    inputs: []
+    outputs: ["/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.derived/runner.swift"]
+
+  "/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.product/Objects.LinkFileList":
+    tool: write-auxiliary-file
+    inputs: ["<link-file-list>","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/DemoSeedData.swift.o","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/DemoServerSimulator.swift.o","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.build/runner.swift.o","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendTests.build/DemoBackendTests.swift.o"]
+    outputs: ["/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.product/Objects.LinkFileList"]
+    description: "Write auxiliary file /Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.product/Objects.LinkFileList"
+
+  "/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendTests.build/sources":
+    tool: write-auxiliary-file
+    inputs: ["<sources-file-list>","/Users/nunez/code/ios/SwiftSync/DemoBackend/Tests/DemoBackendTests/DemoBackendTests.swift"]
+    outputs: ["/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendTests.build/sources"]
+    description: "Write auxiliary file /Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendTests.build/sources"
+
+  "/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt":
+    tool: write-auxiliary-file
+    inputs: ["<swift-get-version>","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"]
+    outputs: ["/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"]
+    always-out-of-date: "true"
+    description: "Write auxiliary file /Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+
+  "<DemoBackend-arm64-apple-macosx26.0-debug.module>":
+    tool: phony
+    inputs: ["/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/DemoSeedData.swift.o","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/DemoServerSimulator.swift.o","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/Modules/DemoBackend.swiftmodule"]
+    outputs: ["<DemoBackend-arm64-apple-macosx26.0-debug.module>"]
+
+  "<DemoBackendPackageTests-arm64-apple-macosx26.0-debug.module>":
+    tool: phony
+    inputs: ["/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.build/runner.swift.o","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/Modules/DemoBackendPackageTests.swiftmodule"]
+    outputs: ["<DemoBackendPackageTests-arm64-apple-macosx26.0-debug.module>"]
+
+  "<DemoBackendPackageTests-arm64-apple-macosx26.0-debug.test>":
+    tool: phony
+    inputs: ["/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.xctest/Contents/MacOS/DemoBackendPackageTests"]
+    outputs: ["<DemoBackendPackageTests-arm64-apple-macosx26.0-debug.test>"]
+
+  "<DemoBackendTests-arm64-apple-macosx26.0-debug.module>":
+    tool: phony
+    inputs: ["/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendTests.build/DemoBackendTests.swift.o","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/Modules/DemoBackendTests.swiftmodule"]
+    outputs: ["<DemoBackendTests-arm64-apple-macosx26.0-debug.module>"]
+
+  "C.DemoBackend-arm64-apple-macosx26.0-debug.module":
+    tool: shell
+    inputs: ["/Users/nunez/code/ios/SwiftSync/DemoBackend/Sources/DemoBackend/DemoSeedData.swift","/Users/nunez/code/ios/SwiftSync/DemoBackend/Sources/DemoBackend/DemoServerSimulator.swift","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/sources"]
+    outputs: ["/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/DemoSeedData.swift.o","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/DemoServerSimulator.swift.o","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/Modules/DemoBackend.swiftmodule"]
+    description: "Compiling Swift Module 'DemoBackend' (2 sources)"
+    args: ["/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc","-module-name","DemoBackend","-emit-dependencies","-emit-module","-emit-module-path","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/Modules/DemoBackend.swiftmodule","-output-file-map","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/output-file-map.json","-parse-as-library","-incremental","-c","@/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/sources","-I","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/Modules","-target","arm64-apple-macosx14.0","-incremental","-enable-batch-mode","-serialize-diagnostics","-index-store-path","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/index/store","-Onone","-enable-testing","-j8","-DSWIFT_PACKAGE","-DDEBUG","-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE","-module-cache-path","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/ModuleCache","-parseable-output","-parse-as-library","-emit-objc-header","-emit-objc-header-path","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/include/DemoBackend-Swift.h","-swift-version","6","-plugin-path","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing","-sdk","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-I","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-L","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-g","-Xcc","-isysroot","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk","-Xcc","-F","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-Xcc","-F","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-Xcc","-fPIC","-Xcc","-g","-package-name","demobackend"]
+
+  "C.DemoBackendPackageTests-arm64-apple-macosx26.0-debug.module":
+    tool: shell
+    inputs: ["/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.derived/runner.swift","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/Modules/DemoBackendTests.swiftmodule","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.build/sources"]
+    outputs: ["/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.build/runner.swift.o","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/Modules/DemoBackendPackageTests.swiftmodule"]
+    description: "Compiling Swift Module 'DemoBackendPackageTests' (1 sources)"
+    args: ["/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc","-module-name","DemoBackendPackageTests","-emit-dependencies","-emit-module","-emit-module-path","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/Modules/DemoBackendPackageTests.swiftmodule","-output-file-map","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.build/output-file-map.json","-parse-as-library","-incremental","-c","@/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.build/sources","-I","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/Modules","-target","arm64-apple-macosx14.0","-incremental","-enable-batch-mode","-serialize-diagnostics","-index-store-path","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/index/store","-Onone","-enable-testing","-Xfrontend","-enable-cross-import-overlays","-j8","-DSWIFT_PACKAGE","-DDEBUG","-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE","-module-cache-path","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/ModuleCache","-parseable-output","-parse-as-library","-emit-objc-header","-emit-objc-header-path","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.build/include/DemoBackendPackageTests-Swift.h","-plugin-path","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing","-sdk","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-I","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-L","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-g","-Xcc","-isysroot","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk","-Xcc","-F","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-Xcc","-F","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-Xcc","-fPIC","-Xcc","-g","-package-name","demobackend"]
+
+  "C.DemoBackendPackageTests-arm64-apple-macosx26.0-debug.test":
+    tool: shell
+    inputs: ["/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/DemoSeedData.swift.o","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackend.build/DemoServerSimulator.swift.o","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.build/runner.swift.o","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendTests.build/DemoBackendTests.swift.o","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.product/Objects.LinkFileList"]
+    outputs: ["/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.xctest/Contents/MacOS/DemoBackendPackageTests"]
+    description: "Linking ./.build/arm64-apple-macosx/debug/DemoBackendPackageTests.xctest/Contents/MacOS/DemoBackendPackageTests"
+    args: ["/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc","-L","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug","-o","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.xctest/Contents/MacOS/DemoBackendPackageTests","-module-name","DemoBackendPackageTests","-Xlinker","-no_warn_duplicate_libraries","-Xlinker","-bundle","-Xlinker","-rpath","-Xlinker","@loader_path/../../../","@/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendPackageTests.product/Objects.LinkFileList","-Xlinker","-rpath","-Xlinker","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-6.2/macosx","-target","arm64-apple-macosx14.0","-Xlinker","-add_ast_path","-Xlinker","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/Modules/DemoBackend.swiftmodule","-Xlinker","-add_ast_path","-Xlinker","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/Modules/DemoBackendPackageTests.swiftmodule","-Xlinker","-add_ast_path","-Xlinker","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/Modules/DemoBackendTests.swiftmodule","-plugin-path","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing","-sdk","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-I","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-L","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-g"]
+
+  "C.DemoBackendTests-arm64-apple-macosx26.0-debug.module":
+    tool: shell
+    inputs: ["/Users/nunez/code/ios/SwiftSync/DemoBackend/Tests/DemoBackendTests/DemoBackendTests.swift","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/Modules/DemoBackend.swiftmodule","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendTests.build/sources"]
+    outputs: ["/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendTests.build/DemoBackendTests.swift.o","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/Modules/DemoBackendTests.swiftmodule"]
+    description: "Compiling Swift Module 'DemoBackendTests' (1 sources)"
+    args: ["/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc","-module-name","DemoBackendTests","-emit-dependencies","-emit-module","-emit-module-path","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/Modules/DemoBackendTests.swiftmodule","-output-file-map","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendTests.build/output-file-map.json","-parse-as-library","-incremental","-c","@/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/DemoBackendTests.build/sources","-I","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/Modules","-target","arm64-apple-macosx14.0","-incremental","-enable-batch-mode","-serialize-diagnostics","-index-store-path","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/index/store","-Onone","-enable-testing","-Xfrontend","-enable-cross-import-overlays","-j8","-DSWIFT_PACKAGE","-DDEBUG","-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE","-module-cache-path","/Users/nunez/code/ios/SwiftSync/DemoBackend/.build/arm64-apple-macosx/debug/ModuleCache","-parseable-output","-parse-as-library","-swift-version","6","-plugin-path","/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing","-sdk","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-F","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-I","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-L","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib","-g","-Xcc","-isysroot","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk","-Xcc","-F","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks","-Xcc","-F","-Xcc","/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks","-Xcc","-fPIC","-Xcc","-g","-package-name","demobackend"]
+
+  "PackageStructure":
+    tool: package-structure-tool
+    inputs: ["/Users/nunez/code/ios/SwiftSync/DemoBackend/Sources/DemoBackend/","/Users/nunez/code/ios/SwiftSync/DemoBackend/Tests/DemoBackendTests/","/Users/nunez/code/ios/SwiftSync/DemoBackend/Package.swift","/Users/nunez/code/ios/SwiftSync/DemoBackend/Package.resolved"]
+    outputs: ["<PackageStructure>"]
+    description: "Planning build"
+    allow-missing-inputs: true
+

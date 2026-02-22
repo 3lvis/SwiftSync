@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		9F0A0B0C0D0E0F1011121317 /* DemoBackend in Frameworks */ = {isa = PBXBuildFile; productRef = 9F0A0B0C0D0E0F1011121318 /* DemoBackend */; };
+		9F0A0B0C0D0E0F1011121314 /* SwiftSync in Frameworks */ = {isa = PBXBuildFile; productRef = 9F0A0B0C0D0E0F1011121315 /* SwiftSync */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		28ADD7D12F49158D00AB7C9B /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -22,10 +27,6 @@
 			remoteInfo = Demo;
 		};
 /* End PBXContainerItemProxy section */
-
-/* Begin PBXBuildFile section */
-		9F0A0B0C0D0E0F1011121314 /* SwiftSync in Frameworks */ = {isa = PBXBuildFile; productRef = 9F0A0B0C0D0E0F1011121315 /* SwiftSync */; };
-/* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		28ADD7C12F49158C00AB7C9B /* Demo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Demo.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -56,6 +57,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9F0A0B0C0D0E0F1011121317 /* DemoBackend in Frameworks */,
 				9F0A0B0C0D0E0F1011121314 /* SwiftSync in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -117,6 +119,7 @@
 			);
 			name = Demo;
 			packageProductDependencies = (
+				9F0A0B0C0D0E0F1011121318 /* DemoBackend */,
 				9F0A0B0C0D0E0F1011121315 /* SwiftSync */,
 			);
 			productName = Demo;
@@ -201,13 +204,14 @@
 			);
 			mainGroup = 28ADD7B82F49158C00AB7C9B;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				9F0A0B0C0D0E0F1011121316 /* XCLocalSwiftPackageReference ".." */,
+				9F0A0B0C0D0E0F1011121319 /* XCLocalSwiftPackageReference "../DemoBackend" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 28ADD7C22F49158C00AB7C9B /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
-			packageReferences = (
-				9F0A0B0C0D0E0F1011121316 /* XCLocalSwiftPackageReference ".." */,
-			);
 			targets = (
 				28ADD7C02F49158C00AB7C9B /* Demo */,
 				28ADD7CF2F49158D00AB7C9B /* DemoTests */,
@@ -276,21 +280,6 @@
 			targetProxy = 28ADD7DB2F49158D00AB7C9B /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
-
-/* Begin XCLocalSwiftPackageReference section */
-		9F0A0B0C0D0E0F1011121316 /* XCLocalSwiftPackageReference ".." */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ..;
-		};
-/* End XCLocalSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		9F0A0B0C0D0E0F1011121315 /* SwiftSync */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 9F0A0B0C0D0E0F1011121316 /* XCLocalSwiftPackageReference ".." */;
-			productName = SwiftSync;
-		};
-/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCBuildConfiguration section */
 		28ADD7E22F49158D00AB7C9B /* Debug */ = {
@@ -602,6 +591,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		9F0A0B0C0D0E0F1011121316 /* XCLocalSwiftPackageReference ".." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ..;
+		};
+		9F0A0B0C0D0E0F1011121319 /* XCLocalSwiftPackageReference "../DemoBackend" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../DemoBackend;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		9F0A0B0C0D0E0F1011121315 /* SwiftSync */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9F0A0B0C0D0E0F1011121316 /* XCLocalSwiftPackageReference ".." */;
+			productName = SwiftSync;
+		};
+		9F0A0B0C0D0E0F1011121318 /* DemoBackend */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9F0A0B0C0D0E0F1011121319 /* XCLocalSwiftPackageReference "../DemoBackend" */;
+			productName = DemoBackend;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 28ADD7B92F49158C00AB7C9B /* Project object */;
 }

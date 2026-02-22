@@ -1,4 +1,4 @@
-# SwiftSync Demo App Plan (SwiftUI, Staged Sync, Three-Phase Rollout)
+# SwiftSync Demo App Plan (SwiftUI, Staged Sync, Stateful Fake Backend)
 
 ## Status Legend
 
@@ -26,10 +26,25 @@
 ### What is still missing
 
 - [ ] Phase 2 create/edit write flows
+- [X] SQLite-backed stateful fake backend (separate backend source of truth)
+- [X] Fake backend moved to local Swift package (`DemoBackend`) for `swift test`
 - [ ] Task description modal editing flow
-- [ ] Phase 3 offline outbox / replay system
-- [ ] Network monitor + pending changes indicators
+- [X] Backend unit tests (SQLite-backed fake server behavior)
+- [X] App read path swapped from seed-array fake client to backend-backed fake client
+- [ ] Offline/replay work (intentionally deferred until backend + writes are working)
 - [ ] Demo-specific test coverage planned in this document
+
+## Current Execution Direction (What we are doing next)
+
+We are replacing the current seeded read-only fake API implementation with a stateful fake backend simulator that behaves like a backend but runs in-process.
+
+Rules for this phase:
+
+- backend state must be separate from app local state (`SyncContainer`)
+- backend storage uses SQLite (not JSON files)
+- clear code separation in local package `DemoBackend` (app imports it as a package product)
+- unit tests for backend behavior are required
+- offline/outbox work is deferred until read/write backend behavior is working
 
 ## Goal
 
@@ -38,13 +53,14 @@ Build a demo app that proves SwiftSync can deliver:
 1. [X] Reactive SwiftUI reads via `@SyncQuery` and `@SyncModel`.
 2. [X] Multi-step backend loading (not a single giant JSON payload).
 3. [X] Predictable sync behavior with simulated latency/failures (read path + scenario presets).
-4. [ ] A phased path from read-only to editable to offline-first sync (Phase 2/3 pending).
+4. [ ] A path from read-only to editable flows first; offline-first is deferred until after backend stateful writes are working.
 
 ## Scope
 
 - [X] Platform/UI: iOS + SwiftUI.
 - [X] Data stack: SwiftData + SwiftSync.
 - [X] Networking: fake backend service (in-process, deterministic delays/errors).
+- [X] Backend storage: SQLite-backed simulator in local package `DemoBackend`
 - [X] App shell: two tabs only.
   - `Projects`
   - `Users`
@@ -122,6 +138,37 @@ Status: `[-]` Mostly implemented; one naming detail in this plan is outdated (`C
 
 ## Fake Backend Contract
 
+Status: `[X]` Read endpoints now run through a SQLite-backed stateful simulator in the `DemoBackend` local package.
+
+## Fake Backend Implementation Plan (Current Phase)
+
+### Backend Separation
+
+- [X] Backend lives in local Swift package `DemoBackend` (library + tests).
+- [X] Backend state is separate from app `SyncContainer` state.
+- [X] App continues to use `DemoAPIClient` as the only backend boundary.
+
+### Backend Storage (SQLite)
+
+- [X] SQLite-backed server storage (projects/users/tasks/tags/comments + task_tag join table).
+- [X] Seed SQLite backend state from deterministic demo seed data on first init/reset.
+- [X] Backend reads from SQLite for all existing staged endpoints.
+- [ ] Support backend mutations in SQLite for Phase 2 write endpoints.
+
+### Backend Behavior (Backend-like, no HTTP needed)
+
+- [X] Server-owned timestamps/updates on mutation (`updatedAt`) for implemented mutations.
+- [X] Validation/error paths for invalid writes (minimal, deterministic) for implemented mutations.
+- [X] Stable backend-side relationship handling (task tags, comments, assignee/project foreign keys).
+- [X] Scenario delay/failure behavior remains in `DemoAPIClient` layer, not in SQLite storage layer.
+
+### Backend Unit Tests (Required)
+
+- [X] SQLite schema/bootstrap + seeding
+- [X] Read endpoint data correctness from SQLite state
+- [X] Mutation persistence (write then read reflects server-side change)
+- [X] Relationship mutation correctness (comment insert)
+
 ### Endpoints (Staged Fetches)
 
 - [X] `GET /projects`
@@ -159,14 +206,15 @@ Status: `[-]` Mostly implemented; one naming detail in this plan is outdated (`C
 
 ## App Architecture
 
-Status: `[X]` core layers implemented for Phase 1 read path.
+Status: `[-]` core read path now uses the SQLite-backed backend package; write flows are still pending.
 
 ### Layers
 
-1. [X] `DemoAPIClient` protocol + `FakeDemoAPIClient` implementation.
+1. [X] `DemoAPIClient` protocol + fake client implementation (now backed by `DemoBackend` SQLite simulator for reads).
 2. [X] `SyncEngine` service that maps DTOs into SwiftSync `sync(...)` calls.
 3. [X] `SyncContainer` as single data entry point.
 4. [X] SwiftUI features reading through `@SyncQuery` / `@SyncModel`.
+5. [X] `DemoBackend` local package (SQLite-backed server simulator + package tests)
 
 ## SwiftUI Feature Flows
 
@@ -281,9 +329,9 @@ Status: `[ ]` Not started.
 
 Demonstrate that create/edit operations flow through SwiftSync and refresh affected screens without manual reload plumbing.
 
-## Phase 3: Offline-First + Reconnect Replay
+## Phase 3: Offline-First + Reconnect Replay (Deferred)
 
-Status: `[ ]` Not started (only scenario preset + offline error simulation exists).
+Status: `[ ]` Deferred until after SQLite-backed backend + Phase 2 writes are working.
 
 ### Requirements
 
@@ -352,3 +400,4 @@ All operations should update local UI immediately and queue network writes.
 4. [ ] Phase 2 create/edit flows.
 5. [ ] Phase 3 outbox + network monitor + replay.
 6. [-] Debug panel for network/conflict simulation (scenario picker/error surfacing exist; deeper tooling remains pending)
+7. [ ] SQLite-backed backend simulator + backend unit tests + app client swap
