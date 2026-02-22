@@ -311,6 +311,7 @@ private struct EditTaskDescriptionSheet: View {
     @State private var text = ""
     @State private var hasLoadedInitialValue = false
     @State private var isSaving = false
+    @State private var saveErrorMessage: String?
 
     init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.taskID = taskID
@@ -338,14 +339,22 @@ private struct EditTaskDescriptionSheet: View {
                         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !trimmed.isEmpty else { return }
                         isSaving = true
+                        saveErrorMessage = nil
                         _Concurrency.Task {
                             await syncEngine.updateTaskDescription(
                                 taskID: taskID,
                                 projectID: taskModel?.projectID,
                                 descriptionText: trimmed
                             )
+                            await MainActor.run {
+                                if let message = syncEngine.lastErrorMessage {
+                                    isSaving = false
+                                    saveErrorMessage = message
+                                } else {
+                                    dismiss()
+                                }
+                            }
                         }
-                        dismiss()
                     }) {
                         Text("Save")
                     }
@@ -357,6 +366,21 @@ private struct EditTaskDescriptionSheet: View {
             guard !hasLoadedInitialValue, let taskModel else { return }
             text = taskModel.descriptionText
             hasLoadedInitialValue = true
+        }
+        .alert(
+            "Save Failed",
+            isPresented: Binding(
+                get: { saveErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented { saveErrorMessage = nil }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                saveErrorMessage = nil
+            }
+        } message: {
+            Text(saveErrorMessage ?? "Unknown error")
         }
         .presentationDetents([.medium, .large])
     }
@@ -371,6 +395,8 @@ private struct AssigneePickerSheet: View {
     @SyncQuery private var users: [User]
     @State private var pendingAssigneeID: String?
     @State private var hasLoadedInitialValue = false
+    @State private var isSaving = false
+    @State private var saveErrorMessage: String?
 
     init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.taskID = taskID
@@ -420,24 +446,33 @@ private struct AssigneePickerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
+                        .disabled(isSaving)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: {
                         let selection = pendingAssigneeID
                         let projectID = taskModel?.projectID
-                        dismiss()
-                        DispatchQueue.main.async {
-                            _Concurrency.Task {
-                                await syncEngine.updateTaskAssignee(
-                                    taskID: taskID,
-                                    projectID: projectID,
-                                    assigneeID: selection
-                                )
+                        isSaving = true
+                        saveErrorMessage = nil
+                        _Concurrency.Task {
+                            await syncEngine.updateTaskAssignee(
+                                taskID: taskID,
+                                projectID: projectID,
+                                assigneeID: selection
+                            )
+                            await MainActor.run {
+                                if let message = syncEngine.lastErrorMessage {
+                                    isSaving = false
+                                    saveErrorMessage = message
+                                } else {
+                                    dismiss()
+                                }
                             }
                         }
                     }) {
                         Text("Save")
                     }
+                    .disabled(isSaving)
                 }
             }
         }
@@ -445,6 +480,21 @@ private struct AssigneePickerSheet: View {
             guard !hasLoadedInitialValue, let taskModel else { return }
             pendingAssigneeID = taskModel.assigneeID
             hasLoadedInitialValue = true
+        }
+        .alert(
+            "Save Failed",
+            isPresented: Binding(
+                get: { saveErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented { saveErrorMessage = nil }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                saveErrorMessage = nil
+            }
+        } message: {
+            Text(saveErrorMessage ?? "Unknown error")
         }
         .presentationDetents([.medium, .large])
     }
@@ -461,6 +511,7 @@ private struct EditTaskTagsSheet: View {
     @State private var pendingTagIDs: Set<String> = []
     @State private var hasLoadedInitialSelection = false
     @State private var isSaving = false
+    @State private var saveErrorMessage: String?
 
     init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.taskID = taskID
@@ -517,6 +568,7 @@ private struct EditTaskTagsSheet: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: {
                         isSaving = true
+                        saveErrorMessage = nil
                         let tagIDs = pendingTagIDs.sorted()
                         _Concurrency.Task {
                             await syncEngine.replaceTaskTags(
@@ -524,8 +576,15 @@ private struct EditTaskTagsSheet: View {
                                 projectID: taskModel?.projectID,
                                 tagIDs: tagIDs
                             )
+                            await MainActor.run {
+                                if let message = syncEngine.lastErrorMessage {
+                                    isSaving = false
+                                    saveErrorMessage = message
+                                } else {
+                                    dismiss()
+                                }
+                            }
                         }
-                        dismiss()
                     }) {
                         Text("Save")
                     }
@@ -537,6 +596,21 @@ private struct EditTaskTagsSheet: View {
             guard !hasLoadedInitialSelection, taskModel != nil else { return }
             pendingTagIDs = Set(selectedTags.map(\.id))
             hasLoadedInitialSelection = true
+        }
+        .alert(
+            "Save Failed",
+            isPresented: Binding(
+                get: { saveErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented { saveErrorMessage = nil }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                saveErrorMessage = nil
+            }
+        } message: {
+            Text(saveErrorMessage ?? "Unknown error")
         }
         .presentationDetents([.medium, .large])
     }
@@ -552,6 +626,7 @@ private struct CreateCommentSheet: View {
     @State private var authorUserID: String?
     @State private var bodyText = ""
     @State private var isSaving = false
+    @State private var saveErrorMessage: String?
 
     init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.taskID = taskID
@@ -593,14 +668,22 @@ private struct CreateCommentSheet: View {
                         let trimmedBody = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard let authorUserID, !trimmedBody.isEmpty else { return }
                         isSaving = true
+                        saveErrorMessage = nil
                         _Concurrency.Task {
                             await syncEngine.createComment(
                                 taskID: taskID,
                                 authorUserID: authorUserID,
                                 body: trimmedBody
                             )
+                            await MainActor.run {
+                                if let message = syncEngine.lastErrorMessage {
+                                    isSaving = false
+                                    saveErrorMessage = message
+                                } else {
+                                    dismiss()
+                                }
+                            }
                         }
-                        dismiss()
                     }) {
                         Text("Save")
                     }
@@ -617,6 +700,21 @@ private struct CreateCommentSheet: View {
         }
         .task(id: users.map(\.id)) {
             seedAuthorIfNeeded()
+        }
+        .alert(
+            "Save Failed",
+            isPresented: Binding(
+                get: { saveErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented { saveErrorMessage = nil }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                saveErrorMessage = nil
+            }
+        } message: {
+            Text(saveErrorMessage ?? "Unknown error")
         }
         .presentationDetents([.medium, .large])
     }

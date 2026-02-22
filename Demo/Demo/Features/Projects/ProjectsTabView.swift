@@ -217,6 +217,7 @@ private struct ProjectDetailView: View {
             while !_Concurrency.Task.isCancelled {
                 try? await _Concurrency.Task.sleep(nanoseconds: 10_000_000_000)
                 guard !_Concurrency.Task.isCancelled else { break }
+                guard !isShowingCreateTaskSheet, taskPendingDelete == nil else { continue }
                 await syncEngine.syncProjectTasks(projectID: projectID)
             }
         }
@@ -380,6 +381,7 @@ private struct CreateTaskSheet: View {
     @State private var state = DemoTaskStateOption.todo
     @State private var assigneeID: String?
     @State private var isSaving = false
+    @State private var saveErrorMessage: String?
 
     init(
         projectID: String,
@@ -440,6 +442,7 @@ private struct CreateTaskSheet: View {
                         guard !trimmedTitle.isEmpty else { return }
 
                         isSaving = true
+                        saveErrorMessage = nil
                         _Concurrency.Task {
                             await syncEngine.createTask(
                                 projectID: projectID,
@@ -450,14 +453,34 @@ private struct CreateTaskSheet: View {
                                 tagIDs: []
                             )
                             await MainActor.run {
-                                isSaving = false
-                                dismiss()
+                                if let message = syncEngine.lastErrorMessage {
+                                    isSaving = false
+                                    saveErrorMessage = message
+                                } else {
+                                    isSaving = false
+                                    dismiss()
+                                }
                             }
                         }
                     }
                     .disabled(isSaving || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
+        }
+        .alert(
+            "Save Failed",
+            isPresented: Binding(
+                get: { saveErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented { saveErrorMessage = nil }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                saveErrorMessage = nil
+            }
+        } message: {
+            Text(saveErrorMessage ?? "Unknown error")
         }
         .presentationDetents([.medium, .large])
     }
