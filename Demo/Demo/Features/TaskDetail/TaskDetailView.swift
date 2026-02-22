@@ -47,7 +47,6 @@ struct TaskDetailView: View {
                     Text(taskModel.title)
                         .font(.title3)
                     Text("State: \(taskModel.state)")
-                    Text("Priority: \(taskModel.priority)")
                     if let assignee = taskModel.assignee?.displayName {
                         Text("Assignee: \(assignee)")
                     }

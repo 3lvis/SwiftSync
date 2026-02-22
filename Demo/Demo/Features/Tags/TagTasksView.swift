@@ -22,7 +22,7 @@ struct TagTasksView: View {
             toMany: tag,
             in: syncContainer,
             sortBy: [
-                SortDescriptor(\Task.priority, order: .reverse),
+                SortDescriptor(\Task.updatedAt, order: .reverse),
                 SortDescriptor(\Task.id)
             ],
             refreshOn: [\.tags]
@@ -47,7 +47,7 @@ struct TagTasksView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(task.title)
                                     .font(.headline)
-                                Text("\(task.state) · p\(task.priority)")
+                                Text(task.state)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }

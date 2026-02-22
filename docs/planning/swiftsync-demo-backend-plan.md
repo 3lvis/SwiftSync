@@ -90,7 +90,7 @@ Status: `[X]` Read endpoints now run through a SQLite-backed stateful simulator 
 
 ### Write Endpoints (Phase 2)
 
-- [ ] `PATCH /tasks/{taskID}` (title/state/assignee/priority)
+- [ ] `PATCH /tasks/{taskID}` (title/state/assignee)
 - [ ] `PATCH /tasks/{taskID}/description` (modal edit flow)
 - [ ] `PUT /tasks/{taskID}/tags` (full set replace or explicit add/remove contract)
 - [ ] `POST /tasks/{taskID}/comments`

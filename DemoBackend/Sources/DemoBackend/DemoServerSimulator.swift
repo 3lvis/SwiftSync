@@ -87,7 +87,7 @@ public final class DemoServerSimulator {
     public func getTaskDetailPayload(taskID: String) throws -> [String: Any]? {
         let rows = try self.sqlite.query(
             """
-            SELECT id, project_id, assignee_id, title, description, state, priority, updated_at
+            SELECT id, project_id, assignee_id, title, description, state, updated_at
             FROM tasks
             WHERE id = ?
             LIMIT 1
@@ -228,7 +228,7 @@ public final class DemoServerSimulator {
         let rows = try self.sqlite.query(
             """
             SELECT tasks.id, tasks.project_id, tasks.assignee_id, tasks.title, tasks.description, tasks.state,
-                   tasks.priority, tasks.updated_at
+                   tasks.updated_at
             FROM tasks
             \(whereClause)
             ORDER BY tasks.id ASC
@@ -247,7 +247,6 @@ public final class DemoServerSimulator {
             "title": row.string("title"),
             "description": row.string("description"),
             "state": row.string("state"),
-            "priority": Int(row.int64("priority")),
             "tag_ids": try tagIDs(forTaskID: taskID),
             "updated_at": iso8601(row.double("updated_at"))
         ]
@@ -340,7 +339,6 @@ public final class DemoServerSimulator {
                 title TEXT NOT NULL,
                 description TEXT NOT NULL,
                 state TEXT NOT NULL,
-                priority INTEGER NOT NULL,
                 updated_at REAL NOT NULL,
                 FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE RESTRICT,
                 FOREIGN KEY(assignee_id) REFERENCES users(id) ON DELETE SET NULL
@@ -421,8 +419,8 @@ public final class DemoServerSimulator {
             for task in seedData.tasks {
                 try sqlite.execute(
                     """
-                    INSERT INTO tasks (id, project_id, assignee_id, title, description, state, priority, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO tasks (id, project_id, assignee_id, title, description, state, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     bind: { stmt in
                         sqlite.bind(text: task.id, at: 1, in: stmt)
@@ -431,8 +429,7 @@ public final class DemoServerSimulator {
                         sqlite.bind(text: task.title, at: 4, in: stmt)
                         sqlite.bind(text: task.descriptionText, at: 5, in: stmt)
                         sqlite.bind(text: task.state, at: 6, in: stmt)
-                        sqlite.bind(int64: Int64(task.priority), at: 7, in: stmt)
-                        sqlite.bind(double: task.updatedAt.timeIntervalSince1970, at: 8, in: stmt)
+                        sqlite.bind(double: task.updatedAt.timeIntervalSince1970, at: 7, in: stmt)
                     }
                 )
 

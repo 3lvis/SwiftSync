@@ -80,7 +80,7 @@ private struct ProjectDetailView: View {
             toOne: project,
             in: syncContainer,
             sortBy: [
-                SortDescriptor(\Task.priority, order: .reverse),
+                SortDescriptor(\Task.updatedAt, order: .reverse),
                 SortDescriptor(\Task.id)
             ],
             refreshOn: [\.assignee]
@@ -112,7 +112,7 @@ private struct ProjectDetailView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(task.title)
                                 .font(.headline)
-                            Text("\(task.state) · p\(task.priority)")
+                            Text(task.state)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             if let assignee = task.assignee?.displayName {

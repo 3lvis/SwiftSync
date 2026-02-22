@@ -89,7 +89,6 @@ final class Task {
     var descriptionText: String
 
     var state: String
-    var priority: Int
     var updatedAt: Date
     var project: Project?
     var assignee: User?
@@ -103,7 +102,6 @@ final class Task {
         title: String,
         descriptionText: String,
         state: String,
-        priority: Int,
         updatedAt: Date,
         project: Project? = nil,
         assignee: User? = nil,
@@ -116,7 +114,6 @@ final class Task {
         self.title = title
         self.descriptionText = descriptionText
         self.state = state
-        self.priority = priority
         self.updatedAt = updatedAt
         self.project = project
         self.assignee = assignee

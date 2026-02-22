@@ -74,7 +74,7 @@ private struct UserDetailView: View {
             toOne: user,
             in: syncContainer,
             sortBy: [
-                SortDescriptor(\Task.priority, order: .reverse),
+                SortDescriptor(\Task.updatedAt, order: .reverse),
                 SortDescriptor(\Task.id)
             ],
             refreshOn: [\.project]

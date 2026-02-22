@@ -89,7 +89,6 @@ Status: `[-]` Mostly implemented; one naming detail in this plan is outdated (`C
 
 - `id: String` (`@PrimaryKey`)
 - `displayName: String`
-- `avatarSeed: String`
 - `role: String`
 - `updatedAt: Date`
 - inverse relationship: `assignedTasks: [Task]`
@@ -102,8 +101,6 @@ Status: `[-]` Mostly implemented; one naming detail in this plan is outdated (`C
 - `title: String`
 - `descriptionText: String`
 - `state: String` (`todo`, `inProgress`, `done`)
-- `priority: Int`
-- `dueDate: Date?`
 - `updatedAt: Date`
 - relationships:
   - `project: Project?`
@@ -115,7 +112,6 @@ Status: `[-]` Mostly implemented; one naming detail in this plan is outdated (`C
 
 - `id: String` (`@PrimaryKey`)
 - `name: String` (e.g. `frontend`)
-- `colorHex: String`
 - `updatedAt: Date`
 - inverse relationship: `tasks: [Task]`
 
@@ -126,7 +122,6 @@ Status: `[-]` Mostly implemented; one naming detail in this plan is outdated (`C
 - `authorUserID: String`
 - `body: String`
 - `createdAt: Date`
-- `updatedAt: Date`
 - relationships:
   - `task: Task?`
   - `authorUser: User?` (implemented name)

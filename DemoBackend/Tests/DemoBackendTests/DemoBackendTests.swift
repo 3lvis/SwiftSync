@@ -24,6 +24,7 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertNil(users.first?["avatar_seed"])
         XCTAssertNil(tags.first?["color_hex"])
         XCTAssertNil(projectTasks.first?["due_date"])
+        XCTAssertNil(projectTasks.first?["priority"])
         XCTAssertEqual(projectTasks.first?["tag_ids"] as? [String], ["tag-1", "tag-2"])
         XCTAssertNotNil(projectTasks.first?["description"])
         XCTAssertNotNil(projectTasks.first?["updated_at"])
@@ -68,7 +69,6 @@ final class DemoBackendTests: XCTestCase {
                     title: "Task",
                     descriptionText: "Desc",
                     state: "todo",
-                    priority: 1,
                     tagIDs: [],
                     updatedAt: Date(timeIntervalSince1970: 10)
                 )
@@ -118,7 +118,6 @@ final class DemoBackendTests: XCTestCase {
                     title: "Task 1",
                     descriptionText: "Old description",
                     state: "todo",
-                    priority: 2,
                     tagIDs: ["tag-1", "tag-2"],
                     updatedAt: now
                 )

@@ -17,7 +17,7 @@ Reduce demo model/backend fields to the minimum set that still proves SwiftSync'
 - [X] Remove `Tag.colorHex`
 - [X] Remove `Task.dueDate`
 - [X] Remove `Comment.updatedAt` (comments remain create/read-focused for now)
-- [ ] Re-decide `Task.priority` after CRUD UI scope is finalized
+- [X] Remove `Task.priority`
 
 This plan covers both:
 
@@ -47,7 +47,6 @@ This plan covers both:
 
 - `id`
 - `displayName`
-- `avatarSeed`
 - `role`
 - `updatedAt`
 
@@ -55,7 +54,6 @@ This plan covers both:
 
 - `id`
 - `name`
-- `colorHex`
 - `updatedAt`
 
 ### Task
@@ -66,8 +64,6 @@ This plan covers both:
 - `title`
 - `descriptionText` (`@RemoteKey("description")`)
 - `state`
-- `priority`
-- `dueDate`
 - `updatedAt`
 
 ### Comment
@@ -77,7 +73,6 @@ This plan covers both:
 - `authorUserID`
 - `body`
 - `createdAt`
-- `updatedAt`
 
 ## Proposed Target Field Set (Recommended)
 
@@ -130,9 +125,9 @@ This target keeps the demo strong while reducing maintenance and write-surface c
   - adds payload/schema/seed complexity
 - [X] `Tag.colorHex`
   - visual polish only; not needed to prove many-to-many sync
-- [ ] `Task.priority`
+- [X] `Task.priority`
   - useful, but duplicates the role of `state` for "task metadata updates"
-  - also used for sorting today, so requires query/UI updates
+  - required query/UI sorting updates (completed with `updatedAt` + `id`)
 - [X] `Task.dueDate`
   - not used in core demo interactions
 - [X] `Comment.updatedAt`
@@ -140,8 +135,6 @@ This target keeps the demo strong while reducing maintenance and write-surface c
 
 ### Keep for Now, Re-evaluate After CRUD
 
-- `Task.priority`
-  - if we decide to keep "quick edit metadata" richer than just `state`, retain it
 - `Project.status`
   - if project updates are dropped from Phase 2, this becomes a removal candidate
 
@@ -170,7 +163,7 @@ Why first:
 ### Phase C: Remove Low-Value Task/Comment Fields
 
 1. [X] Remove `Task.dueDate` (if no imminent UI use).
-2. [ ] Decide `Task.priority` keep/remove based on CRUD UI scope.
+2. [X] Remove `Task.priority`.
 3. [X] Remove `Comment.updatedAt` if comments remain create/delete only.
 
 Why separate from Phase B:
@@ -178,10 +171,10 @@ Why separate from Phase B:
 
 ### Phase D: Align Sorting/Queries with Reduced Fields
 
-If `Task.priority` is removed:
+Implemented for current demo:
 
-1. Replace task sorting with stable alternatives (e.g. `state`, `title`, `id`, or `updatedAt` + `id`).
-2. Update all `@SyncQuery(Task.self, ...)` call sites consistently.
+1. [X] Replace task sorting with stable alternatives (`updatedAt` + `id`).
+2. [X] Update all `@SyncQuery(Task.self, ...)` call sites consistently.
 
 ### Phase E: Lock Contract and Document It
 

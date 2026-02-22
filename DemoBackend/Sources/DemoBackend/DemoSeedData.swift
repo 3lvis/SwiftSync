@@ -48,7 +48,6 @@ public struct DemoSeedData {
         public let title: String
         public let descriptionText: String
         public let state: String
-        public let priority: Int
         public let tagIDs: [String]
         public let updatedAt: Date
 
@@ -59,7 +58,6 @@ public struct DemoSeedData {
             title: String,
             descriptionText: String,
             state: String,
-            priority: Int,
             tagIDs: [String],
             updatedAt: Date
         ) {
@@ -69,7 +67,6 @@ public struct DemoSeedData {
             self.title = title
             self.descriptionText = descriptionText
             self.state = state
-            self.priority = priority
             self.tagIDs = tagIDs
             self.updatedAt = updatedAt
         }
@@ -176,7 +173,6 @@ public struct DemoSeedData {
                     title: "Task \(index)",
                     descriptionText: "Detailed description for task \(index). This is seeded fake backend content for staged sync demos.",
                     state: taskStates[index % taskStates.count],
-                    priority: (index % 5) + 1,
                     tagIDs: tagIDs,
                     updatedAt: baseDate.addingTimeInterval(TimeInterval(index * 120))
                 )
