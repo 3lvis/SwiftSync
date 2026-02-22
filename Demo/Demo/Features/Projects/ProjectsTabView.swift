@@ -8,6 +8,7 @@ struct ProjectsTabView: View {
 
     @SyncQuery private var projects: [Project]
     @State private var hasTriggeredInitialSync = false
+    @State private var navigationPath: [String] = []
 
     init(syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.syncContainer = syncContainer
@@ -21,26 +22,21 @@ struct ProjectsTabView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             List {
                 ForEach(projects, id: \.id) { project in
-                    NavigationLink {
-                        ProjectDetailView(
-                            project: project,
-                            syncContainer: syncContainer,
-                            syncEngine: syncEngine
-                        )
+                    Button {
+                        navigationPath.append(project.id)
                     } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(project.name)
-                                .font(.headline)
-                            Text(project.status)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        ProjectListRow(project: project)
                     }
+                    .buttonStyle(.plain)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
                 }
             }
+            .listStyle(.plain)
             .overlay {
                 if projects.isEmpty && syncEngine.isSyncing {
                     ProgressView("Syncing projects...")
@@ -57,7 +53,65 @@ struct ProjectsTabView: View {
                 await syncEngine.syncProjects()
                 await syncEngine.syncTags()
             }
+            .navigationDestination(for: String.self) { projectID in
+                if let project = projects.first(where: { $0.id == projectID }) {
+                    ProjectDetailView(
+                        project: project,
+                        syncContainer: syncContainer,
+                        syncEngine: syncEngine
+                    )
+                } else {
+                    Text("Project not found")
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
+    }
+}
+
+private struct ProjectListRow: View {
+    let project: Project
+
+    private var taskCountLabel: String {
+        project.taskCount == 1 ? "1 task" : "\(project.taskCount) tasks"
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(project.name)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+
+                Text(project.status)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+
+            HStack(alignment: .center, spacing: 8) {
+                Text(taskCountLabel)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(Color(.secondarySystemFill))
+                    )
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
     }
 }
 

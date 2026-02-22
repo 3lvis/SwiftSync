@@ -183,6 +183,7 @@ final class DemoSyncEngine: ObservableObject {
 
         guard let project = try project(withID: projectID) else { return }
         try await syncPayload(payload, as: Task.self, parent: project, missingRowPolicy: .delete)
+        try await syncProjectsInternal()
     }
 
     private func syncTaskDetailInternal(taskID: String) async throws {

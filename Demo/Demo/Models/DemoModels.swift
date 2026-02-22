@@ -8,6 +8,7 @@ final class Project {
     @Attribute(.unique) var id: String
     var name: String
     var status: String
+    var taskCount: Int
     var updatedAt: Date
     var tasks: [Task]
 
@@ -15,12 +16,14 @@ final class Project {
         id: String,
         name: String,
         status: String,
+        taskCount: Int = 0,
         updatedAt: Date,
         tasks: [Task] = []
     ) {
         self.id = id
         self.name = name
         self.status = status
+        self.taskCount = taskCount
         self.updatedAt = updatedAt
         self.tasks = tasks
     }

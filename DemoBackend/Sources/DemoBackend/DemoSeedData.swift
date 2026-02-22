@@ -115,9 +115,9 @@ public struct DemoSeedData {
         }
 
         let projects: [SeedProject] = [
-            .init(id: "project-1", name: "Account Security Controls", status: "onTrack", updatedAt: at(540)),
-            .init(id: "project-2", name: "Team Notifications Reliability", status: "atRisk", updatedAt: at(525)),
-            .init(id: "project-3", name: "Support Inbox Refresh", status: "onTrack", updatedAt: at(510))
+            .init(id: "project-1", name: "Account Security Controls", status: "On track", updatedAt: at(540)),
+            .init(id: "project-2", name: "Team Notifications Reliability", status: "At risk", updatedAt: at(525)),
+            .init(id: "project-3", name: "Support Inbox Refresh", status: "On track", updatedAt: at(510))
         ]
 
         let users: [SeedUser] = [

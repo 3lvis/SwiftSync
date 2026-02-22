@@ -46,9 +46,16 @@ public final class DemoServerSimulator {
     public func getProjectsPayload() throws -> [[String: Any]] {
         let rows = try self.sqlite.query(
             """
-            SELECT id, name, status, updated_at
+            SELECT
+                projects.id,
+                projects.name,
+                projects.status,
+                projects.updated_at,
+                COUNT(tasks.id) AS task_count
             FROM projects
-            ORDER BY id ASC
+            LEFT JOIN tasks ON tasks.project_id = projects.id
+            GROUP BY projects.id, projects.name, projects.status, projects.updated_at
+            ORDER BY projects.id ASC
             """
         )
         return rows.map { row in
@@ -56,6 +63,7 @@ public final class DemoServerSimulator {
                 "id": row.string("id"),
                 "name": row.string("name"),
                 "status": row.string("status"),
+                "task_count": Int(row.int64("task_count")),
                 "updated_at": iso8601(row.double("updated_at"))
             ]
         }
