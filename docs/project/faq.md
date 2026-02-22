@@ -43,6 +43,7 @@ See `docs/project/parent-scope.md`.
 Use this mental rule:
 - `relatedTo:` + `relatedID:` = relationship-scoped query by ID
 - `through:` = explicit relationship path for ambiguous cases
+- Demo example: `Task -> User` is ambiguous once `Task` has `assignee`, `reviewer`, and `watchers`, so `through:` is required there
 - `predicate:` = custom business filters or scalar-only filters
 
 See `docs/project/reactive-reads.md`.

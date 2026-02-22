@@ -36,20 +36,29 @@ final class User {
     var displayName: String
     var role: String
     var updatedAt: Date
+    @Relationship(inverse: \Task.assignee)
     var assignedTasks: [Task]
+    @Relationship(inverse: \Task.reviewer)
+    var reviewTasks: [Task]
+    @Relationship(inverse: \Task.watchers)
+    var watchedTasks: [Task]
 
     init(
         id: String,
         displayName: String,
         role: String,
         updatedAt: Date,
-        assignedTasks: [Task] = []
+        assignedTasks: [Task] = [],
+        reviewTasks: [Task] = [],
+        watchedTasks: [Task] = []
     ) {
         self.id = id
         self.displayName = displayName
         self.role = role
         self.updatedAt = updatedAt
         self.assignedTasks = assignedTasks
+        self.reviewTasks = reviewTasks
+        self.watchedTasks = watchedTasks
     }
 }
 
@@ -82,6 +91,7 @@ final class Task {
     var projectID: String
 
     var assigneeID: String?
+    var reviewerID: String?
 
     var title: String
 
@@ -92,32 +102,40 @@ final class Task {
     var updatedAt: Date
     var project: Project?
     var assignee: User?
+    var reviewer: User?
     var tags: [Tag]
+    var watchers: [User]
     var comments: [Comment]
 
     init(
         id: String,
         projectID: String,
         assigneeID: String?,
+        reviewerID: String?,
         title: String,
         descriptionText: String,
         state: String,
         updatedAt: Date,
         project: Project? = nil,
         assignee: User? = nil,
+        reviewer: User? = nil,
         tags: [Tag] = [],
+        watchers: [User] = [],
         comments: [Comment] = []
     ) {
         self.id = id
         self.projectID = projectID
         self.assigneeID = assigneeID
+        self.reviewerID = reviewerID
         self.title = title
         self.descriptionText = descriptionText
         self.state = state
         self.updatedAt = updatedAt
         self.project = project
         self.assignee = assignee
+        self.reviewer = reviewer
         self.tags = tags
+        self.watchers = watchers
         self.comments = comments
     }
 }

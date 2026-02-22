@@ -111,7 +111,7 @@ public final class DemoServerSimulator {
     public func getTaskDetailPayload(taskID: String) throws -> [String: Any]? {
         let rows = try self.sqlite.query(
             """
-            SELECT id, project_id, assignee_id, title, description, state, updated_at
+            SELECT id, project_id, assignee_id, reviewer_id, title, description, state, updated_at
             FROM tasks
             WHERE id = ?
             LIMIT 1
@@ -385,17 +385,18 @@ public final class DemoServerSimulator {
         do {
             try self.sqlite.execute(
                 """
-                INSERT INTO tasks (id, project_id, assignee_id, title, description, state, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO tasks (id, project_id, assignee_id, reviewer_id, title, description, state, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 bind: { stmt in
                     self.sqlite.bind(text: newID, at: 1, in: stmt)
                     self.sqlite.bind(text: projectID, at: 2, in: stmt)
                     self.sqlite.bind(nullableText: assigneeID, at: 3, in: stmt)
-                    self.sqlite.bind(text: normalizedTitle, at: 4, in: stmt)
-                    self.sqlite.bind(text: normalizedDescription, at: 5, in: stmt)
-                    self.sqlite.bind(text: normalizedState, at: 6, in: stmt)
-                    self.sqlite.bind(double: now.timeIntervalSince1970, at: 7, in: stmt)
+                    self.sqlite.bind(nullableText: nil, at: 4, in: stmt)
+                    self.sqlite.bind(text: normalizedTitle, at: 5, in: stmt)
+                    self.sqlite.bind(text: normalizedDescription, at: 6, in: stmt)
+                    self.sqlite.bind(text: normalizedState, at: 7, in: stmt)
+                    self.sqlite.bind(double: now.timeIntervalSince1970, at: 8, in: stmt)
                 }
             )
 
@@ -475,7 +476,7 @@ public final class DemoServerSimulator {
     ) throws -> [[String: Any]] {
         let rows = try self.sqlite.query(
             """
-            SELECT tasks.id, tasks.project_id, tasks.assignee_id, tasks.title, tasks.description, tasks.state,
+            SELECT tasks.id, tasks.project_id, tasks.assignee_id, tasks.reviewer_id, tasks.title, tasks.description, tasks.state,
                    tasks.updated_at
             FROM tasks
             \(whereClause)
@@ -566,10 +567,12 @@ public final class DemoServerSimulator {
             "id": taskID,
             "project_id": row.string("project_id"),
             "assignee_id": row.nullableString("assignee_id") ?? NSNull(),
+            "reviewer_id": row.nullableString("reviewer_id") ?? NSNull(),
             "title": row.string("title"),
             "description": row.string("description"),
             "state": row.string("state"),
             "tag_ids": try tagIDs(forTaskID: taskID),
+            "watcher_ids": try watcherIDs(forTaskID: taskID),
             "updated_at": iso8601(row.double("updated_at"))
         ]
     }
@@ -587,6 +590,21 @@ public final class DemoServerSimulator {
             }
         )
         return rows.map { $0.string("tag_id") }
+    }
+
+    private func watcherIDs(forTaskID taskID: String) throws -> [String] {
+        let rows = try self.sqlite.query(
+            """
+            SELECT user_id
+            FROM task_watchers
+            WHERE task_id = ?
+            ORDER BY user_id ASC
+            """,
+            bind: { stmt in
+                self.sqlite.bind(text: taskID, at: 1, in: stmt)
+            }
+        )
+        return rows.map { $0.string("user_id") }
     }
 
     private func exists(in table: String, id: String) throws -> Bool {
@@ -695,6 +713,7 @@ public final class DemoServerSimulator {
 
     private static func prepareSchema(_ sqlite: DemoSQLiteDatabase, seedData: DemoSeedData) throws {
         try createSchemaIfNeeded(sqlite: sqlite)
+        try migrateSchemaIfNeeded(sqlite: sqlite)
         try seedIfNeeded(sqlite, seedData: seedData)
     }
 
@@ -725,12 +744,14 @@ public final class DemoServerSimulator {
                 id TEXT PRIMARY KEY,
                 project_id TEXT NOT NULL,
                 assignee_id TEXT NULL,
+                reviewer_id TEXT NULL,
                 title TEXT NOT NULL,
                 description TEXT NOT NULL,
                 state TEXT NOT NULL,
                 updated_at REAL NOT NULL,
                 FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE RESTRICT,
-                FOREIGN KEY(assignee_id) REFERENCES users(id) ON DELETE SET NULL
+                FOREIGN KEY(assignee_id) REFERENCES users(id) ON DELETE SET NULL,
+                FOREIGN KEY(reviewer_id) REFERENCES users(id) ON DELETE SET NULL
             );
 
             CREATE TABLE IF NOT EXISTS task_tags (
@@ -739,6 +760,14 @@ public final class DemoServerSimulator {
                 PRIMARY KEY (task_id, tag_id),
                 FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE,
                 FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS task_watchers (
+                task_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                PRIMARY KEY (task_id, user_id),
+                FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS comments (
@@ -750,6 +779,26 @@ public final class DemoServerSimulator {
                 created_at REAL NOT NULL,
                 FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE,
                 FOREIGN KEY(author_user_id) REFERENCES users(id) ON DELETE RESTRICT
+            );
+            """
+        )
+    }
+
+    private static func migrateSchemaIfNeeded(sqlite: DemoSQLiteDatabase) throws {
+        let taskColumns = try sqlite.query("PRAGMA table_info(tasks)")
+        let hasReviewerColumn = taskColumns.contains { $0.string("name") == "reviewer_id" }
+        if !hasReviewerColumn {
+            try sqlite.execute("ALTER TABLE tasks ADD COLUMN reviewer_id TEXT NULL")
+        }
+
+        try sqlite.executeScript(
+            """
+            CREATE TABLE IF NOT EXISTS task_watchers (
+                task_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                PRIMARY KEY (task_id, user_id),
+                FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
             );
             """
         )
@@ -809,17 +858,18 @@ public final class DemoServerSimulator {
             for task in seedData.tasks {
                 try sqlite.execute(
                     """
-                    INSERT INTO tasks (id, project_id, assignee_id, title, description, state, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO tasks (id, project_id, assignee_id, reviewer_id, title, description, state, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     bind: { stmt in
                         sqlite.bind(text: task.id, at: 1, in: stmt)
                         sqlite.bind(text: task.projectID, at: 2, in: stmt)
                         sqlite.bind(nullableText: task.assigneeID, at: 3, in: stmt)
-                        sqlite.bind(text: task.title, at: 4, in: stmt)
-                        sqlite.bind(text: task.descriptionText, at: 5, in: stmt)
-                        sqlite.bind(text: task.state, at: 6, in: stmt)
-                        sqlite.bind(double: task.updatedAt.timeIntervalSince1970, at: 7, in: stmt)
+                        sqlite.bind(nullableText: task.reviewerID, at: 4, in: stmt)
+                        sqlite.bind(text: task.title, at: 5, in: stmt)
+                        sqlite.bind(text: task.descriptionText, at: 6, in: stmt)
+                        sqlite.bind(text: task.state, at: 7, in: stmt)
+                        sqlite.bind(double: task.updatedAt.timeIntervalSince1970, at: 8, in: stmt)
                     }
                 )
 
@@ -832,6 +882,19 @@ public final class DemoServerSimulator {
                         bind: { stmt in
                             sqlite.bind(text: task.id, at: 1, in: stmt)
                             sqlite.bind(text: tagID, at: 2, in: stmt)
+                        }
+                    )
+                }
+
+                for watcherID in task.watcherIDs {
+                    try sqlite.execute(
+                        """
+                        INSERT INTO task_watchers (task_id, user_id)
+                        VALUES (?, ?)
+                        """,
+                        bind: { stmt in
+                            sqlite.bind(text: task.id, at: 1, in: stmt)
+                            sqlite.bind(text: watcherID, at: 2, in: stmt)
                         }
                     )
                 }

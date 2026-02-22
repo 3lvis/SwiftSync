@@ -45,29 +45,35 @@ public struct DemoSeedData {
         public let id: String
         public let projectID: String
         public let assigneeID: String?
+        public let reviewerID: String?
         public let title: String
         public let descriptionText: String
         public let state: String
         public let tagIDs: [String]
+        public let watcherIDs: [String]
         public let updatedAt: Date
 
         public init(
             id: String,
             projectID: String,
             assigneeID: String?,
+            reviewerID: String? = nil,
             title: String,
             descriptionText: String,
             state: String,
             tagIDs: [String],
+            watcherIDs: [String] = [],
             updatedAt: Date
         ) {
             self.id = id
             self.projectID = projectID
             self.assigneeID = assigneeID
+            self.reviewerID = reviewerID
             self.title = title
             self.descriptionText = descriptionText
             self.state = state
             self.tagIDs = tagIDs
+            self.watcherIDs = watcherIDs
             self.updatedAt = updatedAt
         }
     }
@@ -149,6 +155,7 @@ public struct DemoSeedData {
                 id: "task-1",
                 projectID: "project-1",
                 assigneeID: "user-1",
+                reviewerID: "user-4",
                 title: "Add session timeout controls to account settings",
                 descriptionText: """
                 Build the mobile settings UI for session timeout and forced re-authentication controls.
@@ -157,102 +164,119 @@ public struct DemoSeedData {
                 """,
                 state: "inProgress",
                 tagIDs: ["tag-1", "tag-5", "tag-6"],
+                watcherIDs: ["user-2", "user-5"],
                 updatedAt: at(300)
             ),
             .init(
                 id: "task-2",
                 projectID: "project-1",
                 assigneeID: "user-2",
+                reviewerID: "user-1",
                 title: "Validate security policy PATCH payload on backend",
                 descriptionText: """
                 Enforce allowed values for timeout minutes and re-auth policy. Reject unknown keys so mobile payloads stay explicit.
                 """,
                 state: "todo",
                 tagIDs: ["tag-2", "tag-3", "tag-5"],
+                watcherIDs: ["user-4"],
                 updatedAt: at(305)
             ),
             .init(
                 id: "task-3",
                 projectID: "project-1",
                 assigneeID: "user-5",
+                reviewerID: "user-4",
                 title: "Write QA checklist for forced re-auth scenarios",
                 descriptionText: """
                 Cover app relaunch, expired session recovery, and offline-to-online transitions after the policy changes.
                 """,
                 state: "todo",
                 tagIDs: ["tag-5", "tag-7", "tag-8"],
+                watcherIDs: ["user-1", "user-3"],
                 updatedAt: at(310)
             ),
             .init(
                 id: "task-4",
                 projectID: "project-1",
                 assigneeID: "user-3",
+                reviewerID: "user-1",
                 title: "Polish warning copy and hierarchy in security settings",
                 descriptionText: """
                 Refine the warning copy and screen hierarchy so risky actions are clear without blocking the flow.
                 """,
                 state: "done",
                 tagIDs: ["tag-1", "tag-6"],
+                watcherIDs: ["user-4"],
                 updatedAt: at(315)
             ),
             .init(
                 id: "task-5",
                 projectID: "project-1",
                 assigneeID: "user-6",
+                reviewerID: "user-2",
                 title: "Enable rollout flag for account security controls",
                 descriptionText: """
                 Prepare release gating so the feature can be enabled per environment after QA sign-off.
                 """,
                 state: "inProgress",
                 tagIDs: ["tag-2", "tag-8", "tag-10"],
+                watcherIDs: ["user-4", "user-5"],
                 updatedAt: at(320)
             ),
             .init(
                 id: "task-6",
                 projectID: "project-2",
                 assigneeID: "user-1",
+                reviewerID: "user-2",
                 title: "Fix duplicate push preference sync after reconnect",
                 descriptionText: """
                 The preferences screen can duplicate local rows after reconnect. Backend remains correct; the client refresh path needs better scoped sync.
                 """,
                 state: "inProgress",
                 tagIDs: ["tag-1", "tag-4", "tag-9", "tag-10"],
+                watcherIDs: ["user-4", "user-6"],
                 updatedAt: at(330)
             ),
             .init(
                 id: "task-7",
                 projectID: "project-2",
                 assigneeID: "user-2",
+                reviewerID: "user-6",
                 title: "Add idempotency guard to notification preference writes",
                 descriptionText: """
                 Prevent duplicate writes when the same save is retried. Keep the response payload stable for targeted refresh.
                 """,
                 state: "todo",
                 tagIDs: ["tag-2", "tag-3", "tag-9", "tag-10"],
+                watcherIDs: ["user-1", "user-4"],
                 updatedAt: at(335)
             ),
             .init(
                 id: "task-8",
                 projectID: "project-2",
                 assigneeID: "user-5",
+                reviewerID: "user-2",
                 title: "Verify scoped delete behavior for removed notification channels",
                 descriptionText: """
                 Confirm channel lists only delete rows inside the synced parent scope and never remove channels from other users/projects.
                 """,
                 state: "todo",
                 tagIDs: ["tag-4", "tag-7", "tag-9"],
+                watcherIDs: ["user-4"],
                 updatedAt: at(340)
             ),
             .init(
                 id: "task-9",
                 projectID: "project-2",
                 assigneeID: nil,
+                reviewerID: "user-4",
                 title: "Draft incident playbook for notification delivery degradation",
                 descriptionText: """
                 Capture triage steps, rollback criteria, and communication templates. This task starts unassigned to demonstrate null assignee handling.
                 """,
                 state: "todo",
                 tagIDs: ["tag-8", "tag-9", "tag-10"],
+                watcherIDs: ["user-2", "user-6"],
                 updatedAt: at(345)
             ),
             .init(

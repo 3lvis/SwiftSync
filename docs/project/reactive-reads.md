@@ -78,6 +78,12 @@ Example (ambiguous relationship):
 var assignedTickets: [Ticket]
 ```
 
+Real Demo example (same queried model + same related model, multiple paths):
+- `Task.assignee` (`User?`)
+- `Task.reviewer` (`User?`)
+- `Task.watchers` (`[User]`)
+- `@SyncQuery(Task.self, relatedTo: User.self, relatedID: userID, ...)` is ambiguous, so Demo uses explicit `through:` for all three task buckets.
+
 ## `sortBy` vs `refreshOn`
 
 - `sortBy:` defines order.

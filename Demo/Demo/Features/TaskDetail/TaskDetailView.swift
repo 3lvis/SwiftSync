@@ -57,6 +57,7 @@ struct TaskDetailView: View {
     var body: some View {
         List {
             taskSection
+            peopleSection
             descriptionSection
             tagsSection
             commentsSection
@@ -169,6 +170,70 @@ struct TaskDetailView: View {
     }
 
     @ViewBuilder
+    private var peopleSection: some View {
+        if let taskModel {
+            Section("People") {
+                if let assignee = taskModel.assignee {
+                    NavigationLink {
+                        UserTaskBucketsView(
+                            userID: assignee.id,
+                            syncContainer: syncContainer,
+                            syncEngine: syncEngine
+                        )
+                    } label: {
+                        LabeledContent("Assignee Tasks") {
+                            Text(assignee.displayName)
+                                .foregroundStyle(Color.accentColor)
+                        }
+                    }
+                }
+
+                if let reviewer = taskModel.reviewer {
+                    NavigationLink {
+                        UserTaskBucketsView(
+                            userID: reviewer.id,
+                            syncContainer: syncContainer,
+                            syncEngine: syncEngine
+                        )
+                    } label: {
+                        LabeledContent("Reviewer Tasks") {
+                            Text(reviewer.displayName)
+                                .foregroundStyle(Color.accentColor)
+                        }
+                    }
+                } else {
+                    LabeledContent("Reviewer") {
+                        Text("None")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if taskModel.watchers.isEmpty {
+                    LabeledContent("Watchers") {
+                        Text("None")
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    ForEach(sortedWatchers(taskModel.watchers), id: \.id) { watcher in
+                        NavigationLink {
+                            UserTaskBucketsView(
+                                userID: watcher.id,
+                                syncContainer: syncContainer,
+                                syncEngine: syncEngine
+                            )
+                        } label: {
+                            LabeledContent("Watcher") {
+                                Text(watcher.displayName)
+                                    .foregroundStyle(Color.accentColor)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
     private var tagsSection: some View {
         if taskModel != nil {
             Section("Tags") {
@@ -252,6 +317,16 @@ struct TaskDetailView: View {
         }
     }
 
+    private func sortedWatchers(_ watchers: [User]) -> [User] {
+        watchers.sorted {
+            let nameOrder = $0.displayName.localizedCaseInsensitiveCompare($1.displayName)
+            if nameOrder == .orderedSame {
+                return $0.id < $1.id
+            }
+            return nameOrder == .orderedAscending
+        }
+    }
+
     @ViewBuilder
     private func presentedSheet(for sheet: TaskDetailSheet) -> some View {
         switch sheet {
@@ -279,6 +354,106 @@ struct TaskDetailView: View {
                 syncContainer: syncContainer,
                 syncEngine: syncEngine
             )
+        }
+    }
+}
+
+private struct UserTaskBucketsView: View {
+    let userID: String
+    let syncContainer: SyncContainer
+    @ObservedObject var syncEngine: DemoSyncEngine
+
+    @SyncModel private var userModel: User?
+    @SyncQuery private var assignedTasks: [Task]
+    @SyncQuery private var reviewTasks: [Task]
+    @SyncQuery private var watchedTasks: [Task]
+    @State private var hasTriggeredInitialSync = false
+
+    init(userID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
+        self.userID = userID
+        self.syncContainer = syncContainer
+        self.syncEngine = syncEngine
+
+        _userModel = SyncModel(User.self, id: userID, in: syncContainer, animation: .snappy(duration: 0.22))
+        _assignedTasks = SyncQuery(
+            Task.self,
+            relatedTo: User.self,
+            relatedID: userID,
+            through: \Task.assignee,
+            in: syncContainer,
+            sortBy: [\.title, \.id],
+            refreshOn: [\.assignee],
+            animation: .snappy(duration: 0.22)
+        )
+        _reviewTasks = SyncQuery(
+            Task.self,
+            relatedTo: User.self,
+            relatedID: userID,
+            through: \Task.reviewer,
+            in: syncContainer,
+            sortBy: [\.title, \.id],
+            refreshOn: [\.reviewer],
+            animation: .snappy(duration: 0.22)
+        )
+        _watchedTasks = SyncQuery(
+            Task.self,
+            relatedTo: User.self,
+            relatedID: userID,
+            through: \Task.watchers,
+            in: syncContainer,
+            sortBy: [\.title, \.id],
+            refreshOn: [\.watchers],
+            animation: .snappy(duration: 0.22)
+        )
+    }
+
+    var body: some View {
+        List {
+            Section("User") {
+                if let userModel {
+                    LabeledContent("Name", value: userModel.displayName)
+                    LabeledContent("Role", value: userModel.role)
+                } else {
+                    Text("User not found")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            taskBucketSection("Assigned", tasks: assignedTasks)
+            taskBucketSection("Reviewer", tasks: reviewTasks)
+            taskBucketSection("Watcher", tasks: watchedTasks)
+        }
+        .navigationTitle(userModel?.displayName ?? "User")
+        .refreshable {
+            await syncEngine.syncUsers()
+        }
+        .task {
+            guard !hasTriggeredInitialSync else { return }
+            hasTriggeredInitialSync = true
+            await syncEngine.syncUsers()
+        }
+    }
+
+    @ViewBuilder
+    private func taskBucketSection(_ title: String, tasks: [Task]) -> some View {
+        Section(title) {
+            if tasks.isEmpty {
+                Text("No tasks")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(tasks, id: \.id) { task in
+                    NavigationLink {
+                        TaskDetailView(taskID: task.id, syncContainer: syncContainer, syncEngine: syncEngine)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(task.title)
+                            Text(DemoTaskStateOption(rawValue: task.state)?.label ?? task.state)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
         }
     }
 }

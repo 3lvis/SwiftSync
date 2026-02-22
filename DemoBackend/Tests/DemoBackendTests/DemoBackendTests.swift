@@ -25,7 +25,9 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertNil(tags.first?["color_hex"])
         XCTAssertNil(projectTasks.first?["due_date"])
         XCTAssertNil(projectTasks.first?["priority"])
+        XCTAssertEqual(projectTasks.first?["reviewer_id"] as? String, "user-1")
         XCTAssertEqual(projectTasks.first?["tag_ids"] as? [String], ["tag-1", "tag-2"])
+        XCTAssertEqual(projectTasks.first?["watcher_ids"] as? [String], ["user-1"])
         XCTAssertNotNil(projectTasks.first?["description"])
         XCTAssertNotNil(projectTasks.first?["updated_at"])
         XCTAssertEqual(taskComments.first?["author_name"] as? String, "User")
@@ -67,10 +69,12 @@ final class DemoBackendTests: XCTestCase {
                     id: "task-1",
                     projectID: "project-1",
                     assigneeID: nil,
+                    reviewerID: nil,
                     title: "Task",
                     descriptionText: "Desc",
                     state: "todo",
                     tagIDs: [],
+                    watcherIDs: [],
                     updatedAt: Date(timeIntervalSince1970: 10)
                 )
             ],
@@ -158,7 +162,9 @@ final class DemoBackendTests: XCTestCase {
         }
         XCTAssertEqual(created["project_id"] as? String, "project-1")
         XCTAssertEqual(created["assignee_id"] as? String, "user-1")
+        XCTAssertTrue((created["reviewer_id"] is NSNull))
         XCTAssertEqual(created["tag_ids"] as? [String], ["tag-1"])
+        XCTAssertEqual(created["watcher_ids"] as? [String], [])
 
         let projectTasksAfterCreate = try backend.getProjectTasksPayload(projectID: "project-1")
         XCTAssertEqual(projectTasksAfterCreate.count, 2)
@@ -224,10 +230,12 @@ final class DemoBackendTests: XCTestCase {
                     id: "task-1",
                     projectID: "project-1",
                     assigneeID: "user-1",
+                    reviewerID: "user-1",
                     title: "Task 1",
                     descriptionText: "Old description",
                     state: "todo",
                     tagIDs: ["tag-1", "tag-2"],
+                    watcherIDs: ["user-1"],
                     updatedAt: now
                 )
             ],
