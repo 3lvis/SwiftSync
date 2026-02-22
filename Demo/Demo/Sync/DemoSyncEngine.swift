@@ -162,9 +162,29 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
+    func updateTaskReviewer(taskID: String, projectID: String?, reviewerID: String?) async throws {
+        try await syncOperationThrowing("patchTaskReviewer-\(taskID)") {
+            _ = try await apiClient.patchTaskReviewer(taskID: taskID, reviewerID: reviewerID)
+            try await syncTaskDetailInternal(taskID: taskID)
+            if let projectID {
+                try await syncProjectTasksInternal(projectID: projectID)
+            }
+        }
+    }
+
     func replaceTaskTags(taskID: String, projectID: String?, tagIDs: [String]) async throws {
         try await syncOperationThrowing("replaceTaskTags-\(taskID)") {
             _ = try await apiClient.replaceTaskTags(taskID: taskID, tagIDs: tagIDs)
+            try await syncTaskDetailInternal(taskID: taskID)
+            if let projectID {
+                try await syncProjectTasksInternal(projectID: projectID)
+            }
+        }
+    }
+
+    func replaceTaskWatchers(taskID: String, projectID: String?, watcherIDs: [String]) async throws {
+        try await syncOperationThrowing("replaceTaskWatchers-\(taskID)") {
+            _ = try await apiClient.replaceTaskWatchers(taskID: taskID, watcherIDs: watcherIDs)
             try await syncTaskDetailInternal(taskID: taskID)
             if let projectID {
                 try await syncProjectTasksInternal(projectID: projectID)

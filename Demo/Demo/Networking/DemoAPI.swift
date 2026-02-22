@@ -60,7 +60,9 @@ protocol DemoAPIClient: AnyObject {
     func patchTaskDescription(taskID: String, descriptionText: String) async throws -> [String: Any]?
     func patchTaskState(taskID: String, state: String) async throws -> [String: Any]?
     func patchTaskAssignee(taskID: String, assigneeID: String?) async throws -> [String: Any]?
+    func patchTaskReviewer(taskID: String, reviewerID: String?) async throws -> [String: Any]?
     func replaceTaskTags(taskID: String, tagIDs: [String]) async throws -> [String: Any]?
+    func replaceTaskWatchers(taskID: String, watcherIDs: [String]) async throws -> [String: Any]?
 
     func createTask(
         projectID: String,
@@ -184,9 +186,19 @@ final class FakeDemoAPIClient: DemoAPIClient {
         return try backend.patchTaskAssignee(taskID: taskID, assigneeID: assigneeID)
     }
 
+    func patchTaskReviewer(taskID: String, reviewerID: String?) async throws -> [String: Any]? {
+        try await networkGate(endpoint: "PATCH /tasks/{id} (reviewer_id)")
+        return try backend.patchTaskReviewer(taskID: taskID, reviewerID: reviewerID)
+    }
+
     func replaceTaskTags(taskID: String, tagIDs: [String]) async throws -> [String: Any]? {
         try await networkGate(endpoint: "PUT /tasks/{id}/tags")
         return try backend.replaceTaskTags(taskID: taskID, tagIDs: tagIDs)
+    }
+
+    func replaceTaskWatchers(taskID: String, watcherIDs: [String]) async throws -> [String: Any]? {
+        try await networkGate(endpoint: "PUT /tasks/{id}/watchers")
+        return try backend.replaceTaskWatchers(taskID: taskID, watcherIDs: watcherIDs)
     }
 
     func createTask(

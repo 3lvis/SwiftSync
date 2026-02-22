@@ -361,6 +361,31 @@ public final class DemoServerSimulator {
     }
 
     @discardableResult
+    public func patchTaskReviewer(taskID: String, reviewerID: String?) throws -> [String: Any]? {
+        if let reviewerID, !(try exists(in: "users", id: reviewerID)) {
+            throw DemoBackendError.invalidReference(entity: "reviewer_id", id: reviewerID)
+        }
+        guard let current = try getTaskDetailPayload(taskID: taskID) else { return nil }
+        suspendAmbientMutationsAfterWrite()
+        let currentUpdatedAt = try parseISO8601(current["updated_at"])
+        let next = nextTimestamp(after: currentUpdatedAt)
+
+        try self.sqlite.execute(
+            """
+            UPDATE tasks
+            SET reviewer_id = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            bind: { stmt in
+                self.sqlite.bind(nullableText: reviewerID, at: 1, in: stmt)
+                self.sqlite.bind(double: next.timeIntervalSince1970, at: 2, in: stmt)
+                self.sqlite.bind(text: taskID, at: 3, in: stmt)
+            }
+        )
+        return try getTaskDetailPayload(taskID: taskID)
+    }
+
+    @discardableResult
     public func replaceTaskTags(taskID: String, tagIDs: [String]) throws -> [String: Any]? {
         guard try exists(in: "tasks", id: taskID) else { return nil }
         let uniqueTagIDs = Array(Set(tagIDs)).sorted()
@@ -391,6 +416,61 @@ public final class DemoServerSimulator {
                     bind: { stmt in
                         self.sqlite.bind(text: taskID, at: 1, in: stmt)
                         self.sqlite.bind(text: tagID, at: 2, in: stmt)
+                    }
+                )
+            }
+
+            try self.sqlite.execute(
+                """
+                UPDATE tasks
+                SET updated_at = ?
+                WHERE id = ?
+                """,
+                bind: { stmt in
+                    self.sqlite.bind(double: next.timeIntervalSince1970, at: 1, in: stmt)
+                    self.sqlite.bind(text: taskID, at: 2, in: stmt)
+                }
+            )
+            try self.sqlite.execute("COMMIT;")
+        } catch {
+            try? self.sqlite.execute("ROLLBACK;")
+            throw error
+        }
+
+        return try getTaskDetailPayload(taskID: taskID)
+    }
+
+    @discardableResult
+    public func replaceTaskWatchers(taskID: String, watcherIDs: [String]) throws -> [String: Any]? {
+        guard try exists(in: "tasks", id: taskID) else { return nil }
+        let uniqueWatcherIDs = Array(Set(watcherIDs)).sorted()
+        for watcherID in uniqueWatcherIDs where !(try exists(in: "users", id: watcherID)) {
+            throw DemoBackendError.invalidReference(entity: "watcher_id", id: watcherID)
+        }
+
+        guard let current = try getTaskDetailPayload(taskID: taskID) else { return nil }
+        suspendAmbientMutationsAfterWrite()
+        let currentUpdatedAt = try parseISO8601(current["updated_at"])
+        let next = nextTimestamp(after: currentUpdatedAt)
+
+        try self.sqlite.execute("BEGIN TRANSACTION;")
+        do {
+            try self.sqlite.execute(
+                "DELETE FROM task_watchers WHERE task_id = ?",
+                bind: { stmt in
+                    self.sqlite.bind(text: taskID, at: 1, in: stmt)
+                }
+            )
+
+            for watcherID in uniqueWatcherIDs {
+                try self.sqlite.execute(
+                    """
+                    INSERT INTO task_watchers (task_id, user_id)
+                    VALUES (?, ?)
+                    """,
+                    bind: { stmt in
+                        self.sqlite.bind(text: taskID, at: 1, in: stmt)
+                        self.sqlite.bind(text: watcherID, at: 2, in: stmt)
                     }
                 )
             }

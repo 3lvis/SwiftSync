@@ -117,6 +117,10 @@ struct TaskDetailView: View {
                 .disabled(taskModel == nil)
             Button("Change Assignee") { activeSheet = .assignee }
                 .disabled(taskModel == nil)
+            Button("Change Reviewer") { activeSheet = .reviewer }
+                .disabled(taskModel == nil)
+            Button("Edit Watchers") { activeSheet = .watchers }
+                .disabled(taskModel == nil)
             Button("Edit Tags") { activeSheet = .tags }
                 .disabled(taskModel == nil)
             Button("Add Comment") { activeSheet = .comment }
@@ -169,6 +173,13 @@ struct TaskDetailView: View {
     private var peopleSection: some View {
         if let taskModel {
             Section("People") {
+                Button("Change Reviewer") {
+                    activeSheet = .reviewer
+                }
+                Button("Edit Watchers") {
+                    activeSheet = .watchers
+                }
+
                 if let assignee = taskModel.assignee {
                     NavigationLink {
                         UserTaskBucketsView(
@@ -345,6 +356,18 @@ struct TaskDetailView: View {
                 syncContainer: syncContainer,
                 syncEngine: syncEngine
             )
+        case .reviewer:
+            ReviewerPickerSheet(
+                taskID: taskID,
+                syncContainer: syncContainer,
+                syncEngine: syncEngine
+            )
+        case .watchers:
+            EditTaskWatchersSheet(
+                taskID: taskID,
+                syncContainer: syncContainer,
+                syncEngine: syncEngine
+            )
         case .tags:
             EditTaskTagsSheet(
                 taskID: taskID,
@@ -464,6 +487,8 @@ private struct UserTaskBucketsView: View {
 private enum TaskDetailSheet: String, Identifiable {
     case description
     case assignee
+    case reviewer
+    case watchers
     case tags
     case comment
 
@@ -687,6 +712,127 @@ private struct AssigneePickerSheet: View {
     }
 }
 
+private struct ReviewerPickerSheet: View {
+    let taskID: String
+    let syncEngine: DemoSyncEngine
+
+    @Environment(\.dismiss) private var dismiss
+    @SyncModel private var taskModel: Task?
+    @SyncQuery private var users: [User]
+    @State private var pendingReviewerID: String?
+    @State private var hasLoadedInitialValue = false
+    @State private var isSaving = false
+    @State private var saveErrorMessage: String?
+
+    init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
+        self.taskID = taskID
+        self.syncEngine = syncEngine
+        _taskModel = SyncModel(Task.self, id: taskID, in: syncContainer, animation: .snappy(duration: 0.22))
+        _users = SyncQuery(
+            User.self,
+            in: syncContainer,
+            sortBy: [\.displayName, \.id],
+            animation: .snappy(duration: 0.22)
+        )
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Button {
+                    pendingReviewerID = nil
+                } label: {
+                    HStack {
+                        Text("None")
+                        Spacer()
+                        if pendingReviewerID == nil {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(Color.accentColor)
+                        }
+                    }
+                }
+
+                ForEach(users, id: \.id) { user in
+                    Button {
+                        pendingReviewerID = user.id
+                    } label: {
+                        HStack {
+                            Text(user.displayName)
+                            Spacer()
+                            if pendingReviewerID == user.id {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(Color.accentColor)
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Reviewer")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .disabled(isSaving)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: {
+                        let selection = pendingReviewerID
+                        let projectID = taskModel?.projectID
+                        isSaving = true
+                        saveErrorMessage = nil
+                        _Concurrency.Task {
+                            do {
+                                try await syncEngine.updateTaskReviewer(
+                                    taskID: taskID,
+                                    projectID: projectID,
+                                    reviewerID: selection
+                                )
+                                await MainActor.run {
+                                    dismiss()
+                                }
+                            } catch {
+                                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                                await MainActor.run {
+                                    isSaving = false
+                                    saveErrorMessage = message
+                                }
+                            }
+                        }
+                    }) {
+                        HStack(spacing: 6) {
+                            if isSaving {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                            Text("Save")
+                        }
+                    }
+                    .disabled(isSaving)
+                }
+            }
+        }
+        .task(id: taskModel?.id) {
+            guard !hasLoadedInitialValue, let taskModel else { return }
+            pendingReviewerID = taskModel.reviewerID
+            hasLoadedInitialValue = true
+        }
+        .alert(
+            "Save Failed",
+            isPresented: Binding(
+                get: { saveErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented { saveErrorMessage = nil }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(saveErrorMessage ?? "Unknown error")
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
 private struct EditTaskTagsSheet: View {
     let taskID: String
     let syncEngine: DemoSyncEngine
@@ -779,6 +925,117 @@ private struct EditTaskTagsSheet: View {
         .task(id: taskModel?.tags.map(\.id).sorted() ?? []) {
             guard !hasLoadedInitialSelection, let taskModel else { return }
             pendingTagIDs = Set(taskModel.tags.map(\.id))
+            hasLoadedInitialSelection = true
+        }
+        .alert(
+            "Save Failed",
+            isPresented: Binding(
+                get: { saveErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented { saveErrorMessage = nil }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(saveErrorMessage ?? "Unknown error")
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+private struct EditTaskWatchersSheet: View {
+    let taskID: String
+    let syncEngine: DemoSyncEngine
+
+    @Environment(\.dismiss) private var dismiss
+    @SyncModel private var taskModel: Task?
+    @SyncQuery private var users: [User]
+    @State private var pendingWatcherIDs: Set<String> = []
+    @State private var hasLoadedInitialSelection = false
+    @State private var isSaving = false
+    @State private var saveErrorMessage: String?
+
+    init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
+        self.taskID = taskID
+        self.syncEngine = syncEngine
+        _taskModel = SyncModel(Task.self, id: taskID, in: syncContainer, animation: .snappy(duration: 0.22))
+        _users = SyncQuery(
+            User.self,
+            in: syncContainer,
+            sortBy: [\.displayName, \.id],
+            animation: .snappy(duration: 0.22)
+        )
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(users, id: \.id) { user in
+                    Button {
+                        if pendingWatcherIDs.contains(user.id) {
+                            pendingWatcherIDs.remove(user.id)
+                        } else {
+                            pendingWatcherIDs.insert(user.id)
+                        }
+                    } label: {
+                        HStack {
+                            Text(user.displayName)
+                            Spacer()
+                            if pendingWatcherIDs.contains(user.id) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(Color.accentColor)
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Watchers")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .disabled(isSaving)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: {
+                        isSaving = true
+                        saveErrorMessage = nil
+                        let watcherIDs = pendingWatcherIDs.sorted()
+                        _Concurrency.Task {
+                            do {
+                                try await syncEngine.replaceTaskWatchers(
+                                    taskID: taskID,
+                                    projectID: taskModel?.projectID,
+                                    watcherIDs: watcherIDs
+                                )
+                                await MainActor.run {
+                                    dismiss()
+                                }
+                            } catch {
+                                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                                await MainActor.run {
+                                    isSaving = false
+                                    saveErrorMessage = message
+                                }
+                            }
+                        }
+                    }) {
+                        HStack(spacing: 6) {
+                            if isSaving {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                            Text("Save")
+                        }
+                    }
+                    .disabled(isSaving)
+                }
+            }
+        }
+        .task(id: taskModel?.watchers.map(\.id).sorted() ?? []) {
+            guard !hasLoadedInitialSelection, let taskModel else { return }
+            pendingWatcherIDs = Set(taskModel.watchers.map(\.id))
             hasLoadedInitialSelection = true
         }
         .alert(

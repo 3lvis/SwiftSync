@@ -135,7 +135,7 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertTrue(comments.isEmpty)
     }
 
-    func testSQLiteBackendPatchTaskStateAndAssigneeAndReplaceTags() async throws {
+    func testSQLiteBackendPatchTaskStateAndAssigneeReviewerAndRelationships() async throws {
         let url = makeTemporaryDatabaseURL()
         defer { try? FileManager.default.removeItem(at: url) }
 
@@ -154,9 +154,21 @@ final class DemoBackendTests: XCTestCase {
         let reassigned = try backend.patchTaskAssignee(taskID: "task-1", assigneeID: "user-1")
         XCTAssertEqual(reassigned?["assignee_id"] as? String, "user-1")
 
+        let clearedReviewer = try backend.patchTaskReviewer(taskID: "task-1", reviewerID: nil)
+        XCTAssertTrue((clearedReviewer?["reviewer_id"] is NSNull))
+
+        let reReviewed = try backend.patchTaskReviewer(taskID: "task-1", reviewerID: "user-1")
+        XCTAssertEqual(reReviewed?["reviewer_id"] as? String, "user-1")
+
         let retagged = try backend.replaceTaskTags(taskID: "task-1", tagIDs: ["tag-2"])
         XCTAssertEqual(retagged?["tag_ids"] as? [String], ["tag-2"])
         XCTAssertNotEqual(retagged?["updated_at"] as? String, beforeUpdatedAt)
+
+        let rewatched = try backend.replaceTaskWatchers(taskID: "task-1", watcherIDs: ["user-1"])
+        XCTAssertEqual(rewatched?["watcher_ids"] as? [String], ["user-1"])
+
+        let clearedWatchers = try backend.replaceTaskWatchers(taskID: "task-1", watcherIDs: [])
+        XCTAssertEqual(clearedWatchers?["watcher_ids"] as? [String], [])
 
         let tag1Tasks = try backend.getTagTasksPayload(tagID: "tag-1")
         let tag2Tasks = try backend.getTagTasksPayload(tagID: "tag-2")
