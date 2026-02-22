@@ -7,7 +7,10 @@ import SwiftSync
 final class Project {
     @Attribute(.unique) var id: String
     var name: String
+    @RemoteKey("status.id")
     var status: String
+    @RemoteKey("status.label")
+    var statusLabel: String
     var taskCount: Int
     var updatedAt: Date
     var tasks: [Task]
@@ -16,6 +19,7 @@ final class Project {
         id: String,
         name: String,
         status: String,
+        statusLabel: String,
         taskCount: Int = 0,
         updatedAt: Date,
         tasks: [Task] = []
@@ -23,6 +27,7 @@ final class Project {
         self.id = id
         self.name = name
         self.status = status
+        self.statusLabel = statusLabel
         self.taskCount = taskCount
         self.updatedAt = updatedAt
         self.tasks = tasks
@@ -34,7 +39,10 @@ final class Project {
 final class User {
     @Attribute(.unique) var id: String
     var displayName: String
+    @RemoteKey("role.id")
     var role: String
+    @RemoteKey("role.label")
+    var roleLabel: String
     var updatedAt: Date
     @Relationship(inverse: \Task.assignee)
     var assignedTasks: [Task]
@@ -47,6 +55,7 @@ final class User {
         id: String,
         displayName: String,
         role: String,
+        roleLabel: String,
         updatedAt: Date,
         assignedTasks: [Task] = [],
         reviewTasks: [Task] = [],
@@ -55,10 +64,27 @@ final class User {
         self.id = id
         self.displayName = displayName
         self.role = role
+        self.roleLabel = roleLabel
         self.updatedAt = updatedAt
         self.assignedTasks = assignedTasks
         self.reviewTasks = reviewTasks
         self.watchedTasks = watchedTasks
+    }
+}
+
+@Syncable
+@Model
+final class TaskStateOption {
+    @Attribute(.unique) var id: String
+    var label: String
+    var sortOrder: Int
+    var updatedAt: Date
+
+    init(id: String, label: String, sortOrder: Int, updatedAt: Date) {
+        self.id = id
+        self.label = label
+        self.sortOrder = sortOrder
+        self.updatedAt = updatedAt
     }
 }
 

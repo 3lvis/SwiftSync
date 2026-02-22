@@ -52,6 +52,7 @@ protocol DemoAPIClient: AnyObject {
     func getTaskComments(taskID: String) async throws -> [[String: Any]]
     func getTags() async throws -> [[String: Any]]
     func getTagTasks(tagID: String) async throws -> [[String: Any]]
+    func getTaskStateOptions() async throws -> [[String: Any]]
 
     func patchTaskDescription(taskID: String, descriptionText: String) async throws -> [String: Any]?
     func patchTaskState(taskID: String, state: String) async throws -> [String: Any]?
@@ -143,6 +144,11 @@ final class FakeDemoAPIClient: DemoAPIClient {
     func getTagTasks(tagID: String) async throws -> [[String: Any]] {
         try await networkGate(endpoint: "GET /tags/{id}/tasks")
         return try backend.getTagTasksPayload(tagID: tagID)
+    }
+
+    func getTaskStateOptions() async throws -> [[String: Any]] {
+        try await networkGate(endpoint: "GET /task-state-options")
+        return try backend.getTaskStateOptionsPayload()
     }
 
     func patchTaskDescription(taskID: String, descriptionText: String) async throws -> [String: Any]? {

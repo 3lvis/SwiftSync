@@ -63,7 +63,7 @@ public final class DemoServerSimulator {
             [
                 "id": row.string("id"),
                 "name": row.string("name"),
-                "status": row.string("status"),
+                "status": labeledValuePayload(id: row.string("status"), label: row.string("status")),
                 "task_count": Int(row.int64("task_count")),
                 "updated_at": iso8601(row.double("updated_at"))
             ]
@@ -102,10 +102,34 @@ public final class DemoServerSimulator {
             [
                 "id": row.string("id"),
                 "display_name": row.string("display_name"),
-                "role": row.string("role"),
+                "role": labeledValuePayload(id: row.string("role"), label: row.string("role")),
                 "updated_at": iso8601(row.double("updated_at"))
             ]
         }
+    }
+
+    public func getTaskStateOptionsPayload() throws -> [[String: Any]] {
+        let updatedAt = iso8601(0)
+        return [
+            [
+                "id": "todo",
+                "label": "To Do",
+                "sort_order": 0,
+                "updated_at": updatedAt
+            ],
+            [
+                "id": "inProgress",
+                "label": "In Progress",
+                "sort_order": 1,
+                "updated_at": updatedAt
+            ],
+            [
+                "id": "done",
+                "label": "Done",
+                "sort_order": 2,
+                "updated_at": updatedAt
+            ]
+        ]
     }
 
     public func getTaskDetailPayload(taskID: String) throws -> [String: Any]? {
@@ -498,7 +522,7 @@ public final class DemoServerSimulator {
         let updateKind = (step / 3) % 2
 
         if updateKind == 0 {
-            let currentState = (task["state"] as? String) ?? "todo"
+            let currentState = ((task["state"] as? [String: Any])?["id"] as? String) ?? "todo"
             let nextState: String
             switch currentState {
             case "todo":
@@ -579,10 +603,7 @@ public final class DemoServerSimulator {
     }
 
     private func taskStatePayload(id stateID: String) -> [String: Any] {
-        [
-            "id": stateID,
-            "label": taskStateLabel(id: stateID)
-        ]
+        labeledValuePayload(id: stateID, label: taskStateLabel(id: stateID))
     }
 
     private func taskStateLabel(id stateID: String) -> String {
@@ -596,6 +617,13 @@ public final class DemoServerSimulator {
         default:
             return stateID
         }
+    }
+
+    private func labeledValuePayload(id: String, label: String) -> [String: Any] {
+        [
+            "id": id,
+            "label": label
+        ]
     }
 
     private func tagIDs(forTaskID taskID: String) throws -> [String] {

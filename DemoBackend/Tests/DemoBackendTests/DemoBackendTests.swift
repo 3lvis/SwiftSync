@@ -12,15 +12,21 @@ final class DemoBackendTests: XCTestCase {
         let projects = try backend.getProjectsPayload()
         let users = try backend.getUsersPayload()
         let tags = try backend.getTagsPayload()
+        let taskStates = try backend.getTaskStateOptionsPayload()
         let projectTasks = try backend.getProjectTasksPayload(projectID: "project-1")
         let taskComments = try backend.getTaskCommentsPayload(taskID: "task-1")
 
         XCTAssertEqual(projects.count, 1)
         XCTAssertEqual(users.count, 1)
         XCTAssertEqual(tags.count, 2)
+        XCTAssertEqual(taskStates.count, 3)
         XCTAssertEqual(projectTasks.count, 1)
         XCTAssertEqual(taskComments.count, 1)
 
+        XCTAssertEqual(projectStatusID(in: projects.first), "active")
+        XCTAssertEqual(projectStatusLabel(in: projects.first), "active")
+        XCTAssertEqual(userRoleID(in: users.first), "Engineer")
+        XCTAssertEqual(userRoleLabel(in: users.first), "Engineer")
         XCTAssertNil(users.first?["avatar_seed"])
         XCTAssertNil(tags.first?["color_hex"])
         XCTAssertNil(projectTasks.first?["due_date"])
@@ -33,6 +39,8 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertNotNil(projectTasks.first?["description"])
         XCTAssertNotNil(projectTasks.first?["updated_at"])
         XCTAssertEqual(taskComments.first?["author_name"] as? String, "User")
+        XCTAssertEqual(taskStates.map { $0["id"] as? String }, ["todo", "inProgress", "done"])
+        XCTAssertEqual(taskStates.map { ($0["label"] as? String) ?? "" }, ["To Do", "In Progress", "Done"])
     }
 
     func testSQLiteBackendPatchTaskDescriptionPersistsAcrossReopen() async throws {
@@ -222,6 +230,22 @@ final class DemoBackendTests: XCTestCase {
 
     private func stateLabel(in task: [String: Any]?) -> String? {
         (task?["state"] as? [String: Any])?["label"] as? String
+    }
+
+    private func projectStatusID(in project: [String: Any]?) -> String? {
+        (project?["status"] as? [String: Any])?["id"] as? String
+    }
+
+    private func projectStatusLabel(in project: [String: Any]?) -> String? {
+        (project?["status"] as? [String: Any])?["label"] as? String
+    }
+
+    private func userRoleID(in user: [String: Any]?) -> String? {
+        (user?["role"] as? [String: Any])?["id"] as? String
+    }
+
+    private func userRoleLabel(in user: [String: Any]?) -> String? {
+        (user?["role"] as? [String: Any])?["label"] as? String
     }
 
     private func makeTemporaryDatabaseURL() -> URL {

@@ -31,7 +31,7 @@ struct ProjectsTabView: View {
                                 .lineLimit(2)
 
                             HStack(spacing: 8) {
-                                Text(project.status)
+                                Text(project.statusLabel)
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
 
@@ -110,7 +110,7 @@ private struct ProjectDetailView: View {
                         .font(.headline)
                         .lineLimit(3)
 
-                    LabeledContent("Status", value: projectModel.status)
+                    LabeledContent("Status", value: projectModel.statusLabel)
                         .foregroundStyle(.secondary)
 
                     LabeledContent("Tasks", value: projectModel.taskCount == 1 ? "1 task" : "\(projectModel.taskCount) tasks")
@@ -227,10 +227,11 @@ private struct CreateTaskSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @SyncQuery private var users: [User]
+    @SyncQuery private var taskStateOptions: [TaskStateOption]
 
     @State private var title = ""
     @State private var descriptionText = ""
-    @State private var state = DemoTaskStateOption.todo
+    @State private var stateID: String?
     @State private var assigneeID: String?
     @State private var isSaving = false
     @State private var saveErrorMessage: String?
@@ -250,6 +251,12 @@ private struct CreateTaskSheet: View {
             sortBy: [\.displayName, \.id],
             animation: .snappy(duration: 0.22)
         )
+        _taskStateOptions = SyncQuery(
+            TaskStateOption.self,
+            in: syncContainer,
+            sortBy: [\.sortOrder, \.id],
+            animation: .snappy(duration: 0.22)
+        )
         _assigneeID = State(initialValue: defaultAssigneeID)
     }
 
@@ -259,11 +266,12 @@ private struct CreateTaskSheet: View {
                 Section("Task") {
                     TextField("Title", text: $title)
 
-                    Picker("State", selection: $state) {
-                        ForEach(DemoTaskStateOption.allCases) { option in
-                            Text(option.label).tag(option)
+                    Picker("State", selection: $stateID) {
+                        ForEach(taskStateOptions, id: \.id) { option in
+                            Text(option.label).tag(Optional(option.id))
                         }
                     }
+                    .disabled(taskStateOptions.isEmpty)
 
                     Picker("Assignee", selection: $assigneeID) {
                         Text("Unassigned").tag(String?.none)
@@ -291,7 +299,7 @@ private struct CreateTaskSheet: View {
                     Button(action: {
                         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
                         let trimmedDescription = descriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !trimmedTitle.isEmpty else { return }
+                        guard !trimmedTitle.isEmpty, let stateID else { return }
 
                         isSaving = true
                         saveErrorMessage = nil
@@ -301,7 +309,7 @@ private struct CreateTaskSheet: View {
                                     projectID: projectID,
                                     title: trimmedTitle,
                                     descriptionText: trimmedDescription.isEmpty ? "No description yet." : trimmedDescription,
-                                    state: state.rawValue,
+                                    state: stateID,
                                     assigneeID: assigneeID,
                                     tagIDs: []
                                 )
@@ -326,9 +334,22 @@ private struct CreateTaskSheet: View {
                             Text("Create")
                         }
                     }
-                    .disabled(isSaving || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(
+                        isSaving ||
+                        title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                        stateID == nil
+                    )
                 }
             }
+        }
+        .task {
+            await syncEngine.syncTaskStates()
+        }
+        .task(id: taskStateOptions.map(\.id)) {
+            if let stateID, taskStateOptions.contains(where: { $0.id == stateID }) {
+                return
+            }
+            self.stateID = taskStateOptions.first?.id
         }
         .alert(
             "Save Failed",
@@ -344,24 +365,5 @@ private struct CreateTaskSheet: View {
             Text(saveErrorMessage ?? "Unknown error")
         }
         .presentationDetents([.medium, .large])
-    }
-}
-
-private enum DemoTaskStateOption: String, CaseIterable, Identifiable {
-    case todo
-    case inProgress
-    case done
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .todo:
-            return "To Do"
-        case .inProgress:
-            return "In Progress"
-        case .done:
-            return "Done"
-        }
     }
 }

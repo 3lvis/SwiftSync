@@ -31,6 +31,7 @@ final class DemoSyncEngine: ObservableObject {
             try await syncProjectsInternal()
             try await syncUsersInternal()
             try await syncTagsInternal()
+            try await syncTaskStatesInternal()
         }
     }
 
@@ -49,6 +50,12 @@ final class DemoSyncEngine: ObservableObject {
     func syncTags() async {
         await syncOperation("tags") {
             try await syncTagsInternal()
+        }
+    }
+
+    func syncTaskStates() async {
+        await syncOperation("taskStates") {
+            try await syncTaskStatesInternal()
         }
     }
 
@@ -171,6 +178,11 @@ final class DemoSyncEngine: ObservableObject {
     private func syncTagsInternal() async throws {
         let payload = try await apiClient.getTags()
         try await syncPayload(payload, as: Tag.self, missingRowPolicy: .delete)
+    }
+
+    private func syncTaskStatesInternal() async throws {
+        let payload = try await apiClient.getTaskStateOptions()
+        try await syncPayload(payload, as: TaskStateOption.self, missingRowPolicy: .delete)
     }
 
     private func syncProjectTasksInternal(projectID: String) async throws {

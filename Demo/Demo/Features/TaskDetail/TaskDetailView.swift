@@ -8,6 +8,7 @@ struct TaskDetailView: View {
     @ObservedObject var syncEngine: DemoSyncEngine
 
     @SyncModel private var taskModel: Task?
+    @SyncQuery private var taskStateOptions: [TaskStateOption]
     @SyncQuery private var tags: [Tag]
     @SyncQuery private var comments: [Comment]
     @State private var hasTriggeredInitialSync = false
@@ -20,6 +21,12 @@ struct TaskDetailView: View {
         self.syncEngine = syncEngine
 
         _taskModel = SyncModel(Task.self, id: taskID, in: syncContainer, animation: .snappy(duration: 0.22))
+        _taskStateOptions = SyncQuery(
+            TaskStateOption.self,
+            in: syncContainer,
+            sortBy: [\.sortOrder, \.id],
+            animation: .snappy(duration: 0.22)
+        )
         _tags = SyncQuery(
             Tag.self,
             relatedTo: Task.self,
@@ -57,12 +64,14 @@ struct TaskDetailView: View {
             }
         }
         .refreshable {
+            await syncEngine.syncTaskStates()
             await syncEngine.syncTaskDetail(taskID: taskID)
             await syncEngine.syncTaskComments(taskID: taskID)
         }
         .task {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
+            await syncEngine.syncTaskStates()
             await syncEngine.syncTaskDetail(taskID: taskID)
             await syncEngine.syncTaskComments(taskID: taskID)
         }
@@ -280,20 +289,24 @@ struct TaskDetailView: View {
     private func taskStateMenu(taskModel: Task) -> some View {
         let projectID = taskModel.projectID
         return Menu {
-            ForEach(DemoTaskStateOption.allCases) { option in
-                Button {
-                    _Concurrency.Task {
-                        try? await syncEngine.updateTaskState(
-                            taskID: taskID,
-                            projectID: projectID,
-                            state: option.rawValue
-                        )
-                    }
-                } label: {
-                    if taskModel.state == option.rawValue {
-                        Label(option.label, systemImage: "checkmark")
-                    } else {
-                        Text(option.label)
+            if taskStateOptions.isEmpty {
+                Text("No state options")
+            } else {
+                ForEach(taskStateOptions, id: \.id) { option in
+                    Button {
+                        _Concurrency.Task {
+                            try? await syncEngine.updateTaskState(
+                                taskID: taskID,
+                                projectID: projectID,
+                                state: option.id
+                            )
+                        }
+                    } label: {
+                        if taskModel.state == option.id {
+                            Label(option.label, systemImage: "checkmark")
+                        } else {
+                            Text(option.label)
+                        }
                     }
                 }
             }
@@ -398,7 +411,7 @@ private struct UserTaskBucketsView: View {
             Section("User") {
                 if let userModel {
                     LabeledContent("Name", value: userModel.displayName)
-                    LabeledContent("Role", value: userModel.role)
+                    LabeledContent("Role", value: userModel.roleLabel)
                 } else {
                     Text("User not found")
                         .foregroundStyle(.secondary)
@@ -913,24 +926,5 @@ private struct CreateCommentSheet: View {
         }
 
         authorUserID = taskModel?.assigneeID.flatMap { validIDs.contains($0) ? $0 : nil } ?? users.first?.id
-    }
-}
-
-private enum DemoTaskStateOption: String, CaseIterable, Identifiable {
-    case todo
-    case inProgress
-    case done
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .todo:
-            return "To Do"
-        case .inProgress:
-            return "In Progress"
-        case .done:
-            return "Done"
-        }
     }
 }
