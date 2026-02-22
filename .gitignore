@@ -9,6 +9,9 @@ Package.resolved
 SwiftSync/.build/
 SwiftSync/.swiftpm/
 SwiftSync/Package.resolved
+DemoBackend/.build/
+DemoBackend/.swiftpm/
+DemoBackend/Package.resolved
 
 # Xcode user data
 xcuserdata/

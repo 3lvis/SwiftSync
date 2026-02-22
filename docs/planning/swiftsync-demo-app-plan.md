@@ -25,7 +25,7 @@
 
 ### What is still missing
 
-- [ ] Phase 2 create/edit write flows
+- [ ] Phase 2 write flows in the app/sync engine (backend package has test-covered mutation primitives, but app UI/write pipeline is not done yet)
 - [X] SQLite-backed stateful fake backend (separate backend source of truth)
 - [X] Fake backend moved to local Swift package (`DemoBackend`) for `swift test`
 - [ ] Task description modal editing flow
