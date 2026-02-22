@@ -219,12 +219,7 @@ private struct ProjectDetailView: View {
             }
         }
         .navigationDestination(item: $selectedTaskRoute) { route in
-            if let task = tasks.first(where: { $0.id == route.id }) {
-                TaskDetailView(taskID: task.id, syncContainer: syncContainer, syncEngine: syncEngine)
-            } else {
-                Text("Task not found")
-                    .foregroundStyle(.secondary)
-            }
+            TaskDetailView(taskID: route.id, syncContainer: syncContainer, syncEngine: syncEngine)
         }
         .sheet(isPresented: $isShowingCreateTaskSheet) {
             CreateTaskSheet(

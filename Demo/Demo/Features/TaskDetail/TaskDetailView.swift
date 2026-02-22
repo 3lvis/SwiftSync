@@ -10,8 +10,6 @@ struct TaskDetailView: View {
     @SyncModel private var taskModel: Task?
     @SyncQuery private var tags: [Tag]
     @SyncQuery private var comments: [Comment]
-    @SyncQuery private var allUsers: [User]
-    @SyncQuery private var allTags: [Tag]
     @State private var hasTriggeredInitialSync = false
     @State private var activeSheet: TaskDetailSheet?
     @State private var commentPendingDelete: CommentDeletePrompt?
@@ -22,16 +20,6 @@ struct TaskDetailView: View {
         self.syncEngine = syncEngine
 
         _taskModel = SyncModel(Task.self, id: taskID, in: syncContainer, animation: .snappy(duration: 0.22))
-        _allUsers = SyncQuery(
-            User.self,
-            in: syncContainer,
-            sortBy: [\.displayName, \.id]
-        )
-        _allTags = SyncQuery(
-            Tag.self,
-            in: syncContainer,
-            sortBy: [\.name, \.id]
-        )
         _tags = SyncQuery(
             Tag.self,
             relatedTo: Task.self,
@@ -119,11 +107,11 @@ struct TaskDetailView: View {
             Button("Edit Description") { activeSheet = .description }
                 .disabled(taskModel == nil)
             Button("Change Assignee") { activeSheet = .assignee }
-                .disabled(taskModel == nil || allUsers.isEmpty)
+                .disabled(taskModel == nil)
             Button("Edit Tags") { activeSheet = .tags }
-                .disabled(taskModel == nil || allTags.isEmpty)
+                .disabled(taskModel == nil)
             Button("Add Comment") { activeSheet = .comment }
-                .disabled(taskModel == nil || allUsers.isEmpty)
+                .disabled(taskModel == nil)
         } label: {
             Label("Actions", systemImage: "ellipsis.circle")
         }
@@ -148,7 +136,6 @@ struct TaskDetailView: View {
                         Text(taskModel.assignee?.displayName ?? "Unassigned")
                             .foregroundStyle(Color.accentColor)
                     }
-                    .disabled(allUsers.isEmpty)
                 }
             } else {
                 Text("Task not found")
@@ -240,7 +227,6 @@ struct TaskDetailView: View {
                 Button("Edit Tags") {
                     activeSheet = .tags
                 }
-                .disabled(allTags.isEmpty)
 
                 if tags.isEmpty {
                     Text("No tags")
@@ -266,7 +252,7 @@ struct TaskDetailView: View {
             } label: {
                 Label("Add Comment", systemImage: "plus.bubble")
             }
-            .disabled(allUsers.isEmpty || taskModel == nil)
+            .disabled(taskModel == nil)
 
             if comments.isEmpty {
                 Text("No comments")
