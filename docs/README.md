@@ -13,4 +13,5 @@ Completed implementation plans are removed once the behavior is implemented and 
 
 Current planning docs:
 - `docs/planning/swiftdata-concurrency-edge-cases.md`
+- `docs/planning/swiftsync-demo-backend-plan.md`
 - `docs/planning/swiftsync-demo-app-plan.md`

@@ -22,29 +22,22 @@
 - [X] Tag drill-in -> tasks
 - [X] Staged sync via `DemoSyncEngine`
 - [X] Read-only Phase 1 behavior (core path)
+- [X] Backend work split into separate plan (`docs/planning/swiftsync-demo-backend-plan.md`)
 
 ### What is still missing
 
 - [ ] Phase 2 write flows in the app/sync engine (backend package has test-covered mutation primitives, but app UI/write pipeline is not done yet)
-- [X] SQLite-backed stateful fake backend (separate backend source of truth)
-- [X] Fake backend moved to local Swift package (`DemoBackend`) for `swift test`
 - [ ] Task description modal editing flow
-- [X] Backend unit tests (SQLite-backed fake server behavior)
-- [X] App read path swapped from seed-array fake client to backend-backed fake client
 - [ ] Offline/replay work (intentionally deferred until backend + writes are working)
 - [ ] Demo-specific test coverage planned in this document
 
-## Current Execution Direction (What we are doing next)
+## Related Planning Document (Backend Work)
 
-We are replacing the current seeded read-only fake API implementation with a stateful fake backend simulator that behaves like a backend but runs in-process.
+Backend implementation planning now lives in:
 
-Rules for this phase:
+- `docs/planning/swiftsync-demo-backend-plan.md`
 
-- backend state must be separate from app local state (`SyncContainer`)
-- backend storage uses SQLite (not JSON files)
-- clear code separation in local package `DemoBackend` (app imports it as a package product)
-- unit tests for backend behavior are required
-- offline/outbox work is deferred until read/write backend behavior is working
+This demo app plan tracks UI flows, sync-engine integration, and staged feature rollout. The backend plan tracks SQLite storage, fake backend endpoint behavior, and backend unit tests.
 
 ## Goal
 
@@ -136,77 +129,9 @@ Status: `[-]` Mostly implemented; one naming detail in this plan is outdated (`C
   - `task: Task?`
   - `authorUser: User?` (implemented name)
 
-## Fake Backend Contract
-
-Status: `[X]` Read endpoints now run through a SQLite-backed stateful simulator in the `DemoBackend` local package.
-
-## Fake Backend Implementation Plan (Current Phase)
-
-### Backend Separation
-
-- [X] Backend lives in local Swift package `DemoBackend` (library + tests).
-- [X] Backend state is separate from app `SyncContainer` state.
-- [X] App continues to use `DemoAPIClient` as the only backend boundary.
-
-### Backend Storage (SQLite)
-
-- [X] SQLite-backed server storage (projects/users/tasks/tags/comments + task_tag join table).
-- [X] Seed SQLite backend state from deterministic demo seed data on first init/reset.
-- [X] Backend reads from SQLite for all existing staged endpoints.
-- [ ] Support backend mutations in SQLite for Phase 2 write endpoints.
-
-### Backend Behavior (Backend-like, no HTTP needed)
-
-- [X] Server-owned timestamps/updates on mutation (`updatedAt`) for implemented mutations.
-- [X] Validation/error paths for invalid writes (minimal, deterministic) for implemented mutations.
-- [X] Stable backend-side relationship handling (task tags, comments, assignee/project foreign keys).
-- [X] Scenario delay/failure behavior remains in `DemoAPIClient` layer, not in SQLite storage layer.
-
-### Backend Unit Tests (Required)
-
-- [X] SQLite schema/bootstrap + seeding
-- [X] Read endpoint data correctness from SQLite state
-- [X] Mutation persistence (write then read reflects server-side change)
-- [X] Relationship mutation correctness (comment insert)
-
-### Endpoints (Staged Fetches)
-
-- [X] `GET /projects`
-- [X] `GET /projects/{projectID}/tasks` (summary task payload; no full description body updates unless changed)
-- [X] `GET /users`
-- [X] `GET /users/{userID}/tasks` (for Users tab drill-in)
-- [X] `GET /tasks/{taskID}` (full task detail, includes description)
-- [X] `GET /tasks/{taskID}/comments`
-- [X] `GET /tags`
-- [X] `GET /tags/{tagID}/tasks`
-
-### Write Endpoints
-
-- [ ] `PATCH /tasks/{taskID}` (title/state/assignee/priority)
-- [ ] `PATCH /tasks/{taskID}/description` (from modal edit flow)
-- [ ] `PUT /tasks/{taskID}/tags` (full set replace or additive/removal contract)
-- [ ] `POST /tasks/{taskID}/comments`
-
-### Backend Simulation Behavior
-
-- [X] Delay per endpoint (implemented with scenario-based base + deterministic jitter).
-- [X] Optional transient failures (scenario-driven flaky preset).
-- [X] Deterministic scenario presets:
-  - `fastStable`
-  - `slowNetwork`
-  - `flakyNetwork`
-  - `offline`
-- [-] Conflict simulation via `updatedAt` and optional `version` field (timestamps exist; explicit version/conflict write flows are not implemented).
-- [X] Large seeded dataset for realistic list stress:
-  - 30 projects
-  - 300 tasks
-  - 40 users
-  - 50 tags
-  - 2,000 comments
-
 ## App Architecture
 
-Status: `[-]` core read path now uses the SQLite-backed backend package; write flows are still pending.
+Status: `[-]` core read path uses the backend package; write flows are still pending.
 
 ### Layers
 
@@ -400,4 +325,4 @@ All operations should update local UI immediately and queue network writes.
 4. [ ] Phase 2 create/edit flows.
 5. [ ] Phase 3 outbox + network monitor + replay.
 6. [-] Debug panel for network/conflict simulation (scenario picker/error surfacing exist; deeper tooling remains pending)
-7. [ ] SQLite-backed backend simulator + backend unit tests + app client swap
+7. [X] SQLite-backed backend simulator + backend unit tests + app client swap (tracked in `docs/planning/swiftsync-demo-backend-plan.md`)
