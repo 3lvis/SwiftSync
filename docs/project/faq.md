@@ -6,6 +6,7 @@ Source-of-truth docs:
 - `docs/project/parent-scope.md` (parent-scoped sync/query behavior)
 - `docs/project/property-mapping-contract.md` (mapping/import/export semantics)
 - `docs/project/reactive-reads.md` (`@SyncQuery` / `@SyncModel` mental model)
+- `docs/project/relationship-integrity.md` (inverse relationships, tag bug, `@Syncable` inverse guardrails)
 - `docs/project/backend-contract.md` (recommended backend shape)
 
 If an answer needs more than a short explanation, this FAQ points to the source-of-truth doc instead of duplicating it.
@@ -180,3 +181,15 @@ Recommended default: no.
 This keeps view ownership explicit and avoids stale retained-reference assumptions.
 
 See `docs/project/reactive-reads.md` ("App Best Practices").
+
+## 22) Why does `@Syncable` warn about missing to-many inverses, and what is `allowMissingToManyInverses`?
+
+Because implicit SwiftData inverse inference can cause real relationship corruption in sync-heavy flows (we hit this in Demo with `Task.tags` / `Tag.tasks`).
+
+- default rule: explicit inverse for to-many relationships
+- SwiftSync warns early at `@Syncable`
+- if SwiftData compiler hits a circular macro expansion edge case when both sides are explicit, use:
+  - `@Syncable(allowMissingToManyInverses: ["propertyName"])`
+  - only for the specific known-safe exception(s)
+
+See `docs/project/relationship-integrity.md`.

@@ -84,6 +84,10 @@ Real Demo example (same queried model + same related model, multiple paths):
 - `Task.watchers` (`[User]`)
 - `@SyncQuery(Task.self, relatedTo: User.self, relatedID: userID, ...)` is ambiguous, so Demo uses explicit `through:` for all three task buckets.
 
+Related modeling note:
+- relationship-scoped queries assume the local relationship graph is trustworthy
+- for to-many relationships, prefer explicit inverses (`@Relationship(inverse: ...)`) and see `docs/project/relationship-integrity.md` for the tag corruption bug and `@Syncable` inverse guardrail rationale
+
 ## `sortBy` vs `refreshOn`
 
 - `sortBy:` defines order.
