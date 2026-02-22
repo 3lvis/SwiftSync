@@ -2,172 +2,15 @@
 
 This is the single FAQ for SwiftSync.
 
-Related docs:
-- backend payload contract: `docs/project/backend-contract.md`
-- parent-scoped sync/query behavior: `docs/project/parent-scope.md`
+Source-of-truth docs:
+- `docs/project/parent-scope.md` (parent-scoped sync/query behavior)
+- `docs/project/property-mapping-contract.md` (mapping/import/export semantics)
+- `docs/project/reactive-reads.md` (`@SyncQuery` / `@SyncModel` mental model)
+- `docs/project/backend-contract.md` (recommended backend shape)
 
-## 1) Parent-scoped identity vs global identity
+If an answer needs more than a short explanation, this FAQ points to the source-of-truth doc instead of duplicating it.
 
-`ParentScopedModel` defaults to:
-- `syncIdentityPolicy = .scopedByParent`
-
-Meaning:
-- identity is treated as `(parent, remoteID)` during parent-scoped sync
-- two different parents can have child rows with the same remote `id`
-
-If you want global identity instead, override:
-
-```swift
-extension Child: GlobalParentScopedModel {
-  static var parentRelationship: ReferenceWritableKeyPath<Child, Parent?> { \.parent }
-}
-```
-
-Parent relationship inference is the default behavior when you call parent sync without `ParentScopedModel`:
-- if exactly one to-one relationship from child -> parent type exists, SwiftSync uses it
-- `parentRelationship` is only required when more than one candidate exists
-- if zero candidates exist, SwiftSync throws because parent-scoped sync cannot be resolved for that model
-- inferred parent sync defaults to `identityPolicy = .global` unless you pass `.scopedByParent` in the call
-
-Important:
-- `@Attribute(.unique)` on raw `id` is a SwiftData store-level global uniqueness rule.
-- If you set that on a scoped entity, global uniqueness wins and scoped duplicates are not possible.
-
-## 2) Foreign-key (`*_id`) typing policy
-
-Relationship FK lookup is strict by type:
-- `Int` FK links to `Int` identity
-- `String` FK links to `String` identity
-- no automatic cross-type coercion at relationship-link step
-
-This is intentional to avoid ambiguous linking.  
-Scalar attributes still support deterministic coercion paths where appropriate:
-- parseable string -> numeric (`Int`, `Double`, `Float`, `Decimal`)
-- numeric -> numeric (`Int`, `Double`, `Float`, `Decimal`)
-- string/0/1 numeric -> `Bool`
-- string -> `UUID`, `URL`
-- common primitives -> `String`
-
-`@Syncable` auto-generates this helper behavior for common relationship patterns:
-- to-one by `*_id`
-- to-many by `*_ids`
-- nested to-one by relationship key (for example `company`)
-- nested to-many by relationship key (for example `members`)
-
-No wrapper extension is required when using `@Syncable`.
-For custom merge policies, keep manual `applyRelationships(...)` implementations.
-
-## 3) Ordered to-many support
-
-SwiftSync currently does not provide ordered relationship sync semantics.
-
-- SwiftData does not expose Core Data-style ordered relationship metadata for this pipeline.
-- To-many sync is treated as unordered membership.
-- If you need deterministic order in UI, store an explicit scalar order field and use `@SyncQuery(..., sortBy: ...)`.
-
-## 4) Relationship operation flags
-
-Sync calls expose per-call relationship operation control:
-
-```swift
-try await SwiftSync.sync(
-  payload: payload,
-  as: Model.self,
-  in: context,
-  relationshipOperations: [.insert, .update]
-)
-```
-
-Defaults:
-- `.all` (insert + update + delete)
-
-Use this to run root-row sync while narrowing relationship-side work for a specific pass.
-
-## 5) Missing-row policy
-
-`missingRowPolicy` controls what happens to local rows not present in payload:
-- `.delete` (default): payload is authoritative for that scope
-- `.keep`: do not delete missing local rows
-
-For parent-scoped sync, delete behavior is scoped to that parent subset.
-
-## 6) Missing key vs `null` (field-level updates)
-
-This is a hard contract for payload semantics:
-- missing key => no-op (do not mutate existing local value)
-- explicit `null` => clear value/relationship
-- explicit `[]` on to-many => clear membership
-
-If backend wants to remove/clear, it should send explicit `null` (or `[]` for to-many), not omit the key.
-
-## 7) Deep-path mapping (`@RemotePath`)
-
-`@RemotePath` is supported for both import and export.
-
-- Example: `@RemotePath("profile.contact.email") var email: String?`
-- Inbound sync resolves dotted keys from nested dictionaries.
-- Outbound export writes nested dictionaries for dotted paths.
-- Missing vs `null` semantics are unchanged for deep paths.
-
-## 8) Input key style (`snake_case` vs `camelCase`)
-
-Configure inbound key style once at `SyncContainer`:
-- `.snakeCase` (default)
-- `.camelCase`
-
-The configured style is applied across attributes and relationship mapping, including deep paths.
-
-## 9) Blocked model property names
-
-For `@Syncable` models, SwiftSync emits compile-time diagnostics for blocked names:
-- `description`
-- `hashValue`
-
-Recommended replacements:
-- `descriptionText`
-- `hashValueRaw`
-
-Use `@RemoteKey` if backend keys still use the blocked names.
-
-## 10) `@SyncQuery` with `toOne` / `toMany`
-
-`@SyncQuery` supports relationship-scoped reads.
-
-To-one (`belongs to`):
-
-```swift
-@SyncQuery(
-  Comment.self,
-  toOne: task,
-  in: syncContainer,
-  sortBy: [SortDescriptor(\Comment.id)]
-)
-var comments: [Comment]
-```
-
-To-many (`contains` / membership):
-
-```swift
-@SyncQuery(
-  Tag.self,
-  toMany: task,
-  in: syncContainer,
-  sortBy: [SortDescriptor(\Tag.id)]
-)
-var tags: [Tag]
-```
-
-Inference rule is the same idea as parent sync:
-- exactly one to-one relationship to the parent type => inferred automatically
-- exactly one to-many relationship to the related type => inferred automatically
-- ambiguous (more than one) => pass `via:` explicitly
-- none => fail fast with a clear diagnostic
-
-Use `predicate` instead when:
-- filtering by scalar FK values without a parent object instance
-- applying non-parent business filters
-
-## 11) Do I have to import multiple modules?
+## 1) Do I need to import multiple modules?
 
 No. Use only:
 
@@ -175,71 +18,142 @@ No. Use only:
 import SwiftSync
 ```
 
-## 12) What if payload has duplicate items with the same identity?
+## 2) Can two different parents have children with the same `id`?
 
-SwiftSync applies payload rows in order. If the same identity appears more than once, later rows win.
+Yes, if the model uses parent-scoped identity.
 
-## 13) What if local DB already has duplicate rows for the same primary key?
+- `ParentScopedModel` defaults to `.scopedByParent`
+- inferred parent sync defaults to `.global` unless you pass `identityPolicy: .scopedByParent`
+- `@Attribute(.unique)` on raw `id` still enforces global uniqueness at the store level
+
+See `docs/project/parent-scope.md`.
+
+## 3) Why does parent-scoped sync need relationship inference / `parentRelationship`?
+
+Because SwiftSync must know which child->parent relationship defines the sync scope (especially for scoped delete/diff).
+
+- exactly one candidate => inferred
+- ambiguous => explicit `parentRelationship`
+- none => fail fast
+
+See `docs/project/parent-scope.md`.
+
+## 4) How do I think about `@SyncQuery` filtering?
+
+Use this mental rule:
+- `toOne:` = "belongs to"
+- `toMany:` = "contains / membership"
+- `predicate:` = custom business filters or scalar-only filters
+
+See `docs/project/reactive-reads.md`.
+
+## 5) What does `refreshOn:` mean in `@SyncQuery`?
+
+It expands what related model changes should invalidate/refetch the query.
+
+Use it when the UI reads related data that is not part of the query model's own scalar fields.
+
+See `docs/project/reactive-reads.md`.
+
+## 6) Is missing field the same as `null`?
+
+No.
+
+- missing key => no-op (`absent = ignore`)
+- explicit `null` => clear
+- explicit `[]` for to-many => clear membership
+
+See `docs/project/property-mapping-contract.md` and `docs/project/backend-contract.md`.
+
+## 7) How strict is relationship FK (`*_id`) linking?
+
+Strict by type.
+
+- `Int` FK links to `Int` identity
+- `String` FK links to `String` identity
+- no cross-type coercion at relationship-link step
+
+Scalar attribute coercion is broader; relationship FK linking is intentionally stricter.
+
+See `docs/project/property-mapping-contract.md`.
+
+## 8) Does SwiftSync support ordered to-many relationship syncing?
+
+Not as ordered relationship semantics.
+
+Treat to-many sync as unordered membership and store an explicit scalar order field if UI order matters.
+
+See `docs/project/property-mapping-contract.md` and `docs/project/backend-contract.md`.
+
+## 9) How do key mapping defaults work (`snake_case`, camelCase, `@RemotePath`)?
+
+Convention-first.
+
+- inbound key style is configured once at `SyncContainer` (`.snakeCase` default, `.camelCase` optional)
+- `@RemoteKey` / `@RemotePath` override conventions
+- import/export follow the same mapping contract
+
+See `docs/project/property-mapping-contract.md`.
+
+## 10) Are any model property names blocked?
+
+Yes for `@Syncable` models: `description`, `hashValue`.
+
+Use names like `descriptionText` / `hashValueRaw`, and map backend keys with `@RemoteKey` if needed.
+
+See `docs/project/property-mapping-contract.md`.
+
+## 11) Can I control relationship insert/update/delete work per sync call?
+
+Yes. Use `relationshipOperations` (default: `.all`).
+
+Use this when you want row updates but need to narrow relationship-side work for a specific sync pass.
+
+## 12) What does `missingRowPolicy` do?
+
+It controls what happens to local rows missing from the payload in that sync scope:
+
+- `.delete` (default)
+- `.keep`
+
+For parent-scoped sync, delete behavior is scoped to that parent subset.
+
+## 13) What if payload has duplicate rows with the same identity?
+
+Later payload rows win (payload order is applied in order).
+
+## 14) What if local storage already has duplicate rows for the same identity?
 
 SwiftSync deduplicates local identity collisions during sync and keeps one logical row per identity.
 
-## 14) What if a row has missing or `null` primary key?
+## 15) What if a row has missing or `null` primary key?
 
 That row is skipped for matching/diffing. Sync continues for valid rows.
 
-## 15) What happens when payload value is `null` for a scalar?
+## 16) What happens when a scalar payload value is `null`?
 
 - optional scalar -> `nil`
-- non-optional primitive scalar -> default value (`""`, `0`, `false`, epoch date, zero UUID)
+- non-optional primitive scalar -> default fallback (`""`, `0`, `false`, epoch date, zero UUID)
 
-## 16) What happens if two sync calls run at the same time?
+See `docs/project/property-mapping-contract.md`.
+
+## 17) What happens if two sync calls run at the same time?
 
 SwiftSync serializes sync calls per store/container.
 
-- Calls targeting the same `ModelContainer` are queued (no overlap/interleaving).
-- Final state is last-writer-wins by queued execution order.
-- Calls targeting different stores can run concurrently.
+- same `ModelContainer` => queued, no overlap
+- different stores => can run concurrently
 
-More internal test-planning detail lives in `docs/planning/swiftdata-concurrency-edge-cases.md`.
+More implementation/test-planning detail lives in `docs/planning/swiftdata-concurrency-edge-cases.md`.
 
-## 17) How do I cancel a sync?
+## 18) How do I cancel a sync?
 
-Use Swift Concurrency task cancellation:
+Use Swift Concurrency task cancellation (`task.cancel()`).
 
-```swift
-let task = Task {
-  try await SwiftSync.sync(payload: payload, as: User.self, in: context)
-}
+SwiftSync cooperatively cancels and rolls back unsaved in-memory work for that run.
 
-task.cancel()
+## 19) `@SyncQuery` sorting: shorthand vs explicit `SortDescriptor`
 
-do {
-  try await task.value
-} catch SyncError.cancelled {
-  // expected cooperative cancellation
-}
-```
-
-Cancellation is cooperative. SwiftSync rolls back unsaved in-memory changes for that run, but it does not roll back work that was already saved earlier.
-
-## 18) Can I still control sort direction with `@SyncQuery`?
-
-Yes. Use explicit `SortDescriptor` values when you need direction:
-
-```swift
-@SyncQuery(
-  Task.self,
-  in: syncContainer,
-  sortBy: [
-    SortDescriptor(\Task.priority, order: .reverse),
-    SortDescriptor(\Task.id)
-  ]
-)
-var tasks: [Task]
-```
-
-## 19) When should I use `sortBy: [\.field]` vs `sortBy: [SortDescriptor(...)]`?
-
-- Use `sortBy: [\.field]` for concise default ascending sort.
-- Use `sortBy: [SortDescriptor(...)]` for descending or mixed ordering.
-- If your model is not `@Syncable`, shorthand requires `SyncQuerySortableModel` conformance; explicit `SortDescriptor` works directly.
+- `sortBy: [\.field]` => concise ascending sort
+- `sortBy: [SortDescriptor(...)]` => descending/mixed ordering
+- shorthand requires `SyncQuerySortableModel` (or `@Syncable` generated support)

@@ -106,14 +106,6 @@ extension Ticket: ParentScopedModel {
 identityPolicy: .scopedByParent
 ```
 
-## What Was Removed vs Kept
-
-Removed for unambiguous models:
-- mandatory explicit `parentRelationship`
-
-Still required for ambiguous models:
-- explicit `parentRelationship` (deterministic scope selection)
-
 ## Safety Contract
 
 SwiftSync does not silently guess between multiple candidate parent relationships.
