@@ -153,7 +153,7 @@ This demo intentionally highlights multiple relationship types.
 - On first appearance: trigger `syncProjects()`.
 - Project detail:
   - Header via `@SyncModel(Project.self, id: projectID, in: syncContainer)`.
-  - Task list via `@SyncQuery(Task.self, parent: project, in: syncContainer, sortBy: [SortDescriptor(\Task.priority, order: .reverse), SortDescriptor(\Task.id)])`.
+  - Task list via `@SyncQuery(Task.self, toOne: project, in: syncContainer, sortBy: [SortDescriptor(\Task.priority, order: .reverse), SortDescriptor(\Task.id)])`.
   - On first appearance: trigger `syncProjectTasks(projectID:)`.
 
 ### Tab 2: Users
@@ -161,7 +161,7 @@ This demo intentionally highlights multiple relationship types.
 - Users list via `@SyncQuery(User.self, in: syncContainer, sortBy: [\.displayName, \.id])`.
 - On first appearance: trigger `syncUsers()`.
 - User detail task list via assignee filter:
-  - `@SyncQuery(Task.self, parent: user, in: syncContainer, sortBy: [SortDescriptor(\Task.priority, order: .reverse), SortDescriptor(\Task.id)])`.
+  - `@SyncQuery(Task.self, toOne: user, in: syncContainer, sortBy: [SortDescriptor(\Task.priority, order: .reverse), SortDescriptor(\Task.id)])`.
 - Optionally trigger `syncUserTasks(userID:)` when entering screen.
 
 ### Task Detail
@@ -169,7 +169,7 @@ This demo intentionally highlights multiple relationship types.
 - Task core model via `@SyncModel(Task.self, id: taskID, in: syncContainer)`.
 - Assignee display via task relation or `@SyncModel(User.self, id: assigneeID, in: syncContainer)`.
 - Tag chips from task-tag relation.
-- Comments list via `@SyncQuery(Comment.self, parent: task, in: syncContainer, sortBy: [SortDescriptor(\Comment.createdAt, order: .reverse), SortDescriptor(\Comment.id)])`.
+- Comments list via `@SyncQuery(Comment.self, toOne: task, in: syncContainer, sortBy: [SortDescriptor(\Comment.createdAt, order: .reverse), SortDescriptor(\Comment.id)])`.
 - On first appearance:
   - `syncTaskDetail(taskID:)`
   - `syncTaskComments(taskID:)`.
@@ -187,7 +187,7 @@ This demo intentionally highlights multiple relationship types.
 - Navigate to `TagTasksView(tagID:)`.
 - Screen uses:
   - `@SyncModel(Tag.self, id: tagID, in: syncContainer)`.
-  - `@SyncQuery(Task.self, ... by tag relation ...)`.
+  - `@SyncQuery(Task.self, toMany: tag, in: syncContainer, sortBy: [SortDescriptor(\Task.priority, order: .reverse), SortDescriptor(\Task.id)])`.
 - On first appearance: trigger `syncTagTasks(tagID:)`.
 
 ## Relationship Types Demonstrated

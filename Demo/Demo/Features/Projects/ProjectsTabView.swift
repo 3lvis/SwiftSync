@@ -77,7 +77,7 @@ private struct ProjectDetailView: View {
         _projectModel = SyncModel(Project.self, id: project.id, in: syncContainer)
         _tasks = SyncQuery(
             Task.self,
-            parent: project,
+            toOne: project,
             in: syncContainer,
             sortBy: [
                 SortDescriptor(\Task.priority, order: .reverse),

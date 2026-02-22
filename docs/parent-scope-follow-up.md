@@ -13,8 +13,8 @@ SwiftSync now supports both styles:
 - explicit `parentRelationship` only when relationship choice is ambiguous
 
 Reactive reads follow the same rule:
-- `@SyncQuery(..., parent: parentObject, ...)` infers when exactly one candidate exists
-- pass `parentRelationship:` only for ambiguous parent mappings
+- `@SyncQuery(..., toOne: parentObject, ...)` infers when exactly one candidate exists
+- pass `via:` only for ambiguous query relationship mappings
 
 ## Current Behavior
 
@@ -119,12 +119,12 @@ Still required for ambiguous models:
 SwiftSync does not silently guess between multiple candidate parent relationships.
 Ambiguity is surfaced as an error to avoid cross-scope delete mistakes.
 
-## Parent-Scoped Query Example
+## To-One Query Example
 
 ```swift
 @SyncQuery(
   Comment.self,
-  parent: task,
+  toOne: task,
   in: syncContainer,
   sortBy: [SortDescriptor(\Comment.id)]
 )
@@ -136,10 +136,22 @@ Ambiguous example:
 ```swift
 @SyncQuery(
   Ticket.self,
-  parent: user,
-  parentRelationship: \.assignee,
+  toOne: user,
+  via: \.assignee,
   in: syncContainer,
   sortBy: [SortDescriptor(\Ticket.id)]
 )
 var assignedTickets: [Ticket]
+```
+
+## To-Many Query Example
+
+```swift
+@SyncQuery(
+  Tag.self,
+  toMany: task,
+  in: syncContainer,
+  sortBy: [SortDescriptor(\Tag.id)]
+)
+var tags: [Tag]
 ```

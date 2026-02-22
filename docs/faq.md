@@ -128,26 +128,40 @@ Recommended replacements:
 
 Use `@RemoteKey` if backend keys still use the blocked names.
 
-## 10) `@SyncQuery` with `parent`
+## 10) `@SyncQuery` with `toOne` / `toMany`
 
-`@SyncQuery` supports parent-scoped reads:
+`@SyncQuery` supports relationship-scoped reads.
+
+To-one (`belongs to`):
 
 ```swift
 @SyncQuery(
   Comment.self,
-  parent: task,
+  toOne: task,
   in: syncContainer,
   sortBy: [SortDescriptor(\Comment.id)]
 )
 var comments: [Comment]
 ```
 
-Inference rule is the same as parent sync:
+To-many (`contains` / membership):
+
+```swift
+@SyncQuery(
+  Tag.self,
+  toMany: task,
+  in: syncContainer,
+  sortBy: [SortDescriptor(\Tag.id)]
+)
+var tags: [Tag]
+```
+
+Inference rule is the same idea as parent sync:
 - exactly one to-one relationship to the parent type => inferred automatically
-- ambiguous (more than one) => pass `parentRelationship:` explicitly
+- exactly one to-many relationship to the related type => inferred automatically
+- ambiguous (more than one) => pass `via:` explicitly
 - none => fail fast with a clear diagnostic
 
 Use `predicate` instead when:
-- filtering by many-to-many membership
 - filtering by scalar FK values without a parent object instance
 - applying non-parent business filters

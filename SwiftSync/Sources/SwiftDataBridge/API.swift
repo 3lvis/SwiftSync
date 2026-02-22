@@ -3,13 +3,30 @@ import SwiftData
 import Core
 
 public extension SwiftSync {
-    static func inferParentRelationship<Model: PersistentModel, Parent: PersistentModel>(
+    static func inferToOneRelationship<Model: PersistentModel, Parent: PersistentModel>(
         for model: Model.Type,
         parent: Parent.Type
     ) throws -> ReferenceWritableKeyPath<Model, Parent?> {
         _ = model
         _ = parent
         return try inferSingleParentRelationship(for: Model.self, parent: Parent.self).keyPath
+    }
+
+    @available(*, deprecated, renamed: "inferToOneRelationship(for:parent:)")
+    static func inferParentRelationship<Model: PersistentModel, Parent: PersistentModel>(
+        for model: Model.Type,
+        parent: Parent.Type
+    ) throws -> ReferenceWritableKeyPath<Model, Parent?> {
+        try inferToOneRelationship(for: model, parent: parent)
+    }
+
+    static func inferToManyRelationship<Model: PersistentModel, Related: PersistentModel>(
+        for model: Model.Type,
+        related: Related.Type
+    ) throws -> ReferenceWritableKeyPath<Model, [Related]> {
+        _ = model
+        _ = related
+        return try inferSingleToManyRelationship(for: Model.self, related: Related.self).keyPath
     }
 
     static func sync<Model: SyncUpdatableModel>(
@@ -155,7 +172,7 @@ public extension SwiftSync {
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         _ = model
-        let inferred = try inferParentRelationship(for: Model.self, parent: Parent.self)
+        let inferred = try inferToOneRelationship(for: Model.self, parent: Parent.self)
         try await sync(
             payload: payload,
             as: model,
@@ -405,6 +422,11 @@ public extension SwiftSync {
         let keyPath: ReferenceWritableKeyPath<Model, Parent?>
     }
 
+    private struct ToManyRelationshipCandidate<Model: PersistentModel, Related: PersistentModel> {
+        let name: String
+        let keyPath: ReferenceWritableKeyPath<Model, [Related]>
+    }
+
     private static func inferSingleParentRelationship<Model: PersistentModel, Parent: PersistentModel>(
         for model: Model.Type,
         parent: Parent.Type
@@ -444,6 +466,52 @@ public extension SwiftSync {
                 Ambiguous parent relationship to \(String(describing: Parent.self)). \
                 Found \(candidates.count) candidates: \(names). \
                 Add explicit ParentScopedModel.parentRelationship for this model.
+                """
+            )
+        }
+
+        return candidates[0]
+    }
+
+    private static func inferSingleToManyRelationship<Model: PersistentModel, Related: PersistentModel>(
+        for model: Model.Type,
+        related: Related.Type
+    ) throws -> ToManyRelationshipCandidate<Model, Related> {
+        _ = model
+        _ = related
+
+        var candidates: [ToManyRelationshipCandidate<Model, Related>] = []
+        for metadata in Model.schemaMetadata {
+            let metadataMirror = Mirror(reflecting: metadata)
+            let name = metadataMirror.children.first(where: { $0.label == "name" })?.value as? String ?? "<unknown>"
+            guard let keyPathAny = metadataMirror.children.first(where: { $0.label == "keypath" })?.value else {
+                continue
+            }
+            guard let keyPath = keyPathAny as? ReferenceWritableKeyPath<Model, [Related]> else {
+                continue
+            }
+            candidates.append(ToManyRelationshipCandidate(name: name, keyPath: keyPath))
+        }
+
+        if candidates.isEmpty {
+            throw SyncError.invalidPayload(
+                model: String(describing: Model.self),
+                reason: """
+                Could not infer a to-many relationship to \(String(describing: Related.self)). \
+                Found 0 candidate to-many relationships. \
+                Pass an explicit query relationship via `via:`.
+                """
+            )
+        }
+
+        if candidates.count > 1 {
+            let names = candidates.map(\.name).sorted().joined(separator: ", ")
+            throw SyncError.invalidPayload(
+                model: String(describing: Model.self),
+                reason: """
+                Ambiguous to-many relationship to \(String(describing: Related.self)). \
+                Found \(candidates.count) candidates: \(names). \
+                Pass an explicit query relationship via `via:`.
                 """
             )
         }

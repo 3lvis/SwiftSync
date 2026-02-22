@@ -159,7 +159,7 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
 
     public init<Parent: PersistentModel>(
         _ model: Model.Type,
-        parent: Parent,
+        toOne parent: Parent,
         in syncContainer: SyncContainer,
         sortBy: [SortDescriptor<Model>] = [],
         animation: Animation? = nil
@@ -169,12 +169,86 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
             syncContainer: syncContainer,
             predicate: nil,
             sortBy: sortBy,
-            postFetchFilter: Self.inferredParentFilter(parent: parent),
+            postFetchFilter: Self.inferredToOneFilter(parent: parent),
             observedModelTypeNames: Self.defaultObservedModelTypeNames(),
             animation: animation
         )
     }
 
+    public init<Parent: PersistentModel>(
+        _ model: Model.Type,
+        toOne parent: Parent,
+        via relationship: ReferenceWritableKeyPath<Model, Parent?>,
+        in syncContainer: SyncContainer,
+        sortBy: [SortDescriptor<Model>] = [],
+        animation: Animation? = nil
+    ) {
+        _ = model
+        self.init(
+            syncContainer: syncContainer,
+            predicate: nil,
+            sortBy: sortBy,
+            postFetchFilter: Self.explicitToOneFilter(parent: parent, relationship: relationship),
+            observedModelTypeNames: Self.defaultObservedModelTypeNames(),
+            animation: animation
+        )
+    }
+
+    public init<Related: PersistentModel>(
+        _ model: Model.Type,
+        toMany related: Related,
+        in syncContainer: SyncContainer,
+        sortBy: [SortDescriptor<Model>] = [],
+        animation: Animation? = nil
+    ) {
+        _ = model
+        self.init(
+            syncContainer: syncContainer,
+            predicate: nil,
+            sortBy: sortBy,
+            postFetchFilter: Self.inferredToManyFilter(related: related),
+            observedModelTypeNames: Self.defaultObservedModelTypeNames(),
+            animation: animation
+        )
+    }
+
+    public init<Related: PersistentModel>(
+        _ model: Model.Type,
+        toMany related: Related,
+        via relationship: ReferenceWritableKeyPath<Model, [Related]>,
+        in syncContainer: SyncContainer,
+        sortBy: [SortDescriptor<Model>] = [],
+        animation: Animation? = nil
+    ) {
+        _ = model
+        self.init(
+            syncContainer: syncContainer,
+            predicate: nil,
+            sortBy: sortBy,
+            postFetchFilter: Self.explicitToManyFilter(related: related, relationship: relationship),
+            observedModelTypeNames: Self.defaultObservedModelTypeNames(),
+            animation: animation
+        )
+    }
+
+    @available(*, deprecated, renamed: "init(_:toOne:in:sortBy:animation:)")
+    public init<Parent: PersistentModel>(
+        _ model: Model.Type,
+        parent: Parent,
+        in syncContainer: SyncContainer,
+        sortBy: [SortDescriptor<Model>] = [],
+        animation: Animation? = nil
+    ) {
+        self.init(
+            model,
+            toOne: parent,
+            in: syncContainer,
+            sortBy: sortBy,
+            animation: animation
+        )
+    }
+
+    @available(*, deprecated, renamed: "init(_:toOne:via:in:sortBy:animation:)")
     public init<Parent: PersistentModel>(
         _ model: Model.Type,
         parent: Parent,
@@ -183,13 +257,12 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
         sortBy: [SortDescriptor<Model>] = [],
         animation: Animation? = nil
     ) {
-        _ = model
         self.init(
-            syncContainer: syncContainer,
-            predicate: nil,
+            model,
+            toOne: parent,
+            via: parentRelationship,
+            in: syncContainer,
             sortBy: sortBy,
-            postFetchFilter: Self.explicitParentFilter(parent: parent, relationship: parentRelationship),
-            observedModelTypeNames: Self.defaultObservedModelTypeNames(),
             animation: animation
         )
     }
@@ -222,24 +295,45 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
         return names
     }
 
-    private static func inferredParentFilter<Parent: PersistentModel>(
+    private static func inferredToOneFilter<Parent: PersistentModel>(
         parent: Parent
     ) -> (Model) -> Bool {
         do {
-            let relationship = try SwiftSync.inferParentRelationship(for: Model.self, parent: Parent.self)
-            return explicitParentFilter(parent: parent, relationship: relationship)
+            let relationship = try SwiftSync.inferToOneRelationship(for: Model.self, parent: Parent.self)
+            return explicitToOneFilter(parent: parent, relationship: relationship)
         } catch {
-            preconditionFailure("SyncQuery parent inference failed for \(Model.self): \(error)")
+            preconditionFailure("SyncQuery toOne inference failed for \(Model.self): \(error)")
         }
     }
 
-    private static func explicitParentFilter<Parent: PersistentModel>(
+    private static func explicitToOneFilter<Parent: PersistentModel>(
         parent: Parent,
         relationship: ReferenceWritableKeyPath<Model, Parent?>
     ) -> (Model) -> Bool {
         let parentID = parent.persistentModelID
         return { row in
             row[keyPath: relationship]?.persistentModelID == parentID
+        }
+    }
+
+    private static func inferredToManyFilter<Related: PersistentModel>(
+        related: Related
+    ) -> (Model) -> Bool {
+        do {
+            let relationship = try SwiftSync.inferToManyRelationship(for: Model.self, related: Related.self)
+            return explicitToManyFilter(related: related, relationship: relationship)
+        } catch {
+            preconditionFailure("SyncQuery toMany inference failed for \(Model.self): \(error)")
+        }
+    }
+
+    private static func explicitToManyFilter<Related: PersistentModel>(
+        related: Related,
+        relationship: ReferenceWritableKeyPath<Model, [Related]>
+    ) -> (Model) -> Bool {
+        let relatedID = related.persistentModelID
+        return { row in
+            row[keyPath: relationship].contains { $0.persistentModelID == relatedID }
         }
     }
 
@@ -285,7 +379,7 @@ public extension SyncQuery where Model: SyncModelable {
 
     init<Parent: PersistentModel>(
         _ model: Model.Type,
-        parent: Parent,
+        toOne parent: Parent,
         in syncContainer: SyncContainer,
         sortBy: [SortDescriptor<Model>] = [],
         refreshOn: [PartialKeyPath<Model>] = [],
@@ -296,12 +390,91 @@ public extension SyncQuery where Model: SyncModelable {
             syncContainer: syncContainer,
             predicate: nil,
             sortBy: sortBy,
-            postFetchFilter: Self.inferredParentFilter(parent: parent),
+            postFetchFilter: Self.inferredToOneFilter(parent: parent),
             observedModelTypeNames: Self.observedModelTypeNames(refreshOn: refreshOn),
             animation: animation
         )
     }
 
+    init<Parent: PersistentModel>(
+        _ model: Model.Type,
+        toOne parent: Parent,
+        via relationship: ReferenceWritableKeyPath<Model, Parent?>,
+        in syncContainer: SyncContainer,
+        sortBy: [SortDescriptor<Model>] = [],
+        refreshOn: [PartialKeyPath<Model>] = [],
+        animation: Animation? = nil
+    ) {
+        _ = model
+        self.init(
+            syncContainer: syncContainer,
+            predicate: nil,
+            sortBy: sortBy,
+            postFetchFilter: Self.explicitToOneFilter(parent: parent, relationship: relationship),
+            observedModelTypeNames: Self.observedModelTypeNames(refreshOn: refreshOn),
+            animation: animation
+        )
+    }
+
+    init<Related: PersistentModel>(
+        _ model: Model.Type,
+        toMany related: Related,
+        in syncContainer: SyncContainer,
+        sortBy: [SortDescriptor<Model>] = [],
+        refreshOn: [PartialKeyPath<Model>] = [],
+        animation: Animation? = nil
+    ) {
+        _ = model
+        self.init(
+            syncContainer: syncContainer,
+            predicate: nil,
+            sortBy: sortBy,
+            postFetchFilter: Self.inferredToManyFilter(related: related),
+            observedModelTypeNames: Self.observedModelTypeNames(refreshOn: refreshOn),
+            animation: animation
+        )
+    }
+
+    init<Related: PersistentModel>(
+        _ model: Model.Type,
+        toMany related: Related,
+        via relationship: ReferenceWritableKeyPath<Model, [Related]>,
+        in syncContainer: SyncContainer,
+        sortBy: [SortDescriptor<Model>] = [],
+        refreshOn: [PartialKeyPath<Model>] = [],
+        animation: Animation? = nil
+    ) {
+        _ = model
+        self.init(
+            syncContainer: syncContainer,
+            predicate: nil,
+            sortBy: sortBy,
+            postFetchFilter: Self.explicitToManyFilter(related: related, relationship: relationship),
+            observedModelTypeNames: Self.observedModelTypeNames(refreshOn: refreshOn),
+            animation: animation
+        )
+    }
+
+    @available(*, deprecated, renamed: "init(_:toOne:in:sortBy:refreshOn:animation:)")
+    init<Parent: PersistentModel>(
+        _ model: Model.Type,
+        parent: Parent,
+        in syncContainer: SyncContainer,
+        sortBy: [SortDescriptor<Model>] = [],
+        refreshOn: [PartialKeyPath<Model>] = [],
+        animation: Animation? = nil
+    ) {
+        self.init(
+            model,
+            toOne: parent,
+            in: syncContainer,
+            sortBy: sortBy,
+            refreshOn: refreshOn,
+            animation: animation
+        )
+    }
+
+    @available(*, deprecated, renamed: "init(_:toOne:via:in:sortBy:refreshOn:animation:)")
     init<Parent: PersistentModel>(
         _ model: Model.Type,
         parent: Parent,
@@ -311,13 +484,13 @@ public extension SyncQuery where Model: SyncModelable {
         refreshOn: [PartialKeyPath<Model>] = [],
         animation: Animation? = nil
     ) {
-        _ = model
         self.init(
-            syncContainer: syncContainer,
-            predicate: nil,
+            model,
+            toOne: parent,
+            via: parentRelationship,
+            in: syncContainer,
             sortBy: sortBy,
-            postFetchFilter: Self.explicitParentFilter(parent: parent, relationship: parentRelationship),
-            observedModelTypeNames: Self.observedModelTypeNames(refreshOn: refreshOn),
+            refreshOn: refreshOn,
             animation: animation
         )
     }
@@ -366,6 +539,83 @@ public extension SyncQuery where Model: SyncQuerySortableModel {
 
     init<Parent: PersistentModel>(
         _ model: Model.Type,
+        toOne parent: Parent,
+        in syncContainer: SyncContainer,
+        sortBy: [PartialKeyPath<Model>],
+        refreshOn: [PartialKeyPath<Model>] = [],
+        animation: Animation? = nil
+    ) {
+        self.init(
+            model,
+            toOne: parent,
+            in: syncContainer,
+            sortBy: Model.syncSortDescriptors(for: sortBy),
+            refreshOn: refreshOn,
+            animation: animation
+        )
+    }
+
+    init<Parent: PersistentModel>(
+        _ model: Model.Type,
+        toOne parent: Parent,
+        via relationship: ReferenceWritableKeyPath<Model, Parent?>,
+        in syncContainer: SyncContainer,
+        sortBy: [PartialKeyPath<Model>],
+        refreshOn: [PartialKeyPath<Model>] = [],
+        animation: Animation? = nil
+    ) {
+        self.init(
+            model,
+            toOne: parent,
+            via: relationship,
+            in: syncContainer,
+            sortBy: Model.syncSortDescriptors(for: sortBy),
+            refreshOn: refreshOn,
+            animation: animation
+        )
+    }
+
+    init<Related: PersistentModel>(
+        _ model: Model.Type,
+        toMany related: Related,
+        in syncContainer: SyncContainer,
+        sortBy: [PartialKeyPath<Model>],
+        refreshOn: [PartialKeyPath<Model>] = [],
+        animation: Animation? = nil
+    ) {
+        self.init(
+            model,
+            toMany: related,
+            in: syncContainer,
+            sortBy: Model.syncSortDescriptors(for: sortBy),
+            refreshOn: refreshOn,
+            animation: animation
+        )
+    }
+
+    init<Related: PersistentModel>(
+        _ model: Model.Type,
+        toMany related: Related,
+        via relationship: ReferenceWritableKeyPath<Model, [Related]>,
+        in syncContainer: SyncContainer,
+        sortBy: [PartialKeyPath<Model>],
+        refreshOn: [PartialKeyPath<Model>] = [],
+        animation: Animation? = nil
+    ) {
+        self.init(
+            model,
+            toMany: related,
+            via: relationship,
+            in: syncContainer,
+            sortBy: Model.syncSortDescriptors(for: sortBy),
+            refreshOn: refreshOn,
+            animation: animation
+        )
+    }
+
+    @available(*, deprecated, renamed: "init(_:toOne:in:sortBy:refreshOn:animation:)")
+    init<Parent: PersistentModel>(
+        _ model: Model.Type,
         parent: Parent,
         in syncContainer: SyncContainer,
         sortBy: [PartialKeyPath<Model>],
@@ -374,14 +624,15 @@ public extension SyncQuery where Model: SyncQuerySortableModel {
     ) {
         self.init(
             model,
-            parent: parent,
+            toOne: parent,
             in: syncContainer,
-            sortBy: Model.syncSortDescriptors(for: sortBy),
+            sortBy: sortBy,
             refreshOn: refreshOn,
             animation: animation
         )
     }
 
+    @available(*, deprecated, renamed: "init(_:toOne:via:in:sortBy:refreshOn:animation:)")
     init<Parent: PersistentModel>(
         _ model: Model.Type,
         parent: Parent,
@@ -393,10 +644,10 @@ public extension SyncQuery where Model: SyncQuerySortableModel {
     ) {
         self.init(
             model,
-            parent: parent,
-            parentRelationship: parentRelationship,
+            toOne: parent,
+            via: parentRelationship,
             in: syncContainer,
-            sortBy: Model.syncSortDescriptors(for: sortBy),
+            sortBy: sortBy,
             refreshOn: refreshOn,
             animation: animation
         )

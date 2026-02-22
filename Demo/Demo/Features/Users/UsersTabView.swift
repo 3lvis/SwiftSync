@@ -71,7 +71,7 @@ private struct UserDetailView: View {
         _userModel = SyncModel(User.self, id: user.id, in: syncContainer)
         _tasks = SyncQuery(
             Task.self,
-            parent: user,
+            toOne: user,
             in: syncContainer,
             sortBy: [
                 SortDescriptor(\Task.priority, order: .reverse),

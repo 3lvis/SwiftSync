@@ -231,29 +231,41 @@ try await syncContainer.sync(
 var users: [User]
 ```
 
-Parent-scoped list:
+To-one scoped list:
 
 ```swift
 @SyncQuery(
   Comment.self,
-  parent: task,
+  toOne: task,
   in: syncContainer,
   sortBy: [SortDescriptor(\Comment.createdAt, order: .reverse)]
 )
 var comments: [Comment]
 ```
 
-Ambiguous parent mapping can be made explicit:
+Ambiguous to-one mapping can be made explicit:
 
 ```swift
 @SyncQuery(
   Ticket.self,
-  parent: user,
-  parentRelationship: \.assignee,
+  toOne: user,
+  via: \.assignee,
   in: syncContainer,
   sortBy: [SortDescriptor(\Ticket.id)]
 )
 var assignedTickets: [Ticket]
+```
+
+To-many membership list:
+
+```swift
+@SyncQuery(
+  Tag.self,
+  toMany: task,
+  in: syncContainer,
+  sortBy: [SortDescriptor(\Tag.name)]
+)
+var tags: [Tag]
 ```
 
 Descending or mixed ordering still uses explicit `SortDescriptor` values:

@@ -3,26 +3,23 @@ import SwiftSync
 import SwiftUI
 
 struct TagTasksView: View {
-    let tagID: String
+    let tag: Tag
     let syncContainer: SyncContainer
     @ObservedObject var syncEngine: DemoSyncEngine
 
-    @SyncModel private var tag: Tag?
+    @SyncModel private var tagModel: Tag?
     @SyncQuery private var tasks: [Task]
     @State private var hasTriggeredInitialSync = false
 
-    init(tagID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
-        self.tagID = tagID
+    init(tag: Tag, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
+        self.tag = tag
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
-        _tag = SyncModel(Tag.self, id: tagID, in: syncContainer)
+        _tagModel = SyncModel(Tag.self, id: tag.id, in: syncContainer)
 
-        let predicate = #Predicate<Task> { task in
-            task.tags.contains { $0.id == tagID }
-        }
         _tasks = SyncQuery(
             Task.self,
-            predicate: predicate,
+            toMany: tag,
             in: syncContainer,
             sortBy: [
                 SortDescriptor(\Task.priority, order: .reverse),
@@ -34,9 +31,9 @@ struct TagTasksView: View {
 
     var body: some View {
         List {
-            if let tag {
+            if let tagModel {
                 Section {
-                    Text(tag.name)
+                    Text(tagModel.name)
                         .font(.title3)
                     Text("\(tasks.count) tasks")
                         .foregroundStyle(.secondary)
@@ -62,14 +59,14 @@ struct TagTasksView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .navigationTitle(tag?.name ?? "Tag")
+        .navigationTitle(tagModel?.name ?? "Tag")
         .refreshable {
-            await syncEngine.syncTagTasks(tagID: tagID)
+            await syncEngine.syncTagTasks(tagID: tag.id)
         }
         .task {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
-            await syncEngine.syncTagTasks(tagID: tagID)
+            await syncEngine.syncTagTasks(tagID: tag.id)
         }
     }
 }

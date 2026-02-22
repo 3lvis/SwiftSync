@@ -21,19 +21,16 @@ struct TaskDetailView: View {
 
         _taskModel = SyncModel(Task.self, id: taskID, in: syncContainer)
 
-        let tagsPredicate = #Predicate<Tag> { tag in
-            tag.tasks.contains { $0.id == taskID }
-        }
         _tags = SyncQuery(
             Tag.self,
-            predicate: tagsPredicate,
+            toMany: task,
             in: syncContainer,
             sortBy: [\.name, \.id],
             refreshOn: [\.tasks]
         )
         _comments = SyncQuery(
             Comment.self,
-            parent: task,
+            toOne: task,
             in: syncContainer,
             sortBy: [
                 SortDescriptor(\Comment.createdAt, order: .reverse),
@@ -77,7 +74,7 @@ struct TaskDetailView: View {
                     } else {
                         ForEach(tags, id: \.id) { tag in
                             NavigationLink {
-                                TagTasksView(tagID: tag.id, syncContainer: syncContainer, syncEngine: syncEngine)
+                                TagTasksView(tag: tag, syncContainer: syncContainer, syncEngine: syncEngine)
                             } label: {
                                 Label(tag.name, systemImage: "tag")
                                     .foregroundStyle(Color(hex: tag.colorHex) ?? .accentColor)

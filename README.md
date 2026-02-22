@@ -164,35 +164,47 @@ Descending or mixed sort order:
 var tasks: [Task]
 ```
 
-Parent-scoped query shorthand:
+To-one query shorthand (ownership / belongs-to):
 
 ```swift
 @SyncQuery(
   Comment.self,
-  parent: task,
+  toOne: task,
   in: syncContainer,
   sortBy: [SortDescriptor(\Comment.id)]
 )
 var comments: [Comment]
 ```
 
-If parent inference is ambiguous, pass the relationship explicitly:
+If to-one inference is ambiguous, pass the relationship explicitly:
 
 ```swift
 @SyncQuery(
   Ticket.self,
-  parent: user,
-  parentRelationship: \.assignee,
+  toOne: user,
+  via: \.assignee,
   in: syncContainer,
   sortBy: [SortDescriptor(\Ticket.id)]
 )
 var assignedTickets: [Ticket]
 ```
 
-Keep using `predicate` when parent-scoped query is not the right shape:
-- many-to-many membership filters (for example `task.tags.contains(...)`)
-- screens that only have scalar IDs (no parent model instance)
+To-many query shorthand (membership / contains):
+
+```swift
+@SyncQuery(
+  Tag.self,
+  toMany: task,
+  in: syncContainer,
+  sortBy: [SortDescriptor(\Tag.name)]
+)
+var tags: [Tag]
+```
+
+Keep using `predicate` when `toOne:` / `toMany:` is not the right shape:
+- screens that only have scalar IDs (no related model instance)
 - non-parent filters (for example `assigneeID == userID`)
+- compound business filters (for example status + date window + membership)
 
 ## Scenario -> Way of Use
 
