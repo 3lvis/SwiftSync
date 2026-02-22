@@ -49,7 +49,7 @@ struct TagTasksView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(task.title)
                                     .font(.headline)
-                                Text(task.state)
+                                Text(task.stateLabel)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }

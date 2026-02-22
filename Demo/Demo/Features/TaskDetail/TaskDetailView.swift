@@ -298,7 +298,7 @@ struct TaskDetailView: View {
                 }
             }
         } label: {
-            Text(DemoTaskStateOption(rawValue: taskModel.state)?.label ?? taskModel.state)
+            Text(taskModel.stateLabel)
                 .foregroundStyle(Color.accentColor)
         }
     }
@@ -433,7 +433,7 @@ private struct UserTaskBucketsView: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(task.title)
-                            Text(DemoTaskStateOption(rawValue: task.state)?.label ?? task.state)
+                            Text(task.stateLabel)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

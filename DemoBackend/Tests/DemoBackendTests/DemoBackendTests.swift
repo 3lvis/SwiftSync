@@ -28,6 +28,8 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(projectTasks.first?["reviewer_id"] as? String, "user-1")
         XCTAssertEqual(projectTasks.first?["tag_ids"] as? [String], ["tag-1", "tag-2"])
         XCTAssertEqual(projectTasks.first?["watcher_ids"] as? [String], ["user-1"])
+        XCTAssertEqual(stateID(in: projectTasks.first), "todo")
+        XCTAssertEqual(stateLabel(in: projectTasks.first), "To Do")
         XCTAssertNotNil(projectTasks.first?["description"])
         XCTAssertNotNil(projectTasks.first?["updated_at"])
         XCTAssertEqual(taskComments.first?["author_name"] as? String, "User")
@@ -123,7 +125,8 @@ final class DemoBackendTests: XCTestCase {
         let beforeUpdatedAt = before?["updated_at"] as? String
 
         let patchedState = try backend.patchTaskState(taskID: "task-1", state: "done")
-        XCTAssertEqual(patchedState?["state"] as? String, "done")
+        XCTAssertEqual(stateID(in: patchedState), "done")
+        XCTAssertEqual(stateLabel(in: patchedState), "Done")
 
         let clearedAssignee = try backend.patchTaskAssignee(taskID: "task-1", assigneeID: nil)
         XCTAssertTrue((clearedAssignee?["assignee_id"] is NSNull))
@@ -165,6 +168,8 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertTrue((created["reviewer_id"] is NSNull))
         XCTAssertEqual(created["tag_ids"] as? [String], ["tag-1"])
         XCTAssertEqual(created["watcher_ids"] as? [String], [])
+        XCTAssertEqual(stateID(in: created), "todo")
+        XCTAssertEqual(stateLabel(in: created), "To Do")
 
         let projectTasksAfterCreate = try backend.getProjectTasksPayload(projectID: "project-1")
         XCTAssertEqual(projectTasksAfterCreate.count, 2)
@@ -205,9 +210,18 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertTrue(projectTasks.allSatisfy { ($0["project_id"] as? String) == "project-1" })
 
         for task in projectTasks {
-            let state = task["state"] as? String
+            let state = (task["state"] as? [String: Any])?["id"] as? String
             XCTAssertTrue(["todo", "inProgress", "done"].contains(state ?? ""))
+            XCTAssertNotNil((task["state"] as? [String: Any])?["label"] as? String)
         }
+    }
+
+    private func stateID(in task: [String: Any]?) -> String? {
+        (task?["state"] as? [String: Any])?["id"] as? String
+    }
+
+    private func stateLabel(in task: [String: Any]?) -> String? {
+        (task?["state"] as? [String: Any])?["label"] as? String
     }
 
     private func makeTemporaryDatabaseURL() -> URL {

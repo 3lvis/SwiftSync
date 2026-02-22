@@ -8,7 +8,6 @@ struct ProjectsTabView: View {
 
     @SyncQuery private var projects: [Project]
     @State private var hasTriggeredInitialSync = false
-    @State private var navigationPath: [String] = []
 
     init(syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.syncContainer = syncContainer
@@ -22,22 +21,26 @@ struct ProjectsTabView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $navigationPath) {
+        NavigationStack {
             List {
                 ForEach(projects, id: \.id) { project in
-                    Button {
-                        navigationPath.append(project.id)
-                    } label: {
-                        ProjectListRow(
-                            name: project.name,
-                            status: project.status,
-                            taskCount: project.taskCount
-                        )
+                    NavigationLink(value: project.id) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(project.name)
+                                .font(.headline)
+                                .lineLimit(2)
+
+                            HStack(spacing: 8) {
+                                Text(project.status)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+
+                                Text(project.taskCount == 1 ? "1 task" : "\(project.taskCount) tasks")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
                 }
             }
             .listStyle(.plain)
@@ -68,52 +71,6 @@ struct ProjectsTabView: View {
     }
 }
 
-private struct ProjectListRow: View {
-    let name: String
-    let status: String
-    let taskCount: Int
-
-    private var taskCountLabel: String {
-        taskCount == 1 ? "1 task" : "\(taskCount) tasks"
-    }
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(name)
-                    .font(.headline)
-                    .lineLimit(2)
-
-                Text(status)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer(minLength: 8)
-
-            HStack(alignment: .center, spacing: 8) {
-                Text(taskCountLabel)
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule()
-                            .fill(Color(.secondarySystemFill))
-                    )
-
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-            }
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
-    }
-}
-
 private struct ProjectDetailView: View {
     let projectID: String
     let syncContainer: SyncContainer
@@ -124,7 +81,6 @@ private struct ProjectDetailView: View {
     @State private var hasTriggeredInitialSync = false
     @State private var isShowingCreateTaskSheet = false
     @State private var taskPendingDelete: TaskDeletePrompt?
-    @State private var selectedTaskRoute: ProjectDetailTaskRoute?
 
     init(projectID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.projectID = projectID
@@ -150,35 +106,45 @@ private struct ProjectDetailView: View {
         List {
             Section {
                 if let projectModel {
-                    ProjectDetailHeaderCard(
-                        name: projectModel.name,
-                        status: projectModel.status,
-                        taskCount: projectModel.taskCount
-                    )
+                    Text(projectModel.name)
+                        .font(.headline)
+                        .lineLimit(3)
+
+                    LabeledContent("Status", value: projectModel.status)
+                        .foregroundStyle(.secondary)
+
+                    LabeledContent("Tasks", value: projectModel.taskCount == 1 ? "1 task" : "\(projectModel.taskCount) tasks")
+                        .foregroundStyle(.secondary)
                 } else {
                     Text("Project not found")
                         .foregroundStyle(.secondary)
                 }
             }
-            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-            .listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
 
             Section("Tasks") {
                 ForEach(tasks, id: \.id) { task in
-                    Button {
-                        selectedTaskRoute = ProjectDetailTaskRoute(id: task.id)
+                    NavigationLink {
+                        TaskDetailView(taskID: task.id, syncContainer: syncContainer, syncEngine: syncEngine)
                     } label: {
-                        ProjectTaskListRow(
-                            title: task.title,
-                            state: task.state,
-                            assigneeName: task.assignee?.displayName
-                        )
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(task.title)
+                                .font(.headline)
+                                .lineLimit(3)
+
+                            HStack(spacing: 8) {
+                                Text(task.stateLabel)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+
+                                if let assignee = task.assignee?.displayName {
+                                    Text("Assignee: \(assignee)")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                            }
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
                             taskPendingDelete = TaskDeletePrompt(id: task.id, title: task.title)
@@ -216,9 +182,6 @@ private struct ProjectDetailView: View {
                 await syncEngine.syncProjectTasks(projectID: projectID)
             }
         }
-        .navigationDestination(item: $selectedTaskRoute) { route in
-            TaskDetailView(taskID: route.id, syncContainer: syncContainer, syncEngine: syncEngine)
-        }
         .sheet(isPresented: $isShowingCreateTaskSheet) {
             CreateTaskSheet(
                 projectID: projectID,
@@ -249,105 +212,6 @@ private struct ProjectDetailView: View {
         } message: { prompt in
             Text("Delete \"\(prompt.title)\" from this project?")
         }
-    }
-}
-
-private struct ProjectDetailTaskRoute: Identifiable, Hashable {
-    let id: String
-}
-
-private struct ProjectDetailHeaderCard: View {
-    let name: String
-    let status: String
-    let taskCount: Int
-
-    private var taskCountLabel: String {
-        taskCount == 1 ? "1 task" : "\(taskCount) tasks"
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(name)
-                .font(.title2.weight(.semibold))
-                .lineLimit(3)
-
-            HStack(spacing: 10) {
-                Text(status)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-
-                Text(taskCountLabel)
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule()
-                            .fill(Color(.secondarySystemFill))
-                    )
-
-                Spacer(minLength: 0)
-            }
-        }
-        .padding(16)
-    }
-}
-
-private struct ProjectTaskListRow: View {
-    let title: String
-    let state: String
-    let assigneeName: String?
-
-    private var stateLabel: String {
-        switch state {
-        case "todo":
-            return "To do"
-        case "inProgress":
-            return "In progress"
-        case "done":
-            return "Done"
-        default:
-            return state
-        }
-    }
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(title)
-                    .font(.headline)
-                    .lineLimit(3)
-
-                HStack(alignment: .center, spacing: 8) {
-                    Text(stateLabel)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule()
-                                .fill(Color(.secondarySystemFill))
-                        )
-
-                    if let assignee = assigneeName {
-                        Text("Assignee: \(assignee)")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-
-                    Spacer(minLength: 0)
-                }
-            }
-
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
     }
 }
 

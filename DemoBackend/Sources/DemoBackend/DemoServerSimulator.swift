@@ -563,6 +563,7 @@ public final class DemoServerSimulator {
 
     private func taskPayload(from row: DemoSQLiteRow) throws -> [String: Any] {
         let taskID = row.string("id")
+        let stateID = row.string("state")
         return [
             "id": taskID,
             "project_id": row.string("project_id"),
@@ -570,11 +571,31 @@ public final class DemoServerSimulator {
             "reviewer_id": row.nullableString("reviewer_id") ?? NSNull(),
             "title": row.string("title"),
             "description": row.string("description"),
-            "state": row.string("state"),
+            "state": taskStatePayload(id: stateID),
             "tag_ids": try tagIDs(forTaskID: taskID),
             "watcher_ids": try watcherIDs(forTaskID: taskID),
             "updated_at": iso8601(row.double("updated_at"))
         ]
+    }
+
+    private func taskStatePayload(id stateID: String) -> [String: Any] {
+        [
+            "id": stateID,
+            "label": taskStateLabel(id: stateID)
+        ]
+    }
+
+    private func taskStateLabel(id stateID: String) -> String {
+        switch stateID {
+        case "todo":
+            return "To Do"
+        case "inProgress":
+            return "In Progress"
+        case "done":
+            return "Done"
+        default:
+            return stateID
+        }
     }
 
     private func tagIDs(forTaskID taskID: String) throws -> [String] {

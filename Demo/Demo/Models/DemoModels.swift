@@ -98,7 +98,10 @@ final class Task {
     @RemoteKey("description")
     var descriptionText: String
 
+    @RemoteKey("state.id")
     var state: String
+    @RemoteKey("state.label")
+    var stateLabel: String
     var updatedAt: Date
     var project: Project?
     var assignee: User?
@@ -115,6 +118,7 @@ final class Task {
         title: String,
         descriptionText: String,
         state: String,
+        stateLabel: String,
         updatedAt: Date,
         project: Project? = nil,
         assignee: User? = nil,
@@ -130,6 +134,7 @@ final class Task {
         self.title = title
         self.descriptionText = descriptionText
         self.state = state
+        self.stateLabel = stateLabel
         self.updatedAt = updatedAt
         self.project = project
         self.assignee = assignee
