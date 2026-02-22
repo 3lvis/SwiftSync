@@ -62,7 +62,7 @@ public final class DemoServerSimulator {
     public func getUsersPayload() throws -> [[String: Any]] {
         let rows = try self.sqlite.query(
             """
-            SELECT id, display_name, avatar_seed, role, updated_at
+            SELECT id, display_name, role, updated_at
             FROM users
             ORDER BY id ASC
             """
@@ -71,7 +71,6 @@ public final class DemoServerSimulator {
             [
                 "id": row.string("id"),
                 "display_name": row.string("display_name"),
-                "avatar_seed": row.string("avatar_seed"),
                 "role": row.string("role"),
                 "updated_at": iso8601(row.double("updated_at"))
             ]
@@ -88,7 +87,7 @@ public final class DemoServerSimulator {
     public func getTaskDetailPayload(taskID: String) throws -> [String: Any]? {
         let rows = try self.sqlite.query(
             """
-            SELECT id, project_id, assignee_id, title, description, state, priority, due_date, updated_at
+            SELECT id, project_id, assignee_id, title, description, state, priority, updated_at
             FROM tasks
             WHERE id = ?
             LIMIT 1
@@ -104,7 +103,7 @@ public final class DemoServerSimulator {
     public func getTaskCommentsPayload(taskID: String) throws -> [[String: Any]] {
         let rows = try self.sqlite.query(
             """
-            SELECT id, task_id, author_user_id, body, created_at, updated_at
+            SELECT id, task_id, author_user_id, body, created_at
             FROM comments
             WHERE task_id = ?
             ORDER BY created_at ASC, id ASC
@@ -119,8 +118,7 @@ public final class DemoServerSimulator {
                 "task_id": row.string("task_id"),
                 "author_user_id": row.string("author_user_id"),
                 "body": row.string("body"),
-                "created_at": iso8601(row.double("created_at")),
-                "updated_at": iso8601(row.double("updated_at"))
+                "created_at": iso8601(row.double("created_at"))
             ]
         }
     }
@@ -128,7 +126,7 @@ public final class DemoServerSimulator {
     public func getTagsPayload() throws -> [[String: Any]] {
         let rows = try self.sqlite.query(
             """
-            SELECT id, name, color_hex, updated_at
+            SELECT id, name, updated_at
             FROM tags
             ORDER BY id ASC
             """
@@ -137,7 +135,6 @@ public final class DemoServerSimulator {
             [
                 "id": row.string("id"),
                 "name": row.string("name"),
-                "color_hex": row.string("color_hex"),
                 "updated_at": iso8601(row.double("updated_at"))
             ]
         }
@@ -189,8 +186,8 @@ public final class DemoServerSimulator {
 
         try self.sqlite.execute(
             """
-            INSERT INTO comments (id, task_id, author_user_id, body, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO comments (id, task_id, author_user_id, body, created_at)
+            VALUES (?, ?, ?, ?, ?)
             """,
             bind: { stmt in
                 self.sqlite.bind(text: newID, at: 1, in: stmt)
@@ -198,13 +195,12 @@ public final class DemoServerSimulator {
                 self.sqlite.bind(text: authorUserID, at: 3, in: stmt)
                 self.sqlite.bind(text: body, at: 4, in: stmt)
                 self.sqlite.bind(double: now.timeIntervalSince1970, at: 5, in: stmt)
-                self.sqlite.bind(double: now.timeIntervalSince1970, at: 6, in: stmt)
             }
         )
 
         let rows = try self.sqlite.query(
             """
-            SELECT id, task_id, author_user_id, body, created_at, updated_at
+            SELECT id, task_id, author_user_id, body, created_at
             FROM comments
             WHERE id = ?
             LIMIT 1
@@ -221,8 +217,7 @@ public final class DemoServerSimulator {
             "task_id": row.string("task_id"),
             "author_user_id": row.string("author_user_id"),
             "body": row.string("body"),
-            "created_at": iso8601(row.double("created_at")),
-            "updated_at": iso8601(row.double("updated_at"))
+            "created_at": iso8601(row.double("created_at"))
         ]
     }
 
@@ -233,7 +228,7 @@ public final class DemoServerSimulator {
         let rows = try self.sqlite.query(
             """
             SELECT tasks.id, tasks.project_id, tasks.assignee_id, tasks.title, tasks.description, tasks.state,
-                   tasks.priority, tasks.due_date, tasks.updated_at
+                   tasks.priority, tasks.updated_at
             FROM tasks
             \(whereClause)
             ORDER BY tasks.id ASC
@@ -253,7 +248,6 @@ public final class DemoServerSimulator {
             "description": row.string("description"),
             "state": row.string("state"),
             "priority": Int(row.int64("priority")),
-            "due_date": row.nullableDouble("due_date").map(iso8601) ?? NSNull(),
             "tag_ids": try tagIDs(forTaskID: taskID),
             "updated_at": iso8601(row.double("updated_at"))
         ]
@@ -329,7 +323,6 @@ public final class DemoServerSimulator {
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY,
                 display_name TEXT NOT NULL,
-                avatar_seed TEXT NOT NULL,
                 role TEXT NOT NULL,
                 updated_at REAL NOT NULL
             );
@@ -337,7 +330,6 @@ public final class DemoServerSimulator {
             CREATE TABLE IF NOT EXISTS tags (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
-                color_hex TEXT NOT NULL,
                 updated_at REAL NOT NULL
             );
 
@@ -349,7 +341,6 @@ public final class DemoServerSimulator {
                 description TEXT NOT NULL,
                 state TEXT NOT NULL,
                 priority INTEGER NOT NULL,
-                due_date REAL NULL,
                 updated_at REAL NOT NULL,
                 FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE RESTRICT,
                 FOREIGN KEY(assignee_id) REFERENCES users(id) ON DELETE SET NULL
@@ -369,7 +360,6 @@ public final class DemoServerSimulator {
                 author_user_id TEXT NOT NULL,
                 body TEXT NOT NULL,
                 created_at REAL NOT NULL,
-                updated_at REAL NOT NULL,
                 FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE,
                 FOREIGN KEY(author_user_id) REFERENCES users(id) ON DELETE RESTRICT
             );
@@ -402,15 +392,14 @@ public final class DemoServerSimulator {
             for user in seedData.users {
                 try sqlite.execute(
                     """
-                    INSERT INTO users (id, display_name, avatar_seed, role, updated_at)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO users (id, display_name, role, updated_at)
+                    VALUES (?, ?, ?, ?)
                     """,
                     bind: { stmt in
                         sqlite.bind(text: user.id, at: 1, in: stmt)
                         sqlite.bind(text: user.displayName, at: 2, in: stmt)
-                        sqlite.bind(text: user.avatarSeed, at: 3, in: stmt)
-                        sqlite.bind(text: user.role, at: 4, in: stmt)
-                        sqlite.bind(double: user.updatedAt.timeIntervalSince1970, at: 5, in: stmt)
+                        sqlite.bind(text: user.role, at: 3, in: stmt)
+                        sqlite.bind(double: user.updatedAt.timeIntervalSince1970, at: 4, in: stmt)
                     }
                 )
             }
@@ -418,14 +407,13 @@ public final class DemoServerSimulator {
             for tag in seedData.tags {
                 try sqlite.execute(
                     """
-                    INSERT INTO tags (id, name, color_hex, updated_at)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO tags (id, name, updated_at)
+                    VALUES (?, ?, ?)
                     """,
                     bind: { stmt in
                         sqlite.bind(text: tag.id, at: 1, in: stmt)
                         sqlite.bind(text: tag.name, at: 2, in: stmt)
-                        sqlite.bind(text: tag.colorHex, at: 3, in: stmt)
-                        sqlite.bind(double: tag.updatedAt.timeIntervalSince1970, at: 4, in: stmt)
+                        sqlite.bind(double: tag.updatedAt.timeIntervalSince1970, at: 3, in: stmt)
                     }
                 )
             }
@@ -433,8 +421,8 @@ public final class DemoServerSimulator {
             for task in seedData.tasks {
                 try sqlite.execute(
                     """
-                    INSERT INTO tasks (id, project_id, assignee_id, title, description, state, priority, due_date, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO tasks (id, project_id, assignee_id, title, description, state, priority, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     bind: { stmt in
                         sqlite.bind(text: task.id, at: 1, in: stmt)
@@ -444,8 +432,7 @@ public final class DemoServerSimulator {
                         sqlite.bind(text: task.descriptionText, at: 5, in: stmt)
                         sqlite.bind(text: task.state, at: 6, in: stmt)
                         sqlite.bind(int64: Int64(task.priority), at: 7, in: stmt)
-                        sqlite.bind(nullableDouble: task.dueDate?.timeIntervalSince1970, at: 8, in: stmt)
-                        sqlite.bind(double: task.updatedAt.timeIntervalSince1970, at: 9, in: stmt)
+                        sqlite.bind(double: task.updatedAt.timeIntervalSince1970, at: 8, in: stmt)
                     }
                 )
 
@@ -466,8 +453,8 @@ public final class DemoServerSimulator {
             for comment in seedData.comments {
                 try sqlite.execute(
                     """
-                    INSERT INTO comments (id, task_id, author_user_id, body, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO comments (id, task_id, author_user_id, body, created_at)
+                    VALUES (?, ?, ?, ?, ?)
                     """,
                     bind: { stmt in
                         sqlite.bind(text: comment.id, at: 1, in: stmt)
@@ -475,7 +462,6 @@ public final class DemoServerSimulator {
                         sqlite.bind(text: comment.authorUserID, at: 3, in: stmt)
                         sqlite.bind(text: comment.body, at: 4, in: stmt)
                         sqlite.bind(double: comment.createdAt.timeIntervalSince1970, at: 5, in: stmt)
-                        sqlite.bind(double: comment.updatedAt.timeIntervalSince1970, at: 6, in: stmt)
                     }
                 )
             }

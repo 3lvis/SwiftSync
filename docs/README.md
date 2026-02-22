@@ -15,3 +15,5 @@ Current planning docs:
 - `docs/planning/swiftdata-concurrency-edge-cases.md`
 - `docs/planning/swiftsync-demo-backend-plan.md`
 - `docs/planning/swiftsync-demo-app-plan.md`
+- `docs/planning/swiftsync-demo-field-reduction-plan.md`
+- `docs/planning/swiftsync-demo-crud-flows-plan.md`

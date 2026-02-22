@@ -18,14 +18,12 @@ public struct DemoSeedData {
     public struct SeedUser: Sendable {
         public let id: String
         public let displayName: String
-        public let avatarSeed: String
         public let role: String
         public let updatedAt: Date
 
-        public init(id: String, displayName: String, avatarSeed: String, role: String, updatedAt: Date) {
+        public init(id: String, displayName: String, role: String, updatedAt: Date) {
             self.id = id
             self.displayName = displayName
-            self.avatarSeed = avatarSeed
             self.role = role
             self.updatedAt = updatedAt
         }
@@ -34,13 +32,11 @@ public struct DemoSeedData {
     public struct SeedTag: Sendable {
         public let id: String
         public let name: String
-        public let colorHex: String
         public let updatedAt: Date
 
-        public init(id: String, name: String, colorHex: String, updatedAt: Date) {
+        public init(id: String, name: String, updatedAt: Date) {
             self.id = id
             self.name = name
-            self.colorHex = colorHex
             self.updatedAt = updatedAt
         }
     }
@@ -53,7 +49,6 @@ public struct DemoSeedData {
         public let descriptionText: String
         public let state: String
         public let priority: Int
-        public let dueDate: Date?
         public let tagIDs: [String]
         public let updatedAt: Date
 
@@ -65,7 +60,6 @@ public struct DemoSeedData {
             descriptionText: String,
             state: String,
             priority: Int,
-            dueDate: Date?,
             tagIDs: [String],
             updatedAt: Date
         ) {
@@ -76,7 +70,6 @@ public struct DemoSeedData {
             self.descriptionText = descriptionText
             self.state = state
             self.priority = priority
-            self.dueDate = dueDate
             self.tagIDs = tagIDs
             self.updatedAt = updatedAt
         }
@@ -88,15 +81,13 @@ public struct DemoSeedData {
         public let authorUserID: String
         public let body: String
         public let createdAt: Date
-        public let updatedAt: Date
 
-        public init(id: String, taskID: String, authorUserID: String, body: String, createdAt: Date, updatedAt: Date) {
+        public init(id: String, taskID: String, authorUserID: String, body: String, createdAt: Date) {
             self.id = id
             self.taskID = taskID
             self.authorUserID = authorUserID
             self.body = body
             self.createdAt = createdAt
-            self.updatedAt = updatedAt
         }
     }
 
@@ -145,7 +136,6 @@ public struct DemoSeedData {
                 SeedUser(
                     id: "user-\(index)",
                     displayName: "User \(index)",
-                    avatarSeed: "seed-\(index)",
                     role: roles[index % roles.count],
                     updatedAt: baseDate.addingTimeInterval(TimeInterval(index * 75))
                 )
@@ -154,12 +144,10 @@ public struct DemoSeedData {
 
         var tags: [SeedTag] = []
         for index in 1...50 {
-            let color = String(format: "#%06X", (index * 654321) % 0xFFFFFF)
             tags.append(
                 SeedTag(
                     id: "tag-\(index)",
                     name: "tag-\(index)",
-                    colorHex: color,
                     updatedAt: baseDate.addingTimeInterval(TimeInterval(index * 42))
                 )
             )
@@ -173,13 +161,6 @@ public struct DemoSeedData {
                 assignee = nil
             } else {
                 assignee = "user-\(((index * 3) % users.count) + 1)"
-            }
-
-            let dueDate: Date?
-            if index % 6 == 0 {
-                dueDate = nil
-            } else {
-                dueDate = baseDate.addingTimeInterval(TimeInterval(index * 9_000))
             }
 
             let tagCount = (index % 3) + 1
@@ -196,7 +177,6 @@ public struct DemoSeedData {
                     descriptionText: "Detailed description for task \(index). This is seeded fake backend content for staged sync demos.",
                     state: taskStates[index % taskStates.count],
                     priority: (index % 5) + 1,
-                    dueDate: dueDate,
                     tagIDs: tagIDs,
                     updatedAt: baseDate.addingTimeInterval(TimeInterval(index * 120))
                 )
@@ -211,8 +191,7 @@ public struct DemoSeedData {
                     taskID: "task-\(((index - 1) % tasks.count) + 1)",
                     authorUserID: "user-\(((index * 5) % users.count) + 1)",
                     body: "Comment \(index): seeded for deterministic offline/read-only phase one coverage.",
-                    createdAt: baseDate.addingTimeInterval(TimeInterval(index * 30)),
-                    updatedAt: baseDate.addingTimeInterval(TimeInterval(index * 30 + 5))
+                    createdAt: baseDate.addingTimeInterval(TimeInterval(index * 30))
                 )
             )
         }

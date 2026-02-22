@@ -21,6 +21,9 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(projectTasks.count, 1)
         XCTAssertEqual(taskComments.count, 1)
 
+        XCTAssertNil(users.first?["avatar_seed"])
+        XCTAssertNil(tags.first?["color_hex"])
+        XCTAssertNil(projectTasks.first?["due_date"])
         XCTAssertEqual(projectTasks.first?["tag_ids"] as? [String], ["tag-1", "tag-2"])
         XCTAssertNotNil(projectTasks.first?["description"])
         XCTAssertNotNil(projectTasks.first?["updated_at"])
@@ -55,7 +58,7 @@ final class DemoBackendTests: XCTestCase {
 
         let seed = DemoSeedData(
             projects: [.init(id: "project-1", name: "P", status: "active", updatedAt: Date(timeIntervalSince1970: 10))],
-            users: [.init(id: "user-1", displayName: "U", avatarSeed: "u", role: "Engineer", updatedAt: Date(timeIntervalSince1970: 10))],
+            users: [.init(id: "user-1", displayName: "U", role: "Engineer", updatedAt: Date(timeIntervalSince1970: 10))],
             tags: [],
             tasks: [
                 .init(
@@ -66,7 +69,6 @@ final class DemoBackendTests: XCTestCase {
                     descriptionText: "Desc",
                     state: "todo",
                     priority: 1,
-                    dueDate: nil,
                     tagIDs: [],
                     updatedAt: Date(timeIntervalSince1970: 10)
                 )
@@ -85,10 +87,12 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(created["author_user_id"] as? String, "user-1")
         XCTAssertEqual(created["body"] as? String, "Server-created comment")
         XCTAssertEqual(created["id"] as? String, "comment-1")
+        XCTAssertNil(created["updated_at"])
 
         let comments = try backend.getTaskCommentsPayload(taskID: "task-1")
         XCTAssertEqual(comments.count, 1)
         XCTAssertEqual(comments[0]["id"] as? String, "comment-1")
+        XCTAssertNil(comments[0]["updated_at"])
     }
 
     private func makeTemporaryDatabaseURL() -> URL {
@@ -101,10 +105,10 @@ final class DemoBackendTests: XCTestCase {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         return DemoSeedData(
             projects: [.init(id: "project-1", name: "Project", status: "active", updatedAt: now)],
-            users: [.init(id: "user-1", displayName: "User", avatarSeed: "seed", role: "Engineer", updatedAt: now)],
+            users: [.init(id: "user-1", displayName: "User", role: "Engineer", updatedAt: now)],
             tags: [
-                .init(id: "tag-1", name: "frontend", colorHex: "#FF0000", updatedAt: now),
-                .init(id: "tag-2", name: "ios", colorHex: "#00FF00", updatedAt: now)
+                .init(id: "tag-1", name: "frontend", updatedAt: now),
+                .init(id: "tag-2", name: "ios", updatedAt: now)
             ],
             tasks: [
                 .init(
@@ -115,7 +119,6 @@ final class DemoBackendTests: XCTestCase {
                     descriptionText: "Old description",
                     state: "todo",
                     priority: 2,
-                    dueDate: nil,
                     tagIDs: ["tag-1", "tag-2"],
                     updatedAt: now
                 )
@@ -126,8 +129,7 @@ final class DemoBackendTests: XCTestCase {
                     taskID: "task-1",
                     authorUserID: "user-1",
                     body: "Existing comment",
-                    createdAt: now,
-                    updatedAt: now
+                    createdAt: now
                 )
             ]
         )

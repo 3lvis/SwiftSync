@@ -51,9 +51,6 @@ struct TaskDetailView: View {
                     if let assignee = taskModel.assignee?.displayName {
                         Text("Assignee: \(assignee)")
                     }
-                    if let dueDate = taskModel.dueDate {
-                        Text("Due: \(dueDate.formatted(date: .abbreviated, time: .omitted))")
-                    }
                 } else {
                     Text("Task not found")
                         .foregroundStyle(.secondary)
@@ -77,7 +74,7 @@ struct TaskDetailView: View {
                                 TagTasksView(tag: tag, syncContainer: syncContainer, syncEngine: syncEngine)
                             } label: {
                                 Label(tag.name, systemImage: "tag")
-                                    .foregroundStyle(Color(hex: tag.colorHex) ?? .accentColor)
+                                    .foregroundStyle(Color.accentColor)
                             }
                         }
                     }
@@ -111,20 +108,5 @@ struct TaskDetailView: View {
             await syncEngine.syncTaskDetail(taskID: task.id)
             await syncEngine.syncTaskComments(taskID: task.id)
         }
-    }
-}
-
-private extension Color {
-    init?(hex: String) {
-        let cleaned = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        guard cleaned.count == 6, let value = Int(cleaned, radix: 16) else {
-            return nil
-        }
-
-        let red = Double((value >> 16) & 0xFF) / 255.0
-        let green = Double((value >> 8) & 0xFF) / 255.0
-        let blue = Double(value & 0xFF) / 255.0
-
-        self.init(red: red, green: green, blue: blue)
     }
 }

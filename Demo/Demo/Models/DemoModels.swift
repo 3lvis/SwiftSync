@@ -31,7 +31,6 @@ final class Project {
 final class User {
     @Attribute(.unique) var id: String
     var displayName: String
-    var avatarSeed: String
     var role: String
     var updatedAt: Date
     var assignedTasks: [Task]
@@ -40,7 +39,6 @@ final class User {
     init(
         id: String,
         displayName: String,
-        avatarSeed: String,
         role: String,
         updatedAt: Date,
         assignedTasks: [Task] = [],
@@ -48,7 +46,6 @@ final class User {
     ) {
         self.id = id
         self.displayName = displayName
-        self.avatarSeed = avatarSeed
         self.role = role
         self.updatedAt = updatedAt
         self.assignedTasks = assignedTasks
@@ -61,20 +58,17 @@ final class User {
 final class Tag {
     @Attribute(.unique) var id: String
     var name: String
-    var colorHex: String
     var updatedAt: Date
     var tasks: [Task]
 
     init(
         id: String,
         name: String,
-        colorHex: String,
         updatedAt: Date,
         tasks: [Task] = []
     ) {
         self.id = id
         self.name = name
-        self.colorHex = colorHex
         self.updatedAt = updatedAt
         self.tasks = tasks
     }
@@ -96,7 +90,6 @@ final class Task {
 
     var state: String
     var priority: Int
-    var dueDate: Date?
     var updatedAt: Date
     var project: Project?
     var assignee: User?
@@ -111,7 +104,6 @@ final class Task {
         descriptionText: String,
         state: String,
         priority: Int,
-        dueDate: Date?,
         updatedAt: Date,
         project: Project? = nil,
         assignee: User? = nil,
@@ -125,7 +117,6 @@ final class Task {
         self.descriptionText = descriptionText
         self.state = state
         self.priority = priority
-        self.dueDate = dueDate
         self.updatedAt = updatedAt
         self.project = project
         self.assignee = assignee
@@ -145,7 +136,6 @@ final class Comment {
 
     var body: String
     var createdAt: Date
-    var updatedAt: Date
     var task: Task?
 
     var authorUser: User?
@@ -156,7 +146,6 @@ final class Comment {
         authorUserID: String,
         body: String,
         createdAt: Date,
-        updatedAt: Date,
         task: Task? = nil,
         authorUser: User? = nil
     ) {
@@ -165,7 +154,6 @@ final class Comment {
         self.authorUserID = authorUserID
         self.body = body
         self.createdAt = createdAt
-        self.updatedAt = updatedAt
         self.task = task
         self.authorUser = authorUser
     }

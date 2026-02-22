@@ -36,6 +36,8 @@
 Backend implementation planning now lives in:
 
 - `docs/planning/swiftsync-demo-backend-plan.md`
+- `docs/planning/swiftsync-demo-crud-flows-plan.md`
+- `docs/planning/swiftsync-demo-field-reduction-plan.md`
 
 This demo app plan tracks UI flows, sync-engine integration, and staged feature rollout. The backend plan tracks SQLite storage, fake backend endpoint behavior, and backend unit tests.
 

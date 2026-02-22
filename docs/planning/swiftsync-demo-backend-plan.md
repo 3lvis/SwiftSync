@@ -34,6 +34,12 @@
 - [X] Unit tests run with `swift test` in `DemoBackend`
 - [ ] Offline/replay behavior is out of scope for this document (tracked in demo app plan after Phase 2 writes)
 
+Related planning docs:
+
+- `docs/planning/swiftsync-demo-app-plan.md`
+- `docs/planning/swiftsync-demo-crud-flows-plan.md`
+- `docs/planning/swiftsync-demo-field-reduction-plan.md`
+
 ## Architecture Rules
 
 - [X] Backend code stays in `DemoBackend` local package
