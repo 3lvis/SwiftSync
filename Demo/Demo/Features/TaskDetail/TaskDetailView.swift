@@ -16,8 +16,8 @@ struct TaskDetailView: View {
     @State private var activeSheet: TaskDetailSheet?
     @State private var commentPendingDelete: CommentDeletePrompt?
 
-    init(task: Task, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
-        self.taskID = task.id
+    init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
+        self.taskID = taskID
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
 
@@ -33,17 +33,23 @@ struct TaskDetailView: View {
             sortBy: [\.name, \.id]
         )
 
+        let tagsPredicate = #Predicate<Tag> { tag in
+            tag.tasks.contains { $0.id == taskID }
+        }
         _tags = SyncQuery(
             Tag.self,
-            toMany: task,
+            predicate: tagsPredicate,
             in: syncContainer,
             sortBy: [\.name, \.id],
             refreshOn: [\.tasks],
             animation: .snappy(duration: 0.22)
         )
+        let commentsPredicate = #Predicate<Comment> { row in
+            row.taskID == taskID
+        }
         _comments = SyncQuery(
             Comment.self,
-            toOne: task,
+            predicate: commentsPredicate,
             in: syncContainer,
             sortBy: [
                 SortDescriptor(\Comment.createdAt, order: .reverse),
@@ -78,8 +84,9 @@ struct TaskDetailView: View {
         }
         .task(id: taskID) {
             while !_Concurrency.Task.isCancelled {
-                try? await _Concurrency.Task.sleep(nanoseconds: 6_000_000_000)
+                try? await _Concurrency.Task.sleep(nanoseconds: 14_000_000_000)
                 guard !_Concurrency.Task.isCancelled else { break }
+                guard activeSheet == nil, commentPendingDelete == nil else { continue }
                 await syncEngine.syncTaskDetail(taskID: taskID)
                 await syncEngine.syncTaskComments(taskID: taskID)
             }
@@ -181,7 +188,7 @@ struct TaskDetailView: View {
                 } else {
                     ForEach(tags, id: \.id) { tag in
                         NavigationLink {
-                            TagTasksView(tag: tag, syncContainer: syncContainer, syncEngine: syncEngine)
+                            TagTasksView(tagID: tag.id, syncContainer: syncContainer, syncEngine: syncEngine)
                         } label: {
                             Label(tag.name, systemImage: "tag")
                                 .foregroundStyle(Color.accentColor)
@@ -225,13 +232,14 @@ struct TaskDetailView: View {
     }
 
     private func taskStateMenu(taskModel: Task) -> some View {
-        Menu {
+        let projectID = taskModel.projectID
+        return Menu {
             ForEach(DemoTaskStateOption.allCases) { option in
                 Button {
                     _Concurrency.Task {
                         await syncEngine.updateTaskState(
                             taskID: taskID,
-                            projectID: taskModel.projectID,
+                            projectID: projectID,
                             state: option.rawValue
                         )
                     }
@@ -251,52 +259,69 @@ struct TaskDetailView: View {
 
     @ViewBuilder
     private func presentedSheet(for sheet: TaskDetailSheet) -> some View {
+        let engine = syncEngine
+        let localTaskID = taskID
+        let currentProjectID = taskModel?.projectID
+        let currentDescription = taskModel?.descriptionText ?? ""
+        let currentAssigneeID = taskModel?.assigneeID
+        let selectedTagIDs = Set(tags.map(\.id))
+        let userOptions = allUsers.map { UserPickerOption(id: $0.id, displayName: $0.displayName) }
+        let tagOptions = allTags.map { TagPickerOption(id: $0.id, name: $0.name) }
+        let defaultCommentAuthorID = currentAssigneeID ?? userOptions.first?.id
         switch sheet {
         case .description:
             EditTaskDescriptionSheet(
-                initialText: taskModel?.descriptionText ?? "",
+                initialText: currentDescription,
                 onSave: { newText in
-                    await syncEngine.updateTaskDescription(
-                        taskID: taskID,
-                        projectID: taskModel?.projectID,
-                        descriptionText: newText
-                    )
+                    _Concurrency.Task {
+                        await engine.updateTaskDescription(
+                            taskID: localTaskID,
+                            projectID: currentProjectID,
+                            descriptionText: newText
+                        )
+                    }
                 }
             )
         case .assignee:
             AssigneePickerSheet(
-                users: allUsers,
-                selectedAssigneeID: taskModel?.assigneeID,
+                users: userOptions,
+                selectedAssigneeID: currentAssigneeID,
                 onSave: { newAssigneeID in
-                    await syncEngine.updateTaskAssignee(
-                        taskID: taskID,
-                        projectID: taskModel?.projectID,
-                        assigneeID: newAssigneeID
-                    )
+                    _Concurrency.Task {
+                        await engine.updateTaskAssignee(
+                            taskID: localTaskID,
+                            projectID: currentProjectID,
+                            assigneeID: newAssigneeID
+                        )
+                    }
                 }
             )
         case .tags:
             EditTaskTagsSheet(
-                allTags: allTags,
-                selectedTagIDs: Set(tags.map(\.id)),
+                allTags: tagOptions,
+                selectedTagIDs: selectedTagIDs,
                 onSave: { selectedTagIDs in
-                    await syncEngine.replaceTaskTags(
-                        taskID: taskID,
-                        projectID: taskModel?.projectID,
-                        tagIDs: selectedTagIDs.sorted()
-                    )
+                    _Concurrency.Task {
+                        await engine.replaceTaskTags(
+                            taskID: localTaskID,
+                            projectID: currentProjectID,
+                            tagIDs: selectedTagIDs.sorted()
+                        )
+                    }
                 }
             )
         case .comment:
             CreateCommentSheet(
-                users: allUsers,
-                defaultAuthorUserID: taskModel?.assigneeID ?? allUsers.first?.id,
+                users: userOptions,
+                defaultAuthorUserID: defaultCommentAuthorID,
                 onSave: { authorUserID, body in
-                    await syncEngine.createComment(
-                        taskID: taskID,
-                        authorUserID: authorUserID,
-                        body: body
-                    )
+                    _Concurrency.Task {
+                        await engine.createComment(
+                            taskID: localTaskID,
+                            authorUserID: authorUserID,
+                            body: body
+                        )
+                    }
                 }
             )
         }
@@ -319,13 +344,13 @@ private struct CommentDeletePrompt: Equatable {
 
 private struct EditTaskDescriptionSheet: View {
     let initialText: String
-    let onSave: (String) async -> Void
+    let onSave: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var text: String
     @State private var isSaving = false
 
-    init(initialText: String, onSave: @escaping (String) async -> Void) {
+    init(initialText: String, onSave: @escaping (String) -> Void) {
         self.initialText = initialText
         self.onSave = onSave
         _text = State(initialValue: initialText)
@@ -341,28 +366,23 @@ private struct EditTaskDescriptionSheet: View {
             }
             .navigationTitle("Edit Description")
             .navigationBarTitleDisplayMode(.inline)
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button("Cancel") { dismiss() }
-                    .disabled(isSaving)
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(action: {
-                    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !trimmed.isEmpty else { return }
-                    isSaving = true
-                    _Concurrency.Task {
-                        await onSave(trimmed)
-                        await MainActor.run {
-                            isSaving = false
-                            dismiss()
-                        }
-                    }
-                }) {
-                    Text("Save")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .disabled(isSaving)
                 }
-                .disabled(isSaving || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: {
+                        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !trimmed.isEmpty else { return }
+                        isSaving = true
+                        onSave(trimmed)
+                        dismiss()
+                    }) {
+                        Text("Save")
+                    }
+                    .disabled(isSaving || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
             }
         }
         .presentationDetents([.medium, .large])
@@ -370,18 +390,28 @@ private struct EditTaskDescriptionSheet: View {
 }
 
 private struct AssigneePickerSheet: View {
-    let users: [User]
+    let users: [UserPickerOption]
     let selectedAssigneeID: String?
-    let onSave: (String?) async -> Void
+    let onSave: (String?) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var pendingAssigneeID: String?
-    @State private var isSaving = false
 
     init(
         users: [User],
         selectedAssigneeID: String?,
-        onSave: @escaping (String?) async -> Void
+        onSave: @escaping (String?) -> Void
+    ) {
+        self.users = users.map { UserPickerOption(id: $0.id, displayName: $0.displayName) }
+        self.selectedAssigneeID = selectedAssigneeID
+        self.onSave = onSave
+        _pendingAssigneeID = State(initialValue: selectedAssigneeID)
+    }
+
+    init(
+        users: [UserPickerOption],
+        selectedAssigneeID: String?,
+        onSave: @escaping (String?) -> Void
     ) {
         self.users = users
         self.selectedAssigneeID = selectedAssigneeID
@@ -422,27 +452,21 @@ private struct AssigneePickerSheet: View {
             }
             .navigationTitle("Assignee")
             .navigationBarTitleDisplayMode(.inline)
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button("Cancel") { dismiss() }
-                    .disabled(isSaving)
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(action: {
-                    isSaving = true
-                    let selection = pendingAssigneeID
-                    _Concurrency.Task {
-                        await onSave(selection)
-                        await MainActor.run {
-                            isSaving = false
-                            dismiss()
-                        }
-                    }
-                }) {
-                    Text("Save")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
                 }
-                .disabled(isSaving)
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: {
+                        let selection = pendingAssigneeID
+                        dismiss()
+                        DispatchQueue.main.async {
+                            onSave(selection)
+                        }
+                    }) {
+                        Text("Save")
+                    }
+                }
             }
         }
         .presentationDetents([.medium, .large])
@@ -450,9 +474,9 @@ private struct AssigneePickerSheet: View {
 }
 
 private struct EditTaskTagsSheet: View {
-    let allTags: [Tag]
+    let allTags: [TagPickerOption]
     let selectedTagIDs: Set<String>
-    let onSave: ([String]) async -> Void
+    let onSave: ([String]) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var pendingTagIDs: Set<String>
@@ -461,7 +485,18 @@ private struct EditTaskTagsSheet: View {
     init(
         allTags: [Tag],
         selectedTagIDs: Set<String>,
-        onSave: @escaping ([String]) async -> Void
+        onSave: @escaping ([String]) -> Void
+    ) {
+        self.allTags = allTags.map { TagPickerOption(id: $0.id, name: $0.name) }
+        self.selectedTagIDs = selectedTagIDs
+        self.onSave = onSave
+        _pendingTagIDs = State(initialValue: selectedTagIDs)
+    }
+
+    init(
+        allTags: [TagPickerOption],
+        selectedTagIDs: Set<String>,
+        onSave: @escaping ([String]) -> Void
     ) {
         self.allTags = allTags
         self.selectedTagIDs = selectedTagIDs
@@ -493,27 +528,22 @@ private struct EditTaskTagsSheet: View {
             }
             .navigationTitle("Edit Tags")
             .navigationBarTitleDisplayMode(.inline)
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button("Cancel") { dismiss() }
-                    .disabled(isSaving)
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(action: {
-                    isSaving = true
-                    let tagIDs = pendingTagIDs.sorted()
-                    _Concurrency.Task {
-                        await onSave(tagIDs)
-                        await MainActor.run {
-                            isSaving = false
-                            dismiss()
-                        }
-                    }
-                }) {
-                    Text("Save")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .disabled(isSaving)
                 }
-                .disabled(isSaving)
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: {
+                        isSaving = true
+                        let tagIDs = pendingTagIDs.sorted()
+                        onSave(tagIDs)
+                        dismiss()
+                    }) {
+                        Text("Save")
+                    }
+                    .disabled(isSaving)
+                }
             }
         }
         .presentationDetents([.medium, .large])
@@ -521,9 +551,9 @@ private struct EditTaskTagsSheet: View {
 }
 
 private struct CreateCommentSheet: View {
-    let users: [User]
+    let users: [UserPickerOption]
     let defaultAuthorUserID: String?
-    let onSave: (_ authorUserID: String, _ body: String) async -> Void
+    let onSave: (_ authorUserID: String, _ body: String) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var authorUserID: String?
@@ -533,7 +563,18 @@ private struct CreateCommentSheet: View {
     init(
         users: [User],
         defaultAuthorUserID: String?,
-        onSave: @escaping (_ authorUserID: String, _ body: String) async -> Void
+        onSave: @escaping (_ authorUserID: String, _ body: String) -> Void
+    ) {
+        self.users = users.map { UserPickerOption(id: $0.id, displayName: $0.displayName) }
+        self.defaultAuthorUserID = defaultAuthorUserID
+        self.onSave = onSave
+        _authorUserID = State(initialValue: defaultAuthorUserID ?? self.users.first?.id)
+    }
+
+    init(
+        users: [UserPickerOption],
+        defaultAuthorUserID: String?,
+        onSave: @escaping (_ authorUserID: String, _ body: String) -> Void
     ) {
         self.users = users
         self.defaultAuthorUserID = defaultAuthorUserID
@@ -559,36 +600,41 @@ private struct CreateCommentSheet: View {
             }
             .navigationTitle("New Comment")
             .navigationBarTitleDisplayMode(.inline)
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button("Cancel") { dismiss() }
-                    .disabled(isSaving)
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(action: {
-                    let trimmedBody = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard let authorUserID, !trimmedBody.isEmpty else { return }
-                    isSaving = true
-                    _Concurrency.Task {
-                        await onSave(authorUserID, trimmedBody)
-                        await MainActor.run {
-                            isSaving = false
-                            dismiss()
-                        }
-                    }
-                }) {
-                    Text("Save")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .disabled(isSaving)
                 }
-                .disabled(
-                    isSaving ||
-                    authorUserID == nil ||
-                    bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                )
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: {
+                        let trimmedBody = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard let authorUserID, !trimmedBody.isEmpty else { return }
+                        isSaving = true
+                        onSave(authorUserID, trimmedBody)
+                        dismiss()
+                    }) {
+                        Text("Save")
+                    }
+                    .disabled(
+                        isSaving ||
+                        authorUserID == nil ||
+                        bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    )
+                }
             }
         }
         .presentationDetents([.medium, .large])
     }
+}
+
+private struct UserPickerOption: Identifiable, Equatable {
+    let id: String
+    let displayName: String
+}
+
+private struct TagPickerOption: Identifiable, Equatable {
+    let id: String
+    let name: String
 }
 
 private enum DemoTaskStateOption: String, CaseIterable, Identifiable {

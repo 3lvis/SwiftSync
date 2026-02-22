@@ -29,6 +29,7 @@ public final class DemoServerSimulator {
     private let formatter = ISO8601DateFormatter()
     private let enableAmbientProjectMutationsOnRead: Bool
     private var ambientProjectReadCounters: [String: Int] = [:]
+    private var ambientMutationsSuspendedUntil: Date?
 
     public init(
         databaseURL: URL,
@@ -70,10 +71,13 @@ public final class DemoServerSimulator {
     }
 
     public func getProjectTasksPayload(projectID: String) throws -> [[String: Any]] {
-        if enableAmbientProjectMutationsOnRead {
+        if enableAmbientProjectMutationsOnRead, shouldApplyAmbientProjectMutationOnRead() {
             let next = (ambientProjectReadCounters[projectID] ?? 0) + 1
             ambientProjectReadCounters[projectID] = next
-            try applyAmbientProjectMutation(projectID: projectID, step: next)
+            // Slow the ambient "alive backend" effect so user-triggered refreshes remain readable.
+            if next.isMultiple(of: 2) {
+                try applyAmbientProjectMutation(projectID: projectID, step: next)
+            }
         }
 
         return try getProjectTasksPayloadRaw(projectID: projectID)
@@ -176,6 +180,7 @@ public final class DemoServerSimulator {
     @discardableResult
     public func patchTaskDescription(taskID: String, descriptionText: String) throws -> [String: Any]? {
         guard let current = try getTaskDetailPayload(taskID: taskID) else { return nil }
+        suspendAmbientMutationsAfterWrite()
         let currentUpdatedAt = try parseISO8601(current["updated_at"])
         let next = nextTimestamp(after: currentUpdatedAt)
 
@@ -203,6 +208,7 @@ public final class DemoServerSimulator {
         }
         let normalizedBody = try validatedNonEmpty(body, field: "body")
         let authorName = try userDisplayName(for: authorUserID)
+        suspendAmbientMutationsAfterWrite()
 
         let now = nextTimestamp(after: nil)
         let newID = try nextCommentID()
@@ -250,6 +256,7 @@ public final class DemoServerSimulator {
     public func patchTaskState(taskID: String, state: String) throws -> [String: Any]? {
         _ = try validatedTaskState(state)
         guard let current = try getTaskDetailPayload(taskID: taskID) else { return nil }
+        suspendAmbientMutationsAfterWrite()
         let currentUpdatedAt = try parseISO8601(current["updated_at"])
         let next = nextTimestamp(after: currentUpdatedAt)
 
@@ -274,6 +281,7 @@ public final class DemoServerSimulator {
             throw DemoBackendError.invalidReference(entity: "assignee_id", id: assigneeID)
         }
         guard let current = try getTaskDetailPayload(taskID: taskID) else { return nil }
+        suspendAmbientMutationsAfterWrite()
         let currentUpdatedAt = try parseISO8601(current["updated_at"])
         let next = nextTimestamp(after: currentUpdatedAt)
 
@@ -301,6 +309,7 @@ public final class DemoServerSimulator {
         }
 
         guard let current = try getTaskDetailPayload(taskID: taskID) else { return nil }
+        suspendAmbientMutationsAfterWrite()
         let currentUpdatedAt = try parseISO8601(current["updated_at"])
         let next = nextTimestamp(after: currentUpdatedAt)
 
@@ -370,6 +379,7 @@ public final class DemoServerSimulator {
 
         let newID = try nextTaskID()
         let now = nextTimestamp(after: nil)
+        suspendAmbientMutationsAfterWrite()
 
         try self.sqlite.execute("BEGIN TRANSACTION;")
         do {
@@ -417,6 +427,7 @@ public final class DemoServerSimulator {
         guard try exists(in: "tasks", id: taskID) else {
             throw DemoBackendError.notFound(entity: "task", id: taskID)
         }
+        suspendAmbientMutationsAfterWrite()
         try self.sqlite.execute(
             "DELETE FROM tasks WHERE id = ?",
             bind: { stmt in
@@ -429,6 +440,7 @@ public final class DemoServerSimulator {
         guard try exists(in: "comments", id: commentID) else {
             throw DemoBackendError.notFound(entity: "comment", id: commentID)
         }
+        suspendAmbientMutationsAfterWrite()
         try self.sqlite.execute(
             "DELETE FROM comments WHERE id = ?",
             bind: { stmt in
@@ -670,6 +682,15 @@ public final class DemoServerSimulator {
 
     private func iso8601(_ secondsSince1970: Double) -> String {
         formatter.string(from: Date(timeIntervalSince1970: secondsSince1970))
+    }
+
+    private func shouldApplyAmbientProjectMutationOnRead() -> Bool {
+        guard let suspendedUntil = ambientMutationsSuspendedUntil else { return true }
+        return Date() >= suspendedUntil
+    }
+
+    private func suspendAmbientMutationsAfterWrite() {
+        ambientMutationsSuspendedUntil = Date().addingTimeInterval(1.25)
     }
 
     private static func prepareSchema(_ sqlite: DemoSQLiteDatabase, seedData: DemoSeedData) throws {

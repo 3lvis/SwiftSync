@@ -209,14 +209,14 @@ private struct ProjectDetailView: View {
         }
         .task(id: projectID) {
             while !_Concurrency.Task.isCancelled {
-                try? await _Concurrency.Task.sleep(nanoseconds: 4_500_000_000)
+                try? await _Concurrency.Task.sleep(nanoseconds: 10_000_000_000)
                 guard !_Concurrency.Task.isCancelled else { break }
                 await syncEngine.syncProjectTasks(projectID: projectID)
             }
         }
         .navigationDestination(item: $selectedTaskRoute) { route in
             if let task = tasks.first(where: { $0.id == route.id }) {
-                TaskDetailView(task: task, syncContainer: syncContainer, syncEngine: syncEngine)
+                TaskDetailView(taskID: task.id, syncContainer: syncContainer, syncEngine: syncEngine)
             } else {
                 Text("Task not found")
                     .foregroundStyle(.secondary)

@@ -11,15 +11,18 @@ struct TagTasksView: View {
     @SyncQuery private var tasks: [Task]
     @State private var hasTriggeredInitialSync = false
 
-    init(tag: Tag, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
-        self.tagID = tag.id
+    init(tagID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
+        self.tagID = tagID
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
-        _tagModel = SyncModel(Tag.self, id: tag.id, in: syncContainer, animation: .snappy(duration: 0.22))
+        _tagModel = SyncModel(Tag.self, id: tagID, in: syncContainer, animation: .snappy(duration: 0.22))
 
+        let tasksPredicate = #Predicate<Task> { row in
+            row.tags.contains { $0.id == tagID }
+        }
         _tasks = SyncQuery(
             Task.self,
-            toMany: tag,
+            predicate: tasksPredicate,
             in: syncContainer,
             sortBy: [
                 SortDescriptor(\Task.updatedAt, order: .reverse),
@@ -43,7 +46,7 @@ struct TagTasksView: View {
                 Section("Tasks") {
                     ForEach(tasks, id: \.id) { task in
                         NavigationLink {
-                            TaskDetailView(task: task, syncContainer: syncContainer, syncEngine: syncEngine)
+                            TaskDetailView(taskID: task.id, syncContainer: syncContainer, syncEngine: syncEngine)
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(task.title)
@@ -71,7 +74,7 @@ struct TagTasksView: View {
         }
         .task(id: tagID) {
             while !_Concurrency.Task.isCancelled {
-                try? await _Concurrency.Task.sleep(nanoseconds: 6_500_000_000)
+                try? await _Concurrency.Task.sleep(nanoseconds: 16_000_000_000)
                 guard !_Concurrency.Task.isCancelled else { break }
                 await syncEngine.syncTagTasks(tagID: tagID)
             }
