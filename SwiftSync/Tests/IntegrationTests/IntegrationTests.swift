@@ -215,15 +215,16 @@ final class AutoEmployee {
     }
 }
 
-@Syncable
 @Model
 final class AutoTag {
     @Attribute(.unique) var id: Int
     var name: String
+    var tasks: [AutoTask]
 
-    init(id: Int, name: String) {
+    init(id: Int, name: String, tasks: [AutoTask] = []) {
         self.id = id
         self.name = name
+        self.tasks = tasks
     }
 }
 
@@ -234,6 +235,7 @@ final class AutoTask {
     var title: String
 
     @RemoteKey("tag_ids")
+    @Relationship(inverse: \AutoTag.tasks)
     var tags: [AutoTag]
 
     init(id: Int, title: String, tags: [AutoTag] = []) {
@@ -243,15 +245,23 @@ final class AutoTask {
     }
 }
 
-@Syncable
 @Model
 final class AutoNestedMember {
     @Attribute(.unique) var id: Int
     var fullName: String
+    var ownedTeams: [AutoNestedTeam]
+    var memberTeams: [AutoNestedTeam]
 
-    init(id: Int, fullName: String) {
+    init(
+        id: Int,
+        fullName: String,
+        ownedTeams: [AutoNestedTeam] = [],
+        memberTeams: [AutoNestedTeam] = []
+    ) {
         self.id = id
         self.fullName = fullName
+        self.ownedTeams = ownedTeams
+        self.memberTeams = memberTeams
     }
 }
 
@@ -260,7 +270,9 @@ final class AutoNestedMember {
 final class AutoNestedTeam {
     @Attribute(.unique) var id: Int
     var name: String
+    @Relationship(inverse: \AutoNestedMember.ownedTeams)
     var owner: AutoNestedMember?
+    @Relationship(inverse: \AutoNestedMember.memberTeams)
     var members: [AutoNestedMember]
 
     init(id: Int, name: String, owner: AutoNestedMember? = nil, members: [AutoNestedMember] = []) {
@@ -362,6 +374,44 @@ final class SuperNote {
         self.id = id
         self.text = text
         self.superUser = superUser
+    }
+}
+
+extension AutoTag: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<AutoTag, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> AutoTag {
+        AutoTag(
+            id: try payload.required(Int.self, for: "id"),
+            name: try payload.required(String.self, for: "name")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        let incomingName: String = try payload.required(String.self, for: "name")
+        guard name != incomingName else { return false }
+        name = incomingName
+        return true
+    }
+}
+
+extension AutoNestedMember: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<AutoNestedMember, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> AutoNestedMember {
+        AutoNestedMember(
+            id: try payload.required(Int.self, for: "id"),
+            fullName: try payload.required(String.self, for: "full_name")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        let incomingFullName: String = try payload.required(String.self, for: "full_name")
+        guard fullName != incomingFullName else { return false }
+        fullName = incomingFullName
+        return true
     }
 }
 

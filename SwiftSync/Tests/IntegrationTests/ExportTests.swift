@@ -76,10 +76,12 @@ final class ExportCompany {
 final class ExportNote {
     @Attribute(.unique) var id: Int
     var text: String
+    @NotExport var user: ExportUser?
 
-    init(id: Int, text: String) {
+    init(id: Int, text: String, user: ExportUser? = nil) {
         self.id = id
         self.text = text
+        self.user = user
     }
 }
 
@@ -89,6 +91,7 @@ final class ExportUser {
     @Attribute(.unique) var id: Int
     var name: String
     var company: ExportCompany?
+    @Relationship(inverse: \ExportNote.user)
     var notes: [ExportNote]
 
     init(id: Int, name: String, company: ExportCompany? = nil, notes: [ExportNote] = []) {
@@ -99,7 +102,6 @@ final class ExportUser {
     }
 }
 
-@Syncable
 @Model
 final class ExportParent {
     @Attribute(.unique) var id: Int

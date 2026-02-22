@@ -61,6 +61,15 @@ let package = Package(
             name: "IntegrationTests",
             dependencies: ["SwiftSync"],
             path: "SwiftSync/Tests/IntegrationTests"
+        ),
+        .testTarget(
+            name: "MacrosTests",
+            dependencies: [
+                "MacrosImplementation",
+                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax")
+            ],
+            path: "SwiftSync/Tests/MacrosTests"
         )
     ]
 )

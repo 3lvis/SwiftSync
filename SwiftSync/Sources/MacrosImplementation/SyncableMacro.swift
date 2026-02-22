@@ -36,6 +36,24 @@ private struct ReservedModelPropertyNameDiagnostic: DiagnosticMessage {
     var severity: DiagnosticSeverity { .error }
 }
 
+private struct MissingToManyRelationshipInverseDiagnostic: DiagnosticMessage {
+    let typeName: String
+    let propertyName: String
+
+    var message: String {
+        """
+        To-many relationship '\(propertyName)' in @Syncable model '\(typeName)' must declare @Relationship(inverse: ...). \
+        Explicit inverses are required to avoid SwiftData relationship corruption during sync.
+        """
+    }
+
+    var diagnosticID: MessageID {
+        MessageID(domain: "SwiftSync.SyncableMacro", id: "missing-to-many-inverse-\(typeName)-\(propertyName)")
+    }
+
+    var severity: DiagnosticSeverity { .error }
+}
+
 public struct SyncableMacro: ExtensionMacro {
     public static func expansion(
         of node: AttributeSyntax,
@@ -49,6 +67,10 @@ public struct SyncableMacro: ExtensionMacro {
         }
 
         emitBlockedNameDiagnostics(in: classDecl, context: context)
+        let hasRelationshipInverseDiagnostics = emitToManyRelationshipInverseDiagnostics(in: classDecl, context: context)
+        if hasRelationshipInverseDiagnostics {
+            return []
+        }
 
         let typeName = classDecl.name.text
         let properties = syncedProperties(from: classDecl)
@@ -188,6 +210,44 @@ public struct SyncableMacro: ExtensionMacro {
         }
     }
 
+    @discardableResult
+    private static func emitToManyRelationshipInverseDiagnostics(
+        in classDecl: ClassDeclSyntax,
+        context: some MacroExpansionContext
+    ) -> Bool {
+        var emitted = false
+        let typeName = classDecl.name.text
+
+        for member in classDecl.memberBlock.members {
+            guard let variable = member.decl.as(VariableDeclSyntax.self),
+                variable.bindings.count == 1,
+                let binding = variable.bindings.first,
+                binding.accessorBlock == nil,
+                let pattern = binding.pattern.as(IdentifierPatternSyntax.self),
+                let annotation = binding.typeAnnotation
+            else {
+                continue
+            }
+
+            let relationship = relationshipInfo(from: annotation.type.trimmedDescription)
+            guard relationship.isRelationship, relationship.isToMany else { continue }
+            guard !hasExplicitRelationshipInverse(variable) else { continue }
+
+            context.diagnose(
+                Diagnostic(
+                    node: Syntax(pattern.identifier),
+                    message: MissingToManyRelationshipInverseDiagnostic(
+                        typeName: typeName,
+                        propertyName: pattern.identifier.text
+                    )
+                )
+            )
+            emitted = true
+        }
+
+        return emitted
+    }
+
     private static func syncedProperties(from classDecl: ClassDeclSyntax) -> [SyncedProperty] {
         classDecl.memberBlock.members.compactMap { member in
             guard let variable = member.decl.as(VariableDeclSyntax.self) else { return nil }
@@ -283,6 +343,19 @@ public struct SyncableMacro: ExtensionMacro {
             guard let syntax = attribute.as(AttributeSyntax.self) else { continue }
             let rawName = syntax.attributeName.trimmedDescription
             if rawName == "NotExport" || rawName.hasSuffix(".NotExport") {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static func hasExplicitRelationshipInverse(_ variable: VariableDeclSyntax) -> Bool {
+        for attribute in variable.attributes {
+            guard let syntax = attribute.as(AttributeSyntax.self) else { continue }
+            let rawName = syntax.attributeName.trimmedDescription
+            guard rawName == "Relationship" || rawName.hasSuffix(".Relationship") else { continue }
+            guard let arguments = syntax.arguments?.as(LabeledExprListSyntax.self) else { continue }
+            if arguments.contains(where: { $0.label?.text == "inverse" }) {
                 return true
             }
         }
