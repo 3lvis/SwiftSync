@@ -62,7 +62,7 @@ struct TaskDetailView: View {
             tagsSection
             commentsSection
         }
-        .navigationTitle(taskModel?.title ?? "Task")
+        .navigationTitle("Task")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 actionMenu
