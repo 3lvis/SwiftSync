@@ -17,6 +17,7 @@ final class Project {
     var priorityLabel: String
     var taskCount: Int
     var updatedAt: Date
+    @Relationship(inverse: \Task.project)
     var tasks: [Task]
 
     init(
@@ -166,7 +167,7 @@ final class Tag {
     }
 }
 
-@Syncable
+@Syncable(allowMissingToManyInverses: ["tags", "watchers"])
 @Model
 final class Task {
     @Attribute(.unique) var id: String
@@ -195,6 +196,7 @@ final class Task {
     var reviewer: User?
     var tags: [Tag]
     var watchers: [User]
+    @Relationship(inverse: \Comment.task)
     var comments: [Comment]
 
     init(

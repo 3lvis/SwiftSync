@@ -1,7 +1,9 @@
 import Core
 
 @attached(extension, conformances: SyncRelationshipUpdatableModel, ExportModel, SyncQuerySortableModel, names: named(SyncID), named(syncIdentity), named(syncIdentityRemoteKeys), named(syncDefaultRefreshModelTypes), named(syncRelatedModelType), named(syncSortDescriptor), named(make), named(apply), named(applyRelationships), named(syncApplyGeneratedRelationships), named(exportObject))
-public macro Syncable() = #externalMacro(module: "MacrosImplementation", type: "SyncableMacro")
+public macro Syncable(
+    allowMissingToManyInverses: [String] = []
+) = #externalMacro(module: "MacrosImplementation", type: "SyncableMacro")
 
 @attached(peer)
 public macro PrimaryKey(remote: String? = nil) = #externalMacro(module: "MacrosImplementation", type: "PrimaryKeyMacro")
