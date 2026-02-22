@@ -17,12 +17,10 @@ struct TagTasksView: View {
         self.syncEngine = syncEngine
         _tagModel = SyncModel(Tag.self, id: tagID, in: syncContainer, animation: .snappy(duration: 0.22))
 
-        let tasksPredicate = #Predicate<Task> { row in
-            row.tags.contains { $0.id == tagID }
-        }
         _tasks = SyncQuery(
             Task.self,
-            predicate: tasksPredicate,
+            relatedTo: Tag.self,
+            relatedID: tagID,
             in: syncContainer,
             sortBy: [
                 SortDescriptor(\Task.updatedAt, order: .reverse),

@@ -32,24 +32,19 @@ struct TaskDetailView: View {
             in: syncContainer,
             sortBy: [\.name, \.id]
         )
-
-        let tagsPredicate = #Predicate<Tag> { tag in
-            tag.tasks.contains { $0.id == taskID }
-        }
         _tags = SyncQuery(
             Tag.self,
-            predicate: tagsPredicate,
+            relatedTo: Task.self,
+            relatedID: taskID,
             in: syncContainer,
             sortBy: [\.name, \.id],
             refreshOn: [\.tasks],
             animation: .snappy(duration: 0.22)
         )
-        let commentsPredicate = #Predicate<Comment> { row in
-            row.taskID == taskID
-        }
         _comments = SyncQuery(
             Comment.self,
-            predicate: commentsPredicate,
+            relatedTo: Task.self,
+            relatedID: taskID,
             in: syncContainer,
             sortBy: [
                 SortDescriptor(\Comment.createdAt, order: .reverse),
@@ -541,12 +536,10 @@ private struct EditTaskTagsSheet: View {
             sortBy: [\.name, \.id],
             animation: .snappy(duration: 0.22)
         )
-        let selectedTagsPredicate = #Predicate<Tag> { tag in
-            tag.tasks.contains { $0.id == taskID }
-        }
         _selectedTags = SyncQuery(
             Tag.self,
-            predicate: selectedTagsPredicate,
+            relatedTo: Task.self,
+            relatedID: taskID,
             in: syncContainer,
             sortBy: [\.name, \.id],
             refreshOn: [\.tasks],

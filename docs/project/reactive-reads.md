@@ -24,26 +24,29 @@ Think of `@SyncQuery` as:
 
 Three common query shapes:
 
-1. `toOne:` (belongs-to / ownership)
-- Example: all `Comment` rows that belong to a specific `Task`.
+1. `relatedTo:` + `relatedID:` (relationship-scoped query by ID)
+- Example: all `Comment` rows that belong to a specific `Task` ID.
 
 ```swift
 @SyncQuery(
   Comment.self,
-  toOne: task,
+  relatedTo: Task.self,
+  relatedID: taskID,
   in: syncContainer,
   sortBy: [SortDescriptor(\Comment.createdAt, order: .reverse)]
 )
 var comments: [Comment]
 ```
 
-2. `toMany:` (membership / contains)
-- Example: all `Tag` rows that include a specific `Task` in their `tasks` relationship.
+2. `relatedTo:` + `relatedID:` + `through:` (explicit relationship path)
+- Example: all `Tag` rows that include a specific `Task` ID in their `tasks` relationship.
 
 ```swift
 @SyncQuery(
   Tag.self,
-  toMany: task,
+  relatedTo: Task.self,
+  relatedID: taskID,
+  through: \Tag.tasks,
   in: syncContainer,
   sortBy: [SortDescriptor(\Tag.name)]
 )
@@ -51,23 +54,24 @@ var tags: [Tag]
 ```
 
 3. `predicate:` (custom business filters)
-- Use for scalar-only filters, compound filters, or cases where you do not have the related model instance.
+- Use for scalar-only filters, compound filters, or non-relationship business filters.
 
-## Inference Rules (`toOne:` / `toMany:`)
+## Inference Rules (`relatedTo:` / `relatedID:`)
 
-SwiftSync infers the relationship automatically when exactly one matching relationship exists on the queried model.
+SwiftSync infers the relationship automatically when exactly one matching relationship exists on the queried model for the related type.
 
 - exactly 1 candidate => inferred
 - 0 candidates => fail fast
-- more than 1 candidate => pass `via:` explicitly
+- more than 1 candidate (or both to-one and to-many candidates) => pass `through:` explicitly
 
-Example (ambiguous to-one):
+Example (ambiguous relationship):
 
 ```swift
 @SyncQuery(
   Ticket.self,
-  toOne: user,
-  via: \.assignee,
+  relatedTo: User.self,
+  relatedID: userID,
+  through: \Ticket.assignee,
   in: syncContainer,
   sortBy: [SortDescriptor(\Ticket.id)]
 )
@@ -84,7 +88,9 @@ Example:
 ```swift
 @SyncQuery(
   Task.self,
-  toOne: user,
+  relatedTo: User.self,
+  relatedID: userID,
+  through: \Task.assignee,
   in: syncContainer,
   sortBy: [
     SortDescriptor(\Task.priority, order: .reverse),

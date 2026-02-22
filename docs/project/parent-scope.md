@@ -13,8 +13,8 @@ SwiftSync now supports both styles:
 - explicit `parentRelationship` only when relationship choice is ambiguous
 
 Reactive reads follow the same rule:
-- `@SyncQuery(..., toOne: parentObject, ...)` infers when exactly one candidate exists
-- pass `via:` only for ambiguous query relationship mappings
+- `@SyncQuery(..., relatedTo: Parent.self, relatedID: parentID, ...)` infers when exactly one candidate exists
+- pass `through:` only for ambiguous query relationship mappings
 
 ## Current Behavior
 
@@ -116,7 +116,8 @@ Ambiguity is surfaced as an error to avoid cross-scope delete mistakes.
 ```swift
 @SyncQuery(
   Comment.self,
-  toOne: task,
+  relatedTo: Task.self,
+  relatedID: taskID,
   in: syncContainer,
   sortBy: [SortDescriptor(\Comment.id)]
 )
@@ -128,8 +129,9 @@ Ambiguous example:
 ```swift
 @SyncQuery(
   Ticket.self,
-  toOne: user,
-  via: \.assignee,
+  relatedTo: User.self,
+  relatedID: userID,
+  through: \Ticket.assignee,
   in: syncContainer,
   sortBy: [SortDescriptor(\Ticket.id)]
 )
@@ -141,7 +143,9 @@ var assignedTickets: [Ticket]
 ```swift
 @SyncQuery(
   Tag.self,
-  toMany: task,
+  relatedTo: Task.self,
+  relatedID: taskID,
+  through: \Tag.tasks,
   in: syncContainer,
   sortBy: [SortDescriptor(\Tag.id)]
 )

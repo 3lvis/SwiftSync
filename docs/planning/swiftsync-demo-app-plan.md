@@ -194,8 +194,8 @@ Status: `[-]` Phase 1 read flows and Phase 2 online CRUD flows are implemented; 
 - [X] Projects list via `@SyncQuery(Project.self, in: syncContainer, sortBy: [\.name, \.id])`.
 - [X] On first appearance: trigger `syncProjects()` (and tags sync in UI path).
 - [X] Project detail:
-  - [X] Header via `@SyncModel(Project.self, id: projectID, in: syncContainer)` (implemented with `project` object input + `project.id` lookup)
-  - [X] Task list via `@SyncQuery(Task.self, toOne: project, ...)`
+  - [X] Header via `@SyncModel(Project.self, id: projectID, in: syncContainer)` (ID-owned view)
+  - [X] Task list via `@SyncQuery(Task.self, relatedTo: Project.self, relatedID: projectID, ...)`
   - [X] On first appearance: trigger `syncProjectTasks(projectID:)`
 
 ### Seeded Reference Data
@@ -206,10 +206,10 @@ Status: `[-]` Phase 1 read flows and Phase 2 online CRUD flows are implemented; 
 
 ### Task Detail
 
-- [X] Task core model via `@SyncModel(Task.self, id: taskID, in: syncContainer)` (implemented with `task` object input + `task.id`)
+- [X] Task core model via `@SyncModel(Task.self, id: taskID, in: syncContainer)` (ID-owned view)
 - [X] Assignee display via task relation
-- [X] Tag list from task-tag relation (`@SyncQuery(Tag.self, toMany: task, ...)`)
-- [X] Comments list via `@SyncQuery(Comment.self, toOne: task, ...)`
+- [X] Tag list from task-tag relation (`@SyncQuery(Tag.self, relatedTo: Task.self, relatedID: taskID, ...)`)
+- [X] Comments list via `@SyncQuery(Comment.self, relatedTo: Task.self, relatedID: taskID, ...)`)
 - [X] On first appearance:
   - [X] `syncTaskDetail(taskID:)`
   - [X] `syncTaskComments(taskID:)`
@@ -224,10 +224,10 @@ Status: `[-]` Phase 1 read flows and Phase 2 online CRUD flows are implemented; 
 ### Tag Drill-In Flow
 
 - From task detail, tap tag chip `#frontend`.
-- [X] Navigate to `TagTasksView(tag:)` (current implementation passes the `Tag` model).
+- [X] Navigate to `TagTasksView(tagID:)` (ID-owned destination).
 - [X] Screen uses:
-  - [X] `@SyncModel(Tag.self, id: tag.id, in: syncContainer)`
-  - [X] `@SyncQuery(Task.self, toMany: tag, ...)`
+  - [X] `@SyncModel(Tag.self, id: tagID, in: syncContainer)`
+  - [X] `@SyncQuery(Task.self, relatedTo: Tag.self, relatedID: tagID, ...)`
 - [X] On first appearance: trigger `syncTagTasks(tagID:)`.
 
 ## Relationship Types Demonstrated

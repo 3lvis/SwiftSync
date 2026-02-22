@@ -134,12 +134,10 @@ private struct ProjectDetailView: View {
         self.syncEngine = syncEngine
 
         _projectModel = SyncModel(Project.self, id: projectID, in: syncContainer)
-        let tasksPredicate = #Predicate<Task> { row in
-            row.projectID == projectID
-        }
         _tasks = SyncQuery(
             Task.self,
-            predicate: tasksPredicate,
+            relatedTo: Project.self,
+            relatedID: projectID,
             in: syncContainer,
             sortBy: [
                 SortDescriptor(\Task.updatedAt, order: .reverse),

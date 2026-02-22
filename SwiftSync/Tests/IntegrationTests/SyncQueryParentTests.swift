@@ -4,7 +4,7 @@ import SwiftSync
 
 final class SyncQueryParentTests: XCTestCase {
     @MainActor
-    func testSyncQueryToOneInferenceFiltersToParentScope() throws {
+    func testSyncQueryRelatedToIDInferredToOneFiltersToParentScope() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let modelContainer = try ModelContainer(
             for: InferredTask.self,
@@ -25,7 +25,8 @@ final class SyncQueryParentTests: XCTestCase {
 
         let query = SyncQuery(
             InferredComment.self,
-            toOne: taskA,
+            relatedTo: InferredTask.self,
+            relatedID: taskA.id,
             in: syncContainer,
             sortBy: [SortDescriptor(\InferredComment.id)]
         )
@@ -34,7 +35,7 @@ final class SyncQueryParentTests: XCTestCase {
     }
 
     @MainActor
-    func testSyncQueryToOneExplicitViaSupportsAmbiguousModels() throws {
+    func testSyncQueryRelatedToIDExplicitThroughSupportsAmbiguousToOne() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let modelContainer = try ModelContainer(
             for: RoleUser.self,
@@ -55,8 +56,9 @@ final class SyncQueryParentTests: XCTestCase {
 
         let query = SyncQuery(
             RoleTicket.self,
-            toOne: userA,
-            via: \RoleTicket.assignee,
+            relatedTo: RoleUser.self,
+            relatedID: userA.id,
+            through: \RoleTicket.assignee,
             in: syncContainer,
             sortBy: [SortDescriptor(\RoleTicket.id)]
         )
@@ -65,7 +67,7 @@ final class SyncQueryParentTests: XCTestCase {
     }
 
     @MainActor
-    func testSyncQueryToManyInferenceFiltersMembership() throws {
+    func testSyncQueryRelatedToIDInferredToManyFiltersMembership() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let modelContainer = try ModelContainer(
             for: Tag.self,
@@ -93,7 +95,8 @@ final class SyncQueryParentTests: XCTestCase {
 
         let query = SyncQuery(
             Tag.self,
-            toMany: userA,
+            relatedTo: UserTagsByObjects.self,
+            relatedID: userA.id,
             in: syncContainer,
             sortBy: [SortDescriptor(\Tag.id)]
         )
@@ -102,7 +105,7 @@ final class SyncQueryParentTests: XCTestCase {
     }
 
     @MainActor
-    func testSyncQueryToManyExplicitViaSupportsAmbiguousModels() throws {
+    func testSyncQueryRelatedToIDExplicitThroughSupportsAmbiguousToMany() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let modelContainer = try ModelContainer(
             for: RoleUser.self,
@@ -122,8 +125,9 @@ final class SyncQueryParentTests: XCTestCase {
 
         let query = SyncQuery(
             RoleUser.self,
-            toMany: ticket,
-            via: \RoleUser.assignedTickets,
+            relatedTo: RoleTicket.self,
+            relatedID: ticket.id,
+            through: \RoleUser.assignedTickets,
             in: syncContainer,
             sortBy: [SortDescriptor(\RoleUser.id)]
         )

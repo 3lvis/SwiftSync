@@ -41,8 +41,8 @@ See `docs/project/parent-scope.md`.
 ## 4) How do I think about `@SyncQuery` filtering?
 
 Use this mental rule:
-- `toOne:` = "belongs to"
-- `toMany:` = "contains / membership"
+- `relatedTo:` + `relatedID:` = relationship-scoped query by ID
+- `through:` = explicit relationship path for ambiguous cases
 - `predicate:` = custom business filters or scalar-only filters
 
 See `docs/project/reactive-reads.md`.
