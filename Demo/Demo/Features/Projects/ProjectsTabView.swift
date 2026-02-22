@@ -217,7 +217,6 @@ private struct ProjectDetailView: View {
             while !_Concurrency.Task.isCancelled {
                 try? await _Concurrency.Task.sleep(nanoseconds: 10_000_000_000)
                 guard !_Concurrency.Task.isCancelled else { break }
-                guard !isShowingCreateTaskSheet, taskPendingDelete == nil else { continue }
                 await syncEngine.syncProjectTasks(projectID: projectID)
             }
         }
@@ -436,7 +435,7 @@ private struct CreateTaskSheet: View {
                     .disabled(isSaving)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Create") {
+                    Button(action: {
                         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
                         let trimmedDescription = descriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !trimmedTitle.isEmpty else { return }
@@ -444,7 +443,7 @@ private struct CreateTaskSheet: View {
                         isSaving = true
                         saveErrorMessage = nil
                         _Concurrency.Task {
-                            await syncEngine.createTask(
+                            let result = await syncEngine.createTask(
                                 projectID: projectID,
                                 title: trimmedTitle,
                                 descriptionText: trimmedDescription.isEmpty ? "No description yet." : trimmedDescription,
@@ -453,14 +452,23 @@ private struct CreateTaskSheet: View {
                                 tagIDs: []
                             )
                             await MainActor.run {
-                                if let message = syncEngine.lastErrorMessage {
-                                    isSaving = false
-                                    saveErrorMessage = message
-                                } else {
+                                switch result {
+                                case .success:
                                     isSaving = false
                                     dismiss()
+                                case .failure(let message):
+                                    isSaving = false
+                                    saveErrorMessage = message
                                 }
                             }
+                        }
+                    }) {
+                        HStack(spacing: 6) {
+                            if isSaving {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                            Text("Create")
                         }
                     }
                     .disabled(isSaving || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

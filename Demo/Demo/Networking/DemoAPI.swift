@@ -227,8 +227,27 @@ final class FakeDemoAPIClient: DemoAPIClient {
         }
 
         let jitter = UInt64((stableHash(endpoint) + callIndex * 17) % 250)
-        let delay = baseDelayMS + jitter
+        let delay = baseDelayMS + jitter + extraMutationDelayMS(endpoint: endpoint)
         try await _Concurrency.Task.sleep(nanoseconds: delay * 1_000_000)
+    }
+
+    private func extraMutationDelayMS(endpoint: String) -> UInt64 {
+        let isMutation =
+            endpoint.hasPrefix("PATCH ") ||
+            endpoint.hasPrefix("POST ") ||
+            endpoint.hasPrefix("PUT ") ||
+            endpoint.hasPrefix("DELETE ")
+
+        guard isMutation else { return 0 }
+
+        switch scenario {
+        case .fastStable:
+            return 220
+        case .flakyNetwork:
+            return 120
+        case .slowNetwork, .offline:
+            return 0
+        }
     }
 
     private func stableHash(_ value: String) -> Int {

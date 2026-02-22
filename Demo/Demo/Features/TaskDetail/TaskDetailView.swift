@@ -341,22 +341,29 @@ private struct EditTaskDescriptionSheet: View {
                         isSaving = true
                         saveErrorMessage = nil
                         _Concurrency.Task {
-                            await syncEngine.updateTaskDescription(
+                            let result = await syncEngine.updateTaskDescription(
                                 taskID: taskID,
                                 projectID: taskModel?.projectID,
                                 descriptionText: trimmed
                             )
                             await MainActor.run {
-                                if let message = syncEngine.lastErrorMessage {
+                                switch result {
+                                case .success:
+                                    dismiss()
+                                case .failure(let message):
                                     isSaving = false
                                     saveErrorMessage = message
-                                } else {
-                                    dismiss()
                                 }
                             }
                         }
                     }) {
-                        Text("Save")
+                        HStack(spacing: 6) {
+                            if isSaving {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                            Text("Save")
+                        }
                     }
                     .disabled(isSaving || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
@@ -455,22 +462,29 @@ private struct AssigneePickerSheet: View {
                         isSaving = true
                         saveErrorMessage = nil
                         _Concurrency.Task {
-                            await syncEngine.updateTaskAssignee(
+                            let result = await syncEngine.updateTaskAssignee(
                                 taskID: taskID,
                                 projectID: projectID,
                                 assigneeID: selection
                             )
                             await MainActor.run {
-                                if let message = syncEngine.lastErrorMessage {
+                                switch result {
+                                case .success:
+                                    dismiss()
+                                case .failure(let message):
                                     isSaving = false
                                     saveErrorMessage = message
-                                } else {
-                                    dismiss()
                                 }
                             }
                         }
                     }) {
-                        Text("Save")
+                        HStack(spacing: 6) {
+                            if isSaving {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                            Text("Save")
+                        }
                     }
                     .disabled(isSaving)
                 }
@@ -571,22 +585,29 @@ private struct EditTaskTagsSheet: View {
                         saveErrorMessage = nil
                         let tagIDs = pendingTagIDs.sorted()
                         _Concurrency.Task {
-                            await syncEngine.replaceTaskTags(
+                            let result = await syncEngine.replaceTaskTags(
                                 taskID: taskID,
                                 projectID: taskModel?.projectID,
                                 tagIDs: tagIDs
                             )
                             await MainActor.run {
-                                if let message = syncEngine.lastErrorMessage {
+                                switch result {
+                                case .success:
+                                    dismiss()
+                                case .failure(let message):
                                     isSaving = false
                                     saveErrorMessage = message
-                                } else {
-                                    dismiss()
                                 }
                             }
                         }
                     }) {
-                        Text("Save")
+                        HStack(spacing: 6) {
+                            if isSaving {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                            Text("Save")
+                        }
                     }
                     .disabled(isSaving)
                 }
@@ -670,22 +691,29 @@ private struct CreateCommentSheet: View {
                         isSaving = true
                         saveErrorMessage = nil
                         _Concurrency.Task {
-                            await syncEngine.createComment(
+                            let result = await syncEngine.createComment(
                                 taskID: taskID,
                                 authorUserID: authorUserID,
                                 body: trimmedBody
                             )
                             await MainActor.run {
-                                if let message = syncEngine.lastErrorMessage {
+                                switch result {
+                                case .success:
+                                    dismiss()
+                                case .failure(let message):
                                     isSaving = false
                                     saveErrorMessage = message
-                                } else {
-                                    dismiss()
                                 }
                             }
                         }
                     }) {
-                        Text("Save")
+                        HStack(spacing: 6) {
+                            if isSaving {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                            Text("Save")
+                        }
                     }
                     .disabled(
                         isSaving ||
