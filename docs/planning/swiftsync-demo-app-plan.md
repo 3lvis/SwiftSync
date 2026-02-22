@@ -11,13 +11,12 @@
 ### What is done now
 
 - [X] Demo app target exists and builds
-- [X] Two-tab shell (`Projects`, `Users`)
+- [X] Single primary shell (`Projects`) with drill-in screens
 - [X] Fake backend with staged read endpoints
 - [X] Scenario presets (`fastStable`, `slowNetwork`, `flakyNetwork`, `offline`)
-- [X] Large seeded dataset (30 projects / 40 users / 50 tags / 300 tasks / 2,000 comments)
+- [X] Curated seeded story dataset (3 projects / 6 users / 12 tags / 12 tasks / 20 comments)
 - [X] Reactive reads use `@SyncQuery` / `@SyncModel`
 - [X] Project -> tasks flow
-- [X] User -> assigned tasks flow
 - [X] Task detail with tags + comments
 - [X] Tag drill-in -> tasks
 - [X] Staged sync via `DemoSyncEngine`
@@ -26,8 +25,6 @@
 
 ### What is still missing
 
-- [ ] Phase 2 write flows in the app/sync engine (backend package has test-covered mutation primitives, but app UI/write pipeline is not done yet)
-- [ ] Task description modal editing flow
 - [ ] Offline/replay work (intentionally deferred until backend + writes are working)
 - [ ] Demo-specific test coverage planned in this document
 
@@ -40,6 +37,59 @@ Backend implementation planning now lives in:
 - `docs/planning/swiftsync-demo-field-reduction-plan.md`
 
 This demo app plan tracks UI flows, sync-engine integration, and staged feature rollout. The backend plan tracks SQLite storage, fake backend endpoint behavior, and backend unit tests.
+
+## Demo Purpose
+
+Build a focused demo that proves the main SwiftSync behaviors with as little UI/domain complexity as possible.
+
+The demo is not a mini product. It is a showcase for:
+
+- relationship syncing (`toOne`, `toMany`, parent-scoped sync)
+- staged reads and targeted refresh
+- backend-authoritative writes followed by sync-based UI refresh
+- realistic payload shapes (attributes, foreign keys, arrays of IDs)
+- failure scenarios (`slow`, `flaky`, `offline`) without changing app architecture
+
+## Demo Mantra
+
+- Prove SwiftSync, not product breadth.
+- Keep support data seeded unless CRUD adds new sync behavior.
+- Make writes go to the backend first, then refresh through SwiftSync reads.
+- Prefer one strong example per concept over multiple redundant screens.
+
+## Core Showcase (What Must Be Demonstrated)
+
+- [X] One-to-many: `Project -> [Task]`
+- [X] To-one relation + FK redundancy where useful: `Task.assignee` + `Task.assigneeID`
+- [X] Many-to-many: `Task <-> [Tag]`
+- [X] Nested one-to-many: `Task -> [Comment]`
+- [X] Reserved-key mapping example: task `description` -> `descriptionText`
+- [X] Online CRUD flows that trigger targeted re-sync instead of manual local patching
+- [ ] Offline/replay (after online CRUD is stable)
+
+## Scope Shape (Seeded vs Interactive)
+
+### Seeded-only (reference/support data in current demo)
+
+- [X] `User` records (used for assignee display/selection)
+- [X] `Tag` metadata (`name`, etc.; membership updates still interactive through `Task`)
+- [X] `Project` records in current shell (no project create/edit/delete UI in Phase 2)
+
+### Interactive (important because they prove sync behavior)
+
+- [X] `Task` create/update/delete in project scope
+- [X] `Task.description` modal edit (`PATCH`)
+- [X] `Task.assigneeID` update (including `null` clear behavior)
+- [X] `Task.tags` membership replace (`PUT tag_ids`)
+- [X] `Comment` create/delete under a task
+
+## Non-Goals (Current Demo Scope)
+
+- [X] User CRUD UI
+- [X] Tag metadata CRUD UI
+- [X] Project CRUD UI
+- [X] Simulating HTTP protocol details (headers/status codes/router stack)
+- [ ] Offline queue/outbox/replay before online CRUD is complete
 
 ## Goal
 
@@ -56,26 +106,23 @@ Build a demo app that proves SwiftSync can deliver:
 - [X] Data stack: SwiftData + SwiftSync.
 - [X] Networking: fake backend service (in-process, deterministic delays/errors).
 - [X] Backend storage: SQLite-backed simulator in local package `DemoBackend`
-- [X] App shell: two tabs only.
-  - `Projects`
-  - `Users`
+- [X] App shell: single primary flow (`Projects`) with drill-ins (`Task`, `Tag`).
 - [X] Workspace setup: Xcode workspace containing:
   - `SwiftSync` package
   - `SwiftSyncDemo` app target
 
 ## Demo Domain
 
-This demo intentionally highlights multiple relationship types.
+This demo intentionally highlights multiple relationship types with a simplified UI shell.
 
 - `Project` -> to-many `Task`
 - `Task` -> to-one `User` (`assignee`)
-- `User` -> to-many `Task` (inverse)
 - `Task` <-> to-many `Tag` (many-to-many)
 - `Task` -> to-many `Comment`
 
 ## Data Model (SwiftData + Syncable)
 
-Status: `[-]` Mostly implemented; one naming detail in this plan is outdated (`Comment.author` vs actual `authorUser`).
+Status: `[X]` Implemented and simplified for the current showcase.
 
 ### `Project`
 
@@ -120,15 +167,15 @@ Status: `[-]` Mostly implemented; one naming detail in this plan is outdated (`C
 - `id: String` (`@PrimaryKey`)
 - `taskID: String`
 - `authorUserID: String`
+- `authorName: String` (denormalized display attribute from backend payload)
 - `body: String`
 - `createdAt: Date`
 - relationships:
   - `task: Task?`
-  - `authorUser: User?` (implemented name)
 
 ## App Architecture
 
-Status: `[-]` core read path uses the backend package; write flows are still pending.
+Status: `[X]` read path and Phase 2 online CRUD flows are implemented; offline/replay is still pending.
 
 ### Layers
 
@@ -140,7 +187,7 @@ Status: `[-]` core read path uses the backend package; write flows are still pen
 
 ## SwiftUI Feature Flows
 
-Status: `[-]` Phase 1 read flows are implemented; editing/offline flows in later phases are not.
+Status: `[-]` Phase 1 read flows and Phase 2 online CRUD flows are implemented; offline/replay remains deferred.
 
 ### Tab 1: Projects
 
@@ -151,13 +198,11 @@ Status: `[-]` Phase 1 read flows are implemented; editing/offline flows in later
   - [X] Task list via `@SyncQuery(Task.self, toOne: project, ...)`
   - [X] On first appearance: trigger `syncProjectTasks(projectID:)`
 
-### Tab 2: Users
+### Seeded Reference Data
 
-- [X] Users list via `@SyncQuery(User.self, in: syncContainer, sortBy: [\.displayName, \.id])`.
-- [X] On first appearance: trigger `syncUsers()`.
-- [X] User detail task list:
-  - [X] `@SyncQuery(Task.self, toOne: user, ...)`
-- [X] Trigger `syncUserTasks(userID:)` when entering screen.
+- [X] Users are synced as seeded reference data (assignee display + selection support).
+- [X] Tags metadata is seeded reference data (task tag labels + tag drill-in).
+- [X] Projects are seeded in current demo shell (no project create/edit UI planned in current Phase 2 scope).
 
 ### Task Detail
 
@@ -172,9 +217,9 @@ Status: `[-]` Phase 1 read flows are implemented; editing/offline flows in later
 ### Description Editing Rule
 
 - [X] In task detail, description is currently read-only.
-- [ ] Edit action opens modal sheet (`EditTaskDescriptionView`).
-- [ ] Save action goes through sync pipeline (`PATCH /tasks/{taskID}/description`).
-- [ ] Close modal and let reactive wrappers refresh visible task detail state.
+- [X] Edit action opens modal sheet (`EditTaskDescriptionView`).
+- [X] Save action goes through sync pipeline (`PATCH /tasks/{taskID}/description`).
+- [X] Close modal and let reactive wrappers refresh visible task detail state.
 
 ### Tag Drill-In Flow
 
@@ -189,9 +234,9 @@ Status: `[-]` Phase 1 read flows are implemented; editing/offline flows in later
 
 1. One-to-many: `Project -> [Task]`.
 2. Many-to-one: `Task -> User (assignee)`.
-3. One-to-many inverse: `User -> [Task]`.
-4. Many-to-many: `Task <-> [Tag]`.
-5. Nested one-to-many: `Task -> [Comment]`.
+3. Many-to-many: `Task <-> [Tag]`.
+4. Nested one-to-many: `Task -> [Comment]`.
+5. To-one FK + relation redundancy where useful: `Task.assigneeID` + `Task.assignee`.
 
 ## Phase 1: Read-Only, Mocked Data, Staged Fetching
 
@@ -201,7 +246,7 @@ Status: `[X]` Implemented (core read-only staged fetch flow).
 
 1. [X] App launch:
    - Show local cache immediately via `@SyncQuery`.
-   - Trigger `syncProjects()` and `syncUsers()`.
+   - Trigger bootstrap staged sync (projects/users/tags).
 2. [X] Enter project:
    - Show cached tasks instantly.
    - Trigger `syncProjectTasks(projectID:)`.
@@ -224,28 +269,24 @@ Demonstrate relationship traversal and staged fetch behavior using a large fake 
 
 ## Phase 2: Editable Online Flows
 
-Status: `[ ]` Not started.
+Status: `[X]` Implemented for online CRUD flows in the current demo scope.
 
 ### Requirements
 
 1. Add create/edit capabilities while online.
 2. Support creating:
-   - project
    - task
    - comment
-   - user
 3. Continue using staged sync and reactive wrappers as primary read path.
 4. Preserve modal-only task description editing rule.
 
 ### Write Endpoints Used in Phase 2
 
-1. `POST /projects`
-2. `POST /tasks`
-3. `POST /users`
-4. `POST /tasks/{taskID}/comments`
-5. `PATCH /tasks/{taskID}`
-6. `PATCH /tasks/{taskID}/description`
-7. `PUT /tasks/{taskID}/tags`
+1. `POST /tasks`
+2. `POST /tasks/{taskID}/comments`
+3. `PATCH /tasks/{taskID}`
+4. `PATCH /tasks/{taskID}/description`
+5. `PUT /tasks/{taskID}/tags`
 
 ### Key Objective
 
@@ -305,11 +346,11 @@ All operations should update local UI immediately and queue network writes.
 
 ## Acceptance Criteria
 
-1. [X] Two-tab app (`Projects`, `Users`) is fully functional (read flows).
+1. [X] Project-centered app flow is fully functional for read paths (`Projects` -> `Task` -> `Tag` drill-in).
 2. [X] All major relationship types are visible in user flows.
 3. [X] Phase 1 is read-only and uses large fake backend content.
-4. [ ] Phase 2 supports creating project/task/comment/user.
-5. [ ] Task description remains editable only through modal flow.
+4. [X] Phase 2 supports creating task/comment and editing task state/description/assignee/tags.
+5. [X] Task description remains editable only through modal flow.
 6. [X] Tag drill-in correctly shows tasks for selected tag.
 7. [ ] Phase 3 offline edits replay automatically on reconnect.
 8. [X] Reactive wrappers are primary read APIs throughout UI.
@@ -319,7 +360,7 @@ All operations should update local UI immediately and queue network writes.
 1. [X] Workspace + app target + package wiring.
 2. [X] Models + fake backend + large seeded fixtures + scenario switcher.
 3. [X] Phase 1 read-only screens and staged sync calls.
-4. [ ] Phase 2 create/edit flows.
+4. [X] Phase 2 create/edit flows.
 5. [ ] Phase 3 outbox + network monitor + replay.
 6. [-] Debug panel for network/conflict simulation (scenario picker/error surfacing exist; deeper tooling remains pending)
 7. [X] SQLite-backed backend simulator + backend unit tests + app client swap (tracked in `docs/planning/swiftsync-demo-backend-plan.md`)

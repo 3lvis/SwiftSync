@@ -6,6 +6,7 @@ public enum DemoBackendError: LocalizedError {
     case sqlite(message: String)
     case notFound(entity: String, id: String)
     case invalidReference(entity: String, id: String)
+    case validation(message: String)
 
     public var errorDescription: String? {
         switch self {
@@ -17,6 +18,8 @@ public enum DemoBackendError: LocalizedError {
             return "\(entity) not found: \(id)"
         case let .invalidReference(entity, id):
             return "Invalid reference \(entity)=\(id)"
+        case let .validation(message):
+            return "Validation error: \(message)"
         }
     }
 }
@@ -30,8 +33,7 @@ public final class DemoServerSimulator {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
         try self.sqlite.execute("PRAGMA foreign_keys = ON;")
-        try Self.createSchemaIfNeeded(sqlite: self.sqlite)
-        try Self.seedIfNeeded(self.sqlite, seedData: seedData)
+        try Self.prepareSchema(self.sqlite, seedData: seedData)
     }
 
     public func getProjectsPayload() throws -> [[String: Any]] {
@@ -77,13 +79,6 @@ public final class DemoServerSimulator {
         }
     }
 
-    public func getUserTasksPayload(userID: String) throws -> [[String: Any]] {
-        try getTasksPayload(
-            whereClause: "WHERE assignee_id = ?",
-            bind: { stmt in self.sqlite.bind(text: userID, at: 1, in: stmt) }
-        )
-    }
-
     public func getTaskDetailPayload(taskID: String) throws -> [String: Any]? {
         let rows = try self.sqlite.query(
             """
@@ -103,7 +98,7 @@ public final class DemoServerSimulator {
     public func getTaskCommentsPayload(taskID: String) throws -> [[String: Any]] {
         let rows = try self.sqlite.query(
             """
-            SELECT id, task_id, author_user_id, body, created_at
+            SELECT id, task_id, author_user_id, author_name, body, created_at
             FROM comments
             WHERE task_id = ?
             ORDER BY created_at ASC, id ASC
@@ -117,6 +112,7 @@ public final class DemoServerSimulator {
                 "id": row.string("id"),
                 "task_id": row.string("task_id"),
                 "author_user_id": row.string("author_user_id"),
+                "author_name": row.string("author_name"),
                 "body": row.string("body"),
                 "created_at": iso8601(row.double("created_at"))
             ]
@@ -180,27 +176,30 @@ public final class DemoServerSimulator {
         guard try exists(in: "users", id: authorUserID) else {
             throw DemoBackendError.invalidReference(entity: "author_user_id", id: authorUserID)
         }
+        let normalizedBody = try validatedNonEmpty(body, field: "body")
+        let authorName = try userDisplayName(for: authorUserID)
 
         let now = nextTimestamp(after: nil)
         let newID = try nextCommentID()
 
         try self.sqlite.execute(
             """
-            INSERT INTO comments (id, task_id, author_user_id, body, created_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO comments (id, task_id, author_user_id, author_name, body, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             bind: { stmt in
                 self.sqlite.bind(text: newID, at: 1, in: stmt)
                 self.sqlite.bind(text: taskID, at: 2, in: stmt)
                 self.sqlite.bind(text: authorUserID, at: 3, in: stmt)
-                self.sqlite.bind(text: body, at: 4, in: stmt)
-                self.sqlite.bind(double: now.timeIntervalSince1970, at: 5, in: stmt)
+                self.sqlite.bind(text: authorName, at: 4, in: stmt)
+                self.sqlite.bind(text: normalizedBody, at: 5, in: stmt)
+                self.sqlite.bind(double: now.timeIntervalSince1970, at: 6, in: stmt)
             }
         )
 
         let rows = try self.sqlite.query(
             """
-            SELECT id, task_id, author_user_id, body, created_at
+            SELECT id, task_id, author_user_id, author_name, body, created_at
             FROM comments
             WHERE id = ?
             LIMIT 1
@@ -216,9 +215,201 @@ public final class DemoServerSimulator {
             "id": row.string("id"),
             "task_id": row.string("task_id"),
             "author_user_id": row.string("author_user_id"),
+            "author_name": row.string("author_name"),
             "body": row.string("body"),
             "created_at": iso8601(row.double("created_at"))
         ]
+    }
+
+    @discardableResult
+    public func patchTaskState(taskID: String, state: String) throws -> [String: Any]? {
+        _ = try validatedTaskState(state)
+        guard let current = try getTaskDetailPayload(taskID: taskID) else { return nil }
+        let currentUpdatedAt = try parseISO8601(current["updated_at"])
+        let next = nextTimestamp(after: currentUpdatedAt)
+
+        try self.sqlite.execute(
+            """
+            UPDATE tasks
+            SET state = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            bind: { stmt in
+                self.sqlite.bind(text: state, at: 1, in: stmt)
+                self.sqlite.bind(double: next.timeIntervalSince1970, at: 2, in: stmt)
+                self.sqlite.bind(text: taskID, at: 3, in: stmt)
+            }
+        )
+        return try getTaskDetailPayload(taskID: taskID)
+    }
+
+    @discardableResult
+    public func patchTaskAssignee(taskID: String, assigneeID: String?) throws -> [String: Any]? {
+        if let assigneeID, !(try exists(in: "users", id: assigneeID)) {
+            throw DemoBackendError.invalidReference(entity: "assignee_id", id: assigneeID)
+        }
+        guard let current = try getTaskDetailPayload(taskID: taskID) else { return nil }
+        let currentUpdatedAt = try parseISO8601(current["updated_at"])
+        let next = nextTimestamp(after: currentUpdatedAt)
+
+        try self.sqlite.execute(
+            """
+            UPDATE tasks
+            SET assignee_id = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            bind: { stmt in
+                self.sqlite.bind(nullableText: assigneeID, at: 1, in: stmt)
+                self.sqlite.bind(double: next.timeIntervalSince1970, at: 2, in: stmt)
+                self.sqlite.bind(text: taskID, at: 3, in: stmt)
+            }
+        )
+        return try getTaskDetailPayload(taskID: taskID)
+    }
+
+    @discardableResult
+    public func replaceTaskTags(taskID: String, tagIDs: [String]) throws -> [String: Any]? {
+        guard try exists(in: "tasks", id: taskID) else { return nil }
+        let uniqueTagIDs = Array(Set(tagIDs)).sorted()
+        for tagID in uniqueTagIDs where !(try exists(in: "tags", id: tagID)) {
+            throw DemoBackendError.invalidReference(entity: "tag_id", id: tagID)
+        }
+
+        guard let current = try getTaskDetailPayload(taskID: taskID) else { return nil }
+        let currentUpdatedAt = try parseISO8601(current["updated_at"])
+        let next = nextTimestamp(after: currentUpdatedAt)
+
+        try self.sqlite.execute("BEGIN TRANSACTION;")
+        do {
+            try self.sqlite.execute(
+                "DELETE FROM task_tags WHERE task_id = ?",
+                bind: { stmt in
+                    self.sqlite.bind(text: taskID, at: 1, in: stmt)
+                }
+            )
+
+            for tagID in uniqueTagIDs {
+                try self.sqlite.execute(
+                    """
+                    INSERT INTO task_tags (task_id, tag_id)
+                    VALUES (?, ?)
+                    """,
+                    bind: { stmt in
+                        self.sqlite.bind(text: taskID, at: 1, in: stmt)
+                        self.sqlite.bind(text: tagID, at: 2, in: stmt)
+                    }
+                )
+            }
+
+            try self.sqlite.execute(
+                """
+                UPDATE tasks
+                SET updated_at = ?
+                WHERE id = ?
+                """,
+                bind: { stmt in
+                    self.sqlite.bind(double: next.timeIntervalSince1970, at: 1, in: stmt)
+                    self.sqlite.bind(text: taskID, at: 2, in: stmt)
+                }
+            )
+            try self.sqlite.execute("COMMIT;")
+        } catch {
+            try? self.sqlite.execute("ROLLBACK;")
+            throw error
+        }
+
+        return try getTaskDetailPayload(taskID: taskID)
+    }
+
+    public func createTask(
+        projectID: String,
+        title: String,
+        descriptionText: String,
+        state: String,
+        assigneeID: String?,
+        tagIDs: [String]
+    ) throws -> [String: Any] {
+        guard try exists(in: "projects", id: projectID) else {
+            throw DemoBackendError.invalidReference(entity: "project_id", id: projectID)
+        }
+        if let assigneeID, !(try exists(in: "users", id: assigneeID)) {
+            throw DemoBackendError.invalidReference(entity: "assignee_id", id: assigneeID)
+        }
+        let normalizedTitle = try validatedNonEmpty(title, field: "title")
+        let normalizedDescription = try validatedNonEmpty(descriptionText, field: "description")
+        let normalizedState = try validatedTaskState(state)
+        let uniqueTagIDs = Array(Set(tagIDs)).sorted()
+        for tagID in uniqueTagIDs where !(try exists(in: "tags", id: tagID)) {
+            throw DemoBackendError.invalidReference(entity: "tag_id", id: tagID)
+        }
+
+        let newID = try nextTaskID()
+        let now = nextTimestamp(after: nil)
+
+        try self.sqlite.execute("BEGIN TRANSACTION;")
+        do {
+            try self.sqlite.execute(
+                """
+                INSERT INTO tasks (id, project_id, assignee_id, title, description, state, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                bind: { stmt in
+                    self.sqlite.bind(text: newID, at: 1, in: stmt)
+                    self.sqlite.bind(text: projectID, at: 2, in: stmt)
+                    self.sqlite.bind(nullableText: assigneeID, at: 3, in: stmt)
+                    self.sqlite.bind(text: normalizedTitle, at: 4, in: stmt)
+                    self.sqlite.bind(text: normalizedDescription, at: 5, in: stmt)
+                    self.sqlite.bind(text: normalizedState, at: 6, in: stmt)
+                    self.sqlite.bind(double: now.timeIntervalSince1970, at: 7, in: stmt)
+                }
+            )
+
+            for tagID in uniqueTagIDs {
+                try self.sqlite.execute(
+                    """
+                    INSERT INTO task_tags (task_id, tag_id)
+                    VALUES (?, ?)
+                    """,
+                    bind: { stmt in
+                        self.sqlite.bind(text: newID, at: 1, in: stmt)
+                        self.sqlite.bind(text: tagID, at: 2, in: stmt)
+                    }
+                )
+            }
+            try self.sqlite.execute("COMMIT;")
+        } catch {
+            try? self.sqlite.execute("ROLLBACK;")
+            throw error
+        }
+
+        guard let payload = try getTaskDetailPayload(taskID: newID) else {
+            throw DemoBackendError.notFound(entity: "task", id: newID)
+        }
+        return payload
+    }
+
+    public func deleteTask(taskID: String) throws {
+        guard try exists(in: "tasks", id: taskID) else {
+            throw DemoBackendError.notFound(entity: "task", id: taskID)
+        }
+        try self.sqlite.execute(
+            "DELETE FROM tasks WHERE id = ?",
+            bind: { stmt in
+                self.sqlite.bind(text: taskID, at: 1, in: stmt)
+            }
+        )
+    }
+
+    public func deleteComment(commentID: String) throws {
+        guard try exists(in: "comments", id: commentID) else {
+            throw DemoBackendError.notFound(entity: "comment", id: commentID)
+        }
+        try self.sqlite.execute(
+            "DELETE FROM comments WHERE id = ?",
+            bind: { stmt in
+                self.sqlite.bind(text: commentID, at: 1, in: stmt)
+            }
+        )
     }
 
     private func getTasksPayload(
@@ -277,6 +468,24 @@ public final class DemoServerSimulator {
         return !rows.isEmpty
     }
 
+    private func userDisplayName(for userID: String) throws -> String {
+        let rows = try self.sqlite.query(
+            """
+            SELECT display_name
+            FROM users
+            WHERE id = ?
+            LIMIT 1
+            """,
+            bind: { stmt in
+                self.sqlite.bind(text: userID, at: 1, in: stmt)
+            }
+        )
+        guard let row = rows.first else {
+            throw DemoBackendError.invalidReference(entity: "author_user_id", id: userID)
+        }
+        return row.string("display_name")
+    }
+
     private func nextCommentID() throws -> String {
         let rows = try self.sqlite.query(
             """
@@ -287,6 +496,34 @@ public final class DemoServerSimulator {
         )
         let next = Int(rows.first?.int64("max_id") ?? 0) + 1
         return "comment-\(next)"
+    }
+
+    private func nextTaskID() throws -> String {
+        let rows = try self.sqlite.query(
+            """
+            SELECT COALESCE(MAX(CAST(SUBSTR(id, 6) AS INTEGER)), 0) AS max_id
+            FROM tasks
+            WHERE id LIKE 'task-%'
+            """
+        )
+        let next = Int(rows.first?.int64("max_id") ?? 0) + 1
+        return "task-\(next)"
+    }
+
+    private func validatedNonEmpty(_ value: String, field: String) throws -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw DemoBackendError.validation(message: "\(field) must not be empty")
+        }
+        return trimmed
+    }
+
+    private func validatedTaskState(_ state: String) throws -> String {
+        let allowed = ["todo", "inProgress", "done"]
+        guard allowed.contains(state) else {
+            throw DemoBackendError.validation(message: "state must be one of \(allowed.joined(separator: ", "))")
+        }
+        return state
     }
 
     private func parseISO8601(_ value: Any?) throws -> Date? {
@@ -307,6 +544,11 @@ public final class DemoServerSimulator {
 
     private func iso8601(_ secondsSince1970: Double) -> String {
         formatter.string(from: Date(timeIntervalSince1970: secondsSince1970))
+    }
+
+    private static func prepareSchema(_ sqlite: DemoSQLiteDatabase, seedData: DemoSeedData) throws {
+        try createSchemaIfNeeded(sqlite: sqlite)
+        try seedIfNeeded(sqlite, seedData: seedData)
     }
 
     private static func createSchemaIfNeeded(sqlite: DemoSQLiteDatabase) throws {
@@ -356,6 +598,7 @@ public final class DemoServerSimulator {
                 id TEXT PRIMARY KEY,
                 task_id TEXT NOT NULL,
                 author_user_id TEXT NOT NULL,
+                author_name TEXT NOT NULL,
                 body TEXT NOT NULL,
                 created_at REAL NOT NULL,
                 FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE,
@@ -448,17 +691,30 @@ public final class DemoServerSimulator {
             }
 
             for comment in seedData.comments {
+                let authorName = try sqlite.query(
+                    """
+                    SELECT display_name
+                    FROM users
+                    WHERE id = ?
+                    LIMIT 1
+                    """,
+                    bind: { stmt in
+                        sqlite.bind(text: comment.authorUserID, at: 1, in: stmt)
+                    }
+                ).first?.string("display_name") ?? comment.authorUserID
+
                 try sqlite.execute(
                     """
-                    INSERT INTO comments (id, task_id, author_user_id, body, created_at)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO comments (id, task_id, author_user_id, author_name, body, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     bind: { stmt in
                         sqlite.bind(text: comment.id, at: 1, in: stmt)
                         sqlite.bind(text: comment.taskID, at: 2, in: stmt)
                         sqlite.bind(text: comment.authorUserID, at: 3, in: stmt)
-                        sqlite.bind(text: comment.body, at: 4, in: stmt)
-                        sqlite.bind(double: comment.createdAt.timeIntervalSince1970, at: 5, in: stmt)
+                        sqlite.bind(text: authorName, at: 4, in: stmt)
+                        sqlite.bind(text: comment.body, at: 5, in: stmt)
+                        sqlite.bind(double: comment.createdAt.timeIntervalSince1970, at: 6, in: stmt)
                     }
                 )
             }

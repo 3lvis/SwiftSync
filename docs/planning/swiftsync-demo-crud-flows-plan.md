@@ -10,12 +10,34 @@ Add clear, realistic demo flows for inserts, updates, and deletes that prove:
 
 Offline/outbox/replay is intentionally out of scope until these online CRUD flows are working.
 
+## Current Status (2026-02-22)
+
+- [X] Core online CRUD slice implemented in demo UI + `DemoSyncEngine`
+- [X] `DemoAPIClient` write methods wired to `DemoBackend`
+- [X] `DemoBackend` write endpoints + unit tests for shipped Phase 2 flows
+- [ ] Offline/outbox/replay (deferred)
+
 ## Scope Rules
 
 - Start with online-only CRUD flows.
 - Prefer simple, visible interactions over broad coverage.
 - Use server-authoritative refresh after writes (targeted sync calls).
 - Keep the number of writable fields small (coordinate with field-reduction plan).
+- Keep support/reference entities seeded unless CRUD adds a new SwiftSync behavior.
+
+## CRUD Flow Mantra
+
+- Build the smallest interactive flow that proves the sync behavior.
+- Do not add CRUD for seeded reference entities (`User`, `Tag` metadata, `Project`) in current scope.
+- Backend write first, then targeted sync reads refresh the UI.
+- Avoid manual local patching in UI code.
+
+## Core CRUD Showcase (Current Phase 2 Target)
+
+- `Task` create/delete in a project (one-to-many parent-scoped list refresh)
+- `Task` updates (`description`, `state`, `assignee`) (to-one/FK + partial updates)
+- `Task.tags` replace (many-to-many membership update)
+- `Comment` create/delete under a task (nested one-to-many scoped sync)
 
 Related docs:
 
@@ -29,8 +51,6 @@ Related docs:
 
 - Create `Comment` from Task Detail
 - Create `Task` from Project Detail
-- Create `Project` from Projects tab
-- Create `User` from Users tab
 
 ### Updates (Phase 2 Core)
 
@@ -61,7 +81,7 @@ Related docs:
   - `body`
   - `authorUserID` (default selected user or simple picker)
 - Save action:
-  1. call `DemoAPIClient.postTaskComment(...)`
+  1. call `DemoAPIClient.createTaskComment(...)`
   2. call `syncTaskComments(taskID:)`
   3. optionally call `syncTaskDetail(taskID:)` if server updates task `updatedAt`
 
@@ -94,17 +114,16 @@ Why first:
 - Inline `Menu` / segmented picker in task detail header
 - Save immediately on selection (no extra form submit)
 - Action:
-  1. call `DemoAPIClient.patchTask(...)` with `state`
+  1. call `DemoAPIClient.patchTaskState(...)`
   2. call `syncTaskDetail(taskID:)`
   3. call parent list sync if current screen came from a list where sort/filter may change:
-     - `syncProjectTasks(projectID:)` and/or
-     - `syncUserTasks(userID:)` when relevant
+     - `syncProjectTasks(projectID:)` when relevant
 
 ### Reassign Assignee
 
 - Sheet or menu listing users
 - Save action:
-  1. call `DemoAPIClient.patchTask(...)` with `assignee_id`
+  1. call `DemoAPIClient.patchTaskAssignee(...)`
   2. sync `task` detail
   3. sync affected lists:
      - old assignee tasks slice (if known)
@@ -115,7 +134,7 @@ Why first:
 
 - Sheet with multi-select tag list
 - Save action sends full selected set (recommended):
-  1. call `DemoAPIClient.putTaskTags(taskID:tagIDs:)`
+  1. call `DemoAPIClient.replaceTaskTags(taskID:tagIDs:)`
   2. `syncTaskDetail(taskID:)` (for `tag_ids` on task payload)
   3. `syncTags()` only if tag metadata changed (usually not needed)
   4. `syncTagTasks(tagID:)` for impacted tags if you need tag drill-in to reflect immediately
@@ -135,9 +154,9 @@ Recommended simplification:
   - optional `assignee`
   - optional `description`
 - Save action:
-  1. call `DemoAPIClient.postTask(projectID:...)`
+  1. call `DemoAPIClient.createTask(projectID:...)`
   2. call `syncProjectTasks(projectID:)`
-  3. if assignee set, call `syncUserTasks(userID:)` for the selected user (optional phase-2b refinement)
+  3. keep task detail/project list refresh scoped to the project slice
 
 ### Delete Task
 
@@ -148,36 +167,17 @@ Recommended simplification:
   2. call `syncProjectTasks(projectID:)` (authoritative slice + delete pass)
   3. optionally sync related slices if currently visible elsewhere (defer unless needed)
 
-## 4) Root Lists: Project/User Insert
-
-### Create Project
-
-- Toolbar `+` in Projects tab
-- Simple sheet form (`name`, maybe `status`)
-- Save:
-  1. call `DemoAPIClient.postProject(...)`
-  2. call `syncProjects()`
-
-### Create User
-
-- Toolbar `+` in Users tab
-- Simple sheet form (`displayName`, maybe `role`)
-- Save:
-  1. call `DemoAPIClient.postUser(...)`
-  2. call `syncUsers()`
-
 ## Sync Engine Plan (App Layer)
 
 Add explicit write methods to `DemoSyncEngine` for UI screens to call.
 
 Recommended pattern:
 
-- `createProject(...)`
-- `createUser(...)`
 - `createTask(...)`
 - `createComment(...)`
 - `updateTaskDescription(...)`
-- `updateTask(...)`
+- `updateTaskState(...)`
+- `updateTaskAssignee(...)`
 - `replaceTaskTags(...)`
 - `deleteTask(...)`
 - `deleteComment(...)`
@@ -194,24 +194,16 @@ Do not patch SwiftData rows directly in UI code.
 
 Extend `DemoAPIClient` with write methods matching the CRUD slice.
 
-### Phase 2a (First Wave)
+Implemented in current demo:
 
-- `postTaskComment`
+- `createTaskComment`
 - `deleteTaskComment`
 - `patchTaskDescription`
-- `patchTask`
-
-### Phase 2b (Second Wave)
-
-- `putTaskTags`
-- `postTask`
+- `patchTaskState`
+- `patchTaskAssignee`
+- `replaceTaskTags`
+- `createTask`
 - `deleteTask`
-- `postProject`
-- `postUser`
-
-Why this order:
-- starts with Task Detail flows (smallest UI surface, highest demo value)
-- then expands to root and list-level create/delete
 
 ## Fake Backend Plan (Coordination)
 
@@ -249,21 +241,19 @@ Keep this lightweight initially:
 
 ## Execution Order (Recommended)
 
-1. Finalize reduced field set for Phase 2 CRUD forms (coordinate with field-reduction plan)
-2. Implement + test backend endpoints for Task Detail flows (`comment`, `description`, `task patch`)
-3. Add `DemoAPIClient` write methods for those endpoints
-4. Add `DemoSyncEngine` write methods + targeted post-write sync calls
-5. Implement Task Detail UI for comment create/delete + description/state/assignee updates
-6. Implement + test backend endpoints for task create/delete + tags replace
-7. Wire Project Detail task create/delete UI
-8. Implement + test backend endpoints for project/user create
-9. Wire root-list create UI for projects/users
-10. Do a cleanup pass (copy, errors, loading states, destructive confirmations)
+1. [X] Finalize reduced field set for Phase 2 CRUD forms (coordinate with field-reduction plan)
+2. [X] Implement + test backend endpoints for Task Detail flows (`comment`, `description`, `task patch`)
+3. [X] Add `DemoAPIClient` write methods for those endpoints
+4. [X] Add `DemoSyncEngine` write methods + targeted post-write sync calls
+5. [X] Implement Task Detail UI for comment create/delete + description/state/assignee updates
+6. [X] Implement + test backend endpoints for task create/delete + tags replace
+7. [X] Wire Project Detail task create/delete UI
+8. [X] Do a cleanup pass (copy, errors, loading states, destructive confirmations)
 
 ## Acceptance Criteria
 
-1. Demo has visible insert, update, and delete flows (not read-only only).
-2. All writes go through `DemoSyncEngine` + `DemoAPIClient`, not direct local model mutation.
-3. Post-write UI refresh is driven by targeted sync calls.
-4. `DemoBackend` unit tests cover all shipped write endpoints.
-5. Demo remains online-only for Phase 2; offline/outbox work stays deferred.
+1. [X] Demo has visible insert, update, and delete flows (not read-only only).
+2. [X] All writes go through `DemoSyncEngine` + `DemoAPIClient`, not direct local model mutation.
+3. [X] Post-write UI refresh is driven by targeted sync calls.
+4. [X] `DemoBackend` unit tests cover all shipped write endpoints.
+5. [X] Demo remains online-only for Phase 2; offline/outbox work stays deferred.

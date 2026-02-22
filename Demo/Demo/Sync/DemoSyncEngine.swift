@@ -58,39 +58,103 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    func syncUserTasks(userID: String) async {
-        await syncOperation("userTasks-\(userID)") {
-            let payload = try await apiClient.getUserTasks(userID: userID)
-            try await syncPayload(payload, as: Task.self, missingRowPolicy: .keep)
-        }
-    }
-
     func syncTaskDetail(taskID: String) async {
         await syncOperation("taskDetail-\(taskID)") {
-            guard let payload = try await apiClient.getTaskDetail(taskID: taskID) else { return }
-            try await syncPayload([payload], as: Task.self, missingRowPolicy: .keep)
+            try await syncTaskDetailInternal(taskID: taskID)
         }
     }
 
     func syncTaskComments(taskID: String) async {
         await syncOperation("taskComments-\(taskID)") {
-            let payload = try await apiClient.getTaskComments(taskID: taskID)
-
-            if try task(withID: taskID) == nil {
-                if let detailPayload = try await apiClient.getTaskDetail(taskID: taskID) {
-                    try await syncPayload([detailPayload], as: Task.self, missingRowPolicy: .keep)
-                }
-            }
-
-            guard let task = try task(withID: taskID) else { return }
-            try await syncPayload(payload, as: Comment.self, parent: task, missingRowPolicy: .keep)
+            try await syncTaskCommentsInternal(taskID: taskID)
         }
     }
 
     func syncTagTasks(tagID: String) async {
         await syncOperation("tagTasks-\(tagID)") {
-            let payload = try await apiClient.getTagTasks(tagID: tagID)
-            try await syncPayload(payload, as: Task.self, missingRowPolicy: .keep)
+            try await syncTagTasksInternal(tagID: tagID)
+        }
+    }
+
+    func createTask(
+        projectID: String,
+        title: String,
+        descriptionText: String,
+        state: String,
+        assigneeID: String?,
+        tagIDs: [String]
+    ) async {
+        await syncOperation("createTask-\(projectID)") {
+            _ = try await apiClient.createTask(
+                projectID: projectID,
+                title: title,
+                descriptionText: descriptionText,
+                state: state,
+                assigneeID: assigneeID,
+                tagIDs: tagIDs
+            )
+            try await syncProjectTasksInternal(projectID: projectID)
+        }
+    }
+
+    func deleteTask(taskID: String, projectID: String) async {
+        await syncOperation("deleteTask-\(taskID)") {
+            try await apiClient.deleteTask(taskID: taskID)
+            try await syncProjectTasksInternal(projectID: projectID)
+        }
+    }
+
+    func updateTaskDescription(taskID: String, projectID: String?, descriptionText: String) async {
+        await syncOperation("patchTaskDescription-\(taskID)") {
+            _ = try await apiClient.patchTaskDescription(taskID: taskID, descriptionText: descriptionText)
+            try await syncTaskDetailInternal(taskID: taskID)
+            if let projectID {
+                try await syncProjectTasksInternal(projectID: projectID)
+            }
+        }
+    }
+
+    func updateTaskState(taskID: String, projectID: String?, state: String) async {
+        await syncOperation("patchTaskState-\(taskID)") {
+            _ = try await apiClient.patchTaskState(taskID: taskID, state: state)
+            try await syncTaskDetailInternal(taskID: taskID)
+            if let projectID {
+                try await syncProjectTasksInternal(projectID: projectID)
+            }
+        }
+    }
+
+    func updateTaskAssignee(taskID: String, projectID: String?, assigneeID: String?) async {
+        await syncOperation("patchTaskAssignee-\(taskID)") {
+            _ = try await apiClient.patchTaskAssignee(taskID: taskID, assigneeID: assigneeID)
+            try await syncTaskDetailInternal(taskID: taskID)
+            if let projectID {
+                try await syncProjectTasksInternal(projectID: projectID)
+            }
+        }
+    }
+
+    func replaceTaskTags(taskID: String, projectID: String?, tagIDs: [String]) async {
+        await syncOperation("replaceTaskTags-\(taskID)") {
+            _ = try await apiClient.replaceTaskTags(taskID: taskID, tagIDs: tagIDs)
+            try await syncTaskDetailInternal(taskID: taskID)
+            if let projectID {
+                try await syncProjectTasksInternal(projectID: projectID)
+            }
+        }
+    }
+
+    func createComment(taskID: String, authorUserID: String, body: String) async {
+        await syncOperation("createComment-\(taskID)") {
+            _ = try await apiClient.createTaskComment(taskID: taskID, authorUserID: authorUserID, body: body)
+            try await syncTaskCommentsInternal(taskID: taskID)
+        }
+    }
+
+    func deleteComment(commentID: String, taskID: String) async {
+        await syncOperation("deleteComment-\(commentID)") {
+            try await apiClient.deleteTaskComment(commentID: commentID)
+            try await syncTaskCommentsInternal(taskID: taskID)
         }
     }
 
@@ -119,6 +183,27 @@ final class DemoSyncEngine: ObservableObject {
 
         guard let project = try project(withID: projectID) else { return }
         try await syncPayload(payload, as: Task.self, parent: project, missingRowPolicy: .delete)
+    }
+
+    private func syncTaskDetailInternal(taskID: String) async throws {
+        guard let payload = try await apiClient.getTaskDetail(taskID: taskID) else { return }
+        try await syncPayload([payload], as: Task.self, missingRowPolicy: .keep)
+    }
+
+    private func syncTaskCommentsInternal(taskID: String) async throws {
+        let payload = try await apiClient.getTaskComments(taskID: taskID)
+
+        if try task(withID: taskID) == nil {
+            try await syncTaskDetailInternal(taskID: taskID)
+        }
+
+        guard let task = try task(withID: taskID) else { return }
+        try await syncPayload(payload, as: Comment.self, parent: task, missingRowPolicy: .delete)
+    }
+
+    private func syncTagTasksInternal(tagID: String) async throws {
+        let payload = try await apiClient.getTagTasks(tagID: tagID)
+        try await syncPayload(payload, as: Task.self, missingRowPolicy: .keep)
     }
 
     private func syncOperation(_ key: String, _ operation: () async throws -> Void) async {

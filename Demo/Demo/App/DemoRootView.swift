@@ -5,17 +5,7 @@ struct DemoRootView: View {
     @ObservedObject var runtime: DemoRuntime
 
     var body: some View {
-        TabView {
-            ProjectsTabView(syncContainer: runtime.syncContainer, syncEngine: runtime.syncEngine)
-                .tabItem {
-                    Label("Projects", systemImage: "folder")
-                }
-
-            UsersTabView(syncContainer: runtime.syncContainer, syncEngine: runtime.syncEngine)
-                .tabItem {
-                    Label("Users", systemImage: "person.2")
-                }
-        }
+        ProjectsTabView(syncContainer: runtime.syncContainer, syncEngine: runtime.syncEngine)
         .task {
             await runtime.bootstrapIfNeeded()
         }

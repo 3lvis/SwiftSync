@@ -48,11 +48,28 @@ protocol DemoAPIClient: AnyObject {
     func getProjects() async throws -> [[String: Any]]
     func getProjectTasks(projectID: String) async throws -> [[String: Any]]
     func getUsers() async throws -> [[String: Any]]
-    func getUserTasks(userID: String) async throws -> [[String: Any]]
     func getTaskDetail(taskID: String) async throws -> [String: Any]?
     func getTaskComments(taskID: String) async throws -> [[String: Any]]
     func getTags() async throws -> [[String: Any]]
     func getTagTasks(tagID: String) async throws -> [[String: Any]]
+
+    func patchTaskDescription(taskID: String, descriptionText: String) async throws -> [String: Any]?
+    func patchTaskState(taskID: String, state: String) async throws -> [String: Any]?
+    func patchTaskAssignee(taskID: String, assigneeID: String?) async throws -> [String: Any]?
+    func replaceTaskTags(taskID: String, tagIDs: [String]) async throws -> [String: Any]?
+
+    func createTask(
+        projectID: String,
+        title: String,
+        descriptionText: String,
+        state: String,
+        assigneeID: String?,
+        tagIDs: [String]
+    ) async throws -> [String: Any]
+    func deleteTask(taskID: String) async throws
+
+    func createTaskComment(taskID: String, authorUserID: String, body: String) async throws -> [String: Any]
+    func deleteTaskComment(commentID: String) async throws
 }
 
 @MainActor
@@ -80,6 +97,9 @@ final class FakeDemoAPIClient: DemoAPIClient {
         }
 
         do {
+            if seedData == nil {
+                try Self.removeBackendStoreFiles(at: databaseURL)
+            }
             self.backend = try DemoServerSimulator(
                 databaseURL: databaseURL,
                 seedData: seedData ?? DemoSeedData.generate()
@@ -104,11 +124,6 @@ final class FakeDemoAPIClient: DemoAPIClient {
         return try backend.getUsersPayload()
     }
 
-    func getUserTasks(userID: String) async throws -> [[String: Any]] {
-        try await networkGate(endpoint: "GET /users/{id}/tasks")
-        return try backend.getUserTasksPayload(userID: userID)
-    }
-
     func getTaskDetail(taskID: String) async throws -> [String: Any]? {
         try await networkGate(endpoint: "GET /tasks/{id}")
         return try backend.getTaskDetailPayload(taskID: taskID)
@@ -127,6 +142,60 @@ final class FakeDemoAPIClient: DemoAPIClient {
     func getTagTasks(tagID: String) async throws -> [[String: Any]] {
         try await networkGate(endpoint: "GET /tags/{id}/tasks")
         return try backend.getTagTasksPayload(tagID: tagID)
+    }
+
+    func patchTaskDescription(taskID: String, descriptionText: String) async throws -> [String: Any]? {
+        try await networkGate(endpoint: "PATCH /tasks/{id}/description")
+        return try backend.patchTaskDescription(taskID: taskID, descriptionText: descriptionText)
+    }
+
+    func patchTaskState(taskID: String, state: String) async throws -> [String: Any]? {
+        try await networkGate(endpoint: "PATCH /tasks/{id} (state)")
+        return try backend.patchTaskState(taskID: taskID, state: state)
+    }
+
+    func patchTaskAssignee(taskID: String, assigneeID: String?) async throws -> [String: Any]? {
+        try await networkGate(endpoint: "PATCH /tasks/{id} (assignee_id)")
+        return try backend.patchTaskAssignee(taskID: taskID, assigneeID: assigneeID)
+    }
+
+    func replaceTaskTags(taskID: String, tagIDs: [String]) async throws -> [String: Any]? {
+        try await networkGate(endpoint: "PUT /tasks/{id}/tags")
+        return try backend.replaceTaskTags(taskID: taskID, tagIDs: tagIDs)
+    }
+
+    func createTask(
+        projectID: String,
+        title: String,
+        descriptionText: String,
+        state: String,
+        assigneeID: String?,
+        tagIDs: [String]
+    ) async throws -> [String: Any] {
+        try await networkGate(endpoint: "POST /tasks")
+        return try backend.createTask(
+            projectID: projectID,
+            title: title,
+            descriptionText: descriptionText,
+            state: state,
+            assigneeID: assigneeID,
+            tagIDs: tagIDs
+        )
+    }
+
+    func deleteTask(taskID: String) async throws {
+        try await networkGate(endpoint: "DELETE /tasks/{id}")
+        try backend.deleteTask(taskID: taskID)
+    }
+
+    func createTaskComment(taskID: String, authorUserID: String, body: String) async throws -> [String: Any] {
+        try await networkGate(endpoint: "POST /tasks/{id}/comments")
+        return try backend.createComment(taskID: taskID, authorUserID: authorUserID, body: body)
+    }
+
+    func deleteTaskComment(commentID: String) async throws {
+        try await networkGate(endpoint: "DELETE /comments/{id}")
+        try backend.deleteComment(commentID: commentID)
     }
 
     private func networkGate(endpoint: String) async throws {
@@ -179,5 +248,20 @@ final class FakeDemoAPIClient: DemoAPIClient {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("SwiftSyncDemo-FakeBackend-\(UUID().uuidString)")
             .appendingPathExtension("sqlite")
+    }
+
+    private static func removeBackendStoreFiles(at databaseURL: URL) throws {
+        let fm = FileManager.default
+        let directory = databaseURL.deletingLastPathComponent()
+        let baseName = databaseURL.lastPathComponent
+
+        try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        for suffix in ["", "-shm", "-wal"] {
+            let fileURL = directory.appendingPathComponent(baseName + suffix)
+            if fm.fileExists(atPath: fileURL.path) {
+                try fm.removeItem(at: fileURL)
+            }
+        }
     }
 }

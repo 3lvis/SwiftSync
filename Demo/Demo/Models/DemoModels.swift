@@ -34,22 +34,19 @@ final class User {
     var role: String
     var updatedAt: Date
     var assignedTasks: [Task]
-    var authoredComments: [Comment]
 
     init(
         id: String,
         displayName: String,
         role: String,
         updatedAt: Date,
-        assignedTasks: [Task] = [],
-        authoredComments: [Comment] = []
+        assignedTasks: [Task] = []
     ) {
         self.id = id
         self.displayName = displayName
         self.role = role
         self.updatedAt = updatedAt
         self.assignedTasks = assignedTasks
-        self.authoredComments = authoredComments
     }
 }
 
@@ -130,28 +127,27 @@ final class Comment {
     var taskID: String
 
     var authorUserID: String
+    var authorName: String
 
     var body: String
     var createdAt: Date
     var task: Task?
 
-    var authorUser: User?
-
     init(
         id: String,
         taskID: String,
         authorUserID: String,
+        authorName: String,
         body: String,
         createdAt: Date,
-        task: Task? = nil,
-        authorUser: User? = nil
+        task: Task? = nil
     ) {
         self.id = id
         self.taskID = taskID
         self.authorUserID = authorUserID
+        self.authorName = authorName
         self.body = body
         self.createdAt = createdAt
         self.task = task
-        self.authorUser = authorUser
     }
 }

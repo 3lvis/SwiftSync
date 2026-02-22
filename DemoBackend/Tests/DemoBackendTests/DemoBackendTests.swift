@@ -28,6 +28,7 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(projectTasks.first?["tag_ids"] as? [String], ["tag-1", "tag-2"])
         XCTAssertNotNil(projectTasks.first?["description"])
         XCTAssertNotNil(projectTasks.first?["updated_at"])
+        XCTAssertEqual(taskComments.first?["author_name"] as? String, "User")
     }
 
     func testSQLiteBackendPatchTaskDescriptionPersistsAcrossReopen() async throws {
@@ -85,6 +86,7 @@ final class DemoBackendTests: XCTestCase {
 
         XCTAssertEqual(created["task_id"] as? String, "task-1")
         XCTAssertEqual(created["author_user_id"] as? String, "user-1")
+        XCTAssertEqual(created["author_name"] as? String, "U")
         XCTAssertEqual(created["body"] as? String, "Server-created comment")
         XCTAssertEqual(created["id"] as? String, "comment-1")
         XCTAssertNil(created["updated_at"])
@@ -92,7 +94,90 @@ final class DemoBackendTests: XCTestCase {
         let comments = try backend.getTaskCommentsPayload(taskID: "task-1")
         XCTAssertEqual(comments.count, 1)
         XCTAssertEqual(comments[0]["id"] as? String, "comment-1")
+        XCTAssertEqual(comments[0]["author_name"] as? String, "U")
         XCTAssertNil(comments[0]["updated_at"])
+    }
+
+    func testSQLiteBackendDeleteCommentRemovesFromTaskComments() async throws {
+        let url = makeTemporaryDatabaseURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
+
+        try backend.deleteComment(commentID: "comment-1")
+        let comments = try backend.getTaskCommentsPayload(taskID: "task-1")
+        XCTAssertTrue(comments.isEmpty)
+    }
+
+    func testSQLiteBackendPatchTaskStateAndAssigneeAndReplaceTags() async throws {
+        let url = makeTemporaryDatabaseURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
+
+        let before = try backend.getTaskDetailPayload(taskID: "task-1")
+        let beforeUpdatedAt = before?["updated_at"] as? String
+
+        let patchedState = try backend.patchTaskState(taskID: "task-1", state: "done")
+        XCTAssertEqual(patchedState?["state"] as? String, "done")
+
+        let clearedAssignee = try backend.patchTaskAssignee(taskID: "task-1", assigneeID: nil)
+        XCTAssertTrue((clearedAssignee?["assignee_id"] is NSNull))
+
+        let reassigned = try backend.patchTaskAssignee(taskID: "task-1", assigneeID: "user-1")
+        XCTAssertEqual(reassigned?["assignee_id"] as? String, "user-1")
+
+        let retagged = try backend.replaceTaskTags(taskID: "task-1", tagIDs: ["tag-2"])
+        XCTAssertEqual(retagged?["tag_ids"] as? [String], ["tag-2"])
+        XCTAssertNotEqual(retagged?["updated_at"] as? String, beforeUpdatedAt)
+
+        let tag1Tasks = try backend.getTagTasksPayload(tagID: "tag-1")
+        let tag2Tasks = try backend.getTagTasksPayload(tagID: "tag-2")
+        XCTAssertTrue(tag1Tasks.isEmpty)
+        XCTAssertEqual(tag2Tasks.map { $0["id"] as? String }, ["task-1"])
+    }
+
+    func testSQLiteBackendCreateAndDeleteTaskUpdatesProjectAndTagSlices() async throws {
+        let url = makeTemporaryDatabaseURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
+
+        let created = try backend.createTask(
+            projectID: "project-1",
+            title: "New task",
+            descriptionText: "Server description",
+            state: "todo",
+            assigneeID: "user-1",
+            tagIDs: ["tag-1"]
+        )
+
+        guard let newTaskID = created["id"] as? String else {
+            XCTFail("Expected created task id")
+            return
+        }
+        XCTAssertEqual(created["project_id"] as? String, "project-1")
+        XCTAssertEqual(created["assignee_id"] as? String, "user-1")
+        XCTAssertEqual(created["tag_ids"] as? [String], ["tag-1"])
+
+        let projectTasksAfterCreate = try backend.getProjectTasksPayload(projectID: "project-1")
+        XCTAssertEqual(projectTasksAfterCreate.count, 2)
+        XCTAssertTrue(projectTasksAfterCreate.contains { ($0["id"] as? String) == newTaskID })
+
+        _ = try backend.createComment(taskID: newTaskID, authorUserID: "user-1", body: "For cascade")
+        XCTAssertEqual(try backend.getTaskCommentsPayload(taskID: newTaskID).count, 1)
+
+        try backend.deleteTask(taskID: newTaskID)
+
+        XCTAssertNil(try backend.getTaskDetailPayload(taskID: newTaskID))
+        XCTAssertTrue(try backend.getTaskCommentsPayload(taskID: newTaskID).isEmpty)
+
+        let projectTasksAfterDelete = try backend.getProjectTasksPayload(projectID: "project-1")
+        XCTAssertEqual(projectTasksAfterDelete.count, 1)
+        XCTAssertEqual(projectTasksAfterDelete[0]["id"] as? String, "task-1")
+
+        let tag1TasksAfterDelete = try backend.getTagTasksPayload(tagID: "tag-1")
+        XCTAssertEqual(tag1TasksAfterDelete.map { $0["id"] as? String }, ["task-1"])
     }
 
     private func makeTemporaryDatabaseURL() -> URL {

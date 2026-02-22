@@ -3,7 +3,7 @@ import SwiftSync
 import SwiftUI
 
 struct TagTasksView: View {
-    let tag: Tag
+    let tagID: String
     let syncContainer: SyncContainer
     @ObservedObject var syncEngine: DemoSyncEngine
 
@@ -12,7 +12,7 @@ struct TagTasksView: View {
     @State private var hasTriggeredInitialSync = false
 
     init(tag: Tag, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
-        self.tag = tag
+        self.tagID = tag.id
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
         _tagModel = SyncModel(Tag.self, id: tag.id, in: syncContainer)
@@ -61,12 +61,12 @@ struct TagTasksView: View {
         }
         .navigationTitle(tagModel?.name ?? "Tag")
         .refreshable {
-            await syncEngine.syncTagTasks(tagID: tag.id)
+            await syncEngine.syncTagTasks(tagID: tagID)
         }
         .task {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
-            await syncEngine.syncTagTasks(tagID: tag.id)
+            await syncEngine.syncTagTasks(tagID: tagID)
         }
     }
 }

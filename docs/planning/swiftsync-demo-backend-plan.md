@@ -22,9 +22,7 @@
 
 ### What is still missing
 
-- [ ] Phase 2 write flows in the app/sync engine (backend package has test-covered mutation primitives, but app UI/write pipeline is not done yet)
-- [ ] Complete backend write endpoint coverage used by Phase 2 app flows
-- [ ] Finalize write contract for `PUT /tasks/{taskID}/tags` (full replace vs explicit add/remove semantics)
+- [ ] Offline/outbox replay semantics (intentionally deferred until after online CRUD)
 
 ## Scope
 
@@ -39,6 +37,31 @@ Related planning docs:
 - `docs/planning/swiftsync-demo-app-plan.md`
 - `docs/planning/swiftsync-demo-crud-flows-plan.md`
 - `docs/planning/swiftsync-demo-field-reduction-plan.md`
+
+## Backend Purpose (for the Demo)
+
+Provide a backend-like source of truth that is separate from the app cache, so demo writes and reads behave like a real system without building a real HTTP service.
+
+The backend exists to prove:
+
+- server-owned state changes (timestamps, validation, relationship consistency)
+- app/backend separation of truth (`SyncContainer` cache vs backend SQLite)
+- deterministic read/write behavior for SwiftSync demo flows
+
+## Backend Mantra
+
+- Act like a backend where it matters (state, validation, timestamps, consistency).
+- Drop protocol/server complexity that the app does not need (HTTP stack, auth, deployment).
+- Keep the backend boundary explicit through `DemoAPIClient`.
+- Test backend behavior with `swift test` before wiring app flows.
+
+## Backend Non-Goals (Current Scope)
+
+- [X] Real HTTP server/router
+- [X] Auth/session management
+- [X] Multi-client concurrency simulation
+- [X] Production backend architecture concerns
+- [ ] Offline/outbox replay semantics before online CRUD endpoints are complete
 
 ## Architecture Rules
 
@@ -58,14 +81,14 @@ Status: `[X]` Read endpoints now run through a SQLite-backed stateful simulator 
 - [X] SQLite schema for projects/users/tasks/tags/comments + task_tag join table
 - [X] Seed SQLite backend state from deterministic demo seed data on first init/reset
 - [X] Read endpoint queries against SQLite for existing staged endpoints
-- [ ] Support backend mutations in SQLite for all Phase 2 endpoints used by the app
+- [X] Support backend mutations in SQLite for all Phase 2 endpoints used by the app
 
 ### Behavior (Backend-like, no HTTP needed)
 
 - [X] Server-owned timestamps/updates on mutation (`updatedAt`) for implemented mutations
 - [X] Validation/error paths for invalid writes (minimal, deterministic) for implemented mutations
 - [X] Stable backend-side relationship handling (task tags, comments, assignee/project foreign keys)
-- [ ] Full Phase 2 write semantics exercised through app-facing endpoint methods
+- [X] Full Phase 2 online write semantics exercised through app-facing endpoint methods
 
 ### Unit Tests (Required)
 
@@ -73,7 +96,7 @@ Status: `[X]` Read endpoints now run through a SQLite-backed stateful simulator 
 - [X] Read endpoint data correctness from SQLite state
 - [X] Mutation persistence (write then read reflects server-side change)
 - [X] Relationship mutation correctness (comment insert)
-- [ ] Coverage for every Phase 2 endpoint contract used by app flows
+- [X] Coverage for every Phase 2 backend endpoint contract used by app flows
 
 ## Endpoints
 
@@ -81,8 +104,7 @@ Status: `[X]` Read endpoints now run through a SQLite-backed stateful simulator 
 
 - [X] `GET /projects`
 - [X] `GET /projects/{projectID}/tasks`
-- [X] `GET /users`
-- [X] `GET /users/{userID}/tasks`
+- [X] `GET /users` (seeded reference data for assignee display/selection)
 - [X] `GET /tasks/{taskID}`
 - [X] `GET /tasks/{taskID}/comments`
 - [X] `GET /tags`
@@ -90,13 +112,13 @@ Status: `[X]` Read endpoints now run through a SQLite-backed stateful simulator 
 
 ### Write Endpoints (Phase 2)
 
-- [ ] `PATCH /tasks/{taskID}` (title/state/assignee)
-- [ ] `PATCH /tasks/{taskID}/description` (modal edit flow)
-- [ ] `PUT /tasks/{taskID}/tags` (full set replace or explicit add/remove contract)
-- [ ] `POST /tasks/{taskID}/comments`
-- [ ] `POST /projects`
-- [ ] `POST /tasks`
-- [ ] `POST /users`
+- [X] `PATCH /tasks/{taskID}` (state/assignee in current demo scope)
+- [X] `PATCH /tasks/{taskID}/description` (modal edit flow)
+- [X] `PUT /tasks/{taskID}/tags` (full set replace semantics)
+- [X] `POST /tasks/{taskID}/comments`
+- [X] `POST /tasks`
+- [X] `DELETE /tasks/{taskID}`
+- [X] `DELETE /comments/{commentID}`
 
 ## Backend Simulation Behavior
 
@@ -108,16 +130,16 @@ Status: `[X]` Read endpoints now run through a SQLite-backed stateful simulator 
   - `flakyNetwork`
   - `offline`
 - [-] Conflict simulation via `updatedAt` and optional `version` field (timestamps exist; explicit conflict flows are not implemented)
-- [X] Large seeded dataset for realistic list stress:
-  - 30 projects
-  - 300 tasks
-  - 40 users
-  - 50 tags
-  - 2,000 comments
+- [X] Curated seeded dataset for coherent demo storytelling:
+  - 3 projects
+  - 12 tasks
+  - 6 users
+  - 12 tags
+  - 20 comments
 
 ## Execution Order (Current)
 
-1. [ ] Finish backend write endpoint contract coverage in `DemoBackend` (+ tests)
-2. [ ] Wire `DemoAPIClient` write methods to `DemoBackend`
-3. [ ] Implement Phase 2 app/sync engine write flows using those methods
-4. [ ] Verify end-to-end reactive refresh on write flows in the demo app
+1. [X] Finish backend write endpoint contract coverage in `DemoBackend` (+ tests)
+2. [X] Wire `DemoAPIClient` write methods to `DemoBackend`
+3. [X] Implement Phase 2 app/sync engine write flows using those methods
+4. [X] Verify end-to-end reactive refresh on write flows in the demo app (build/manual flow wiring complete)
