@@ -233,6 +233,7 @@ private struct CreateTaskSheet: View {
     @State private var descriptionText = ""
     @State private var stateID: String?
     @State private var assigneeID: String?
+    @State private var isLoadingTaskStates = false
     @State private var isSaving = false
     @State private var saveErrorMessage: String?
 
@@ -266,12 +267,28 @@ private struct CreateTaskSheet: View {
                 Section("Task") {
                     TextField("Title", text: $title)
 
-                    Picker("State", selection: $stateID) {
-                        ForEach(taskStateOptions, id: \.id) { option in
-                            Text(option.label).tag(Optional(option.id))
+                    if taskStateOptions.isEmpty {
+                        LabeledContent("State") {
+                            if isLoadingTaskStates {
+                                ProgressView()
+                            } else {
+                                Text("Unavailable")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        if !isLoadingTaskStates {
+                            Button("Retry Loading States") {
+                                loadTaskStates()
+                            }
+                        }
+                    } else {
+                        Picker("State", selection: $stateID) {
+                            ForEach(taskStateOptions, id: \.id) { option in
+                                Text(option.label).tag(Optional(option.id))
+                            }
                         }
                     }
-                    .disabled(taskStateOptions.isEmpty)
 
                     Picker("Assignee", selection: $assigneeID) {
                         Text("Unassigned").tag(String?.none)
@@ -343,7 +360,7 @@ private struct CreateTaskSheet: View {
             }
         }
         .task {
-            await syncEngine.syncTaskStates()
+            loadTaskStates()
         }
         .task(id: taskStateOptions.map(\.id)) {
             if let stateID, taskStateOptions.contains(where: { $0.id == stateID }) {
@@ -365,5 +382,16 @@ private struct CreateTaskSheet: View {
             Text(saveErrorMessage ?? "Unknown error")
         }
         .presentationDetents([.medium, .large])
+    }
+
+    private func loadTaskStates() {
+        guard !isLoadingTaskStates else { return }
+        isLoadingTaskStates = true
+        _Concurrency.Task {
+            await syncEngine.syncTaskStates()
+            await MainActor.run {
+                isLoadingTaskStates = false
+            }
+        }
     }
 }

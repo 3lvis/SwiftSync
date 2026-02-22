@@ -290,7 +290,11 @@ struct TaskDetailView: View {
         let projectID = taskModel.projectID
         return Menu {
             if taskStateOptions.isEmpty {
-                Text("No state options")
+                Button("Reload State Options") {
+                    _Concurrency.Task {
+                        await syncEngine.syncTaskStates()
+                    }
+                }
             } else {
                 ForEach(taskStateOptions, id: \.id) { option in
                     Button {

@@ -51,6 +51,10 @@ final class DemoRuntime: ObservableObject {
             for: Project.self,
             User.self,
             Task.self,
+            TaskStateOption.self,
+            PriorityOption.self,
+            ProjectStatusOption.self,
+            UserRoleOption.self,
             Tag.self,
             Comment.self,
             configurations: configuration
