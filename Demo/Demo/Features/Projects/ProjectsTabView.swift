@@ -82,7 +82,6 @@ private struct ProjectListRow: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text(name)
                     .font(.headline)
-                    .foregroundStyle(.primary)
                     .lineLimit(2)
 
                 Text(status)
@@ -95,7 +94,6 @@ private struct ProjectListRow: View {
             HStack(alignment: .center, spacing: 8) {
                 Text(taskCountLabel)
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.primary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background(
@@ -280,7 +278,6 @@ private struct ProjectDetailHeaderCard: View {
 
                 Text(taskCountLabel)
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.primary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background(
@@ -318,7 +315,6 @@ private struct ProjectTaskListRow: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text(title)
                     .font(.headline)
-                    .foregroundStyle(.primary)
                     .lineLimit(3)
 
                 HStack(alignment: .center, spacing: 8) {
@@ -479,9 +475,7 @@ private struct CreateTaskSheet: View {
                 }
             )
         ) {
-            Button("OK", role: .cancel) {
-                saveErrorMessage = nil
-            }
+            Button("OK", role: .cancel) {}
         } message: {
             Text(saveErrorMessage ?? "Unknown error")
         }

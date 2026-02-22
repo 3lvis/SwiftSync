@@ -541,9 +541,7 @@ private struct EditTaskDescriptionSheet: View {
                 }
             )
         ) {
-            Button("OK", role: .cancel) {
-                saveErrorMessage = nil
-            }
+            Button("OK", role: .cancel) {}
         } message: {
             Text(saveErrorMessage ?? "Unknown error")
         }
@@ -664,9 +662,7 @@ private struct AssigneePickerSheet: View {
                 }
             )
         ) {
-            Button("OK", role: .cancel) {
-                saveErrorMessage = nil
-            }
+            Button("OK", role: .cancel) {}
         } message: {
             Text(saveErrorMessage ?? "Unknown error")
         }
@@ -787,9 +783,7 @@ private struct EditTaskTagsSheet: View {
                 }
             )
         ) {
-            Button("OK", role: .cancel) {
-                saveErrorMessage = nil
-            }
+            Button("OK", role: .cancel) {}
         } message: {
             Text(saveErrorMessage ?? "Unknown error")
         }
@@ -900,9 +894,7 @@ private struct CreateCommentSheet: View {
                 }
             )
         ) {
-            Button("OK", role: .cancel) {
-                saveErrorMessage = nil
-            }
+            Button("OK", role: .cancel) {}
         } message: {
             Text(saveErrorMessage ?? "Unknown error")
         }
