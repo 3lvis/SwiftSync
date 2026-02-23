@@ -45,6 +45,7 @@ final class DemoRuntime: ObservableObject {
             UserRoleOption.self,
             Tag.self,
             Comment.self,
+            schemaValidation: .failFast,
             initializationFailureRecovery: .resetAndRetry,
             configurations: configuration
         )

@@ -4,6 +4,16 @@ import Core
 import ObjCExceptionCatcher
 
 public final class SyncContainer: NSObject, @unchecked Sendable {
+    public struct SchemaValidationError: LocalizedError, Sendable {
+        public let message: String
+
+        public var errorDescription: String? { message }
+
+        public init(message: String) {
+            self.message = message
+        }
+    }
+
     public struct ObjectiveCInitializationExceptionError: LocalizedError, Sendable {
         public let name: String?
         public let reason: String?
@@ -20,6 +30,11 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         case resetAndRetry
     }
 
+    public enum SchemaValidation: Sendable {
+        case none
+        case failFast
+    }
+
     public static let didSaveChangesNotification = Notification.Name("SwiftSync.SyncContainer.didSaveChanges")
     public static let changedIdentifiersUserInfoKey = "changedIdentifiers"
     public static let changedModelTypeNamesUserInfoKey = "changedModelTypeNames"
@@ -33,9 +48,11 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         for modelTypes: any PersistentModel.Type...,
         inputKeyStyle: SyncInputKeyStyle = .snakeCase,
         migrationPlan: (any SchemaMigrationPlan.Type)? = nil,
+        schemaValidation: SchemaValidation = .none,
         initializationFailureRecovery: InitializationFailureRecovery = .none,
         configurations: ModelConfiguration...
     ) throws {
+        try Self._validateSchema(modelTypes: modelTypes, mode: schemaValidation)
         let schema = Schema(modelTypes)
         self.modelContainer = try Self._recoverContainerInitialization(
             recovery: initializationFailureRecovery,
@@ -204,6 +221,72 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
                 try fm.removeItem(at: child)
             }
         }
+    }
+
+    struct _SchemaRelationship: Sendable {
+        let ownerTypeName: String
+        let propertyName: String
+        let relatedTypeName: String
+        let isToMany: Bool
+        let hasExplicitInverseAnchor: Bool
+
+        var fullName: String { "\(ownerTypeName).\(propertyName)" }
+    }
+
+    static func _validateSchema(
+        modelTypes: [any PersistentModel.Type],
+        mode: SchemaValidation
+    ) throws {
+        guard mode == .failFast else { return }
+
+        let relationships = _schemaRelationships(from: modelTypes)
+            .sorted { lhs, rhs in
+                if lhs.ownerTypeName != rhs.ownerTypeName { return lhs.ownerTypeName < rhs.ownerTypeName }
+                return lhs.propertyName < rhs.propertyName
+            }
+
+        for relationship in relationships where relationship.isToMany {
+            let reciprocalToMany = relationships.filter {
+                $0.ownerTypeName == relationship.relatedTypeName &&
+                $0.relatedTypeName == relationship.ownerTypeName &&
+                $0.isToMany
+            }
+            guard !reciprocalToMany.isEmpty else { continue } // not many-to-many
+
+            let hasAnchor = relationship.hasExplicitInverseAnchor ||
+                reciprocalToMany.contains(where: \.hasExplicitInverseAnchor)
+            guard !hasAnchor else { continue }
+
+            let reciprocalList = reciprocalToMany.map(\.fullName).joined(separator: ", ")
+            throw SchemaValidationError(
+                message:
+                    """
+                    Invalid many-to-many relationship pair with zero explicit inverse anchors. \
+                    Found \(relationship.fullName) <-> [\(reciprocalList)]. \
+                    Add one @Relationship(inverse: ...) anchor on either side of the many-to-many pair.
+                    """
+            )
+        }
+    }
+
+    static func _schemaRelationships(from modelTypes: [any PersistentModel.Type]) -> [_SchemaRelationship] {
+        var output: [_SchemaRelationship] = []
+        for modelType in modelTypes {
+            guard let introspectable = modelType as? any SyncRelationshipSchemaIntrospectable.Type else { continue }
+            let ownerTypeName = String(reflecting: modelType)
+            for descriptor in introspectable.syncRelationshipSchemaDescriptors {
+                output.append(
+                    _SchemaRelationship(
+                        ownerTypeName: ownerTypeName,
+                        propertyName: descriptor.propertyName,
+                        relatedTypeName: descriptor.relatedTypeName,
+                        isToMany: descriptor.isToMany,
+                        hasExplicitInverseAnchor: descriptor.hasExplicitInverseAnchor
+                    )
+                )
+            }
+        }
+        return output
     }
 
     @objc

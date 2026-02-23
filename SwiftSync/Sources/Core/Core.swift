@@ -45,6 +45,33 @@ public extension SyncQuerySortableModel {
     }
 }
 
+public struct SyncRelationshipSchemaDescriptor: Sendable {
+    public let propertyName: String
+    public let relatedTypeName: String
+    public let isToMany: Bool
+    public let hasExplicitInverseAnchor: Bool
+
+    public init(
+        propertyName: String,
+        relatedTypeName: String,
+        isToMany: Bool,
+        hasExplicitInverseAnchor: Bool
+    ) {
+        self.propertyName = propertyName
+        self.relatedTypeName = relatedTypeName
+        self.isToMany = isToMany
+        self.hasExplicitInverseAnchor = hasExplicitInverseAnchor
+    }
+}
+
+public protocol SyncRelationshipSchemaIntrospectable {
+    static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] { get }
+}
+
+public extension SyncRelationshipSchemaIntrospectable {
+    static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] { [] }
+}
+
 public protocol SyncUpdatableModel: SyncModelable {
     static func make(from payload: SyncPayload) throws -> Self
     func apply(_ payload: SyncPayload) throws -> Bool

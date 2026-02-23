@@ -16,6 +16,7 @@ private struct SyncedProperty {
     let isNotExport: Bool
     let isRelationship: Bool
     let isToManyRelationship: Bool
+    let hasExplicitRelationshipInverse: Bool
 }
 
 private struct ReservedModelPropertyNameDiagnostic: DiagnosticMessage {
@@ -86,12 +87,13 @@ public struct SyncableMacro: ExtensionMacro {
         let sortDescriptorBody = sortDescriptorBlock(for: properties, typeName: typeName)
         let defaultRefreshModelTypesBody = defaultRefreshModelTypesBlock(for: properties)
         let relatedModelTypeBody = relatedModelTypeBlock(for: properties, typeName: typeName)
+        let relationshipSchemaDescriptorsBody = relationshipSchemaDescriptorsBlock(for: properties)
         let relationshipApplyBody = relationshipApplyBlock(for: properties, typeName: typeName)
 
         return [
             try ExtensionDeclSyntax(
                 """
-                extension \(type.trimmed): SyncRelationshipUpdatableModel, ExportModel, SyncQuerySortableModel {
+                extension \(type.trimmed): SyncRelationshipUpdatableModel, ExportModel, SyncQuerySortableModel, SyncRelationshipSchemaIntrospectable {
                     typealias SyncID = \(raw: identityProperty.typeSource)
 
                     static var syncIdentity: KeyPath<\(raw: typeName), \(raw: identityProperty.typeSource)> { \\.\(raw: identityProperty.name) }
@@ -104,6 +106,10 @@ public struct SyncableMacro: ExtensionMacro {
 
                     static func syncSortDescriptor(for keyPath: PartialKeyPath<\(raw: typeName)>) -> SortDescriptor<\(raw: typeName)>? {
                         \(raw: sortDescriptorBody)
+                    }
+
+                    static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] {
+                        \(raw: relationshipSchemaDescriptorsBody)
                     }
 
                     static func make(from payload: SyncPayload) throws -> \(raw: typeName) {
@@ -221,9 +227,28 @@ public struct SyncableMacro: ExtensionMacro {
                 remotePath: remotePath,
                 isNotExport: isNotExport,
                 isRelationship: relationshipInfo.isRelationship,
-                isToManyRelationship: relationshipInfo.isToMany
+                isToManyRelationship: relationshipInfo.isToMany,
+                hasExplicitRelationshipInverse: hasExplicitRelationshipInverse(variable)
             )
         }
+    }
+
+    private static func relationshipSchemaDescriptorsBlock(for properties: [SyncedProperty]) -> String {
+        let descriptors = properties.compactMap { property -> String? in
+            guard property.isRelationship else { return nil }
+            guard let relatedType = relationshipModelTypeName(for: property) else { return nil }
+            return """
+            SyncRelationshipSchemaDescriptor(
+                propertyName: "\(property.name)",
+                relatedTypeName: String(reflecting: \(relatedType).self),
+                isToMany: \(property.isToManyRelationship ? "true" : "false"),
+                hasExplicitInverseAnchor: \(property.hasExplicitRelationshipInverse ? "true" : "false")
+            )
+            """
+        }
+
+        guard !descriptors.isEmpty else { return "[]" }
+        return "[\n\(descriptors.joined(separator: ",\n"))\n]"
     }
 
     private static func primaryKeyRemoteKeyIfPresent(_ variable: VariableDeclSyntax) -> String? {
