@@ -1,6 +1,30 @@
 import Foundation
 import SwiftData
 
+// MARK: - Shared String Case Conversion Utilities
+
+fileprivate enum ScalarClass {
+    case upper
+    case lower
+    case digit
+    case other
+}
+
+fileprivate func scalarClass(_ scalar: UnicodeScalar) -> ScalarClass {
+    if CharacterSet.uppercaseLetters.contains(scalar) {
+        return .upper
+    }
+    if CharacterSet.lowercaseLetters.contains(scalar) {
+        return .lower
+    }
+    if CharacterSet.decimalDigits.contains(scalar) {
+        return .digit
+    }
+    return .other
+}
+
+// MARK: - SwiftSync API
+
 public enum SwiftSync {}
 
 public protocol SyncModelable: PersistentModel {
@@ -624,26 +648,6 @@ public enum ExportKeyStyle: Sendable {
         }
         return output
     }
-
-    private func scalarClass(_ scalar: UnicodeScalar) -> ScalarClass {
-        if CharacterSet.uppercaseLetters.contains(scalar) {
-            return .upper
-        }
-        if CharacterSet.lowercaseLetters.contains(scalar) {
-            return .lower
-        }
-        if CharacterSet.decimalDigits.contains(scalar) {
-            return .digit
-        }
-        return .other
-    }
-
-    private enum ScalarClass {
-        case upper
-        case lower
-        case digit
-        case other
-    }
 }
 
 public struct ExportOptions: Sendable {
@@ -985,26 +989,6 @@ public struct SyncPayload {
             return String(leading).uppercased() + part.dropFirst().lowercased()
         }
         return String(first).lowercased() + tail.joined()
-    }
-
-    private func scalarClass(_ scalar: UnicodeScalar) -> ScalarClass {
-        if CharacterSet.uppercaseLetters.contains(scalar) {
-            return .upper
-        }
-        if CharacterSet.lowercaseLetters.contains(scalar) {
-            return .lower
-        }
-        if CharacterSet.decimalDigits.contains(scalar) {
-            return .digit
-        }
-        return .other
-    }
-
-    private enum ScalarClass {
-        case upper
-        case lower
-        case digit
-        case other
     }
 
     private func cast<T>(_ raw: Any, as type: T.Type) -> T? {
