@@ -35,7 +35,7 @@ let package = Package(
         ),
         .target(
             name: "SwiftSync",
-            dependencies: ["Core", "SwiftDataBridge", "Macros"],
+            dependencies: ["Core", "SwiftDataBridge", "Macros", "ObjCExceptionCatcher"],
             path: "SwiftSync/Sources/SwiftSync"
         ),
         .target(
@@ -46,6 +46,11 @@ let package = Package(
             name: "SwiftDataBridge",
             dependencies: ["Core"],
             path: "SwiftSync/Sources/SwiftDataBridge"
+        ),
+        .target(
+            name: "ObjCExceptionCatcher",
+            path: "SwiftSync/Sources/ObjCExceptionCatcher",
+            publicHeadersPath: "include"
         ),
         .target(
             name: "TestingKit",

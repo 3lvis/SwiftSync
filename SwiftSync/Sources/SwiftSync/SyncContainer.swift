@@ -1,8 +1,25 @@
 import Foundation
 import SwiftData
 import Core
+import ObjCExceptionCatcher
 
 public final class SyncContainer: NSObject, @unchecked Sendable {
+    public struct ObjectiveCInitializationExceptionError: LocalizedError, Sendable {
+        public let name: String?
+        public let reason: String?
+
+        public var errorDescription: String? {
+            if let reason, !reason.isEmpty { return reason }
+            if let name, !name.isEmpty { return name }
+            return "Objective-C exception during ModelContainer initialization."
+        }
+    }
+
+    public enum InitializationFailureRecovery: Sendable {
+        case none
+        case resetAndRetry
+    }
+
     public static let didSaveChangesNotification = Notification.Name("SwiftSync.SyncContainer.didSaveChanges")
     public static let changedIdentifiersUserInfoKey = "changedIdentifiers"
     public static let changedModelTypeNamesUserInfoKey = "changedModelTypeNames"
@@ -16,13 +33,23 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         for modelTypes: any PersistentModel.Type...,
         inputKeyStyle: SyncInputKeyStyle = .snakeCase,
         migrationPlan: (any SchemaMigrationPlan.Type)? = nil,
+        initializationFailureRecovery: InitializationFailureRecovery = .none,
         configurations: ModelConfiguration...
     ) throws {
         let schema = Schema(modelTypes)
-        self.modelContainer = try ModelContainer(
-            for: schema,
-            migrationPlan: migrationPlan,
-            configurations: configurations
+        self.modelContainer = try Self._recoverContainerInitialization(
+            recovery: initializationFailureRecovery,
+            configurations: configurations,
+            makeContainer: {
+                try Self._executeCatchingObjectiveCException {
+                    try ModelContainer(
+                        for: schema,
+                        migrationPlan: migrationPlan,
+                        configurations: configurations
+                    )
+                }
+            },
+            resetPersistentStores: Self._resetPersistentStoreFiles(for:)
         )
         self.mainContext = modelContainer.mainContext
         self.inputKeyStyle = inputKeyStyle
@@ -111,6 +138,72 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             name: ModelContext.didSave,
             object: nil
         )
+    }
+
+    static func _recoverContainerInitialization<T>(
+        recovery: InitializationFailureRecovery,
+        configurations: [ModelConfiguration],
+        makeContainer: () throws -> T,
+        resetPersistentStores: ([ModelConfiguration]) throws -> Void
+    ) throws -> T {
+        do {
+            return try makeContainer()
+        } catch {
+            guard recovery == .resetAndRetry else {
+                throw error
+            }
+            try resetPersistentStores(configurations)
+            return try makeContainer()
+        }
+    }
+
+    static func _executeCatchingObjectiveCException<T>(_ body: () throws -> T) throws -> T {
+        var swiftResult: Result<T, Error>?
+        do {
+            try SwiftSyncObjCExceptionCatcher.`try`({
+                do {
+                    swiftResult = .success(try body())
+                } catch {
+                    swiftResult = .failure(error)
+                }
+            })
+        } catch {
+            let nsError = error as NSError
+            let userInfo = nsError.userInfo
+            let name = userInfo[SwiftSyncObjCExceptionNameKey] as? String
+            let reason = userInfo[SwiftSyncObjCExceptionReasonKey] as? String ?? nsError.localizedDescription
+            throw ObjectiveCInitializationExceptionError(name: name, reason: reason)
+        }
+
+        if let swiftResult {
+            return try swiftResult.get()
+        }
+
+        fatalError("SwiftSyncObjCExceptionCatcher returned no result and no error.")
+    }
+
+    static func _resetPersistentStoreFiles(for configurations: [ModelConfiguration]) throws {
+        let fm = FileManager.default
+
+        for configuration in configurations {
+            let storeURL = configuration.url
+
+            let directory = storeURL.deletingLastPathComponent()
+            let baseName = storeURL.lastPathComponent
+            guard fm.fileExists(atPath: directory.path) else { continue }
+
+            let children = try fm.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: nil,
+                options: [.skipsSubdirectoryDescendants]
+            )
+
+            for child in children {
+                let name = child.lastPathComponent
+                guard name == baseName || name.hasPrefix(baseName) else { continue }
+                try fm.removeItem(at: child)
+            }
+        }
     }
 
     @objc
