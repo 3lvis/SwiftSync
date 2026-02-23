@@ -1,282 +1,135 @@
 # Relationship Integrity (SwiftData + SwiftSync)
 
-This document explains:
+This document captures the corrected rule learned from debugging the Demo tag bug.
 
-- why the Demo `Task.tags` bug happened
-- why explicit relationship inverses matter for SwiftSync users
-- why SwiftSync now warns on missing to-many inverses in `@Syncable`
-- why `@Syncable(allowMissingToManyInverses: [...])` exists
-- how to think about the SwiftData circular macro edge case
+## The Correct Rule
 
-The goal is a simple mental model, not just implementation detail.
+- This is a **many-to-many** issue.
+- It is **not** a general "all to-many relationships need explicit inverses" issue.
+- Regular to-many relationships (for example one-to-many) **work fine** without explicit inverses.
+- For a **many-to-many** pair, you need **one explicit inverse anchor** (not two).
+- Adding explicit inverse annotations on **both sides** can trigger a SwiftData compiler bug:
+  - `"Circular reference resolving attached macro 'Relationship'"`
 
-## Short Version
+## Very Simple Mental Model
 
-Use this rule:
+In a many-to-many pair, SwiftData has to maintain the same links from two directions:
 
-- to-many relationships should have an explicit inverse (`@Relationship(inverse: ...)`)
+- `Task.tags`
+- `Tag.tasks`
 
-Why:
+If neither side explicitly declares the inverse, SwiftData has to infer/guess how the pair maps.
 
-- SwiftSync can correctly sync IDs into relationships
-- but SwiftData still owns the local object graph / inverse relationship behavior
-- implicit inverse inference can produce broken membership behavior in real sync flows
+That inference can break under batch updates (especially when relationships are shared, like one tag used by multiple tasks).
 
-Exception:
+Adding **one explicit inverse anchor** tells SwiftData:
 
-- if SwiftData fails to compile when both sides are explicitly annotated (a circular macro expansion edge case), keep one explicit side and document the exception with:
-  - `@Syncable(allowMissingToManyInverses: ["propertyName"])`
+- "These two properties are the same relationship. Use this mapping."
 
-This keeps the exception visible and intentional.
+That removes the guess and fixes the broken membership updates.
 
-## Mental Model
+## What We Verified in Demo (Experiments)
 
-## 1) SwiftSync syncs membership intent, SwiftData owns the graph
+### 1) Tag bug fix worked with one explicit inverse on `Tag`
 
-Think of SwiftSync as saying:
-
-- "Task `task-6` should be related to tags `[tag-12, tag-3]`"
-
-SwiftData then materializes and maintains the object graph:
-
-- `task.tags`
-- `tag.tasks` (inverse)
-
-If inverse relationships are ambiguous or inferred incorrectly, SwiftSync can do the "right" ID sync and still end up with a wrong in-memory/local graph after SwiftData applies relationship updates.
-
-## 2) To-many relationships are the risky ones
-
-To-many relationships are where membership integrity problems usually show up:
-
-- many-to-many (`Task.tags <-> Tag.tasks`)
-- one-to-many (`Project.tasks <-> Task.project`)
-
-Why they are riskier:
-
-- they represent sets of links
-- they are more likely to be rewritten during batch sync
-- shared related rows (for example the same tag used by two tasks) amplify inverse inconsistencies
-
-## 3) "Missing inverse" bugs look like sync corruption, but the root cause is model integrity
-
-Symptom:
-
-- backend response is correct
-- immediate targeted sync looks correct
-- a later batch sync causes one relationship membership to disappear
-
-That feels like a sync race, but the root issue can be an implicit/inferred inverse relationship in the model schema.
-
-## The Demo `Task.tags` Bug (What Happened)
-
-We hit a real bug in Demo while editing task tags.
-
-Observed behavior:
-
-1. Open "Edit Tags" for a task
-2. Add tags and save
-3. Save reports success
-4. UI shows no change or partial change
-
-What debugging showed:
-
-- backend mutation succeeded
-- backend returned the correct tag IDs
-- targeted `syncTaskDetail` applied the correct tags locally
-- later `syncProjectTasks` (batch task sync) caused one shared tag membership to drop
-
-The specific pattern:
-
-- a tag shared by multiple tasks disappeared from one task after the batch sync
-- a unique tag remained
-
-That strongly pointed to a local inverse relationship integrity problem, not a backend mutation problem.
-
-Root cause:
-
-- `Tag.tasks` did not have an explicit inverse to `Task.tags`
-- SwiftData inverse behavior for that many-to-many pair was inferred/implicit
-- batch sync of multiple tasks with shared tags caused local membership corruption
-
-Fix:
-
-- make the inverse explicit on the `Tag` side:
+This fixed the bug:
 
 ```swift
 @Relationship(inverse: \Task.tags)
 var tasks: [Task]
 ```
 
-After that, the tag replacement flow behaved correctly.
+### 2) Tag bug fix also worked with one explicit inverse on `Task`
 
-## Why `@Syncable` Now Warns on Missing To-Many Inverses
-
-SwiftSync can prevent a lot of user pain by warning early.
-
-The `@Syncable` macro now emits a warning for to-many relationships that do not declare an explicit inverse.
-
-Mental model:
-
-- `@Syncable` is not only about payload mapping
-- it is also a guardrail for model shapes that are risky in sync-heavy apps
-
-This warning exists because the bug class is:
-
-- hard to spot in code review
-- hard to debug from UI symptoms
-- costly to diagnose after the app grows
-
-## Why This Is a Warning (Not Always an Error)
-
-We initially tried stricter enforcement, but SwiftData has a compiler/macro edge case:
-
-- annotating both sides of some relationships with explicit `@Relationship(inverse: ...)`
-- can trigger a SwiftData circular macro expansion compiler error
-
-Important clarification:
-
-- this is a compiler/macro expansion issue
-- not a runtime object-graph cycle issue
-
-So SwiftSync cannot safely require "both sides explicit, always" in all cases.
-
-## The Circular Macro Expansion Edge Case
-
-In some schemas (especially many-to-many pairs), SwiftData can fail to compile when both sides are explicitly annotated.
-
-Example pattern that may fail:
-
-- `Tag.tasks` has `@Relationship(inverse: \Task.tags)`
-- `Task.tags` also has `@Relationship(inverse: \Tag.tasks)`
-
-This can produce a compiler error about circular macro expansion / circular reference.
-
-Because of that, the practical rule becomes:
-
-- prefer explicit inverses
-- but if SwiftData compiler fails on the reciprocal annotation, keep one explicit side and document the exception
-
-## Why `@Syncable(allowMissingToManyInverses: [...])` Is Needed
-
-This is the explicit exception mechanism for the SwiftData edge case.
-
-Example:
+This also fixed the bug:
 
 ```swift
-@Syncable(allowMissingToManyInverses: ["tags", "watchers"])
-@Model
-final class Task {
-    var tags: [Tag]
-    var watchers: [User]
-}
+@Relationship(inverse: \Tag.tasks)
+var tags: [Tag]
 ```
 
-What it means:
+Conclusion:
 
-- "We know these to-many properties are missing a local explicit inverse annotation"
-- "This is intentional"
-- "Do not warn for these specific properties"
+- the `Task.tags <-> Tag.tasks` many-to-many pair needed **one explicit inverse anchor**
+- it did **not** require explicit inverses on both sides
 
-Why this is better than ignoring warnings:
+### 3) Regular to-many relationships still worked without explicit inverses
 
-- exceptions are local and explicit
-- reviewers can see the exact properties being exempted
-- the guardrail still applies to all other to-many relationships
-- we keep pressure toward explicit inverses without blocking valid builds
+As a verification step, explicit inverses were removed from:
 
-## What `allowMissingToManyInverses` Is Not
+- `User.assignedTasks`
+- `User.reviewTasks`
 
-It is not:
+Those relationships still worked fine.
 
-- a runtime fix
-- a sync behavior flag
-- a replacement for proper inverse modeling
+Conclusion:
 
-It only suppresses a macro diagnostic for named properties.
+- this bug pattern is not "all to-many relationships"
+- it is specifically about the problematic many-to-many pair with no inverse anchor
 
-You should use it only when:
+## Why the Demo `tags` Pair Broke but `watchers` Did Not
 
-- the reciprocal side already declares the inverse, and
-- adding the local explicit inverse causes the SwiftData compiler circular macro error
+Demo has two many-to-many pairs:
 
-## Practical Rules (Recommended)
+1. `Task.tags <-> Tag.tasks`
+2. `Task.watchers <-> User.watchedTasks`
 
-## Default rule
+Before the fix:
 
-For `@Syncable` models:
+- `Task.tags <-> Tag.tasks` had **no explicit inverse on either side** (zero anchors) -> this is the one that broke
+- `Task.watchers <-> User.watchedTasks` already had an explicit inverse anchor on `User.watchedTasks` -> this one worked
 
-- declare explicit inverses for to-many relationships
+So the key condition was:
 
-## If SwiftData compiler fails when both sides are explicit
+- **many-to-many with zero explicit inverse anchors**
 
-1. Keep one side explicitly annotated (the side that compiles and clearly documents the relationship)
-2. Add `allowMissingToManyInverses` for the reciprocal to-many property
-3. Add a short code comment if the relationship is non-obvious
+## Practical Rule for SwiftSync + SwiftData Models
 
-## For critical many-to-many relationships
+Use this rule in app models:
 
-- add a regression test that exercises shared-membership batch sync behavior
+### Many-to-many
 
-This is exactly what we did for the tag corruption bug class.
+- Ensure the pair has **at least one** explicit inverse annotation.
+- Do **not** force both sides if SwiftData hits the circular macro compiler error.
 
-## What We Added in SwiftSync to Prevent This Pain Again
+### One-to-many
 
-## 1) Regression tests for the bug class
+- Explicit inverse is optional for correctness in the bug pattern we observed.
+- You can still add one for clarity if it compiles cleanly.
 
-We added a standalone regression file that shows:
+## What To Avoid
 
-- missing explicit inverse can corrupt shared membership during batch sync (expected failure pin)
-- explicit inverse preserves membership (passing control)
+Avoid this in many-to-many pairs:
 
-This makes the bug class visible and reproducible.
+- neither side has `@Relationship(inverse: ...)`
 
-## 2) `@Syncable` diagnostic guardrail
+That is the exact configuration that produced the Demo tag membership corruption during batch sync.
 
-The macro warns on missing to-many inverses by default.
+## SwiftData Compiler Edge Case (Important)
 
-This catches risky model shapes earlier than runtime debugging.
+Trying to annotate both sides of a many-to-many pair can fail with:
 
-## 3) Explicit exception mechanism
+- `"Circular reference resolving attached macro 'Relationship'"`
 
-`allowMissingToManyInverses` documents known-safe exceptions caused by SwiftData compiler limitations.
+This means:
 
-This prevents "warning fatigue" while keeping the policy strict by default.
+- "add explicit inverses everywhere on both sides" is not a workable rule
+- the correct practical approach is one explicit inverse anchor for the pair
 
-## FAQ-Style Clarifications
+## Why There Is No Broad `@Syncable` Inverse Warning
 
-## "If one side is explicit, why warn on the other side at all?"
+We previously added an `@Syncable` warning for all missing to-many inverses.
 
-Because the macro only has limited source/context visibility and cannot reliably prove reciprocal correctness in all cases.
+That rule was too broad and produced the wrong guidance (including for one-to-many relationships that work fine), so it was removed.
 
-A warning-by-default plus explicit allowlist is safer and more honest than silently guessing.
+If we add guardrails again, they should target the real risk:
 
-## "Does this mean SwiftSync is broken?"
+- many-to-many pairs with zero explicit inverse anchors
 
-No. The root issue is at the SwiftData relationship modeling/inverse layer.
+That likely belongs in a runtime schema validator (cross-model validation), not a broad local macro warning.
 
-SwiftSync can still:
+## Recommended Team Wording (copy/paste)
 
-- expose the risk
-- provide guardrails
-- provide tests
-- document exceptions explicitly
-
-## "Will this go away later?"
-
-Possibly.
-
-If SwiftData compiler behavior improves (or SwiftSync adds a stronger runtime schema validator), we can tighten the rule further and reduce exceptions.
-
-## Recommended Next Hardening Step
-
-Add a runtime schema validator (Debug/Test fail-fast) that checks:
-
-- missing/implicit to-many inverses
-- reciprocal mismatch diagnostics
-- related model registration in `SyncContainer`
-
-This complements the macro warning:
-
-- macro = source-level guardrail
-- runtime validator = cross-model/configuration guardrail
-
+- Many-to-many relationships should have **one explicit inverse anchor**.
+- One-to-many relationships work fine without explicit inverses.
+- Do not annotate both sides of a many-to-many pair if SwiftData throws the circular `@Relationship` macro error.

@@ -204,7 +204,7 @@ final class RelationshipIntegrityRegressionTests: XCTestCase {
     @MainActor
     func testMissingExplicitInverseCanDropSharedTagMembershipAcrossTaskBatchSync() async throws {
         XCTExpectFailure(
-            "Known SwiftData/SwiftSync runtime bug: implicit to-many inverse can corrupt shared memberships during batch sync. Use explicit @Relationship(inverse: ...) until runtime guardrails are added."
+            "Known SwiftData/SwiftSync runtime bug: a many-to-many pair with no explicit inverse anchor can corrupt shared memberships during batch sync. Use one explicit @Relationship(inverse: ...) anchor until runtime guardrails are added."
         )
 
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)

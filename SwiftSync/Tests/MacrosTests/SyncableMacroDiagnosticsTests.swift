@@ -9,7 +9,7 @@ final class SyncableMacroDiagnosticsTests: XCTestCase {
         "Syncable": SyncableMacro.self
     ]
 
-    func testSyncableEmitsErrorForToManyRelationshipWithoutExplicitInverse() {
+    func testSyncableDoesNotWarnForToManyRelationshipWithoutExplicitInverse() {
         assertMacroExpansion(
             """
             @Syncable
@@ -28,40 +28,6 @@ final class SyncableMacroDiagnosticsTests: XCTestCase {
 
             final class Label {
                 var id: Int = 0
-            }
-            """,
-            diagnostics: [
-                DiagnosticSpec(
-                    message: "To-many relationship 'labels' in @Syncable model 'Ticket' must declare @Relationship(inverse: ...). Explicit inverses are required to avoid SwiftData relationship corruption during sync.",
-                    line: 3,
-                    column: 9,
-                    severity: .warning
-                )
-            ],
-            macros: macros,
-            indentationWidth: .spaces(4)
-        )
-    }
-
-    func testSyncableDoesNotWarnForAllowlistedMissingToManyInverse() {
-        assertMacroExpansion(
-            """
-            @Syncable(allowMissingToManyInverses: ["tags"])
-            final class Task {
-                var tags: [Tag] = []
-            }
-
-            final class Tag {
-                var name: String = ""
-            }
-            """,
-            expandedSource: """
-            final class Task {
-                var tags: [Tag] = []
-            }
-
-            final class Tag {
-                var name: String = ""
             }
             """,
             diagnostics: [],

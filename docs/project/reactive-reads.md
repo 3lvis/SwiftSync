@@ -86,7 +86,7 @@ Real Demo example (same queried model + same related model, multiple paths):
 
 Related modeling note:
 - relationship-scoped queries assume the local relationship graph is trustworthy
-- for to-many relationships, prefer explicit inverses (`@Relationship(inverse: ...)`) and see `docs/project/relationship-integrity.md` for the tag corruption bug and `@Syncable` inverse guardrail rationale
+- for many-to-many relationships, ensure the pair has one explicit inverse anchor (`@Relationship(inverse: ...)`) and see `docs/project/relationship-integrity.md` for the tag corruption bug and the corrected rule
 
 ## `sortBy` vs `refreshOn`
 

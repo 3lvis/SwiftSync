@@ -167,7 +167,7 @@ final class Tag {
     }
 }
 
-@Syncable(allowMissingToManyInverses: ["tags", "watchers"])
+@Syncable
 @Model
 final class Task {
     @Attribute(.unique) var id: String

@@ -6,7 +6,7 @@ Source-of-truth docs:
 - `docs/project/parent-scope.md` (parent-scoped sync/query behavior)
 - `docs/project/property-mapping-contract.md` (mapping/import/export semantics)
 - `docs/project/reactive-reads.md` (`@SyncQuery` / `@SyncModel` mental model)
-- `docs/project/relationship-integrity.md` (inverse relationships, tag bug, `@Syncable` inverse guardrails)
+- `docs/project/relationship-integrity.md` (many-to-many inverse anchor rule, tag bug)
 - `docs/project/backend-contract.md` (recommended backend shape)
 
 If an answer needs more than a short explanation, this FAQ points to the source-of-truth doc instead of duplicating it.
@@ -182,14 +182,15 @@ This keeps view ownership explicit and avoids stale retained-reference assumptio
 
 See `docs/project/reactive-reads.md` ("App Best Practices").
 
-## 22) Why does `@Syncable` warn about missing to-many inverses, and what is `allowMissingToManyInverses`?
+## 22) What is the inverse rule after the Demo tag bug?
 
-Because implicit SwiftData inverse inference can cause real relationship corruption in sync-heavy flows (we hit this in Demo with `Task.tags` / `Tag.tasks`).
+The corrected rule is narrower than what we first documented:
 
-- default rule: explicit inverse for to-many relationships
-- SwiftSync warns early at `@Syncable`
-- if SwiftData compiler hits a circular macro expansion edge case when both sides are explicit, use:
-  - `@Syncable(allowMissingToManyInverses: ["propertyName"])`
-  - only for the specific known-safe exception(s)
+- this is a **many-to-many** issue (not a general all-to-many issue)
+- one-to-many relationships work fine without explicit inverses
+- many-to-many pairs should have **one explicit inverse anchor** (`@Relationship(inverse: ...)`) on either side
+- do not force both sides if SwiftData throws the circular `@Relationship` macro compiler error
+
+We removed the earlier broad `@Syncable` warning/allowlist because it encoded the wrong rule.
 
 See `docs/project/relationship-integrity.md`.

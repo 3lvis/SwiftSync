@@ -36,24 +36,6 @@ private struct ReservedModelPropertyNameDiagnostic: DiagnosticMessage {
     var severity: DiagnosticSeverity { .error }
 }
 
-private struct MissingToManyRelationshipInverseDiagnostic: DiagnosticMessage {
-    let typeName: String
-    let propertyName: String
-
-    var message: String {
-        """
-        To-many relationship '\(propertyName)' in @Syncable model '\(typeName)' must declare @Relationship(inverse: ...). \
-        Explicit inverses are required to avoid SwiftData relationship corruption during sync.
-        """
-    }
-
-    var diagnosticID: MessageID {
-        MessageID(domain: "SwiftSync.SyncableMacro", id: "missing-to-many-inverse-\(typeName)-\(propertyName)")
-    }
-
-    var severity: DiagnosticSeverity { .warning }
-}
-
 public struct SyncableMacro: ExtensionMacro {
     public static func expansion(
         of node: AttributeSyntax,
@@ -66,13 +48,7 @@ public struct SyncableMacro: ExtensionMacro {
             return []
         }
 
-        let allowlistedMissingToManyInverses = allowlistedMissingToManyInverses(from: node)
         emitBlockedNameDiagnostics(in: classDecl, context: context)
-        _ = emitToManyRelationshipInverseDiagnostics(
-            in: classDecl,
-            allowlistedPropertyNames: allowlistedMissingToManyInverses,
-            context: context
-        )
 
         let typeName = classDecl.name.text
         let properties = syncedProperties(from: classDecl)
@@ -210,66 +186,6 @@ public struct SyncableMacro: ExtensionMacro {
             )
             context.diagnose(Diagnostic(node: Syntax(pattern.identifier), message: message))
         }
-    }
-
-    @discardableResult
-    private static func emitToManyRelationshipInverseDiagnostics(
-        in classDecl: ClassDeclSyntax,
-        allowlistedPropertyNames: Set<String>,
-        context: some MacroExpansionContext
-    ) -> Bool {
-        var emitted = false
-        let typeName = classDecl.name.text
-
-        for member in classDecl.memberBlock.members {
-            guard let variable = member.decl.as(VariableDeclSyntax.self),
-                variable.bindings.count == 1,
-                let binding = variable.bindings.first,
-                binding.accessorBlock == nil,
-                let pattern = binding.pattern.as(IdentifierPatternSyntax.self),
-                let annotation = binding.typeAnnotation
-            else {
-                continue
-            }
-
-            let relationship = relationshipInfo(from: annotation.type.trimmedDescription)
-            guard relationship.isRelationship, relationship.isToMany else { continue }
-            guard !hasExplicitRelationshipInverse(variable) else { continue }
-            guard !allowlistedPropertyNames.contains(pattern.identifier.text) else { continue }
-
-            context.diagnose(
-                Diagnostic(
-                    node: Syntax(pattern.identifier),
-                    message: MissingToManyRelationshipInverseDiagnostic(
-                        typeName: typeName,
-                        propertyName: pattern.identifier.text
-                    )
-                )
-            )
-            emitted = true
-        }
-
-        return emitted
-    }
-
-    private static func allowlistedMissingToManyInverses(from node: AttributeSyntax) -> Set<String> {
-        guard let arguments = node.arguments?.as(LabeledExprListSyntax.self) else { return [] }
-        guard let allowlistArg = arguments.first(where: { $0.label?.text == "allowMissingToManyInverses" }) else {
-            return []
-        }
-        guard let array = allowlistArg.expression.as(ArrayExprSyntax.self) else { return [] }
-
-        var names: Set<String> = []
-        for element in array.elements {
-            guard let literal = element.expression.as(StringLiteralExprSyntax.self) else { continue }
-            let value = literal.segments.compactMap { segment -> String? in
-                segment.as(StringSegmentSyntax.self)?.content.text
-            }.joined()
-            if !value.isEmpty {
-                names.insert(value)
-            }
-        }
-        return names
     }
 
     private static func syncedProperties(from classDecl: ClassDeclSyntax) -> [SyncedProperty] {
