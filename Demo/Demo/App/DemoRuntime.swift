@@ -23,7 +23,7 @@ final class DemoRuntime: ObservableObject {
         do {
             self.syncContainer = try Self.makeSyncContainer()
         } catch {
-            fatalError("Failed to initialize SyncContainer: \(error)")
+            fatalError(Self.formattedSyncContainerInitializationError(error))
         }
 
         self.syncEngine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
@@ -57,5 +57,10 @@ final class DemoRuntime: ObservableObject {
         return appSupport
             .appendingPathComponent("SwiftSyncDemo", isDirectory: true)
             .appendingPathComponent("client-cache.store")
+    }
+
+    private static func formattedSyncContainerInitializationError(_ error: Error) -> String {
+        let detail = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+        return "Failed to initialize SyncContainer.\n\(detail)"
     }
 }
