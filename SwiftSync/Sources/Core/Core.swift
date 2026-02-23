@@ -844,9 +844,16 @@ public struct SyncPayload {
         var keys: [String] = []
         switch keyStyle {
         case .snakeCase:
-            keys.append(transformKeyPathToSnakeCase(key))
+            keys.append(key.split(separator: ".", omittingEmptySubsequences: false)
+                .map { snakeCased(String($0)) }
+                .joined(separator: "."))
         case .camelCase:
-            keys.append(transformKeyPathToCamelCase(key))
+            keys.append(key.split(separator: ".", omittingEmptySubsequences: false)
+                .map { segment in
+                    let normalizedSnake = snakeCased(String(segment))
+                    return camelCased(normalizedSnake)
+                }
+                .joined(separator: "."))
         }
         keys.append(key)
         if key == "remoteID" {
@@ -947,23 +954,6 @@ public struct SyncPayload {
         default:
             return nil
         }
-    }
-
-    private func transformKeyPathToSnakeCase(_ value: String) -> String {
-        value
-            .split(separator: ".", omittingEmptySubsequences: false)
-            .map { snakeCased(String($0)) }
-            .joined(separator: ".")
-    }
-
-    private func transformKeyPathToCamelCase(_ value: String) -> String {
-        value
-            .split(separator: ".", omittingEmptySubsequences: false)
-            .map { segment in
-                let normalizedSnake = snakeCased(String(segment))
-                return camelCased(normalizedSnake)
-            }
-            .joined(separator: ".")
     }
 
     private func snakeCased(_ value: String) -> String {
