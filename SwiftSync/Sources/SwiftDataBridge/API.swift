@@ -12,14 +12,6 @@ public extension SwiftSync {
         return try inferSingleParentRelationship(for: Model.self, parent: Parent.self).keyPath
     }
 
-    @available(*, deprecated, renamed: "inferToOneRelationship(for:parent:)")
-    static func inferParentRelationship<Model: PersistentModel, Parent: PersistentModel>(
-        for model: Model.Type,
-        parent: Parent.Type
-    ) throws -> ReferenceWritableKeyPath<Model, Parent?> {
-        try inferToOneRelationship(for: model, parent: parent)
-    }
-
     static func inferToManyRelationship<Model: PersistentModel, Related: PersistentModel>(
         for model: Model.Type,
         related: Related.Type

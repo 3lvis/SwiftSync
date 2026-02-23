@@ -605,21 +605,3 @@ public struct SyncModel<Model: PersistentModel & SyncModelable>: DynamicProperty
         return names
     }
 }
-
-@MainActor
-@propertyWrapper
-@available(*, deprecated, renamed: "SyncModel")
-public struct SyncModelValue<Model: PersistentModel & SyncModelable>: DynamicProperty {
-    @SyncModel private var model: Model?
-
-    public var wrappedValue: Model? { model }
-
-    public init(
-        _ modelType: Model.Type,
-        id: Model.SyncID,
-        in syncContainer: SyncContainer,
-        animation: Animation? = nil
-    ) {
-        _model = SyncModel(modelType, id: id, in: syncContainer, animation: animation)
-    }
-}
