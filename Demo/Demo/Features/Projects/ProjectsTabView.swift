@@ -175,8 +175,7 @@ private struct ProjectDetailView: View {
             CreateTaskSheet(
                 projectID: projectID,
                 syncContainer: syncContainer,
-                syncEngine: syncEngine,
-                defaultAssigneeID: nil
+                syncEngine: syncEngine
             )
         }
         .alert(
@@ -212,7 +211,6 @@ private struct TaskDeletePrompt: Equatable {
 private struct CreateTaskSheet: View {
     let projectID: String
     let syncEngine: DemoSyncEngine
-    let defaultAssigneeID: String?
 
     @Environment(\.dismiss) private var dismiss
     @SyncQuery private var users: [User]
@@ -221,8 +219,8 @@ private struct CreateTaskSheet: View {
     @State private var title = ""
     @State private var descriptionText = ""
     @State private var stateID: String?
-    @State private var assigneeID: String?
-    @State private var authorID: String?
+    @State private var assigneeID: String? = nil
+    @State private var authorID: String? = nil
     @State private var isLoadingTaskStates = false
     @State private var isSaving = false
     @State private var saveErrorMessage: String?
@@ -230,12 +228,10 @@ private struct CreateTaskSheet: View {
     init(
         projectID: String,
         syncContainer: SyncContainer,
-        syncEngine: DemoSyncEngine,
-        defaultAssigneeID: String?,
+        syncEngine: DemoSyncEngine
     ) {
         self.projectID = projectID
         self.syncEngine = syncEngine
-        self.defaultAssigneeID = defaultAssigneeID
         _users = SyncQuery(
             User.self,
             in: syncContainer,
@@ -248,8 +244,6 @@ private struct CreateTaskSheet: View {
             sortBy: [\.sortOrder, \.id],
             animation: .snappy(duration: 0.22)
         )
-        _assigneeID = State(initialValue: defaultAssigneeID)
-        _authorID = State(initialValue: defaultAssigneeID)
     }
 
     var body: some View {

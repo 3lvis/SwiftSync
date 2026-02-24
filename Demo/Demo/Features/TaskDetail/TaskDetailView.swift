@@ -57,7 +57,16 @@ struct TaskDetailView: View {
             }
         }
         .sheet(item: $activeSheet) { sheet in
-            presentedSheet(for: sheet)
+            switch sheet {
+            case .description:
+                EditTaskDescriptionSheet(taskID: taskID, syncContainer: syncContainer, syncEngine: syncEngine)
+            case .assignee:
+                AssigneePickerSheet(taskID: taskID, syncContainer: syncContainer, syncEngine: syncEngine)
+            case .reviewers:
+                EditTaskReviewersSheet(taskID: taskID, syncContainer: syncContainer, syncEngine: syncEngine)
+            case .watchers:
+                EditTaskWatchersSheet(taskID: taskID, syncContainer: syncContainer, syncEngine: syncEngine)
+            }
         }
     }
 
@@ -166,35 +175,6 @@ struct TaskDetailView: View {
         }
     }
 
-    @ViewBuilder
-    private func presentedSheet(for sheet: TaskDetailSheet) -> some View {
-        switch sheet {
-        case .description:
-            EditTaskDescriptionSheet(
-                taskID: taskID,
-                syncContainer: syncContainer,
-                syncEngine: syncEngine
-            )
-        case .assignee:
-            AssigneePickerSheet(
-                taskID: taskID,
-                syncContainer: syncContainer,
-                syncEngine: syncEngine
-            )
-        case .reviewers:
-            EditTaskReviewersSheet(
-                taskID: taskID,
-                syncContainer: syncContainer,
-                syncEngine: syncEngine
-            )
-        case .watchers:
-            EditTaskWatchersSheet(
-                taskID: taskID,
-                syncContainer: syncContainer,
-                syncEngine: syncEngine
-            )
-        }
-    }
 }
 
 
