@@ -151,22 +151,22 @@ final class DemoSyncEngine: ObservableObject {
 
     private func syncProjectsInternal() async throws {
         let payload = try await apiClient.getProjects()
-        try await syncPayload(payload, as: Project.self, missingRowPolicy: .delete)
+        try await syncContainer.sync(payload: payload, as: Project.self, missingRowPolicy: .delete)
     }
 
     private func syncUsersInternal() async throws {
         let payload = try await apiClient.getUsers()
-        try await syncPayload(payload, as: User.self, missingRowPolicy: .delete)
+        try await syncContainer.sync(payload: payload, as: User.self, missingRowPolicy: .delete)
     }
 
     private func syncTaskStatesInternal() async throws {
         let payload = try await apiClient.getTaskStateOptions()
-        try await syncPayload(payload, as: TaskStateOption.self, missingRowPolicy: .delete)
+        try await syncContainer.sync(payload: payload, as: TaskStateOption.self, missingRowPolicy: .delete)
     }
 
     private func syncUserRolesInternal() async throws {
         let payload = try await apiClient.getUserRoleOptions()
-        try await syncPayload(payload, as: UserRoleOption.self, missingRowPolicy: .delete)
+        try await syncContainer.sync(payload: payload, as: UserRoleOption.self, missingRowPolicy: .delete)
     }
 
     private func syncProjectTasksInternal(projectID: String) async throws {
@@ -174,17 +174,17 @@ final class DemoSyncEngine: ObservableObject {
 
         if try project(withID: projectID) == nil {
             let projectsPayload = try await apiClient.getProjects()
-            try await syncPayload(projectsPayload, as: Project.self, missingRowPolicy: .delete)
+            try await syncContainer.sync(payload: projectsPayload, as: Project.self, missingRowPolicy: .delete)
         }
 
         guard let project = try project(withID: projectID) else { return }
-        try await syncPayload(payload, as: Task.self, parent: project, missingRowPolicy: .delete)
+        try await syncContainer.sync(payload: payload, as: Task.self, parent: project, missingRowPolicy: .delete)
         try await syncProjectsInternal()
     }
 
     private func syncTaskDetailInternal(taskID: String) async throws {
         guard let payload = try await apiClient.getTaskDetail(taskID: taskID) else { return }
-        try await syncPayload([payload], as: Task.self, missingRowPolicy: .keep)
+        try await syncContainer.sync(payload: [payload], as: Task.self, missingRowPolicy: .keep)
     }
 
     private func syncOperation(_ key: String, _ operation: () async throws -> Void) async {
@@ -217,37 +217,7 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    private func syncPayload<Model: SyncUpdatableModel>(
-        _ payload: [[String: Any]],
-        as model: Model.Type,
-        missingRowPolicy: SyncMissingRowPolicy
-    ) async throws {
-        try await syncContainer.sync(
-            payload: payload,
-            as: model,
-            missingRowPolicy: missingRowPolicy
-        )
-    }
-
-    private func syncPayload<Model: SyncUpdatableModel, Parent: PersistentModel>(
-        _ payload: [[String: Any]],
-        as model: Model.Type,
-        parent: Parent,
-        missingRowPolicy: SyncMissingRowPolicy
-    ) async throws {
-        try await syncContainer.sync(
-            payload: payload,
-            as: model,
-            parent: parent,
-            missingRowPolicy: missingRowPolicy
-        )
-    }
-
     private func project(withID projectID: String) throws -> Project? {
         try syncContainer.mainContext.fetch(FetchDescriptor<Project>()).first { $0.id == projectID }
-    }
-
-    private func task(withID taskID: String) throws -> Task? {
-        try syncContainer.mainContext.fetch(FetchDescriptor<Task>()).first { $0.id == taskID }
     }
 }
