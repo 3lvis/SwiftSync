@@ -21,8 +21,8 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(userRoles.count, 1)
         XCTAssertEqual(projectTasks.count, 1)
 
-        XCTAssertEqual(userRoleID(in: users.first), "Engineer")
-        XCTAssertEqual(userRoleLabel(in: users.first), "Engineer")
+        XCTAssertEqual((users.first?["role"] as? [String: Any])?["id"] as? String, "Engineer")
+        XCTAssertEqual((users.first?["role"] as? [String: Any])?["label"] as? String, "Engineer")
         XCTAssertNil(users.first?["avatar_seed"])
         XCTAssertNil(projectTasks.first?["due_date"])
         XCTAssertEqual(projectTasks.first?["reviewer_ids"] as? [String], ["user-1"])
@@ -65,9 +65,6 @@ final class DemoBackendTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: url) }
 
         let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
-
-        let before = try backend.getTaskDetailPayload(taskID: "task-1")
-        let beforeUpdatedAt = before?["updated_at"] as? String
 
         let patchedState = try backend.patchTaskState(taskID: "task-1", state: "done")
         XCTAssertEqual(stateID(in: patchedState), "done")
@@ -163,14 +160,6 @@ final class DemoBackendTests: XCTestCase {
 
     private func stateLabel(in task: [String: Any]?) -> String? {
         (task?["state"] as? [String: Any])?["label"] as? String
-    }
-
-    private func userRoleID(in user: [String: Any]?) -> String? {
-        (user?["role"] as? [String: Any])?["id"] as? String
-    }
-
-    private func userRoleLabel(in user: [String: Any]?) -> String? {
-        (user?["role"] as? [String: Any])?["label"] as? String
     }
 
     private func makeTemporaryDatabaseURL() -> URL {
