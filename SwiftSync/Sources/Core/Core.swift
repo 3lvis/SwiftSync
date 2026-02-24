@@ -133,13 +133,7 @@ public func syncApplyToOneForeignKey<Owner, Related: PersistentModel>(
     _ = context
     let canClear = operations.contains(.delete)
     guard let key = firstPresentPayloadKey(payload, keys: keys) else { return false }
-    guard payload.value(for: key, as: NSNull.self) != nil else { return false }
-    guard canClear else { return false }
-    if owner[keyPath: relationship] != nil {
-        owner[keyPath: relationship] = nil
-        return true
-    }
-    return false
+    return clearToOneIfNull(owner, relationship: relationship, payload: payload, key: key, canClear: canClear) ?? false
 }
 
 @discardableResult
@@ -155,13 +149,8 @@ public func syncApplyToOneForeignKey<Owner, Related: SyncModelable>(
     let canClear = operations.contains(.delete)
     guard let key = firstPresentPayloadKey(payload, keys: keys) else { return false }
 
-    if payload.value(for: key, as: NSNull.self) != nil {
-        guard canClear else { return false }
-        if owner[keyPath: relationship] != nil {
-            owner[keyPath: relationship] = nil
-            return true
-        }
-        return false
+    if let cleared = clearToOneIfNull(owner, relationship: relationship, payload: payload, key: key, canClear: canClear) {
+        return cleared
     }
 
     guard let nextID: Related.SyncID = payload.strictValue(for: key) else {
@@ -219,7 +208,6 @@ public func syncApplyToOneForeignKey<Owner, Related: SyncModelable>(
     guard let key = firstPresentPayloadKey(payload, keys: keys) else { return false }
 
     if payload.value(for: key, as: NSNull.self) != nil {
-        // Non-optional to-one relationships cannot be cleared.
         return false
     }
 
@@ -257,25 +245,7 @@ public func syncApplyToManyForeignKeys<Owner, Related: PersistentModel>(
     _ = context
     let canClear = operations.contains(.delete)
     guard let key = firstPresentPayloadKey(payload, keys: keys) else { return false }
-
-    if payload.value(for: key, as: NSNull.self) != nil {
-        guard canClear else { return false }
-        if !owner[keyPath: relationship].isEmpty {
-            owner[keyPath: relationship] = []
-            return true
-        }
-        return false
-    }
-
-    if let anyIDs: [Any] = payload.strictValue(for: key), anyIDs.isEmpty {
-        guard canClear else { return false }
-        if !owner[keyPath: relationship].isEmpty {
-            owner[keyPath: relationship] = []
-            return true
-        }
-    }
-
-    return false
+    return clearToManyIfNull(owner, relationship: relationship, payload: payload, key: key, canClear: canClear) ?? false
 }
 
 @discardableResult
@@ -291,13 +261,8 @@ public func syncApplyToManyForeignKeys<Owner, Related: SyncModelable>(
     let canDelete = operations.contains(.delete)
     guard let key = firstPresentPayloadKey(payload, keys: keys) else { return false }
 
-    if payload.value(for: key, as: NSNull.self) != nil {
-        guard canDelete else { return false }
-        if !owner[keyPath: relationship].isEmpty {
-            owner[keyPath: relationship] = []
-            return true
-        }
-        return false
+    if let cleared = clearToManyIfNull(owner, relationship: relationship, payload: payload, key: key, canClear: canDelete) {
+        return cleared
     }
 
     guard let rawIDs: [Related.SyncID] = payload.strictValue(for: key) else {
@@ -360,13 +325,8 @@ public func syncApplyToOneNestedObject<Owner, Related: SyncUpdatableModel>(
     let canClear = operations.contains(.delete)
     guard let key = firstPresentPayloadKey(payload, keys: keys) else { return false }
 
-    if payload.value(for: key, as: NSNull.self) != nil {
-        guard canClear else { return false }
-        if owner[keyPath: relationship] != nil {
-            owner[keyPath: relationship] = nil
-            return true
-        }
-        return false
+    if let cleared = clearToOneIfNull(owner, relationship: relationship, payload: payload, key: key, canClear: canClear) {
+        return cleared
     }
 
     guard let nestedValues: [String: Any] = payload.strictValue(for: key) else {
@@ -446,13 +406,8 @@ public func syncApplyToManyNestedObjects<Owner, Related: SyncUpdatableModel>(
     let canDelete = operations.contains(.delete)
     guard let key = firstPresentPayloadKey(payload, keys: keys) else { return false }
 
-    if payload.value(for: key, as: NSNull.self) != nil {
-        guard canDelete else { return false }
-        if !owner[keyPath: relationship].isEmpty {
-            owner[keyPath: relationship] = []
-            return true
-        }
-        return false
+    if let cleared = clearToManyIfNull(owner, relationship: relationship, payload: payload, key: key, canClear: canDelete) {
+        return cleared
     }
 
     guard let nestedValues: [[String: Any]] = payload.strictValue(for: key) else {
@@ -516,6 +471,49 @@ private func firstPresentPayloadKey(_ payload: SyncPayload, keys: [String]) -> S
     for key in keys where payload.contains(key) {
         return key
     }
+    return nil
+}
+
+private func clearToOneIfNull<Owner, Related>(
+    _ owner: Owner,
+    relationship: ReferenceWritableKeyPath<Owner, Related?>,
+    payload: SyncPayload,
+    key: String,
+    canClear: Bool
+) -> Bool? {
+    guard payload.value(for: key, as: NSNull.self) != nil else { return nil }
+    guard canClear else { return false }
+    if owner[keyPath: relationship] != nil {
+        owner[keyPath: relationship] = nil
+        return true
+    }
+    return false
+}
+
+private func clearToManyIfNull<Owner, Related>(
+    _ owner: Owner,
+    relationship: ReferenceWritableKeyPath<Owner, [Related]>,
+    payload: SyncPayload,
+    key: String,
+    canClear: Bool
+) -> Bool? {
+    if payload.value(for: key, as: NSNull.self) != nil {
+        guard canClear else { return false }
+        if !owner[keyPath: relationship].isEmpty {
+            owner[keyPath: relationship] = []
+            return true
+        }
+        return false
+    }
+
+    if let anyIDs: [Any] = payload.strictValue(for: key), anyIDs.isEmpty {
+        guard canClear else { return false }
+        if !owner[keyPath: relationship].isEmpty {
+            owner[keyPath: relationship] = []
+            return true
+        }
+    }
+
     return nil
 }
 
