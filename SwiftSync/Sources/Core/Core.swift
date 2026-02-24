@@ -782,9 +782,14 @@ private func exportSetValue(_ value: Any, path: [String], into target: inout [St
     target[head] = nested
 }
 
+private final class CandidateKeysCache {
+    var cache: [String: [String]] = [:]
+}
+
 public struct SyncPayload {
     public let values: [String: Any]
     public let keyStyle: SyncInputKeyStyle
+    private let candidateKeysCache = CandidateKeysCache()
 
     public init(values: [String: Any], keyStyle: SyncInputKeyStyle = .snakeCase) {
         self.values = values
@@ -845,6 +850,10 @@ public struct SyncPayload {
     }
 
     private func candidateKeys(for key: String) -> [String] {
+        if let cached = candidateKeysCache.cache[key] {
+            return cached
+        }
+
         var keys: [String] = []
         switch keyStyle {
         case .snakeCase:
@@ -881,6 +890,8 @@ public struct SyncPayload {
         for candidate in keys where seen.insert(candidate).inserted {
             ordered.append(candidate)
         }
+
+        candidateKeysCache.cache[key] = ordered
         return ordered
     }
 
