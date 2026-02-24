@@ -12,14 +12,12 @@ final class DemoBackendTests: XCTestCase {
         let projects = try backend.getProjectsPayload()
         let users = try backend.getUsersPayload()
         let taskStates = try backend.getTaskStateOptionsPayload()
-        let priorities = try backend.getPriorityOptionsPayload()
         let userRoles = try backend.getUserRoleOptionsPayload()
         let projectTasks = try backend.getProjectTasksPayload(projectID: "project-1")
 
         XCTAssertEqual(projects.count, 1)
         XCTAssertEqual(users.count, 1)
         XCTAssertEqual(taskStates.count, 3)
-        XCTAssertEqual(priorities.count, 4)
         XCTAssertEqual(userRoles.count, 1)
         XCTAssertEqual(projectTasks.count, 1)
 
@@ -32,13 +30,10 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(projectTasks.first?["watcher_ids"] as? [String], ["user-1"])
         XCTAssertEqual(stateID(in: projectTasks.first), "todo")
         XCTAssertEqual(stateLabel(in: projectTasks.first), "To Do")
-        XCTAssertEqual(taskPriorityID(in: projectTasks.first), "medium")
-        XCTAssertEqual(taskPriorityLabel(in: projectTasks.first), "Medium")
         XCTAssertNotNil(projectTasks.first?["description"])
         XCTAssertNotNil(projectTasks.first?["updated_at"])
         XCTAssertEqual(taskStates.map { $0["id"] as? String }, ["todo", "inProgress", "done"])
         XCTAssertEqual(taskStates.map { ($0["label"] as? String) ?? "" }, ["To Do", "In Progress", "Done"])
-        XCTAssertEqual(priorities.map { $0["id"] as? String }, ["low", "medium", "high", "urgent"])
         XCTAssertEqual(userRoles.map { $0["id"] as? String }, ["Engineer"])
     }
 
@@ -123,8 +118,6 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(created["watcher_ids"] as? [String], [])
         XCTAssertEqual(stateID(in: created), "todo")
         XCTAssertEqual(stateLabel(in: created), "To Do")
-        XCTAssertEqual(taskPriorityID(in: created), "medium")
-        XCTAssertEqual(taskPriorityLabel(in: created), "Medium")
 
         let projectTasksAfterCreate = try backend.getProjectTasksPayload(projectID: "project-1")
         XCTAssertEqual(projectTasksAfterCreate.count, 2)
@@ -178,14 +171,6 @@ final class DemoBackendTests: XCTestCase {
 
     private func userRoleLabel(in user: [String: Any]?) -> String? {
         (user?["role"] as? [String: Any])?["label"] as? String
-    }
-
-    private func taskPriorityID(in task: [String: Any]?) -> String? {
-        (task?["priority"] as? [String: Any])?["id"] as? String
-    }
-
-    private func taskPriorityLabel(in task: [String: Any]?) -> String? {
-        (task?["priority"] as? [String: Any])?["label"] as? String
     }
 
     private func makeTemporaryDatabaseURL() -> URL {

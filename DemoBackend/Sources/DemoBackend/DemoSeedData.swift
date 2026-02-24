@@ -36,7 +36,6 @@ public struct DemoSeedData {
         public let title: String
         public let descriptionText: String
         public let state: String
-        public let priority: String
         public let watcherIDs: [String]
         public let updatedAt: Date
 
@@ -49,7 +48,6 @@ public struct DemoSeedData {
             title: String,
             descriptionText: String,
             state: String,
-            priority: String = "medium",
             watcherIDs: [String] = [],
             updatedAt: Date
         ) {
@@ -61,7 +59,6 @@ public struct DemoSeedData {
             self.title = title
             self.descriptionText = descriptionText
             self.state = state
-            self.priority = priority
             self.watcherIDs = watcherIDs
             self.updatedAt = updatedAt
         }
