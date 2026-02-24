@@ -37,35 +37,13 @@ final class User {
     @RemoteKey("role.label")
     var roleLabel: String
     var updatedAt: Date
-    @Relationship(inverse: \Task.assignee)
-    var assignedTasks: [Task]
-    @Relationship(inverse: \Task.reviewers)
-    var reviewTasks: [Task]
-    @Relationship(inverse: \Task.author)
-    var authoredTasks: [Task]
-    @Relationship(inverse: \Task.watchers)
-    var watchedTasks: [Task]
 
-    init(
-        id: String,
-        displayName: String,
-        role: String,
-        roleLabel: String,
-        updatedAt: Date,
-        assignedTasks: [Task] = [],
-        reviewTasks: [Task] = [],
-        authoredTasks: [Task] = [],
-        watchedTasks: [Task] = []
-    ) {
+    init(id: String, displayName: String, role: String, roleLabel: String, updatedAt: Date) {
         self.id = id
         self.displayName = displayName
         self.role = role
         self.roleLabel = roleLabel
         self.updatedAt = updatedAt
-        self.assignedTasks = assignedTasks
-        self.reviewTasks = reviewTasks
-        self.authoredTasks = authoredTasks
-        self.watchedTasks = watchedTasks
     }
 }
 
@@ -126,8 +104,8 @@ final class Task {
     var author: User?
     var assignee: User?
 
-    var reviewers: [User]
-    var watchers: [User]
+    @Relationship var reviewers: [User]
+    @Relationship var watchers: [User]
 
     init(
         id: String,
