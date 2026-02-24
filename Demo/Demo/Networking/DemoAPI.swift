@@ -38,36 +38,7 @@ enum DemoAPIError: LocalizedError {
 }
 
 @MainActor
-protocol DemoAPIClient: AnyObject {
-    var scenario: DemoNetworkScenario { get set }
-
-    func getProjects() async throws -> [[String: Any]]
-    func getProjectTasks(projectID: String) async throws -> [[String: Any]]
-    func getUsers() async throws -> [[String: Any]]
-    func getTaskDetail(taskID: String) async throws -> [String: Any]?
-    func getTaskStateOptions() async throws -> [[String: Any]]
-    func getUserRoleOptions() async throws -> [[String: Any]]
-
-    func patchTaskDescription(taskID: String, descriptionText: String) async throws -> [String: Any]?
-    func patchTaskState(taskID: String, state: String) async throws -> [String: Any]?
-    func patchTaskAssignee(taskID: String, assigneeID: String?) async throws -> [String: Any]?
-    func replaceTaskReviewers(taskID: String, reviewerIDs: [String]) async throws -> [String: Any]?
-    func replaceTaskWatchers(taskID: String, watcherIDs: [String]) async throws -> [String: Any]?
-
-    func createTask(
-        projectID: String,
-        title: String,
-        descriptionText: String,
-        state: String,
-        assigneeID: String?,
-        authorID: String
-    ) async throws -> [String: Any]
-    func deleteTask(taskID: String) async throws
-
-}
-
-@MainActor
-final class FakeDemoAPIClient: DemoAPIClient {
+final class FakeDemoAPIClient {
     var scenario: DemoNetworkScenario
 
     private let backend: DemoServerSimulator
@@ -84,12 +55,10 @@ final class FakeDemoAPIClient: DemoAPIClient {
             return
         }
 
-        let databaseURL = seedData == nil ? Self.defaultBackendDatabaseURL() : Self.temporaryBackendDatabaseURL()
+        let databaseURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SwiftSyncDemo-\(UUID().uuidString).sqlite")
 
         do {
-            if seedData == nil {
-                try Self.removeBackendStoreFiles(at: databaseURL)
-            }
             self.backend = try DemoServerSimulator(
                 databaseURL: databaseURL,
                 seedData: seedData ?? DemoSeedData.generate(),
@@ -208,32 +177,4 @@ final class FakeDemoAPIClient: DemoAPIClient {
         try await _Concurrency.Task.sleep(nanoseconds: (baseDelayMS + jitter + mutationExtra) * 1_000_000)
     }
 
-    private static func defaultBackendDatabaseURL() -> URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.temporaryDirectory
-        return appSupport
-            .appendingPathComponent("SwiftSyncDemo", isDirectory: true)
-            .appendingPathComponent("fake-backend.sqlite")
-    }
-
-    private static func temporaryBackendDatabaseURL() -> URL {
-        FileManager.default.temporaryDirectory
-            .appendingPathComponent("SwiftSyncDemo-FakeBackend-\(UUID().uuidString)")
-            .appendingPathExtension("sqlite")
-    }
-
-    private static func removeBackendStoreFiles(at databaseURL: URL) throws {
-        let fm = FileManager.default
-        let directory = databaseURL.deletingLastPathComponent()
-        let baseName = databaseURL.lastPathComponent
-
-        try fm.createDirectory(at: directory, withIntermediateDirectories: true)
-
-        for suffix in ["", "-shm", "-wal"] {
-            let fileURL = directory.appendingPathComponent(baseName + suffix)
-            if fm.fileExists(atPath: fileURL.path) {
-                try fm.removeItem(at: fileURL)
-            }
-        }
-    }
 }

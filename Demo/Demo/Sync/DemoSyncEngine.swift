@@ -13,9 +13,9 @@ final class DemoSyncEngine: ObservableObject {
     private var inFlightOperations: Set<String> = []
 
     private let syncContainer: SyncContainer
-    private let apiClient: DemoAPIClient
+    private let apiClient: FakeDemoAPIClient
 
-    init(syncContainer: SyncContainer, apiClient: DemoAPIClient) {
+    init(syncContainer: SyncContainer, apiClient: FakeDemoAPIClient) {
         self.syncContainer = syncContainer
         self.apiClient = apiClient
     }
