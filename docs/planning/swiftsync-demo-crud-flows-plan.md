@@ -22,13 +22,13 @@ Offline/outbox/replay is intentionally out of scope until these online CRUD flow
 - Start with online-only CRUD flows.
 - Prefer simple, visible interactions over broad coverage.
 - Use server-authoritative refresh after writes (targeted sync calls).
-- Keep the number of writable fields small (coordinate with field-reduction plan).
+- Keep the number of writable fields small (coordinate with the model/feature map).
 - Keep support/reference entities seeded unless CRUD adds a new SwiftSync behavior.
 
 ## CRUD Flow Mantra
 
 - Build the smallest interactive flow that proves the sync behavior.
-- Do not add CRUD for seeded reference entities (`User`, `Tag` metadata, `Project`) in current scope.
+- Do not add CRUD for seeded reference entities (`User`, `Project`) in current scope.
 - Backend write first, then targeted sync reads refresh the UI.
 - Avoid manual local patching in UI code.
 
@@ -36,20 +36,16 @@ Offline/outbox/replay is intentionally out of scope until these online CRUD flow
 
 - `Task` create/delete in a project (one-to-many parent-scoped list refresh)
 - `Task` updates (`description`, `state`, `assignee`) (to-one/FK + partial updates)
-- `Task.tags` replace (many-to-many membership update)
-- `Comment` create/delete under a task (nested one-to-many scoped sync)
 
 Related docs:
 
 - `docs/planning/swiftsync-demo-app-plan.md`
 - `docs/planning/swiftsync-demo-backend-plan.md`
-- `docs/planning/swiftsync-demo-field-reduction-plan.md`
 
 ## Recommended CRUD Slice (What to Build First)
 
 ### Inserts (Phase 2 Core)
 
-- Create `Comment` from Task Detail
 - Create `Task` from Project Detail
 
 ### Updates (Phase 2 Core)
@@ -57,48 +53,19 @@ Related docs:
 - Update `Task.descriptionText` (modal edit flow)
 - Update `Task.state` (inline picker/menu)
 - Update `Task.assigneeID` (picker)
-- Update `Task.tags` (multi-select sheet or add/remove chips)
 
 ### Deletes (Phase 2 Core, Minimal But Real)
 
-- Delete `Comment` from Task Detail (swipe to delete)
 - Delete `Task` from Project Detail (swipe to delete)
 
 ### Defer (After Core CRUD Is Stable)
 
 - Delete `Project` (cascades and higher blast radius in demo)
 - Delete `User` (referential behavior needs a deliberate rule)
-- Comment editing (create/delete is enough to prove nested writes)
 
 ## UI Interaction Plan (Concrete)
 
-## 1) Task Detail: Comments (Best First Insert/Delete Flow)
-
-### Insert Comment
-
-- Add composer UI at bottom of comments section or a toolbar action that opens a sheet.
-- Inputs:
-  - `body`
-  - `authorUserID` (default selected user or simple picker)
-- Save action:
-  1. call `DemoAPIClient.createTaskComment(...)`
-  2. call `syncTaskComments(taskID:)`
-  3. optionally call `syncTaskDetail(taskID:)` if server updates task `updatedAt`
-
-Why first:
-- small payload
-- obvious visible result
-- parent-scoped sync (`Comment` under `Task`) is already in place
-
-### Delete Comment
-
-- `swipeActions` on comment row
-- Confirm destructive action (alert)
-- Delete action:
-  1. call `DemoAPIClient.deleteTaskComment(commentID:)` (or task-scoped variant)
-  2. call `syncTaskComments(taskID:)` with parent-scoped delete semantics
-
-## 2) Task Detail: Task Updates (Most Important Update Proof)
+## 1) Task Detail: Task Updates (Most Important Update Proof)
 
 ### Edit Description (Modal)
 
@@ -129,19 +96,6 @@ Why first:
      - old assignee tasks slice (if known)
      - new assignee tasks slice
      - project tasks slice (task row contents changed)
-
-### Edit Tags (Many-to-many)
-
-- Sheet with multi-select tag list
-- Save action sends full selected set (recommended):
-  1. call `DemoAPIClient.replaceTaskTags(taskID:tagIDs:)`
-  2. `syncTaskDetail(taskID:)` (for `tag_ids` on task payload)
-  3. `syncTags()` only if tag metadata changed (usually not needed)
-  4. `syncTagTasks(tagID:)` for impacted tags if you need tag drill-in to reflect immediately
-
-Recommended simplification:
-- Refresh only the current task detail first
-- Let tag drill-in update on next open/refresh unless stale drill-in is visible in the same session
 
 ## 3) Project Detail: Task Insert/Delete
 
@@ -174,13 +128,10 @@ Add explicit write methods to `DemoSyncEngine` for UI screens to call.
 Recommended pattern:
 
 - `createTask(...)`
-- `createComment(...)`
 - `updateTaskDescription(...)`
 - `updateTaskState(...)`
 - `updateTaskAssignee(...)`
-- `replaceTaskTags(...)`
 - `deleteTask(...)`
-- `deleteComment(...)`
 
 Each method should:
 
@@ -196,12 +147,9 @@ Extend `DemoAPIClient` with write methods matching the CRUD slice.
 
 Implemented in current demo:
 
-- `createTaskComment`
-- `deleteTaskComment`
 - `patchTaskDescription`
 - `patchTaskState`
 - `patchTaskAssignee`
-- `replaceTaskTags`
 - `createTask`
 - `deleteTask`
 
@@ -214,7 +162,7 @@ Required backend behavior for all writes:
 - validate references (`project_id`, `assignee_id`, etc.)
 - server-owned timestamps (`updatedAt`, `createdAt`)
 - return backend-shaped payload keys (snake_case)
-- enforce relationship consistency (including `task_tags`)
+- enforce relationship consistency
 
 ## TDD Plan (Required)
 
@@ -229,8 +177,7 @@ For each endpoint before wiring UI:
 Examples:
 
 - `PATCH /tasks/{id}/description` updates `description` and bumps `updated_at`
-- `POST /tasks/{id}/comments` inserts row and appears in task comments query
-- `DELETE /tasks/{id}` removes task and cascades task comments/task_tags as expected
+- `DELETE /tasks/{id}` removes task and cascades related rows as expected
 
 ## 2) App Layer Tests / Verification
 
@@ -241,12 +188,12 @@ Keep this lightweight initially:
 
 ## Execution Order (Recommended)
 
-1. [X] Finalize reduced field set for Phase 2 CRUD forms (coordinate with field-reduction plan)
-2. [X] Implement + test backend endpoints for Task Detail flows (`comment`, `description`, `task patch`)
+1. [X] Finalize reduced field set for Phase 2 CRUD forms (coordinate with the model/feature map)
+2. [X] Implement + test backend endpoints for Task Detail flows (`description`, `task patch`)
 3. [X] Add `DemoAPIClient` write methods for those endpoints
 4. [X] Add `DemoSyncEngine` write methods + targeted post-write sync calls
-5. [X] Implement Task Detail UI for comment create/delete + description/state/assignee updates
-6. [X] Implement + test backend endpoints for task create/delete + tags replace
+5. [X] Implement Task Detail UI for description/state/assignee updates
+6. [X] Implement + test backend endpoints for task create/delete
 7. [X] Wire Project Detail task create/delete UI
 8. [X] Do a cleanup pass (copy, errors, loading states, destructive confirmations)
 

@@ -22,7 +22,7 @@ For parent-scoped resources:
 Use snake_case API keys that map cleanly to Swift camelCase:
 - scalar: `display_name` -> `displayName`
 - to-one FK: `<relation>_id` (example: `assignee_id`)
-- to-many FK: `<relation>_ids` (example: `tag_ids`)
+- to-many FK: `<relation>_ids` (example: `watcher_ids`)
 - nested objects/arrays: relation key itself (example: `assignee`, `members`)
 
 This minimizes `@RemoteKey` usage.

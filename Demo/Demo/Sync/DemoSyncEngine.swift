@@ -30,10 +30,7 @@ final class DemoSyncEngine: ObservableObject {
         await syncOperation("initial") {
             try await syncProjectsInternal()
             try await syncUsersInternal()
-            try await syncTagsInternal()
             try await syncTaskStatesInternal()
-            try await syncPrioritiesInternal()
-            try await syncProjectStatusesInternal()
             try await syncUserRolesInternal()
         }
     }
@@ -50,27 +47,9 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    func syncTags() async {
-        await syncOperation("tags") {
-            try await syncTagsInternal()
-        }
-    }
-
     func syncTaskStates() async {
         await syncOperation("taskStates") {
             try await syncTaskStatesInternal()
-        }
-    }
-
-    func syncPriorities() async {
-        await syncOperation("priorities") {
-            try await syncPrioritiesInternal()
-        }
-    }
-
-    func syncProjectStatuses() async {
-        await syncOperation("projectStatuses") {
-            try await syncProjectStatusesInternal()
         }
     }
 
@@ -92,25 +71,13 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    func syncTaskComments(taskID: String) async {
-        await syncOperation("taskComments-\(taskID)") {
-            try await syncTaskCommentsInternal(taskID: taskID)
-        }
-    }
-
-    func syncTagTasks(tagID: String) async {
-        await syncOperation("tagTasks-\(tagID)") {
-            try await syncTagTasksInternal(tagID: tagID)
-        }
-    }
-
     func createTask(
         projectID: String,
         title: String,
         descriptionText: String,
         state: String,
         assigneeID: String?,
-        tagIDs: [String]
+        authorID: String
     ) async throws {
         try await syncOperationThrowing("createTask-\(projectID)") {
             _ = try await apiClient.createTask(
@@ -119,7 +86,7 @@ final class DemoSyncEngine: ObservableObject {
                 descriptionText: descriptionText,
                 state: state,
                 assigneeID: assigneeID,
-                tagIDs: tagIDs
+                authorID: authorID
             )
             try await syncProjectTasksInternal(projectID: projectID)
         }
@@ -172,16 +139,6 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    func replaceTaskTags(taskID: String, projectID: String?, tagIDs: [String]) async throws {
-        try await syncOperationThrowing("replaceTaskTags-\(taskID)") {
-            _ = try await apiClient.replaceTaskTags(taskID: taskID, tagIDs: tagIDs)
-            try await syncTaskDetailInternal(taskID: taskID)
-            if let projectID {
-                try await syncProjectTasksInternal(projectID: projectID)
-            }
-        }
-    }
-
     func replaceTaskWatchers(taskID: String, projectID: String?, watcherIDs: [String]) async throws {
         try await syncOperationThrowing("replaceTaskWatchers-\(taskID)") {
             _ = try await apiClient.replaceTaskWatchers(taskID: taskID, watcherIDs: watcherIDs)
@@ -189,20 +146,6 @@ final class DemoSyncEngine: ObservableObject {
             if let projectID {
                 try await syncProjectTasksInternal(projectID: projectID)
             }
-        }
-    }
-
-    func createComment(taskID: String, authorUserID: String, body: String) async throws {
-        try await syncOperationThrowing("createComment-\(taskID)") {
-            _ = try await apiClient.createTaskComment(taskID: taskID, authorUserID: authorUserID, body: body)
-            try await syncTaskCommentsInternal(taskID: taskID)
-        }
-    }
-
-    func deleteComment(commentID: String, taskID: String) async {
-        await syncOperation("deleteComment-\(commentID)") {
-            try await apiClient.deleteTaskComment(commentID: commentID)
-            try await syncTaskCommentsInternal(taskID: taskID)
         }
     }
 
@@ -216,24 +159,9 @@ final class DemoSyncEngine: ObservableObject {
         try await syncPayload(payload, as: User.self, missingRowPolicy: .delete)
     }
 
-    private func syncTagsInternal() async throws {
-        let payload = try await apiClient.getTags()
-        try await syncPayload(payload, as: Tag.self, missingRowPolicy: .delete)
-    }
-
     private func syncTaskStatesInternal() async throws {
         let payload = try await apiClient.getTaskStateOptions()
         try await syncPayload(payload, as: TaskStateOption.self, missingRowPolicy: .delete)
-    }
-
-    private func syncPrioritiesInternal() async throws {
-        let payload = try await apiClient.getPriorityOptions()
-        try await syncPayload(payload, as: PriorityOption.self, missingRowPolicy: .delete)
-    }
-
-    private func syncProjectStatusesInternal() async throws {
-        let payload = try await apiClient.getProjectStatusOptions()
-        try await syncPayload(payload, as: ProjectStatusOption.self, missingRowPolicy: .delete)
     }
 
     private func syncUserRolesInternal() async throws {
@@ -257,22 +185,6 @@ final class DemoSyncEngine: ObservableObject {
     private func syncTaskDetailInternal(taskID: String) async throws {
         guard let payload = try await apiClient.getTaskDetail(taskID: taskID) else { return }
         try await syncPayload([payload], as: Task.self, missingRowPolicy: .keep)
-    }
-
-    private func syncTaskCommentsInternal(taskID: String) async throws {
-        let payload = try await apiClient.getTaskComments(taskID: taskID)
-
-        if try task(withID: taskID) == nil {
-            try await syncTaskDetailInternal(taskID: taskID)
-        }
-
-        guard let task = try task(withID: taskID) else { return }
-        try await syncPayload(payload, as: Comment.self, parent: task, missingRowPolicy: .delete)
-    }
-
-    private func syncTagTasksInternal(tagID: String) async throws {
-        let payload = try await apiClient.getTagTasks(tagID: tagID)
-        try await syncPayload(payload, as: Task.self, missingRowPolicy: .keep)
     }
 
     private func syncOperation(_ key: String, _ operation: () async throws -> Void) async {

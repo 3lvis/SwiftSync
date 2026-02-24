@@ -25,35 +25,20 @@ Think of `@SyncQuery` as:
 Three common query shapes:
 
 1. `relatedTo:` + `relatedID:` (relationship-scoped query by ID)
-- Example: all `Comment` rows that belong to a specific `Task` ID.
+- Example: all `Task` rows that belong to a specific `Project` ID.
 
 ```swift
 @SyncQuery(
-  Comment.self,
-  relatedTo: Task.self,
-  relatedID: taskID,
+  Task.self,
+  relatedTo: Project.self,
+  relatedID: projectID,
   in: syncContainer,
-  sortBy: [SortDescriptor(\Comment.createdAt, order: .reverse)]
+  sortBy: [SortDescriptor(\Task.updatedAt, order: .reverse)]
 )
-var comments: [Comment]
+var tasks: [Task]
 ```
 
-2. `relatedTo:` + `relatedID:` + `through:` (explicit relationship path)
-- Example: all `Tag` rows that include a specific `Task` ID in their `tasks` relationship.
-
-```swift
-@SyncQuery(
-  Tag.self,
-  relatedTo: Task.self,
-  relatedID: taskID,
-  through: \Tag.tasks,
-  in: syncContainer,
-  sortBy: [SortDescriptor(\Tag.name)]
-)
-var tags: [Tag]
-```
-
-3. `predicate:` (custom business filters)
+2. `predicate:` (custom business filters)
 - Use for scalar-only filters, compound filters, or non-relationship business filters.
 
 ## Inference Rules (`relatedTo:` / `relatedID:`)
@@ -86,7 +71,7 @@ Real Demo example (same queried model + same related model, multiple paths):
 
 Related modeling note:
 - relationship-scoped queries assume the local relationship graph is trustworthy
-- for many-to-many relationships, ensure the pair has one explicit inverse anchor (`@Relationship(inverse: ...)`) and see `docs/project/relationship-integrity.md` for the tag corruption bug and the corrected rule
+- for many-to-many relationships, ensure the pair has one explicit inverse anchor (`@Relationship(inverse: ...)`) and see `docs/project/relationship-integrity.md` for the corrected rule
 
 ## `sortBy` vs `refreshOn`
 

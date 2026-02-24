@@ -54,20 +54,20 @@ If scope resolution is wrong, delete can target valid rows from another logical 
 Models:
 
 ```swift
+@Model final class Project {
+  @Attribute(.unique) var id: Int
+  var name: String
+  @Relationship(inverse: \Task.project) var tasks: [Task]
+}
+
 @Model final class Task {
   @Attribute(.unique) var id: Int
   var title: String
-  @Relationship(inverse: \Comment.task) var comments: [Comment]
-}
-
-@Model final class Comment {
-  @Attribute(.unique) var id: Int
-  var text: String
-  var task: Task?
+  var project: Project?
 }
 ```
 
-There is exactly one `Comment -> Task?` relationship (`task`), so default parent inference resolves it automatically.
+There is exactly one `Task -> Project?` relationship (`project`), so default parent inference resolves it automatically.
 
 ### Case B: Multiple relationships (explicit key path required)
 
@@ -115,13 +115,13 @@ Ambiguity is surfaced as an error to avoid cross-scope delete mistakes.
 
 ```swift
 @SyncQuery(
-  Comment.self,
-  relatedTo: Task.self,
-  relatedID: taskID,
+  Task.self,
+  relatedTo: Project.self,
+  relatedID: projectID,
   in: syncContainer,
-  sortBy: [SortDescriptor(\Comment.id)]
+  sortBy: [SortDescriptor(\Task.id)]
 )
-var comments: [Comment]
+var tasks: [Task]
 ```
 
 Ambiguous example:
@@ -138,16 +138,3 @@ Ambiguous example:
 var assignedTickets: [Ticket]
 ```
 
-## To-Many Query Example
-
-```swift
-@SyncQuery(
-  Tag.self,
-  relatedTo: Task.self,
-  relatedID: taskID,
-  through: \Tag.tasks,
-  in: syncContainer,
-  sortBy: [SortDescriptor(\Tag.id)]
-)
-var tags: [Tag]
-```

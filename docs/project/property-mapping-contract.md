@@ -55,7 +55,7 @@ Relationship lookup uses the same `SyncPayload` candidate pipeline.
 
 Foreign-key conventions:
 - to-one: `<relationship>_id`
-- to-many IDs: `<relationship>_ids` and singularized fallback (`tag_ids` for `tags`)
+- to-many IDs: `<relationship>_ids` and singularized fallback (`watcher_ids` for `watchers`)
 - `@RemoteKey` overrides FK convention
 
 Nested-object conventions:

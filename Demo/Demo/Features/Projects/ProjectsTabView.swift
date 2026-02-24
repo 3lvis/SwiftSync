@@ -30,15 +30,9 @@ struct ProjectsTabView: View {
                                 .font(.headline)
                                 .lineLimit(2)
 
-                            HStack(spacing: 8) {
-                                Text(project.statusLabel)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-
-                                Text(project.taskCount == 1 ? "1 task" : "\(project.taskCount) tasks")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
+                            Text(project.taskCount == 1 ? "1 task" : "\(project.taskCount) tasks")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -52,13 +46,11 @@ struct ProjectsTabView: View {
             .navigationTitle("Projects")
             .refreshable {
                 await syncEngine.syncProjects()
-                await syncEngine.syncTags()
             }
             .task {
                 guard !hasTriggeredInitialSync else { return }
                 hasTriggeredInitialSync = true
                 await syncEngine.syncProjects()
-                await syncEngine.syncTags()
             }
             .navigationDestination(for: String.self) { projectID in
                 ProjectDetailView(
@@ -109,9 +101,6 @@ private struct ProjectDetailView: View {
                     Text(projectModel.name)
                         .font(.headline)
                         .lineLimit(3)
-
-                    LabeledContent("Status", value: projectModel.statusLabel)
-                        .foregroundStyle(.secondary)
 
                     LabeledContent("Tasks", value: projectModel.taskCount == 1 ? "1 task" : "\(projectModel.taskCount) tasks")
                         .foregroundStyle(.secondary)
@@ -233,6 +222,7 @@ private struct CreateTaskSheet: View {
     @State private var descriptionText = ""
     @State private var stateID: String?
     @State private var assigneeID: String?
+    @State private var authorID: String?
     @State private var isLoadingTaskStates = false
     @State private var isSaving = false
     @State private var saveErrorMessage: String?
@@ -259,6 +249,7 @@ private struct CreateTaskSheet: View {
             animation: .snappy(duration: 0.22)
         )
         _assigneeID = State(initialValue: defaultAssigneeID)
+        _authorID = State(initialValue: defaultAssigneeID)
     }
 
     var body: some View {
@@ -296,6 +287,12 @@ private struct CreateTaskSheet: View {
                             Text(user.displayName).tag(Optional(user.id))
                         }
                     }
+
+                    Picker("Author", selection: $authorID) {
+                        ForEach(users, id: \.id) { user in
+                            Text(user.displayName).tag(Optional(user.id))
+                        }
+                    }
                 }
 
                 Section("Description") {
@@ -316,7 +313,7 @@ private struct CreateTaskSheet: View {
                     Button(action: {
                         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
                         let trimmedDescription = descriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !trimmedTitle.isEmpty, let stateID else { return }
+                        guard !trimmedTitle.isEmpty, let stateID, let authorID else { return }
 
                         isSaving = true
                         saveErrorMessage = nil
@@ -328,7 +325,7 @@ private struct CreateTaskSheet: View {
                                     descriptionText: trimmedDescription.isEmpty ? "No description yet." : trimmedDescription,
                                     state: stateID,
                                     assigneeID: assigneeID,
-                                    tagIDs: []
+                                    authorID: authorID
                                 )
                                 await MainActor.run {
                                     isSaving = false
@@ -354,7 +351,8 @@ private struct CreateTaskSheet: View {
                     .disabled(
                         isSaving ||
                         title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                        stateID == nil
+                        stateID == nil ||
+                        authorID == nil
                     )
                 }
             }
@@ -367,6 +365,14 @@ private struct CreateTaskSheet: View {
                 return
             }
             self.stateID = taskStateOptions.first?.id
+        }
+        .task(id: users.map(\.id)) {
+            if let authorID, users.contains(where: { $0.id == authorID }) {
+                return
+            }
+            authorID = assigneeID.flatMap { id in
+                users.contains(where: { $0.id == id }) ? id : nil
+            } ?? users.first?.id
         }
         .alert(
             "Save Failed",

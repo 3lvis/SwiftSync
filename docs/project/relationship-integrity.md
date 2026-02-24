@@ -1,6 +1,6 @@
 # Relationship Integrity (SwiftData + SwiftSync)
 
-This document captures the corrected rule learned from debugging the Demo tag bug.
+This document captures the corrected rule learned from debugging many-to-many relationship corruption in the Demo.
 
 ## The Correct Rule
 
@@ -13,14 +13,11 @@ This document captures the corrected rule learned from debugging the Demo tag bu
 
 ## Very Simple Mental Model
 
-In a many-to-many pair, SwiftData has to maintain the same links from two directions:
-
-- `Task.tags`
-- `Tag.tasks`
+In a many-to-many pair, SwiftData has to maintain the same links from two directions.
 
 If neither side explicitly declares the inverse, SwiftData has to infer/guess how the pair maps.
 
-That inference can break under batch updates (especially when relationships are shared, like one tag used by multiple tasks).
+That inference can break under batch updates (especially when relationships are shared across many parents).
 
 Adding **one explicit inverse anchor** tells SwiftData:
 
@@ -28,29 +25,29 @@ Adding **one explicit inverse anchor** tells SwiftData:
 
 That removes the guess and fixes the broken membership updates.
 
-## What We Verified in Demo (Experiments)
+## What Was Verified in Demo (Experiments)
 
-### 1) Tag bug fix worked with one explicit inverse on `Tag`
+### 1) Bug fix worked with one explicit inverse on one side
 
 This fixed the bug:
 
 ```swift
-@Relationship(inverse: \Task.tags)
-var tasks: [Task]
+@Relationship(inverse: \Task.watchers)
+var watchedTasks: [Task]
 ```
 
-### 2) Tag bug fix also worked with one explicit inverse on `Task`
+### 2) Bug fix also worked with one explicit inverse on the other side
 
 This also fixed the bug:
 
 ```swift
-@Relationship(inverse: \Tag.tasks)
-var tags: [Tag]
+@Relationship(inverse: \User.watchedTasks)
+var watchers: [User]
 ```
 
 Conclusion:
 
-- the `Task.tags <-> Tag.tasks` many-to-many pair needed **one explicit inverse anchor**
+- the many-to-many pair needed **one explicit inverse anchor**
 - it did **not** require explicit inverses on both sides
 
 ### 3) Regular to-many relationships still worked without explicit inverses
@@ -65,21 +62,9 @@ Those relationships still worked fine.
 Conclusion:
 
 - this bug pattern is not "all to-many relationships"
-- it is specifically about the problematic many-to-many pair with no inverse anchor
+- it is specifically about many-to-many pairs with no inverse anchor
 
-## Why the Demo `tags` Pair Broke but `watchers` Did Not
-
-Demo has two many-to-many pairs:
-
-1. `Task.tags <-> Tag.tasks`
-2. `Task.watchers <-> User.watchedTasks`
-
-Before the fix:
-
-- `Task.tags <-> Tag.tasks` had **no explicit inverse on either side** (zero anchors) -> this is the one that broke
-- `Task.watchers <-> User.watchedTasks` already had an explicit inverse anchor on `User.watchedTasks` -> this one worked
-
-So the key condition was:
+## Key Condition
 
 - **many-to-many with zero explicit inverse anchors**
 
@@ -103,7 +88,7 @@ Avoid this in many-to-many pairs:
 
 - neither side has `@Relationship(inverse: ...)`
 
-That is the exact configuration that produced the Demo tag membership corruption during batch sync.
+That is the exact configuration that produced membership corruption during batch sync.
 
 ## SwiftData Compiler Edge Case (Important)
 

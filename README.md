@@ -169,12 +169,12 @@ To-one query shorthand (ownership / belongs-to):
 
 ```swift
 @SyncQuery(
-  Comment.self,
-  toOne: task,
+  Task.self,
+  toOne: project,
   in: syncContainer,
-  sortBy: [SortDescriptor(\Comment.id)]
+  sortBy: [SortDescriptor(\Task.id)]
 )
-var comments: [Comment]
+var tasks: [Task]
 ```
 
 If to-one inference is ambiguous, pass the relationship explicitly:
@@ -190,19 +190,7 @@ If to-one inference is ambiguous, pass the relationship explicitly:
 var assignedTickets: [Ticket]
 ```
 
-To-many query shorthand (membership / contains):
-
-```swift
-@SyncQuery(
-  Tag.self,
-  toMany: task,
-  in: syncContainer,
-  sortBy: [SortDescriptor(\Tag.name)]
-)
-var tags: [Tag]
-```
-
-Keep using `predicate` when `toOne:` / `toMany:` is not the right shape:
+Keep using `predicate` when `toOne:` is not the right shape:
 - screens that only have scalar IDs (no related model instance)
 - non-parent filters (for example `assigneeID == userID`)
 - compound business filters (for example status + date window + membership)

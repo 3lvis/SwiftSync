@@ -50,13 +50,11 @@ public final class DemoServerSimulator {
             SELECT
                 projects.id,
                 projects.name,
-                projects.status,
-                projects.priority,
                 projects.updated_at,
                 COUNT(tasks.id) AS task_count
             FROM projects
             LEFT JOIN tasks ON tasks.project_id = projects.id
-            GROUP BY projects.id, projects.name, projects.status, projects.priority, projects.updated_at
+            GROUP BY projects.id, projects.name, projects.updated_at
             ORDER BY projects.id ASC
             """
         )
@@ -64,8 +62,6 @@ public final class DemoServerSimulator {
             [
                 "id": row.string("id"),
                 "name": row.string("name"),
-                "status": labeledValuePayload(id: row.string("status"), label: row.string("status")),
-                "priority": priorityPayload(id: row.string("priority")),
                 "task_count": Int(row.int64("task_count")),
                 "updated_at": iso8601(row.double("updated_at"))
             ]
@@ -144,17 +140,6 @@ public final class DemoServerSimulator {
         ]
     }
 
-    public func getProjectStatusOptionsPayload() throws -> [[String: Any]] {
-        try optionsPayload(
-            rows: self.sqlite.query(
-                """
-                SELECT DISTINCT status AS id
-                FROM projects
-                ORDER BY status ASC
-                """
-            )
-        )
-    }
 
     public func getUserRoleOptionsPayload() throws -> [[String: Any]] {
         try optionsPayload(
@@ -171,7 +156,7 @@ public final class DemoServerSimulator {
     public func getTaskDetailPayload(taskID: String) throws -> [String: Any]? {
         let rows = try self.sqlite.query(
             """
-            SELECT id, project_id, assignee_id, reviewer_id, title, description, state, priority, updated_at
+            SELECT id, project_id, assignee_id, reviewer_id, author_id, title, description, state, priority, updated_at
             FROM tasks
             WHERE id = ?
             LIMIT 1
@@ -182,59 +167,6 @@ public final class DemoServerSimulator {
         )
         guard let row = rows.first else { return nil }
         return try taskPayload(from: row)
-    }
-
-    public func getTaskCommentsPayload(taskID: String) throws -> [[String: Any]] {
-        let rows = try self.sqlite.query(
-            """
-            SELECT id, task_id, author_user_id, author_name, body, created_at
-            FROM comments
-            WHERE task_id = ?
-            ORDER BY created_at ASC, id ASC
-            """,
-            bind: { stmt in
-                self.sqlite.bind(text: taskID, at: 1, in: stmt)
-            }
-        )
-        return rows.map { row in
-            [
-                "id": row.string("id"),
-                "task_id": row.string("task_id"),
-                "author_user_id": row.string("author_user_id"),
-                "author_name": row.string("author_name"),
-                "body": row.string("body"),
-                "created_at": iso8601(row.double("created_at"))
-            ]
-        }
-    }
-
-    public func getTagsPayload() throws -> [[String: Any]] {
-        let rows = try self.sqlite.query(
-            """
-            SELECT id, name, updated_at
-            FROM tags
-            ORDER BY id ASC
-            """
-        )
-        return rows.map { row in
-            [
-                "id": row.string("id"),
-                "name": row.string("name"),
-                "updated_at": iso8601(row.double("updated_at"))
-            ]
-        }
-    }
-
-    public func getTagTasksPayload(tagID: String) throws -> [[String: Any]] {
-        try getTasksPayload(
-            whereClause: """
-            INNER JOIN task_tags ON task_tags.task_id = tasks.id
-            WHERE task_tags.tag_id = ?
-            """,
-            bind: { stmt in
-                self.sqlite.bind(text: tagID, at: 1, in: stmt)
-            }
-        )
     }
 
     @discardableResult
@@ -257,59 +189,6 @@ public final class DemoServerSimulator {
             }
         )
         return try getTaskDetailPayload(taskID: taskID)
-    }
-
-    public func createComment(taskID: String, authorUserID: String, body: String) throws -> [String: Any] {
-        guard try exists(in: "tasks", id: taskID) else {
-            throw DemoBackendError.invalidReference(entity: "task_id", id: taskID)
-        }
-        guard try exists(in: "users", id: authorUserID) else {
-            throw DemoBackendError.invalidReference(entity: "author_user_id", id: authorUserID)
-        }
-        let normalizedBody = try validatedNonEmpty(body, field: "body")
-        let authorName = try userDisplayName(for: authorUserID)
-        suspendAmbientMutationsAfterWrite()
-
-        let now = nextTimestamp(after: nil)
-        let newID = try nextCommentID()
-
-        try self.sqlite.execute(
-            """
-            INSERT INTO comments (id, task_id, author_user_id, author_name, body, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            bind: { stmt in
-                self.sqlite.bind(text: newID, at: 1, in: stmt)
-                self.sqlite.bind(text: taskID, at: 2, in: stmt)
-                self.sqlite.bind(text: authorUserID, at: 3, in: stmt)
-                self.sqlite.bind(text: authorName, at: 4, in: stmt)
-                self.sqlite.bind(text: normalizedBody, at: 5, in: stmt)
-                self.sqlite.bind(double: now.timeIntervalSince1970, at: 6, in: stmt)
-            }
-        )
-
-        let rows = try self.sqlite.query(
-            """
-            SELECT id, task_id, author_user_id, author_name, body, created_at
-            FROM comments
-            WHERE id = ?
-            LIMIT 1
-            """,
-            bind: { stmt in
-                self.sqlite.bind(text: newID, at: 1, in: stmt)
-            }
-        )
-        guard let row = rows.first else {
-            throw DemoBackendError.notFound(entity: "comment", id: newID)
-        }
-        return [
-            "id": row.string("id"),
-            "task_id": row.string("task_id"),
-            "author_user_id": row.string("author_user_id"),
-            "author_name": row.string("author_name"),
-            "body": row.string("body"),
-            "created_at": iso8601(row.double("created_at"))
-        ]
     }
 
     @discardableResult
@@ -386,61 +265,6 @@ public final class DemoServerSimulator {
     }
 
     @discardableResult
-    public func replaceTaskTags(taskID: String, tagIDs: [String]) throws -> [String: Any]? {
-        guard try exists(in: "tasks", id: taskID) else { return nil }
-        let uniqueTagIDs = Array(Set(tagIDs)).sorted()
-        for tagID in uniqueTagIDs where !(try exists(in: "tags", id: tagID)) {
-            throw DemoBackendError.invalidReference(entity: "tag_id", id: tagID)
-        }
-
-        guard let current = try getTaskDetailPayload(taskID: taskID) else { return nil }
-        suspendAmbientMutationsAfterWrite()
-        let currentUpdatedAt = try parseISO8601(current["updated_at"])
-        let next = nextTimestamp(after: currentUpdatedAt)
-
-        try self.sqlite.execute("BEGIN TRANSACTION;")
-        do {
-            try self.sqlite.execute(
-                "DELETE FROM task_tags WHERE task_id = ?",
-                bind: { stmt in
-                    self.sqlite.bind(text: taskID, at: 1, in: stmt)
-                }
-            )
-
-            for tagID in uniqueTagIDs {
-                try self.sqlite.execute(
-                    """
-                    INSERT INTO task_tags (task_id, tag_id)
-                    VALUES (?, ?)
-                    """,
-                    bind: { stmt in
-                        self.sqlite.bind(text: taskID, at: 1, in: stmt)
-                        self.sqlite.bind(text: tagID, at: 2, in: stmt)
-                    }
-                )
-            }
-
-            try self.sqlite.execute(
-                """
-                UPDATE tasks
-                SET updated_at = ?
-                WHERE id = ?
-                """,
-                bind: { stmt in
-                    self.sqlite.bind(double: next.timeIntervalSince1970, at: 1, in: stmt)
-                    self.sqlite.bind(text: taskID, at: 2, in: stmt)
-                }
-            )
-            try self.sqlite.execute("COMMIT;")
-        } catch {
-            try? self.sqlite.execute("ROLLBACK;")
-            throw error
-        }
-
-        return try getTaskDetailPayload(taskID: taskID)
-    }
-
-    @discardableResult
     public func replaceTaskWatchers(taskID: String, watcherIDs: [String]) throws -> [String: Any]? {
         guard try exists(in: "tasks", id: taskID) else { return nil }
         let uniqueWatcherIDs = Array(Set(watcherIDs)).sorted()
@@ -502,7 +326,7 @@ public final class DemoServerSimulator {
         state: String,
         priority: String = "medium",
         assigneeID: String?,
-        tagIDs: [String]
+        authorID: String
     ) throws -> [String: Any] {
         guard try exists(in: "projects", id: projectID) else {
             throw DemoBackendError.invalidReference(entity: "project_id", id: projectID)
@@ -510,56 +334,36 @@ public final class DemoServerSimulator {
         if let assigneeID, !(try exists(in: "users", id: assigneeID)) {
             throw DemoBackendError.invalidReference(entity: "assignee_id", id: assigneeID)
         }
+        if !(try exists(in: "users", id: authorID)) {
+            throw DemoBackendError.invalidReference(entity: "author_id", id: authorID)
+        }
         let normalizedTitle = try validatedNonEmpty(title, field: "title")
         let normalizedDescription = try validatedNonEmpty(descriptionText, field: "description")
         let normalizedState = try validatedTaskState(state)
         let normalizedPriority = try validatedPriority(priority)
-        let uniqueTagIDs = Array(Set(tagIDs)).sorted()
-        for tagID in uniqueTagIDs where !(try exists(in: "tags", id: tagID)) {
-            throw DemoBackendError.invalidReference(entity: "tag_id", id: tagID)
-        }
 
         let newID = try nextTaskID()
         let now = nextTimestamp(after: nil)
         suspendAmbientMutationsAfterWrite()
 
-        try self.sqlite.execute("BEGIN TRANSACTION;")
-        do {
-            try self.sqlite.execute(
-                """
-                INSERT INTO tasks (id, project_id, assignee_id, reviewer_id, title, description, state, priority, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                bind: { stmt in
-                    self.sqlite.bind(text: newID, at: 1, in: stmt)
-                    self.sqlite.bind(text: projectID, at: 2, in: stmt)
-                    self.sqlite.bind(nullableText: assigneeID, at: 3, in: stmt)
-                    self.sqlite.bind(nullableText: nil, at: 4, in: stmt)
-                    self.sqlite.bind(text: normalizedTitle, at: 5, in: stmt)
-                    self.sqlite.bind(text: normalizedDescription, at: 6, in: stmt)
-                    self.sqlite.bind(text: normalizedState, at: 7, in: stmt)
-                    self.sqlite.bind(text: normalizedPriority, at: 8, in: stmt)
-                    self.sqlite.bind(double: now.timeIntervalSince1970, at: 9, in: stmt)
-                }
-            )
-
-            for tagID in uniqueTagIDs {
-                try self.sqlite.execute(
-                    """
-                    INSERT INTO task_tags (task_id, tag_id)
-                    VALUES (?, ?)
-                    """,
-                    bind: { stmt in
-                        self.sqlite.bind(text: newID, at: 1, in: stmt)
-                        self.sqlite.bind(text: tagID, at: 2, in: stmt)
-                    }
-                )
+        try self.sqlite.execute(
+            """
+            INSERT INTO tasks (id, project_id, assignee_id, reviewer_id, author_id, title, description, state, priority, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            bind: { stmt in
+                self.sqlite.bind(text: newID, at: 1, in: stmt)
+                self.sqlite.bind(text: projectID, at: 2, in: stmt)
+                self.sqlite.bind(nullableText: assigneeID, at: 3, in: stmt)
+                self.sqlite.bind(nullableText: nil, at: 4, in: stmt)
+                self.sqlite.bind(text: authorID, at: 5, in: stmt)
+                self.sqlite.bind(text: normalizedTitle, at: 6, in: stmt)
+                self.sqlite.bind(text: normalizedDescription, at: 7, in: stmt)
+                self.sqlite.bind(text: normalizedState, at: 8, in: stmt)
+                self.sqlite.bind(text: normalizedPriority, at: 9, in: stmt)
+                self.sqlite.bind(double: now.timeIntervalSince1970, at: 10, in: stmt)
             }
-            try self.sqlite.execute("COMMIT;")
-        } catch {
-            try? self.sqlite.execute("ROLLBACK;")
-            throw error
-        }
+        )
 
         guard let payload = try getTaskDetailPayload(taskID: newID) else {
             throw DemoBackendError.notFound(entity: "task", id: newID)
@@ -576,19 +380,6 @@ public final class DemoServerSimulator {
             "DELETE FROM tasks WHERE id = ?",
             bind: { stmt in
                 self.sqlite.bind(text: taskID, at: 1, in: stmt)
-            }
-        )
-    }
-
-    public func deleteComment(commentID: String) throws {
-        guard try exists(in: "comments", id: commentID) else {
-            throw DemoBackendError.notFound(entity: "comment", id: commentID)
-        }
-        suspendAmbientMutationsAfterWrite()
-        try self.sqlite.execute(
-            "DELETE FROM comments WHERE id = ?",
-            bind: { stmt in
-                self.sqlite.bind(text: commentID, at: 1, in: stmt)
             }
         )
     }
@@ -619,7 +410,7 @@ public final class DemoServerSimulator {
     ) throws -> [[String: Any]] {
         let rows = try self.sqlite.query(
             """
-            SELECT tasks.id, tasks.project_id, tasks.assignee_id, tasks.reviewer_id, tasks.title, tasks.description, tasks.state,
+            SELECT tasks.id, tasks.project_id, tasks.assignee_id, tasks.reviewer_id, tasks.author_id, tasks.title, tasks.description, tasks.state,
                    tasks.priority, tasks.updated_at
             FROM tasks
             \(whereClause)
@@ -666,9 +457,8 @@ public final class DemoServerSimulator {
     }
 
     private func ambientCreateTask(in projectID: String, step: Int) throws {
-        let tagIDs = try allIDs(in: "tags")
         let userIDs = try allIDs(in: "users")
-        guard !tagIDs.isEmpty else { return }
+        guard !userIDs.isEmpty else { return }
 
         let titles = [
             "Review sync behavior after background refresh",
@@ -683,11 +473,8 @@ public final class DemoServerSimulator {
         let selectedTitle = titles[step % titles.count]
         let state = states[(step / 2) % states.count]
         let priority = priorities[(step / 3) % priorities.count]
-        let assigneeID: String? = userIDs.isEmpty || (step % 4 == 0) ? nil : userIDs[step % userIDs.count]
-
-        let firstTag = tagIDs[step % tagIDs.count]
-        let secondTag = tagIDs[(step + 3) % tagIDs.count]
-        let selectedTags = Array(Set([firstTag, secondTag])).sorted()
+        let assigneeID: String? = (step % 4 == 0) ? nil : userIDs[step % userIDs.count]
+        let authorID = assigneeID ?? userIDs.first ?? "user-1"
 
         _ = try createTask(
             projectID: projectID,
@@ -696,7 +483,7 @@ public final class DemoServerSimulator {
             state: state,
             priority: priority,
             assigneeID: assigneeID,
-            tagIDs: selectedTags
+            authorID: authorID
         )
     }
 
@@ -716,11 +503,11 @@ public final class DemoServerSimulator {
             "project_id": row.string("project_id"),
             "assignee_id": row.nullableString("assignee_id") ?? NSNull(),
             "reviewer_id": row.nullableString("reviewer_id") ?? NSNull(),
+            "author_id": row.string("author_id"),
             "title": row.string("title"),
             "description": row.string("description"),
             "state": taskStatePayload(id: stateID),
             "priority": priorityPayload(id: priorityID),
-            "tag_ids": try tagIDs(forTaskID: taskID),
             "watcher_ids": try watcherIDs(forTaskID: taskID),
             "updated_at": iso8601(row.double("updated_at"))
         ]
@@ -782,21 +569,6 @@ public final class DemoServerSimulator {
         }
     }
 
-    private func tagIDs(forTaskID taskID: String) throws -> [String] {
-        let rows = try self.sqlite.query(
-            """
-            SELECT tag_id
-            FROM task_tags
-            WHERE task_id = ?
-            ORDER BY tag_id ASC
-            """,
-            bind: { stmt in
-                self.sqlite.bind(text: taskID, at: 1, in: stmt)
-            }
-        )
-        return rows.map { $0.string("tag_id") }
-    }
-
     private func watcherIDs(forTaskID taskID: String) throws -> [String] {
         let rows = try self.sqlite.query(
             """
@@ -827,36 +599,6 @@ public final class DemoServerSimulator {
             "SELECT id FROM \(table) ORDER BY id ASC"
         )
         return rows.map { $0.string("id") }
-    }
-
-    private func userDisplayName(for userID: String) throws -> String {
-        let rows = try self.sqlite.query(
-            """
-            SELECT display_name
-            FROM users
-            WHERE id = ?
-            LIMIT 1
-            """,
-            bind: { stmt in
-                self.sqlite.bind(text: userID, at: 1, in: stmt)
-            }
-        )
-        guard let row = rows.first else {
-            throw DemoBackendError.invalidReference(entity: "author_user_id", id: userID)
-        }
-        return row.string("display_name")
-    }
-
-    private func nextCommentID() throws -> String {
-        let rows = try self.sqlite.query(
-            """
-            SELECT COALESCE(MAX(CAST(SUBSTR(id, 9) AS INTEGER)), 0) AS max_id
-            FROM comments
-            WHERE id LIKE 'comment-%'
-            """
-        )
-        let next = Int(rows.first?.int64("max_id") ?? 0) + 1
-        return "comment-\(next)"
     }
 
     private func nextTaskID() throws -> String {
@@ -935,8 +677,6 @@ public final class DemoServerSimulator {
             CREATE TABLE IF NOT EXISTS projects (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
-                status TEXT NOT NULL,
-                priority TEXT NOT NULL,
                 updated_at REAL NOT NULL
             );
 
@@ -947,17 +687,12 @@ public final class DemoServerSimulator {
                 updated_at REAL NOT NULL
             );
 
-            CREATE TABLE IF NOT EXISTS tags (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                updated_at REAL NOT NULL
-            );
-
             CREATE TABLE IF NOT EXISTS tasks (
                 id TEXT PRIMARY KEY,
                 project_id TEXT NOT NULL,
                 assignee_id TEXT NULL,
                 reviewer_id TEXT NULL,
+                author_id TEXT NOT NULL,
                 title TEXT NOT NULL,
                 description TEXT NOT NULL,
                 state TEXT NOT NULL,
@@ -965,15 +700,8 @@ public final class DemoServerSimulator {
                 updated_at REAL NOT NULL,
                 FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE RESTRICT,
                 FOREIGN KEY(assignee_id) REFERENCES users(id) ON DELETE SET NULL,
-                FOREIGN KEY(reviewer_id) REFERENCES users(id) ON DELETE SET NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS task_tags (
-                task_id TEXT NOT NULL,
-                tag_id TEXT NOT NULL,
-                PRIMARY KEY (task_id, tag_id),
-                FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-                FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE
+                FOREIGN KEY(reviewer_id) REFERENCES users(id) ON DELETE SET NULL,
+                FOREIGN KEY(author_id) REFERENCES users(id) ON DELETE RESTRICT
             );
 
             CREATE TABLE IF NOT EXISTS task_watchers (
@@ -984,16 +712,6 @@ public final class DemoServerSimulator {
                 FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
             );
 
-            CREATE TABLE IF NOT EXISTS comments (
-                id TEXT PRIMARY KEY,
-                task_id TEXT NOT NULL,
-                author_user_id TEXT NOT NULL,
-                author_name TEXT NOT NULL,
-                body TEXT NOT NULL,
-                created_at REAL NOT NULL,
-                FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-                FOREIGN KEY(author_user_id) REFERENCES users(id) ON DELETE RESTRICT
-            );
             """
         )
     }
@@ -1006,19 +724,17 @@ public final class DemoServerSimulator {
         try sqlite.execute("BEGIN TRANSACTION;")
         do {
             for project in seedData.projects {
-                try sqlite.execute(
-                    """
-                    INSERT INTO projects (id, name, status, priority, updated_at)
-                    VALUES (?, ?, ?, ?, ?)
-                    """,
-                    bind: { stmt in
-                        sqlite.bind(text: project.id, at: 1, in: stmt)
-                        sqlite.bind(text: project.name, at: 2, in: stmt)
-                        sqlite.bind(text: project.status, at: 3, in: stmt)
-                        sqlite.bind(text: project.priority, at: 4, in: stmt)
-                        sqlite.bind(double: project.updatedAt.timeIntervalSince1970, at: 5, in: stmt)
-                    }
-                )
+            try sqlite.execute(
+                """
+                INSERT INTO projects (id, name, updated_at)
+                VALUES (?, ?, ?)
+                """,
+                bind: { stmt in
+                    sqlite.bind(text: project.id, at: 1, in: stmt)
+                    sqlite.bind(text: project.name, at: 2, in: stmt)
+                    sqlite.bind(double: project.updatedAt.timeIntervalSince1970, at: 3, in: stmt)
+                }
+            )
             }
 
             for user in seedData.users {
@@ -1036,51 +752,25 @@ public final class DemoServerSimulator {
                 )
             }
 
-            for tag in seedData.tags {
-                try sqlite.execute(
-                    """
-                    INSERT INTO tags (id, name, updated_at)
-                    VALUES (?, ?, ?)
-                    """,
-                    bind: { stmt in
-                        sqlite.bind(text: tag.id, at: 1, in: stmt)
-                        sqlite.bind(text: tag.name, at: 2, in: stmt)
-                        sqlite.bind(double: tag.updatedAt.timeIntervalSince1970, at: 3, in: stmt)
-                    }
-                )
-            }
-
             for task in seedData.tasks {
                 try sqlite.execute(
                     """
-                    INSERT INTO tasks (id, project_id, assignee_id, reviewer_id, title, description, state, priority, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO tasks (id, project_id, assignee_id, reviewer_id, author_id, title, description, state, priority, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     bind: { stmt in
                         sqlite.bind(text: task.id, at: 1, in: stmt)
                         sqlite.bind(text: task.projectID, at: 2, in: stmt)
                         sqlite.bind(nullableText: task.assigneeID, at: 3, in: stmt)
                         sqlite.bind(nullableText: task.reviewerID, at: 4, in: stmt)
-                        sqlite.bind(text: task.title, at: 5, in: stmt)
-                        sqlite.bind(text: task.descriptionText, at: 6, in: stmt)
-                        sqlite.bind(text: task.state, at: 7, in: stmt)
-                        sqlite.bind(text: task.priority, at: 8, in: stmt)
-                        sqlite.bind(double: task.updatedAt.timeIntervalSince1970, at: 9, in: stmt)
+                        sqlite.bind(text: task.authorID, at: 5, in: stmt)
+                        sqlite.bind(text: task.title, at: 6, in: stmt)
+                        sqlite.bind(text: task.descriptionText, at: 7, in: stmt)
+                        sqlite.bind(text: task.state, at: 8, in: stmt)
+                        sqlite.bind(text: task.priority, at: 9, in: stmt)
+                        sqlite.bind(double: task.updatedAt.timeIntervalSince1970, at: 10, in: stmt)
                     }
                 )
-
-                for tagID in task.tagIDs {
-                    try sqlite.execute(
-                        """
-                        INSERT INTO task_tags (task_id, tag_id)
-                        VALUES (?, ?)
-                        """,
-                        bind: { stmt in
-                            sqlite.bind(text: task.id, at: 1, in: stmt)
-                            sqlite.bind(text: tagID, at: 2, in: stmt)
-                        }
-                    )
-                }
 
                 for watcherID in task.watcherIDs {
                     try sqlite.execute(
@@ -1094,35 +784,6 @@ public final class DemoServerSimulator {
                         }
                     )
                 }
-            }
-
-            for comment in seedData.comments {
-                let authorName = try sqlite.query(
-                    """
-                    SELECT display_name
-                    FROM users
-                    WHERE id = ?
-                    LIMIT 1
-                    """,
-                    bind: { stmt in
-                        sqlite.bind(text: comment.authorUserID, at: 1, in: stmt)
-                    }
-                ).first?.string("display_name") ?? comment.authorUserID
-
-                try sqlite.execute(
-                    """
-                    INSERT INTO comments (id, task_id, author_user_id, author_name, body, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    bind: { stmt in
-                        sqlite.bind(text: comment.id, at: 1, in: stmt)
-                        sqlite.bind(text: comment.taskID, at: 2, in: stmt)
-                        sqlite.bind(text: comment.authorUserID, at: 3, in: stmt)
-                        sqlite.bind(text: authorName, at: 4, in: stmt)
-                        sqlite.bind(text: comment.body, at: 5, in: stmt)
-                        sqlite.bind(double: comment.createdAt.timeIntervalSince1970, at: 6, in: stmt)
-                    }
-                )
             }
 
             try sqlite.execute("COMMIT;")

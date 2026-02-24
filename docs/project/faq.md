@@ -6,7 +6,7 @@ Source-of-truth docs:
 - `docs/project/parent-scope.md` (parent-scoped sync/query behavior)
 - `docs/project/property-mapping-contract.md` (mapping/import/export semantics)
 - `docs/project/reactive-reads.md` (`@SyncQuery` / `@SyncModel` mental model)
-- `docs/project/relationship-integrity.md` (many-to-many inverse anchor rule, tag bug)
+- `docs/project/relationship-integrity.md` (many-to-many inverse anchor rule)
 - `docs/project/backend-contract.md` (recommended backend shape)
 
 If an answer needs more than a short explanation, this FAQ points to the source-of-truth doc instead of duplicating it.
@@ -182,7 +182,7 @@ This keeps view ownership explicit and avoids stale retained-reference assumptio
 
 See `docs/project/reactive-reads.md` ("App Best Practices").
 
-## 22) What is the inverse rule after the Demo tag bug?
+## 22) What is the inverse rule for many-to-many relationships?
 
 The corrected rule is narrower than what we first documented:
 

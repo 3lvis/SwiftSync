@@ -7,14 +7,6 @@ import SwiftSync
 final class Project {
     @Attribute(.unique) var id: String
     var name: String
-    @RemoteKey("status.id")
-    var status: String
-    @RemoteKey("status.label")
-    var statusLabel: String
-    @RemoteKey("priority.id")
-    var priority: String
-    @RemoteKey("priority.label")
-    var priorityLabel: String
     var taskCount: Int
     var updatedAt: Date
     @Relationship(inverse: \Task.project)
@@ -23,20 +15,12 @@ final class Project {
     init(
         id: String,
         name: String,
-        status: String,
-        statusLabel: String,
-        priority: String,
-        priorityLabel: String,
         taskCount: Int = 0,
         updatedAt: Date,
         tasks: [Task] = []
     ) {
         self.id = id
         self.name = name
-        self.status = status
-        self.statusLabel = statusLabel
-        self.priority = priority
-        self.priorityLabel = priorityLabel
         self.taskCount = taskCount
         self.updatedAt = updatedAt
         self.tasks = tasks
@@ -57,6 +41,10 @@ final class User {
     var assignedTasks: [Task]
     @Relationship(inverse: \Task.reviewer)
     var reviewTasks: [Task]
+    @Relationship(inverse: \Task.author)
+    var authoredTasks: [Task]
+    @Relationship(inverse: \Task.collaborators)
+    var collaboratedTasks: [Task]
     @Relationship(inverse: \Task.watchers)
     var watchedTasks: [Task]
 
@@ -68,6 +56,8 @@ final class User {
         updatedAt: Date,
         assignedTasks: [Task] = [],
         reviewTasks: [Task] = [],
+        authoredTasks: [Task] = [],
+        collaboratedTasks: [Task] = [],
         watchedTasks: [Task] = []
     ) {
         self.id = id
@@ -77,6 +67,7 @@ final class User {
         self.updatedAt = updatedAt
         self.assignedTasks = assignedTasks
         self.reviewTasks = reviewTasks
+        self.authoredTasks = authoredTasks
         self.watchedTasks = watchedTasks
     }
 }
@@ -84,38 +75,6 @@ final class User {
 @Syncable
 @Model
 final class TaskStateOption {
-    @Attribute(.unique) var id: String
-    var label: String
-    var sortOrder: Int
-    var updatedAt: Date
-
-    init(id: String, label: String, sortOrder: Int, updatedAt: Date) {
-        self.id = id
-        self.label = label
-        self.sortOrder = sortOrder
-        self.updatedAt = updatedAt
-    }
-}
-
-@Syncable
-@Model
-final class PriorityOption {
-    @Attribute(.unique) var id: String
-    var label: String
-    var sortOrder: Int
-    var updatedAt: Date
-
-    init(id: String, label: String, sortOrder: Int, updatedAt: Date) {
-        self.id = id
-        self.label = label
-        self.sortOrder = sortOrder
-        self.updatedAt = updatedAt
-    }
-}
-
-@Syncable
-@Model
-final class ProjectStatusOption {
     @Attribute(.unique) var id: String
     var label: String
     var sortOrder: Int
@@ -147,26 +106,6 @@ final class UserRoleOption {
 
 @Syncable
 @Model
-final class Tag {
-    @Attribute(.unique) var id: String
-    var name: String
-    var updatedAt: Date
-    @Relationship(inverse: \Task.tags)
-    var tasks: [Task]
-
-    init(
-        id: String,
-        name: String,
-        updatedAt: Date,
-        tasks: [Task] = []
-    ) {
-        self.id = id
-        self.name = name
-        self.updatedAt = updatedAt
-        self.tasks = tasks
-    }
-}
-
 @Syncable
 @Model
 final class Task {
@@ -176,6 +115,7 @@ final class Task {
 
     var assigneeID: String?
     var reviewerID: String?
+    var authorID: String
 
     var title: String
 
@@ -186,87 +126,47 @@ final class Task {
     var state: String
     @RemoteKey("state.label")
     var stateLabel: String
-    @RemoteKey("priority.id")
-    var priority: String
-    @RemoteKey("priority.label")
-    var priorityLabel: String
     var updatedAt: Date
     var project: Project?
     var assignee: User?
     var reviewer: User?
-    var tags: [Tag]
+    var author: User?
+    var collaborators: [User]
     var watchers: [User]
-    @Relationship(inverse: \Comment.task)
-    var comments: [Comment]
 
     init(
         id: String,
         projectID: String,
         assigneeID: String?,
         reviewerID: String?,
+        authorID: String,
         title: String,
         descriptionText: String,
         state: String,
         stateLabel: String,
-        priority: String,
-        priorityLabel: String,
         updatedAt: Date,
         project: Project? = nil,
         assignee: User? = nil,
         reviewer: User? = nil,
-        tags: [Tag] = [],
-        watchers: [User] = [],
-        comments: [Comment] = []
+        author: User? = nil,
+        collaborators: [User] = [],
+        watchers: [User] = []
     ) {
         self.id = id
         self.projectID = projectID
         self.assigneeID = assigneeID
         self.reviewerID = reviewerID
+        self.authorID = authorID
         self.title = title
         self.descriptionText = descriptionText
         self.state = state
         self.stateLabel = stateLabel
-        self.priority = priority
-        self.priorityLabel = priorityLabel
         self.updatedAt = updatedAt
         self.project = project
         self.assignee = assignee
         self.reviewer = reviewer
-        self.tags = tags
+        self.author = author
+        self.collaborators = collaborators
         self.watchers = watchers
-        self.comments = comments
-    }
-}
-
-@Syncable
-@Model
-final class Comment {
-    @Attribute(.unique) var id: String
-
-    var taskID: String
-
-    var authorUserID: String
-    var authorName: String
-
-    var body: String
-    var createdAt: Date
-    var task: Task?
-
-    init(
-        id: String,
-        taskID: String,
-        authorUserID: String,
-        authorName: String,
-        body: String,
-        createdAt: Date,
-        task: Task? = nil
-    ) {
-        self.id = id
-        self.taskID = taskID
-        self.authorUserID = authorUserID
-        self.authorName = authorName
-        self.body = body
-        self.createdAt = createdAt
-        self.task = task
     }
 }

@@ -14,11 +14,10 @@
 - [X] Single primary shell (`Projects`) with drill-in screens
 - [X] Fake backend with staged read endpoints
 - [X] Scenario presets (`fastStable`, `slowNetwork`, `flakyNetwork`, `offline`)
-- [X] Curated seeded story dataset (3 projects / 6 users / 12 tags / 12 tasks / 20 comments)
+- [X] Curated seeded story dataset (3 projects / 6 users / 12 tasks)
 - [X] Reactive reads use `@SyncQuery` / `@SyncModel`
 - [X] Project -> tasks flow
-- [X] Task detail with tags + comments
-- [X] Tag drill-in -> tasks
+- [X] Task detail
 - [X] Staged sync via `DemoSyncEngine`
 - [X] Read-only Phase 1 behavior (core path)
 - [X] Backend work split into separate plan (`docs/planning/swiftsync-demo-backend-plan.md`)
@@ -34,7 +33,6 @@ Backend implementation planning now lives in:
 
 - `docs/planning/swiftsync-demo-backend-plan.md`
 - `docs/planning/swiftsync-demo-crud-flows-plan.md`
-- `docs/planning/swiftsync-demo-field-reduction-plan.md`
 
 This demo app plan tracks UI flows, sync-engine integration, and staged feature rollout. The backend plan tracks SQLite storage, fake backend endpoint behavior, and backend unit tests.
 
@@ -60,9 +58,7 @@ The demo is not a mini product. It is a showcase for:
 ## Core Showcase (What Must Be Demonstrated)
 
 - [X] One-to-many: `Project -> [Task]`
-- [X] To-one relation + FK redundancy where useful: `Task.assignee` + `Task.assigneeID`
-- [X] Many-to-many: `Task <-> [Tag]`
-- [X] Nested one-to-many: `Task -> [Comment]`
+- [X] To-one relation + FK redundancy where useful: `Task.assignee`/`Task.author` + `Task.assigneeID`/`Task.authorID`
 - [X] Reserved-key mapping example: task `description` -> `descriptionText`
 - [X] Online CRUD flows that trigger targeted re-sync instead of manual local patching
 - [ ] Offline/replay (after online CRUD is stable)
@@ -71,8 +67,7 @@ The demo is not a mini product. It is a showcase for:
 
 ### Seeded-only (reference/support data in current demo)
 
-- [X] `User` records (used for assignee display/selection)
-- [X] `Tag` metadata (`name`, etc.; membership updates still interactive through `Task`)
+- [X] `User` records (used for assignee/author display + selection)
 - [X] `Project` records in current shell (no project create/edit/delete UI in Phase 2)
 
 ### Interactive (important because they prove sync behavior)
@@ -80,13 +75,10 @@ The demo is not a mini product. It is a showcase for:
 - [X] `Task` create/update/delete in project scope
 - [X] `Task.description` modal edit (`PATCH`)
 - [X] `Task.assigneeID` update (including `null` clear behavior)
-- [X] `Task.tags` membership replace (`PUT tag_ids`)
-- [X] `Comment` create/delete under a task
 
 ## Non-Goals (Current Demo Scope)
 
 - [X] User CRUD UI
-- [X] Tag metadata CRUD UI
 - [X] Project CRUD UI
 - [X] Simulating HTTP protocol details (headers/status codes/router stack)
 - [ ] Offline queue/outbox/replay before online CRUD is complete
@@ -106,7 +98,7 @@ Build a demo app that proves SwiftSync can deliver:
 - [X] Data stack: SwiftData + SwiftSync.
 - [X] Networking: fake backend service (in-process, deterministic delays/errors).
 - [X] Backend storage: SQLite-backed simulator in local package `DemoBackend`
-- [X] App shell: single primary flow (`Projects`) with drill-ins (`Task`, `Tag`).
+- [X] App shell: single primary flow (`Projects`) with drill-ins (`Task`).
 - [X] Workspace setup: Xcode workspace containing:
   - `SwiftSync` package
   - `SwiftSyncDemo` app target
@@ -116,9 +108,7 @@ Build a demo app that proves SwiftSync can deliver:
 This demo intentionally highlights multiple relationship types with a simplified UI shell.
 
 - `Project` -> to-many `Task`
-- `Task` -> to-one `User` (`assignee`)
-- `Task` <-> to-many `Tag` (many-to-many)
-- `Task` -> to-many `Comment`
+- `Task` -> to-one `User` (`assignee`, `reviewer`, `author`)
 
 ## Data Model (SwiftData + Syncable)
 
@@ -128,7 +118,7 @@ Status: `[X]` Implemented and simplified for the current showcase.
 
 - `id: String` (`@PrimaryKey`)
 - `name: String`
-- `status: String`
+- `taskCount: Int`
 - `updatedAt: Date`
 - relationship: `tasks: [Task]`
 
@@ -145,6 +135,8 @@ Status: `[X]` Implemented and simplified for the current showcase.
 - `id: String` (`@PrimaryKey`)
 - `projectID: String`
 - `assigneeID: String?`
+- `reviewerID: String?`
+- `authorID: String`
 - `title: String`
 - `descriptionText: String`
 - `state: String` (`todo`, `inProgress`, `done`)
@@ -152,26 +144,8 @@ Status: `[X]` Implemented and simplified for the current showcase.
 - relationships:
   - `project: Project?`
   - `assignee: User?`
-  - `tags: [Tag]`
-  - `comments: [Comment]`
-
-### `Tag`
-
-- `id: String` (`@PrimaryKey`)
-- `name: String` (e.g. `frontend`)
-- `updatedAt: Date`
-- inverse relationship: `tasks: [Task]`
-
-### `Comment`
-
-- `id: String` (`@PrimaryKey`)
-- `taskID: String`
-- `authorUserID: String`
-- `authorName: String` (denormalized display attribute from backend payload)
-- `body: String`
-- `createdAt: Date`
-- relationships:
-  - `task: Task?`
+  - `reviewer: User?`
+  - `author: User?`
 
 ## App Architecture
 
@@ -192,7 +166,7 @@ Status: `[-]` Phase 1 read flows and Phase 2 online CRUD flows are implemented; 
 ### Tab 1: Projects
 
 - [X] Projects list via `@SyncQuery(Project.self, in: syncContainer, sortBy: [\.name, \.id])`.
-- [X] On first appearance: trigger `syncProjects()` (and tags sync in UI path).
+- [X] On first appearance: trigger `syncProjects()`.
 - [X] Project detail:
   - [X] Header via `@SyncModel(Project.self, id: projectID, in: syncContainer)` (ID-owned view)
   - [X] Task list via `@SyncQuery(Task.self, relatedTo: Project.self, relatedID: projectID, ...)`
@@ -200,19 +174,15 @@ Status: `[-]` Phase 1 read flows and Phase 2 online CRUD flows are implemented; 
 
 ### Seeded Reference Data
 
-- [X] Users are synced as seeded reference data (assignee display + selection support).
-- [X] Tags metadata is seeded reference data (task tag labels + tag drill-in).
+- [X] Users are synced as seeded reference data (assignee/author display + selection support).
 - [X] Projects are seeded in current demo shell (no project create/edit UI planned in current Phase 2 scope).
 
 ### Task Detail
 
 - [X] Task core model via `@SyncModel(Task.self, id: taskID, in: syncContainer)` (ID-owned view)
 - [X] Assignee display via task relation
-- [X] Tag list from task-tag relation (`@SyncQuery(Tag.self, relatedTo: Task.self, relatedID: taskID, ...)`)
-- [X] Comments list via `@SyncQuery(Comment.self, relatedTo: Task.self, relatedID: taskID, ...)`)
 - [X] On first appearance:
   - [X] `syncTaskDetail(taskID:)`
-  - [X] `syncTaskComments(taskID:)`
 
 ### Description Editing Rule
 
@@ -221,22 +191,11 @@ Status: `[-]` Phase 1 read flows and Phase 2 online CRUD flows are implemented; 
 - [X] Save action goes through sync pipeline (`PATCH /tasks/{taskID}/description`).
 - [X] Close modal and let reactive wrappers refresh visible task detail state.
 
-### Tag Drill-In Flow
-
-- From task detail, tap tag chip `#frontend`.
-- [X] Navigate to `TagTasksView(tagID:)` (ID-owned destination).
-- [X] Screen uses:
-  - [X] `@SyncModel(Tag.self, id: tagID, in: syncContainer)`
-  - [X] `@SyncQuery(Task.self, relatedTo: Tag.self, relatedID: tagID, ...)`
-- [X] On first appearance: trigger `syncTagTasks(tagID:)`.
-
 ## Relationship Types Demonstrated
 
 1. One-to-many: `Project -> [Task]`.
-2. Many-to-one: `Task -> User (assignee)`.
-3. Many-to-many: `Task <-> [Tag]`.
-4. Nested one-to-many: `Task -> [Comment]`.
-5. To-one FK + relation redundancy where useful: `Task.assigneeID` + `Task.assignee`.
+2. Many-to-one: `Task -> User (assignee/reviewer/author)`.
+3. To-one FK + relation redundancy where useful: `Task.assigneeID`/`Task.authorID` + `Task.assignee`/`Task.author`.
 
 ## Phase 1: Read-Only, Mocked Data, Staged Fetching
 
@@ -246,16 +205,13 @@ Status: `[X]` Implemented (core read-only staged fetch flow).
 
 1. [X] App launch:
    - Show local cache immediately via `@SyncQuery`.
-   - Trigger bootstrap staged sync (projects/users/tags).
+   - Trigger bootstrap staged sync (projects/users).
 2. [X] Enter project:
    - Show cached tasks instantly.
    - Trigger `syncProjectTasks(projectID:)`.
 3. [X] Enter task detail:
-   - Show cached detail/comments instantly.
-   - Trigger detail/comments sync calls.
-4. [X] Enter tag drill-in:
-   - Show cached related tasks.
-   - Trigger `syncTagTasks(tagID:)`.
+   - Show cached detail instantly.
+   - Trigger detail sync calls.
 
 ### Key Objective
 
@@ -276,17 +232,14 @@ Status: `[X]` Implemented for online CRUD flows in the current demo scope.
 1. Add create/edit capabilities while online.
 2. Support creating:
    - task
-   - comment
 3. Continue using staged sync and reactive wrappers as primary read path.
 4. Preserve modal-only task description editing rule.
 
 ### Write Endpoints Used in Phase 2
 
 1. `POST /tasks`
-2. `POST /tasks/{taskID}/comments`
-3. `PATCH /tasks/{taskID}`
-4. `PATCH /tasks/{taskID}/description`
-5. `PUT /tasks/{taskID}/tags`
+2. `PATCH /tasks/{taskID}`
+3. `PATCH /tasks/{taskID}/description`
 
 ### Key Objective
 
@@ -317,12 +270,9 @@ Status: `[ ]` Deferred until after SQLite-backed backend + Phase 2 writes are wo
 
 1. [ ] Create a project.
 2. [ ] Create a task.
-3. [ ] Create a comment.
-4. [ ] Create a user.
-5. [ ] Reassign task assignee.
-6. [ ] Change task description from modal.
-7. [ ] Add/remove tags on a task.
-
+3. [ ] Create a user.
+4. [ ] Reassign task assignee.
+5. [ ] Change task description from modal.
 All operations should update local UI immediately and queue network writes.
 
 ### Conflict Policy (Demo Default)
@@ -346,13 +296,12 @@ All operations should update local UI immediately and queue network writes.
 
 ## Acceptance Criteria
 
-1. [X] Project-centered app flow is fully functional for read paths (`Projects` -> `Task` -> `Tag` drill-in).
+1. [X] Project-centered app flow is fully functional for read paths (`Projects` -> `Task`).
 2. [X] All major relationship types are visible in user flows.
 3. [X] Phase 1 is read-only and uses large fake backend content.
-4. [X] Phase 2 supports creating task/comment and editing task state/description/assignee/tags.
+4. [X] Phase 2 supports creating tasks and editing task state/description/assignee.
 5. [X] Task description remains editable only through modal flow.
-6. [X] Tag drill-in correctly shows tasks for selected tag.
-7. [ ] Phase 3 offline edits replay automatically on reconnect.
+6. [ ] Phase 3 offline edits replay automatically on reconnect.
 8. [X] Reactive wrappers are primary read APIs throughout UI.
 
 ## Implementation Milestones

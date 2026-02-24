@@ -13,7 +13,7 @@
 - [X] Backend lives in local Swift package `DemoBackend` (library + tests)
 - [X] Backend state is separate from app `SyncContainer` state
 - [X] App uses `DemoAPIClient` as the backend boundary
-- [X] SQLite-backed server storage (projects/users/tasks/tags/comments + task_tag join table)
+- [X] SQLite-backed server storage (projects/users/tasks)
 - [X] Deterministic seed bootstrap into SQLite backend state
 - [X] Read endpoints are backed by SQLite state
 - [X] Scenario delay/failure behavior remains in app fake client layer (not storage layer)
@@ -36,7 +36,6 @@ Related planning docs:
 
 - `docs/planning/swiftsync-demo-app-plan.md`
 - `docs/planning/swiftsync-demo-crud-flows-plan.md`
-- `docs/planning/swiftsync-demo-field-reduction-plan.md`
 
 ## Backend Purpose (for the Demo)
 
@@ -78,7 +77,7 @@ Status: `[X]` Read endpoints now run through a SQLite-backed stateful simulator 
 
 ### Storage (SQLite)
 
-- [X] SQLite schema for projects/users/tasks/tags/comments + task_tag join table
+- [X] SQLite schema for projects/users/tasks
 - [X] Seed SQLite backend state from deterministic demo seed data on first init/reset
 - [X] Read endpoint queries against SQLite for existing staged endpoints
 - [X] Support backend mutations in SQLite for all Phase 2 endpoints used by the app
@@ -87,7 +86,7 @@ Status: `[X]` Read endpoints now run through a SQLite-backed stateful simulator 
 
 - [X] Server-owned timestamps/updates on mutation (`updatedAt`) for implemented mutations
 - [X] Validation/error paths for invalid writes (minimal, deterministic) for implemented mutations
-- [X] Stable backend-side relationship handling (task tags, comments, assignee/project foreign keys)
+- [X] Stable backend-side relationship handling (assignee/reviewer/author/project foreign keys)
 - [X] Full Phase 2 online write semantics exercised through app-facing endpoint methods
 
 ### Unit Tests (Required)
@@ -95,7 +94,6 @@ Status: `[X]` Read endpoints now run through a SQLite-backed stateful simulator 
 - [X] SQLite schema/bootstrap + seeding
 - [X] Read endpoint data correctness from SQLite state
 - [X] Mutation persistence (write then read reflects server-side change)
-- [X] Relationship mutation correctness (comment insert)
 - [X] Coverage for every Phase 2 backend endpoint contract used by app flows
 
 ## Endpoints
@@ -106,19 +104,12 @@ Status: `[X]` Read endpoints now run through a SQLite-backed stateful simulator 
 - [X] `GET /projects/{projectID}/tasks`
 - [X] `GET /users` (seeded reference data for assignee display/selection)
 - [X] `GET /tasks/{taskID}`
-- [X] `GET /tasks/{taskID}/comments`
-- [X] `GET /tags`
-- [X] `GET /tags/{tagID}/tasks`
-
 ### Write Endpoints (Phase 2)
 
 - [X] `PATCH /tasks/{taskID}` (state/assignee in current demo scope)
 - [X] `PATCH /tasks/{taskID}/description` (modal edit flow)
-- [X] `PUT /tasks/{taskID}/tags` (full set replace semantics)
-- [X] `POST /tasks/{taskID}/comments`
 - [X] `POST /tasks`
 - [X] `DELETE /tasks/{taskID}`
-- [X] `DELETE /comments/{commentID}`
 
 ## Backend Simulation Behavior
 
@@ -134,8 +125,6 @@ Status: `[X]` Read endpoints now run through a SQLite-backed stateful simulator 
   - 3 projects
   - 12 tasks
   - 6 users
-  - 12 tags
-  - 20 comments
 
 ## Execution Order (Current)
 

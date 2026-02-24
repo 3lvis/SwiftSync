@@ -40,11 +40,7 @@ final class DemoRuntime: ObservableObject {
             User.self,
             Task.self,
             TaskStateOption.self,
-            PriorityOption.self,
-            ProjectStatusOption.self,
             UserRoleOption.self,
-            Tag.self,
-            Comment.self,
             schemaValidation: .failFast,
             initializationFailureRecovery: .resetAndRetry,
             configurations: configuration

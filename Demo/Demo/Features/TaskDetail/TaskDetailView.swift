@@ -9,11 +9,8 @@ struct TaskDetailView: View {
 
     @SyncModel private var taskModel: Task?
     @SyncQuery private var taskStateOptions: [TaskStateOption]
-    @SyncQuery private var tags: [Tag]
-    @SyncQuery private var comments: [Comment]
     @State private var hasTriggeredInitialSync = false
     @State private var activeSheet: TaskDetailSheet?
-    @State private var commentPendingDelete: CommentDeletePrompt?
 
     init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.taskID = taskID
@@ -27,26 +24,6 @@ struct TaskDetailView: View {
             sortBy: [\.sortOrder, \.id],
             animation: .snappy(duration: 0.22)
         )
-        _tags = SyncQuery(
-            Tag.self,
-            relatedTo: Task.self,
-            relatedID: taskID,
-            in: syncContainer,
-            sortBy: [\.name, \.id],
-            refreshOn: [\.tasks],
-            animation: .snappy(duration: 0.22)
-        )
-        _comments = SyncQuery(
-            Comment.self,
-            relatedTo: Task.self,
-            relatedID: taskID,
-            in: syncContainer,
-            sortBy: [
-                SortDescriptor(\Comment.createdAt, order: .reverse),
-                SortDescriptor(\Comment.id)
-            ],
-            animation: .snappy(duration: 0.22)
-        )
     }
 
     var body: some View {
@@ -54,8 +31,6 @@ struct TaskDetailView: View {
             taskSection
             peopleSection
             descriptionSection
-            tagsSection
-            commentsSection
         }
         .navigationTitle("Task")
         .toolbar {
@@ -66,48 +41,23 @@ struct TaskDetailView: View {
         .refreshable {
             await syncEngine.syncTaskStates()
             await syncEngine.syncTaskDetail(taskID: taskID)
-            await syncEngine.syncTaskComments(taskID: taskID)
         }
         .task {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
             await syncEngine.syncTaskStates()
             await syncEngine.syncTaskDetail(taskID: taskID)
-            await syncEngine.syncTaskComments(taskID: taskID)
         }
         .task(id: taskID) {
             while !_Concurrency.Task.isCancelled {
                 try? await _Concurrency.Task.sleep(nanoseconds: 14_000_000_000)
                 guard !_Concurrency.Task.isCancelled else { break }
-                guard activeSheet == nil, commentPendingDelete == nil else { continue }
+                guard activeSheet == nil else { continue }
                 await syncEngine.syncTaskDetail(taskID: taskID)
-                await syncEngine.syncTaskComments(taskID: taskID)
             }
         }
         .sheet(item: $activeSheet) { sheet in
             presentedSheet(for: sheet)
-        }
-        .alert(
-            "Delete Comment?",
-            isPresented: Binding(
-                get: { commentPendingDelete != nil },
-                set: { isPresented in
-                    if !isPresented { commentPendingDelete = nil }
-                }
-            ),
-            presenting: commentPendingDelete
-        ) { prompt in
-            Button("Delete", role: .destructive) {
-                _Concurrency.Task {
-                    await syncEngine.deleteComment(commentID: prompt.id, taskID: taskID)
-                    commentPendingDelete = nil
-                }
-            }
-            Button("Cancel", role: .cancel) {
-                commentPendingDelete = nil
-            }
-        } message: { prompt in
-            Text(prompt.body)
         }
     }
 
@@ -120,10 +70,6 @@ struct TaskDetailView: View {
             Button("Change Reviewer") { activeSheet = .reviewer }
                 .disabled(taskModel == nil)
             Button("Edit Watchers") { activeSheet = .watchers }
-                .disabled(taskModel == nil)
-            Button("Edit Tags") { activeSheet = .tags }
-                .disabled(taskModel == nil)
-            Button("Add Comment") { activeSheet = .comment }
                 .disabled(taskModel == nil)
         } label: {
             Label("Actions", systemImage: "ellipsis.circle")
@@ -180,6 +126,26 @@ struct TaskDetailView: View {
                     activeSheet = .watchers
                 }
 
+                if let author = taskModel.author {
+                    NavigationLink {
+                        UserTaskBucketsView(
+                            userID: author.id,
+                            syncContainer: syncContainer,
+                            syncEngine: syncEngine
+                        )
+                    } label: {
+                        LabeledContent("Author") {
+                            Text(author.displayName)
+                                .foregroundStyle(Color.accentColor)
+                        }
+                    }
+                } else {
+                    LabeledContent("Author") {
+                        Text("Unknown")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 if let assignee = taskModel.assignee {
                     NavigationLink {
                         UserTaskBucketsView(
@@ -233,63 +199,6 @@ struct TaskDetailView: View {
                                 Text(watcher.displayName)
                                     .foregroundStyle(Color.accentColor)
                             }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var tagsSection: some View {
-        if taskModel != nil {
-            Section("Tags") {
-                Button("Edit Tags") {
-                    activeSheet = .tags
-                }
-
-                if tags.isEmpty {
-                    Text("No tags")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(tags, id: \.id) { tag in
-                        NavigationLink {
-                            TagTasksView(tagID: tag.id, syncContainer: syncContainer, syncEngine: syncEngine)
-                        } label: {
-                            Label(tag.name, systemImage: "tag")
-                                .foregroundStyle(Color.accentColor)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private var commentsSection: some View {
-        Section("Comments") {
-            Button {
-                activeSheet = .comment
-            } label: {
-                Label("Add Comment", systemImage: "plus.bubble")
-            }
-            .disabled(taskModel == nil)
-
-            if comments.isEmpty {
-                Text("No comments")
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(comments, id: \.id) { comment in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(comment.body)
-                        Text("\(comment.authorName) · \(comment.createdAt.formatted(date: .numeric, time: .shortened))")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button(role: .destructive) {
-                            commentPendingDelete = CommentDeletePrompt(id: comment.id, body: comment.body)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
                         }
                     }
                 }
@@ -368,21 +277,10 @@ struct TaskDetailView: View {
                 syncContainer: syncContainer,
                 syncEngine: syncEngine
             )
-        case .tags:
-            EditTaskTagsSheet(
-                taskID: taskID,
-                syncContainer: syncContainer,
-                syncEngine: syncEngine
-            )
-        case .comment:
-            CreateCommentSheet(
-                taskID: taskID,
-                syncContainer: syncContainer,
-                syncEngine: syncEngine
-            )
         }
     }
 }
+
 
 private struct UserTaskBucketsView: View {
     let userID: String
@@ -392,6 +290,7 @@ private struct UserTaskBucketsView: View {
     @SyncModel private var userModel: User?
     @SyncQuery private var assignedTasks: [Task]
     @SyncQuery private var reviewTasks: [Task]
+    @SyncQuery private var authoredTasks: [Task]
     @SyncQuery private var watchedTasks: [Task]
     @State private var hasTriggeredInitialSync = false
 
@@ -421,6 +320,16 @@ private struct UserTaskBucketsView: View {
             refreshOn: [\.reviewer],
             animation: .snappy(duration: 0.22)
         )
+        _authoredTasks = SyncQuery(
+            Task.self,
+            relatedTo: User.self,
+            relatedID: userID,
+            through: \Task.author,
+            in: syncContainer,
+            sortBy: [\.title, \.id],
+            refreshOn: [\.author],
+            animation: .snappy(duration: 0.22)
+        )
         _watchedTasks = SyncQuery(
             Task.self,
             relatedTo: User.self,
@@ -447,6 +356,7 @@ private struct UserTaskBucketsView: View {
 
             taskBucketSection("Assigned", tasks: assignedTasks)
             taskBucketSection("Reviewer", tasks: reviewTasks)
+            taskBucketSection("Author", tasks: authoredTasks)
             taskBucketSection("Watcher", tasks: watchedTasks)
         }
         .navigationTitle(userModel?.displayName ?? "User")
@@ -489,15 +399,8 @@ private enum TaskDetailSheet: String, Identifiable {
     case assignee
     case reviewer
     case watchers
-    case tags
-    case comment
 
     var id: String { rawValue }
-}
-
-private struct CommentDeletePrompt: Equatable {
-    let id: String
-    let body: String
 }
 
 private struct EditTaskDescriptionSheet: View {
@@ -833,117 +736,6 @@ private struct ReviewerPickerSheet: View {
     }
 }
 
-private struct EditTaskTagsSheet: View {
-    let taskID: String
-    let syncEngine: DemoSyncEngine
-
-    @Environment(\.dismiss) private var dismiss
-    @SyncModel private var taskModel: Task?
-    @SyncQuery private var allTags: [Tag]
-    @State private var pendingTagIDs: Set<String> = []
-    @State private var hasLoadedInitialSelection = false
-    @State private var isSaving = false
-    @State private var saveErrorMessage: String?
-
-    init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
-        self.taskID = taskID
-        self.syncEngine = syncEngine
-        _taskModel = SyncModel(Task.self, id: taskID, in: syncContainer, animation: .snappy(duration: 0.22))
-        _allTags = SyncQuery(
-            Tag.self,
-            in: syncContainer,
-            sortBy: [\.name, \.id],
-            animation: .snappy(duration: 0.22)
-        )
-    }
-
-    var body: some View {
-        NavigationStack {
-            List {
-                ForEach(allTags, id: \.id) { tag in
-                    Button {
-                        if pendingTagIDs.contains(tag.id) {
-                            pendingTagIDs.remove(tag.id)
-                        } else {
-                            pendingTagIDs.insert(tag.id)
-                        }
-                    } label: {
-                        HStack {
-                            Text(tag.name)
-                            Spacer()
-                            if pendingTagIDs.contains(tag.id) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(Color.accentColor)
-                            }
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Edit Tags")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                        .disabled(isSaving)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: {
-                        isSaving = true
-                        saveErrorMessage = nil
-                        let tagIDs = pendingTagIDs.sorted()
-                        _Concurrency.Task {
-                            do {
-                                try await syncEngine.replaceTaskTags(
-                                    taskID: taskID,
-                                    projectID: taskModel?.projectID,
-                                    tagIDs: tagIDs
-                                )
-                                await MainActor.run {
-                                    dismiss()
-                                }
-                            } catch {
-                                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                                await MainActor.run {
-                                    isSaving = false
-                                    saveErrorMessage = message
-                                }
-                            }
-                        }
-                    }) {
-                        HStack(spacing: 6) {
-                            if isSaving {
-                                ProgressView()
-                                    .controlSize(.small)
-                            }
-                            Text("Save")
-                        }
-                    }
-                    .disabled(isSaving)
-                }
-            }
-        }
-        .task(id: taskModel?.tags.map(\.id).sorted() ?? []) {
-            guard !hasLoadedInitialSelection, let taskModel else { return }
-            pendingTagIDs = Set(taskModel.tags.map(\.id))
-            hasLoadedInitialSelection = true
-        }
-        .alert(
-            "Save Failed",
-            isPresented: Binding(
-                get: { saveErrorMessage != nil },
-                set: { isPresented in
-                    if !isPresented { saveErrorMessage = nil }
-                }
-            )
-        ) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(saveErrorMessage ?? "Unknown error")
-        }
-        .presentationDetents([.medium, .large])
-    }
-}
-
 private struct EditTaskWatchersSheet: View {
     let taskID: String
     let syncEngine: DemoSyncEngine
@@ -1052,130 +844,5 @@ private struct EditTaskWatchersSheet: View {
             Text(saveErrorMessage ?? "Unknown error")
         }
         .presentationDetents([.medium, .large])
-    }
-}
-
-private struct CreateCommentSheet: View {
-    let taskID: String
-    let syncEngine: DemoSyncEngine
-
-    @Environment(\.dismiss) private var dismiss
-    @SyncModel private var taskModel: Task?
-    @SyncQuery private var users: [User]
-    @State private var authorUserID: String?
-    @State private var bodyText = ""
-    @State private var isSaving = false
-    @State private var saveErrorMessage: String?
-
-    init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
-        self.taskID = taskID
-        self.syncEngine = syncEngine
-        _taskModel = SyncModel(Task.self, id: taskID, in: syncContainer, animation: .snappy(duration: 0.22))
-        _users = SyncQuery(
-            User.self,
-            in: syncContainer,
-            sortBy: [\.displayName, \.id],
-            animation: .snappy(duration: 0.22)
-        )
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Author") {
-                    Picker("User", selection: $authorUserID) {
-                        ForEach(users, id: \.id) { user in
-                            Text(user.displayName).tag(Optional(user.id))
-                        }
-                    }
-                }
-
-                Section("Comment") {
-                    TextEditor(text: $bodyText)
-                        .frame(minHeight: 180)
-                }
-            }
-            .navigationTitle("New Comment")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                        .disabled(isSaving)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: {
-                        let trimmedBody = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard let authorUserID, !trimmedBody.isEmpty else { return }
-                        isSaving = true
-                        saveErrorMessage = nil
-                        _Concurrency.Task {
-                            do {
-                                try await syncEngine.createComment(
-                                    taskID: taskID,
-                                    authorUserID: authorUserID,
-                                    body: trimmedBody
-                                )
-                                await MainActor.run {
-                                    dismiss()
-                                }
-                            } catch {
-                                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                                await MainActor.run {
-                                    isSaving = false
-                                    saveErrorMessage = message
-                                }
-                            }
-                        }
-                    }) {
-                        HStack(spacing: 6) {
-                            if isSaving {
-                                ProgressView()
-                                    .controlSize(.small)
-                            }
-                            Text("Save")
-                        }
-                    }
-                    .disabled(
-                        isSaving ||
-                        authorUserID == nil ||
-                        bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    )
-                }
-            }
-        }
-        .task(id: taskModel?.assigneeID) {
-            seedAuthorIfNeeded()
-        }
-        .task(id: users.map(\.id)) {
-            seedAuthorIfNeeded()
-        }
-        .alert(
-            "Save Failed",
-            isPresented: Binding(
-                get: { saveErrorMessage != nil },
-                set: { isPresented in
-                    if !isPresented { saveErrorMessage = nil }
-                }
-            )
-        ) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(saveErrorMessage ?? "Unknown error")
-        }
-        .presentationDetents([.medium, .large])
-    }
-
-    private func seedAuthorIfNeeded() {
-        guard !users.isEmpty else {
-            authorUserID = nil
-            return
-        }
-
-        let validIDs = Set(users.map(\.id))
-        if let authorUserID, validIDs.contains(authorUserID) {
-            return
-        }
-
-        authorUserID = taskModel?.assigneeID.flatMap { validIDs.contains($0) ? $0 : nil } ?? users.first?.id
     }
 }

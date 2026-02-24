@@ -49,19 +49,13 @@ protocol DemoAPIClient: AnyObject {
     func getProjectTasks(projectID: String) async throws -> [[String: Any]]
     func getUsers() async throws -> [[String: Any]]
     func getTaskDetail(taskID: String) async throws -> [String: Any]?
-    func getTaskComments(taskID: String) async throws -> [[String: Any]]
-    func getTags() async throws -> [[String: Any]]
-    func getTagTasks(tagID: String) async throws -> [[String: Any]]
     func getTaskStateOptions() async throws -> [[String: Any]]
-    func getPriorityOptions() async throws -> [[String: Any]]
-    func getProjectStatusOptions() async throws -> [[String: Any]]
     func getUserRoleOptions() async throws -> [[String: Any]]
 
     func patchTaskDescription(taskID: String, descriptionText: String) async throws -> [String: Any]?
     func patchTaskState(taskID: String, state: String) async throws -> [String: Any]?
     func patchTaskAssignee(taskID: String, assigneeID: String?) async throws -> [String: Any]?
     func patchTaskReviewer(taskID: String, reviewerID: String?) async throws -> [String: Any]?
-    func replaceTaskTags(taskID: String, tagIDs: [String]) async throws -> [String: Any]?
     func replaceTaskWatchers(taskID: String, watcherIDs: [String]) async throws -> [String: Any]?
 
     func createTask(
@@ -70,12 +64,10 @@ protocol DemoAPIClient: AnyObject {
         descriptionText: String,
         state: String,
         assigneeID: String?,
-        tagIDs: [String]
+        authorID: String
     ) async throws -> [String: Any]
     func deleteTask(taskID: String) async throws
 
-    func createTaskComment(taskID: String, authorUserID: String, body: String) async throws -> [String: Any]
-    func deleteTaskComment(commentID: String) async throws
 }
 
 @MainActor
@@ -136,34 +128,9 @@ final class FakeDemoAPIClient: DemoAPIClient {
         return try backend.getTaskDetailPayload(taskID: taskID)
     }
 
-    func getTaskComments(taskID: String) async throws -> [[String: Any]] {
-        try await networkGate(endpoint: "GET /tasks/{id}/comments")
-        return try backend.getTaskCommentsPayload(taskID: taskID)
-    }
-
-    func getTags() async throws -> [[String: Any]] {
-        try await networkGate(endpoint: "GET /tags")
-        return try backend.getTagsPayload()
-    }
-
-    func getTagTasks(tagID: String) async throws -> [[String: Any]] {
-        try await networkGate(endpoint: "GET /tags/{id}/tasks")
-        return try backend.getTagTasksPayload(tagID: tagID)
-    }
-
     func getTaskStateOptions() async throws -> [[String: Any]] {
         try await networkGate(endpoint: "GET /task-state-options")
         return try backend.getTaskStateOptionsPayload()
-    }
-
-    func getPriorityOptions() async throws -> [[String: Any]] {
-        try await networkGate(endpoint: "GET /priority-options")
-        return try backend.getPriorityOptionsPayload()
-    }
-
-    func getProjectStatusOptions() async throws -> [[String: Any]] {
-        try await networkGate(endpoint: "GET /project-status-options")
-        return try backend.getProjectStatusOptionsPayload()
     }
 
     func getUserRoleOptions() async throws -> [[String: Any]] {
@@ -191,11 +158,6 @@ final class FakeDemoAPIClient: DemoAPIClient {
         return try backend.patchTaskReviewer(taskID: taskID, reviewerID: reviewerID)
     }
 
-    func replaceTaskTags(taskID: String, tagIDs: [String]) async throws -> [String: Any]? {
-        try await networkGate(endpoint: "PUT /tasks/{id}/tags")
-        return try backend.replaceTaskTags(taskID: taskID, tagIDs: tagIDs)
-    }
-
     func replaceTaskWatchers(taskID: String, watcherIDs: [String]) async throws -> [String: Any]? {
         try await networkGate(endpoint: "PUT /tasks/{id}/watchers")
         return try backend.replaceTaskWatchers(taskID: taskID, watcherIDs: watcherIDs)
@@ -207,7 +169,7 @@ final class FakeDemoAPIClient: DemoAPIClient {
         descriptionText: String,
         state: String,
         assigneeID: String?,
-        tagIDs: [String]
+        authorID: String
     ) async throws -> [String: Any] {
         try await networkGate(endpoint: "POST /tasks")
         return try backend.createTask(
@@ -216,23 +178,13 @@ final class FakeDemoAPIClient: DemoAPIClient {
             descriptionText: descriptionText,
             state: state,
             assigneeID: assigneeID,
-            tagIDs: tagIDs
+            authorID: authorID
         )
     }
 
     func deleteTask(taskID: String) async throws {
         try await networkGate(endpoint: "DELETE /tasks/{id}")
         try backend.deleteTask(taskID: taskID)
-    }
-
-    func createTaskComment(taskID: String, authorUserID: String, body: String) async throws -> [String: Any] {
-        try await networkGate(endpoint: "POST /tasks/{id}/comments")
-        return try backend.createComment(taskID: taskID, authorUserID: authorUserID, body: body)
-    }
-
-    func deleteTaskComment(commentID: String) async throws {
-        try await networkGate(endpoint: "DELETE /comments/{id}")
-        try backend.deleteComment(commentID: commentID)
     }
 
     private func networkGate(endpoint: String) async throws {
