@@ -67,7 +67,7 @@ struct TaskDetailView: View {
                 .disabled(taskModel == nil)
             Button("Change Assignee") { activeSheet = .assignee }
                 .disabled(taskModel == nil)
-            Button("Change Reviewer") { activeSheet = .reviewer }
+            Button("Edit Reviewers") { activeSheet = .reviewers }
                 .disabled(taskModel == nil)
             Button("Edit Watchers") { activeSheet = .watchers }
                 .disabled(taskModel == nil)
@@ -119,13 +119,6 @@ struct TaskDetailView: View {
     private var peopleSection: some View {
         if let taskModel {
             Section("People") {
-                Button("Change Reviewer") {
-                    activeSheet = .reviewer
-                }
-                Button("Edit Watchers") {
-                    activeSheet = .watchers
-                }
-
                 if let author = taskModel.author {
                     NavigationLink {
                         UserTaskBucketsView(
@@ -160,25 +153,33 @@ struct TaskDetailView: View {
                         }
                     }
                 }
+                Button("Edit Assignee") {
+                    activeSheet = .assignee
+                }
 
-                if let reviewer = taskModel.reviewer {
-                    NavigationLink {
-                        UserTaskBucketsView(
-                            userID: reviewer.id,
-                            syncContainer: syncContainer,
-                            syncEngine: syncEngine
-                        )
-                    } label: {
-                        LabeledContent("Reviewer Tasks") {
-                            Text(reviewer.displayName)
-                                .foregroundStyle(Color.accentColor)
-                        }
-                    }
-                } else {
-                    LabeledContent("Reviewer") {
+                if taskModel.reviewers.isEmpty {
+                    LabeledContent("Reviewers") {
                         Text("None")
                             .foregroundStyle(.secondary)
                     }
+                } else {
+                    ForEach(taskModel.reviewers.sorted { $0.displayName < $1.displayName }, id: \.id) { reviewer in
+                        NavigationLink {
+                            UserTaskBucketsView(
+                                userID: reviewer.id,
+                                syncContainer: syncContainer,
+                                syncEngine: syncEngine
+                            )
+                        } label: {
+                            LabeledContent("Reviewer") {
+                                Text(reviewer.displayName)
+                                    .foregroundStyle(Color.accentColor)
+                            }
+                        }
+                    }
+                }
+                Button("Edit Reviewers") {
+                    activeSheet = .reviewers
                 }
 
                 if taskModel.watchers.isEmpty {
@@ -201,6 +202,9 @@ struct TaskDetailView: View {
                             }
                         }
                     }
+                }
+                Button("Edit Watchers") {
+                    activeSheet = .watchers
                 }
             }
         }
@@ -265,8 +269,8 @@ struct TaskDetailView: View {
                 syncContainer: syncContainer,
                 syncEngine: syncEngine
             )
-        case .reviewer:
-            ReviewerPickerSheet(
+        case .reviewers:
+            EditTaskReviewersSheet(
                 taskID: taskID,
                 syncContainer: syncContainer,
                 syncEngine: syncEngine
@@ -314,10 +318,10 @@ private struct UserTaskBucketsView: View {
             Task.self,
             relatedTo: User.self,
             relatedID: userID,
-            through: \Task.reviewer,
+            through: \Task.reviewers,
             in: syncContainer,
             sortBy: [\.title, \.id],
-            refreshOn: [\.reviewer],
+            refreshOn: [\.reviewers],
             animation: .snappy(duration: 0.22)
         )
         _authoredTasks = SyncQuery(
@@ -397,7 +401,7 @@ private struct UserTaskBucketsView: View {
 private enum TaskDetailSheet: String, Identifiable {
     case description
     case assignee
-    case reviewer
+    case reviewers
     case watchers
 
     var id: String { rawValue }
@@ -615,15 +619,15 @@ private struct AssigneePickerSheet: View {
     }
 }
 
-private struct ReviewerPickerSheet: View {
+private struct EditTaskReviewersSheet: View {
     let taskID: String
     let syncEngine: DemoSyncEngine
 
     @Environment(\.dismiss) private var dismiss
     @SyncModel private var taskModel: Task?
     @SyncQuery private var users: [User]
-    @State private var pendingReviewerID: String?
-    @State private var hasLoadedInitialValue = false
+    @State private var pendingReviewerIDs: Set<String> = []
+    @State private var hasLoadedInitialSelection = false
     @State private var isSaving = false
     @State private var saveErrorMessage: String?
 
@@ -642,35 +646,26 @@ private struct ReviewerPickerSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Button {
-                    pendingReviewerID = nil
-                } label: {
-                    HStack {
-                        Text("None")
-                        Spacer()
-                        if pendingReviewerID == nil {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(Color.accentColor)
-                        }
-                    }
-                }
-
                 ForEach(users, id: \.id) { user in
                     Button {
-                        pendingReviewerID = user.id
+                        if pendingReviewerIDs.contains(user.id) {
+                            pendingReviewerIDs.remove(user.id)
+                        } else {
+                            pendingReviewerIDs.insert(user.id)
+                        }
                     } label: {
                         HStack {
                             Text(user.displayName)
                             Spacer()
-                            if pendingReviewerID == user.id {
-                                Image(systemName: "checkmark")
+                            if pendingReviewerIDs.contains(user.id) {
+                                Image(systemName: "checkmark.circle.fill")
                                     .foregroundStyle(Color.accentColor)
                             }
                         }
                     }
                 }
             }
-            .navigationTitle("Reviewer")
+            .navigationTitle("Reviewers")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -679,16 +674,15 @@ private struct ReviewerPickerSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: {
-                        let selection = pendingReviewerID
-                        let projectID = taskModel?.projectID
                         isSaving = true
                         saveErrorMessage = nil
+                        let reviewerIDs = pendingReviewerIDs.sorted()
                         _Concurrency.Task {
                             do {
-                                try await syncEngine.updateTaskReviewer(
+                                try await syncEngine.replaceTaskReviewers(
                                     taskID: taskID,
-                                    projectID: projectID,
-                                    reviewerID: selection
+                                    projectID: taskModel?.projectID,
+                                    reviewerIDs: reviewerIDs
                                 )
                                 await MainActor.run {
                                     dismiss()
@@ -714,10 +708,10 @@ private struct ReviewerPickerSheet: View {
                 }
             }
         }
-        .task(id: taskModel?.id) {
-            guard !hasLoadedInitialValue, let taskModel else { return }
-            pendingReviewerID = taskModel.reviewerID
-            hasLoadedInitialValue = true
+        .task(id: taskModel?.reviewers.map(\.id).sorted() ?? []) {
+            guard !hasLoadedInitialSelection, let taskModel else { return }
+            pendingReviewerIDs = Set(taskModel.reviewers.map(\.id))
+            hasLoadedInitialSelection = true
         }
         .alert(
             "Save Failed",

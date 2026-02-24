@@ -31,13 +31,12 @@ public struct DemoSeedData {
         public let id: String
         public let projectID: String
         public let assigneeID: String?
-        public let reviewerID: String?
+        public let reviewerIDs: [String]
         public let authorID: String
         public let title: String
         public let descriptionText: String
         public let state: String
         public let priority: String
-        public let collaboratorIDs: [String]
         public let watcherIDs: [String]
         public let updatedAt: Date
 
@@ -45,26 +44,24 @@ public struct DemoSeedData {
             id: String,
             projectID: String,
             assigneeID: String?,
-            reviewerID: String? = nil,
+            reviewerIDs: [String] = [],
             authorID: String? = nil,
             title: String,
             descriptionText: String,
             state: String,
             priority: String = "medium",
-            collaboratorIDs: [String] = [],
             watcherIDs: [String] = [],
             updatedAt: Date
         ) {
             self.id = id
             self.projectID = projectID
             self.assigneeID = assigneeID
-            self.reviewerID = reviewerID
-            self.authorID = authorID ?? assigneeID ?? reviewerID ?? "user-1"
+            self.reviewerIDs = reviewerIDs
+            self.authorID = authorID ?? assigneeID ?? reviewerIDs.first ?? "user-1"
             self.title = title
             self.descriptionText = descriptionText
             self.state = state
             self.priority = priority
-            self.collaboratorIDs = collaboratorIDs
             self.watcherIDs = watcherIDs
             self.updatedAt = updatedAt
         }
@@ -110,7 +107,7 @@ public struct DemoSeedData {
                 id: "task-1",
                 projectID: "project-1",
                 assigneeID: "user-1",
-                reviewerID: "user-4",
+                reviewerIDs: ["user-4"],
                 title: "Add session timeout controls to account settings",
                 descriptionText: """
                 Build the mobile settings UI for session timeout and forced re-authentication controls.
@@ -125,7 +122,7 @@ public struct DemoSeedData {
                 id: "task-2",
                 projectID: "project-1",
                 assigneeID: "user-2",
-                reviewerID: "user-1",
+                reviewerIDs: ["user-1"],
                 title: "Validate security policy PATCH payload on backend",
                 descriptionText: """
                 Enforce allowed values for timeout minutes and re-auth policy. Reject unknown keys so mobile payloads stay explicit.
@@ -138,7 +135,7 @@ public struct DemoSeedData {
                 id: "task-3",
                 projectID: "project-1",
                 assigneeID: "user-5",
-                reviewerID: "user-4",
+                reviewerIDs: ["user-4"],
                 title: "Write QA checklist for forced re-auth scenarios",
                 descriptionText: """
                 Cover app relaunch, expired session recovery, and offline-to-online transitions after the policy changes.
@@ -151,7 +148,7 @@ public struct DemoSeedData {
                 id: "task-4",
                 projectID: "project-1",
                 assigneeID: "user-3",
-                reviewerID: "user-1",
+                reviewerIDs: ["user-1"],
                 title: "Polish warning copy and hierarchy in security settings",
                 descriptionText: """
                 Refine the warning copy and screen hierarchy so risky actions are clear without blocking the flow.
@@ -164,7 +161,7 @@ public struct DemoSeedData {
                 id: "task-5",
                 projectID: "project-1",
                 assigneeID: "user-6",
-                reviewerID: "user-2",
+                reviewerIDs: ["user-2"],
                 title: "Enable rollout flag for account security controls",
                 descriptionText: """
                 Prepare release gating so the feature can be enabled per environment after QA sign-off.
@@ -177,7 +174,7 @@ public struct DemoSeedData {
                 id: "task-6",
                 projectID: "project-2",
                 assigneeID: "user-1",
-                reviewerID: "user-2",
+                reviewerIDs: ["user-2"],
                 title: "Fix duplicate push preference sync after reconnect",
                 descriptionText: """
                 The preferences screen can duplicate local rows after reconnect. Backend remains correct; the client refresh path needs better scoped sync.
@@ -190,7 +187,7 @@ public struct DemoSeedData {
                 id: "task-7",
                 projectID: "project-2",
                 assigneeID: "user-2",
-                reviewerID: "user-6",
+                reviewerIDs: ["user-6"],
                 title: "Add idempotency guard to notification preference writes",
                 descriptionText: """
                 Prevent duplicate writes when the same save is retried. Keep the response payload stable for targeted refresh.
@@ -203,7 +200,7 @@ public struct DemoSeedData {
                 id: "task-8",
                 projectID: "project-2",
                 assigneeID: "user-5",
-                reviewerID: "user-2",
+                reviewerIDs: ["user-2"],
                 title: "Verify scoped delete behavior for removed notification channels",
                 descriptionText: """
                 Confirm channel lists only delete rows inside the synced parent scope and never remove channels from other users/projects.
@@ -216,7 +213,7 @@ public struct DemoSeedData {
                 id: "task-9",
                 projectID: "project-2",
                 assigneeID: nil,
-                reviewerID: "user-4",
+                reviewerIDs: ["user-4"],
                 title: "Draft incident playbook for notification delivery degradation",
                 descriptionText: """
                 Capture triage steps, rollback criteria, and communication templates. This task starts unassigned to demonstrate null assignee handling.

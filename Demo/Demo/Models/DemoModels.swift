@@ -39,12 +39,10 @@ final class User {
     var updatedAt: Date
     @Relationship(inverse: \Task.assignee)
     var assignedTasks: [Task]
-    @Relationship(inverse: \Task.reviewer)
+    @Relationship(inverse: \Task.reviewers)
     var reviewTasks: [Task]
     @Relationship(inverse: \Task.author)
     var authoredTasks: [Task]
-    @Relationship(inverse: \Task.collaborators)
-    var collaboratedTasks: [Task]
     @Relationship(inverse: \Task.watchers)
     var watchedTasks: [Task]
 
@@ -57,7 +55,6 @@ final class User {
         assignedTasks: [Task] = [],
         reviewTasks: [Task] = [],
         authoredTasks: [Task] = [],
-        collaboratedTasks: [Task] = [],
         watchedTasks: [Task] = []
     ) {
         self.id = id
@@ -106,15 +103,12 @@ final class UserRoleOption {
 
 @Syncable
 @Model
-@Syncable
-@Model
 final class Task {
     @Attribute(.unique) var id: String
 
     var projectID: String
 
     var assigneeID: String?
-    var reviewerID: String?
     var authorID: String
 
     var title: String
@@ -128,17 +122,17 @@ final class Task {
     var stateLabel: String
     var updatedAt: Date
     var project: Project?
-    var assignee: User?
-    var reviewer: User?
+
     var author: User?
-    var collaborators: [User]
+    var assignee: User?
+
+    var reviewers: [User]
     var watchers: [User]
 
     init(
         id: String,
         projectID: String,
         assigneeID: String?,
-        reviewerID: String?,
         authorID: String,
         title: String,
         descriptionText: String,
@@ -146,16 +140,14 @@ final class Task {
         stateLabel: String,
         updatedAt: Date,
         project: Project? = nil,
-        assignee: User? = nil,
-        reviewer: User? = nil,
         author: User? = nil,
-        collaborators: [User] = [],
+        assignee: User? = nil,
+        reviewers: [User] = [],
         watchers: [User] = []
     ) {
         self.id = id
         self.projectID = projectID
         self.assigneeID = assigneeID
-        self.reviewerID = reviewerID
         self.authorID = authorID
         self.title = title
         self.descriptionText = descriptionText
@@ -163,10 +155,9 @@ final class Task {
         self.stateLabel = stateLabel
         self.updatedAt = updatedAt
         self.project = project
-        self.assignee = assignee
-        self.reviewer = reviewer
         self.author = author
-        self.collaborators = collaborators
+        self.assignee = assignee
+        self.reviewers = reviewers
         self.watchers = watchers
     }
 }

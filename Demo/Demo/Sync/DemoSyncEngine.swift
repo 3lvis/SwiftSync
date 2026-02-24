@@ -129,9 +129,9 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    func updateTaskReviewer(taskID: String, projectID: String?, reviewerID: String?) async throws {
-        try await syncOperationThrowing("patchTaskReviewer-\(taskID)") {
-            _ = try await apiClient.patchTaskReviewer(taskID: taskID, reviewerID: reviewerID)
+    func replaceTaskReviewers(taskID: String, projectID: String?, reviewerIDs: [String]) async throws {
+        try await syncOperationThrowing("replaceTaskReviewers-\(taskID)") {
+            _ = try await apiClient.replaceTaskReviewers(taskID: taskID, reviewerIDs: reviewerIDs)
             try await syncTaskDetailInternal(taskID: taskID)
             if let projectID {
                 try await syncProjectTasksInternal(projectID: projectID)

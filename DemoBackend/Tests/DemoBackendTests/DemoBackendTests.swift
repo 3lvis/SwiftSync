@@ -27,7 +27,7 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(userRoleLabel(in: users.first), "Engineer")
         XCTAssertNil(users.first?["avatar_seed"])
         XCTAssertNil(projectTasks.first?["due_date"])
-        XCTAssertEqual(projectTasks.first?["reviewer_id"] as? String, "user-1")
+        XCTAssertEqual(projectTasks.first?["reviewer_ids"] as? [String], ["user-1"])
         XCTAssertEqual(projectTasks.first?["author_id"] as? String, "user-1")
         XCTAssertEqual(projectTasks.first?["watcher_ids"] as? [String], ["user-1"])
         XCTAssertEqual(stateID(in: projectTasks.first), "todo")
@@ -84,11 +84,11 @@ final class DemoBackendTests: XCTestCase {
         let reassigned = try backend.patchTaskAssignee(taskID: "task-1", assigneeID: "user-1")
         XCTAssertEqual(reassigned?["assignee_id"] as? String, "user-1")
 
-        let clearedReviewer = try backend.patchTaskReviewer(taskID: "task-1", reviewerID: nil)
-        XCTAssertTrue((clearedReviewer?["reviewer_id"] is NSNull))
+        let clearedReviewers = try backend.replaceTaskReviewers(taskID: "task-1", reviewerIDs: [])
+        XCTAssertEqual(clearedReviewers?["reviewer_ids"] as? [String], [])
 
-        let reReviewed = try backend.patchTaskReviewer(taskID: "task-1", reviewerID: "user-1")
-        XCTAssertEqual(reReviewed?["reviewer_id"] as? String, "user-1")
+        let reReviewed = try backend.replaceTaskReviewers(taskID: "task-1", reviewerIDs: ["user-1"])
+        XCTAssertEqual(reReviewed?["reviewer_ids"] as? [String], ["user-1"])
 
         let rewatched = try backend.replaceTaskWatchers(taskID: "task-1", watcherIDs: ["user-1"])
         XCTAssertEqual(rewatched?["watcher_ids"] as? [String], ["user-1"])
@@ -118,7 +118,7 @@ final class DemoBackendTests: XCTestCase {
         }
         XCTAssertEqual(created["project_id"] as? String, "project-1")
         XCTAssertEqual(created["assignee_id"] as? String, "user-1")
-        XCTAssertTrue((created["reviewer_id"] is NSNull))
+        XCTAssertEqual(created["reviewer_ids"] as? [String], [])
         XCTAssertEqual(created["author_id"] as? String, "user-1")
         XCTAssertEqual(created["watcher_ids"] as? [String], [])
         XCTAssertEqual(stateID(in: created), "todo")
@@ -204,7 +204,7 @@ final class DemoBackendTests: XCTestCase {
                     id: "task-1",
                     projectID: "project-1",
                     assigneeID: "user-1",
-                    reviewerID: "user-1",
+                    reviewerIDs: ["user-1"],
                     title: "Task 1",
                     descriptionText: "Old description",
                     state: "todo",

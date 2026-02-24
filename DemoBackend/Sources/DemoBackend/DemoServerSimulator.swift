@@ -156,7 +156,7 @@ public final class DemoServerSimulator {
     public func getTaskDetailPayload(taskID: String) throws -> [String: Any]? {
         let rows = try self.sqlite.query(
             """
-            SELECT id, project_id, assignee_id, reviewer_id, author_id, title, description, state, priority, updated_at
+            SELECT id, project_id, assignee_id, author_id, title, description, state, priority, updated_at
             FROM tasks
             WHERE id = ?
             LIMIT 1
@@ -240,27 +240,57 @@ public final class DemoServerSimulator {
     }
 
     @discardableResult
-    public func patchTaskReviewer(taskID: String, reviewerID: String?) throws -> [String: Any]? {
-        if let reviewerID, !(try exists(in: "users", id: reviewerID)) {
+    public func replaceTaskReviewers(taskID: String, reviewerIDs: [String]) throws -> [String: Any]? {
+        guard try exists(in: "tasks", id: taskID) else { return nil }
+        let uniqueReviewerIDs = Array(Set(reviewerIDs)).sorted()
+        for reviewerID in uniqueReviewerIDs where !(try exists(in: "users", id: reviewerID)) {
             throw DemoBackendError.invalidReference(entity: "reviewer_id", id: reviewerID)
         }
+
         guard let current = try getTaskDetailPayload(taskID: taskID) else { return nil }
         suspendAmbientMutationsAfterWrite()
         let currentUpdatedAt = try parseISO8601(current["updated_at"])
         let next = nextTimestamp(after: currentUpdatedAt)
 
-        try self.sqlite.execute(
-            """
-            UPDATE tasks
-            SET reviewer_id = ?, updated_at = ?
-            WHERE id = ?
-            """,
-            bind: { stmt in
-                self.sqlite.bind(nullableText: reviewerID, at: 1, in: stmt)
-                self.sqlite.bind(double: next.timeIntervalSince1970, at: 2, in: stmt)
-                self.sqlite.bind(text: taskID, at: 3, in: stmt)
+        try self.sqlite.execute("BEGIN TRANSACTION;")
+        do {
+            try self.sqlite.execute(
+                "DELETE FROM task_reviewers WHERE task_id = ?",
+                bind: { stmt in
+                    self.sqlite.bind(text: taskID, at: 1, in: stmt)
+                }
+            )
+
+            for reviewerID in uniqueReviewerIDs {
+                try self.sqlite.execute(
+                    """
+                    INSERT INTO task_reviewers (task_id, user_id)
+                    VALUES (?, ?)
+                    """,
+                    bind: { stmt in
+                        self.sqlite.bind(text: taskID, at: 1, in: stmt)
+                        self.sqlite.bind(text: reviewerID, at: 2, in: stmt)
+                    }
+                )
             }
-        )
+
+            try self.sqlite.execute(
+                """
+                UPDATE tasks
+                SET updated_at = ?
+                WHERE id = ?
+                """,
+                bind: { stmt in
+                    self.sqlite.bind(double: next.timeIntervalSince1970, at: 1, in: stmt)
+                    self.sqlite.bind(text: taskID, at: 2, in: stmt)
+                }
+            )
+            try self.sqlite.execute("COMMIT;")
+        } catch {
+            try? self.sqlite.execute("ROLLBACK;")
+            throw error
+        }
+
         return try getTaskDetailPayload(taskID: taskID)
     }
 
@@ -348,20 +378,19 @@ public final class DemoServerSimulator {
 
         try self.sqlite.execute(
             """
-            INSERT INTO tasks (id, project_id, assignee_id, reviewer_id, author_id, title, description, state, priority, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tasks (id, project_id, assignee_id, author_id, title, description, state, priority, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             bind: { stmt in
                 self.sqlite.bind(text: newID, at: 1, in: stmt)
                 self.sqlite.bind(text: projectID, at: 2, in: stmt)
                 self.sqlite.bind(nullableText: assigneeID, at: 3, in: stmt)
-                self.sqlite.bind(nullableText: nil, at: 4, in: stmt)
-                self.sqlite.bind(text: authorID, at: 5, in: stmt)
-                self.sqlite.bind(text: normalizedTitle, at: 6, in: stmt)
-                self.sqlite.bind(text: normalizedDescription, at: 7, in: stmt)
-                self.sqlite.bind(text: normalizedState, at: 8, in: stmt)
-                self.sqlite.bind(text: normalizedPriority, at: 9, in: stmt)
-                self.sqlite.bind(double: now.timeIntervalSince1970, at: 10, in: stmt)
+                self.sqlite.bind(text: authorID, at: 4, in: stmt)
+                self.sqlite.bind(text: normalizedTitle, at: 5, in: stmt)
+                self.sqlite.bind(text: normalizedDescription, at: 6, in: stmt)
+                self.sqlite.bind(text: normalizedState, at: 7, in: stmt)
+                self.sqlite.bind(text: normalizedPriority, at: 8, in: stmt)
+                self.sqlite.bind(double: now.timeIntervalSince1970, at: 9, in: stmt)
             }
         )
 
@@ -410,7 +439,7 @@ public final class DemoServerSimulator {
     ) throws -> [[String: Any]] {
         let rows = try self.sqlite.query(
             """
-            SELECT tasks.id, tasks.project_id, tasks.assignee_id, tasks.reviewer_id, tasks.author_id, tasks.title, tasks.description, tasks.state,
+            SELECT tasks.id, tasks.project_id, tasks.assignee_id, tasks.author_id, tasks.title, tasks.description, tasks.state,
                    tasks.priority, tasks.updated_at
             FROM tasks
             \(whereClause)
@@ -502,7 +531,7 @@ public final class DemoServerSimulator {
             "id": taskID,
             "project_id": row.string("project_id"),
             "assignee_id": row.nullableString("assignee_id") ?? NSNull(),
-            "reviewer_id": row.nullableString("reviewer_id") ?? NSNull(),
+            "reviewer_ids": try reviewerIDsFor(taskID: taskID),
             "author_id": row.string("author_id"),
             "title": row.string("title"),
             "description": row.string("description"),
@@ -567,6 +596,21 @@ public final class DemoServerSimulator {
                 "updated_at": updatedAt
             ]
         }
+    }
+
+    private func reviewerIDsFor(taskID: String) throws -> [String] {
+        let rows = try self.sqlite.query(
+            """
+            SELECT user_id
+            FROM task_reviewers
+            WHERE task_id = ?
+            ORDER BY user_id ASC
+            """,
+            bind: { stmt in
+                self.sqlite.bind(text: taskID, at: 1, in: stmt)
+            }
+        )
+        return rows.map { $0.string("user_id") }
     }
 
     private func watcherIDs(forTaskID taskID: String) throws -> [String] {
@@ -691,7 +735,6 @@ public final class DemoServerSimulator {
                 id TEXT PRIMARY KEY,
                 project_id TEXT NOT NULL,
                 assignee_id TEXT NULL,
-                reviewer_id TEXT NULL,
                 author_id TEXT NOT NULL,
                 title TEXT NOT NULL,
                 description TEXT NOT NULL,
@@ -700,8 +743,15 @@ public final class DemoServerSimulator {
                 updated_at REAL NOT NULL,
                 FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE RESTRICT,
                 FOREIGN KEY(assignee_id) REFERENCES users(id) ON DELETE SET NULL,
-                FOREIGN KEY(reviewer_id) REFERENCES users(id) ON DELETE SET NULL,
                 FOREIGN KEY(author_id) REFERENCES users(id) ON DELETE RESTRICT
+            );
+
+            CREATE TABLE IF NOT EXISTS task_reviewers (
+                task_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                PRIMARY KEY (task_id, user_id),
+                FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS task_watchers (
@@ -755,22 +805,34 @@ public final class DemoServerSimulator {
             for task in seedData.tasks {
                 try sqlite.execute(
                     """
-                    INSERT INTO tasks (id, project_id, assignee_id, reviewer_id, author_id, title, description, state, priority, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO tasks (id, project_id, assignee_id, author_id, title, description, state, priority, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     bind: { stmt in
                         sqlite.bind(text: task.id, at: 1, in: stmt)
                         sqlite.bind(text: task.projectID, at: 2, in: stmt)
                         sqlite.bind(nullableText: task.assigneeID, at: 3, in: stmt)
-                        sqlite.bind(nullableText: task.reviewerID, at: 4, in: stmt)
-                        sqlite.bind(text: task.authorID, at: 5, in: stmt)
-                        sqlite.bind(text: task.title, at: 6, in: stmt)
-                        sqlite.bind(text: task.descriptionText, at: 7, in: stmt)
-                        sqlite.bind(text: task.state, at: 8, in: stmt)
-                        sqlite.bind(text: task.priority, at: 9, in: stmt)
-                        sqlite.bind(double: task.updatedAt.timeIntervalSince1970, at: 10, in: stmt)
+                        sqlite.bind(text: task.authorID, at: 4, in: stmt)
+                        sqlite.bind(text: task.title, at: 5, in: stmt)
+                        sqlite.bind(text: task.descriptionText, at: 6, in: stmt)
+                        sqlite.bind(text: task.state, at: 7, in: stmt)
+                        sqlite.bind(text: task.priority, at: 8, in: stmt)
+                        sqlite.bind(double: task.updatedAt.timeIntervalSince1970, at: 9, in: stmt)
                     }
                 )
+
+                for reviewerID in task.reviewerIDs {
+                    try sqlite.execute(
+                        """
+                        INSERT INTO task_reviewers (task_id, user_id)
+                        VALUES (?, ?)
+                        """,
+                        bind: { stmt in
+                            sqlite.bind(text: task.id, at: 1, in: stmt)
+                            sqlite.bind(text: reviewerID, at: 2, in: stmt)
+                        }
+                    )
+                }
 
                 for watcherID in task.watcherIDs {
                     try sqlite.execute(
