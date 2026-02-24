@@ -29,8 +29,8 @@ struct TaskDetailView: View {
     var body: some View {
         List {
             taskSection
-            peopleSection
             descriptionSection
+            peopleSection
         }
         .navigationTitle("Task")
         .toolbar {
@@ -65,6 +65,26 @@ struct TaskDetailView: View {
         Menu {
             Button("Edit Description") { activeSheet = .description }
                 .disabled(taskModel == nil)
+            Menu("Change State") {
+                ForEach(taskStateOptions, id: \.id) { option in
+                    Button {
+                        _Concurrency.Task {
+                            try? await syncEngine.updateTaskState(
+                                taskID: taskID,
+                                projectID: taskModel?.projectID,
+                                state: option.id
+                            )
+                        }
+                    } label: {
+                        if taskModel?.state == option.id {
+                            Label(option.label, systemImage: "checkmark")
+                        } else {
+                            Text(option.label)
+                        }
+                    }
+                }
+            }
+            .disabled(taskModel == nil)
             Button("Change Assignee") { activeSheet = .assignee }
                 .disabled(taskModel == nil)
             Button("Edit Reviewers") { activeSheet = .reviewers }
@@ -77,25 +97,32 @@ struct TaskDetailView: View {
     }
 
     private var taskSection: some View {
-        Section("Task") {
+        Section {
             if let taskModel {
-                Text(taskModel.title)
-                    .font(.title3)
-                HStack {
-                    Text("State")
-                    Spacer()
-                    taskStateMenu(taskModel: taskModel)
-                }
-                HStack {
-                    Text("Assignee")
-                    Spacer()
-                    Button {
-                        activeSheet = .assignee
-                    } label: {
-                        Text(taskModel.assignee?.displayName ?? "Unassigned")
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(taskModel.title)
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    HStack(spacing: 8) {
+                        Text(taskModel.stateLabel)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color.accentColor.opacity(0.15))
                             .foregroundStyle(Color.accentColor)
+                            .clipShape(Capsule())
+                        Text(taskModel.author?.displayName ?? "Unknown")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color(.systemGray5))
+                            .foregroundStyle(.secondary)
+                            .clipShape(Capsule())
                     }
                 }
+                .padding(.vertical, 4)
             } else {
                 Text("Task not found")
                     .foregroundStyle(.secondary)
@@ -108,10 +135,6 @@ struct TaskDetailView: View {
             Text(taskModel?.descriptionText ?? "")
                 .font(.body)
                 .foregroundStyle(.secondary)
-            Button("Edit Description") {
-                activeSheet = .description
-            }
-            .disabled(taskModel == nil)
         }
     }
 
@@ -119,138 +142,27 @@ struct TaskDetailView: View {
     private var peopleSection: some View {
         if let taskModel {
             Section("People") {
-                if let author = taskModel.author {
-                    NavigationLink {
-                        UserTaskBucketsView(
-                            userID: author.id,
-                            syncContainer: syncContainer,
-                            syncEngine: syncEngine
-                        )
-                    } label: {
-                        LabeledContent("Author") {
-                            Text(author.displayName)
-                                .foregroundStyle(Color.accentColor)
-                        }
-                    }
-                } else {
-                    LabeledContent("Author") {
-                        Text("Unknown")
-                            .foregroundStyle(.secondary)
-                    }
+                LabeledContent("Assignee") {
+                    Text(taskModel.assignee?.displayName ?? "Unassigned")
+                        .foregroundStyle(.secondary)
                 }
-
-                if let assignee = taskModel.assignee {
-                    NavigationLink {
-                        UserTaskBucketsView(
-                            userID: assignee.id,
-                            syncContainer: syncContainer,
-                            syncEngine: syncEngine
-                        )
-                    } label: {
-                        LabeledContent("Assignee Tasks") {
-                            Text(assignee.displayName)
-                                .foregroundStyle(Color.accentColor)
-                        }
-                    }
+                LabeledContent("Reviewers") {
+                    Text(
+                        taskModel.reviewers.isEmpty
+                            ? "None"
+                            : taskModel.reviewers.sorted { $0.displayName < $1.displayName }.map(\.displayName).joined(separator: ", ")
+                    )
+                    .foregroundStyle(.secondary)
                 }
-                Button("Edit Assignee") {
-                    activeSheet = .assignee
-                }
-
-                if taskModel.reviewers.isEmpty {
-                    LabeledContent("Reviewers") {
-                        Text("None")
-                            .foregroundStyle(.secondary)
-                    }
-                } else {
-                    ForEach(taskModel.reviewers.sorted { $0.displayName < $1.displayName }, id: \.id) { reviewer in
-                        NavigationLink {
-                            UserTaskBucketsView(
-                                userID: reviewer.id,
-                                syncContainer: syncContainer,
-                                syncEngine: syncEngine
-                            )
-                        } label: {
-                            LabeledContent("Reviewer") {
-                                Text(reviewer.displayName)
-                                    .foregroundStyle(Color.accentColor)
-                            }
-                        }
-                    }
-                }
-                Button("Edit Reviewers") {
-                    activeSheet = .reviewers
-                }
-
-                if taskModel.watchers.isEmpty {
-                    LabeledContent("Watchers") {
-                        Text("None")
-                            .foregroundStyle(.secondary)
-                    }
-                } else {
-                    ForEach(sortedWatchers(taskModel.watchers), id: \.id) { watcher in
-                        NavigationLink {
-                            UserTaskBucketsView(
-                                userID: watcher.id,
-                                syncContainer: syncContainer,
-                                syncEngine: syncEngine
-                            )
-                        } label: {
-                            LabeledContent("Watcher") {
-                                Text(watcher.displayName)
-                                    .foregroundStyle(Color.accentColor)
-                            }
-                        }
-                    }
-                }
-                Button("Edit Watchers") {
-                    activeSheet = .watchers
+                LabeledContent("Watchers") {
+                    Text(
+                        taskModel.watchers.isEmpty
+                            ? "None"
+                            : taskModel.watchers.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }.map(\.displayName).joined(separator: ", ")
+                    )
+                    .foregroundStyle(.secondary)
                 }
             }
-        }
-    }
-
-    private func taskStateMenu(taskModel: Task) -> some View {
-        let projectID = taskModel.projectID
-        return Menu {
-            if taskStateOptions.isEmpty {
-                Button("Reload State Options") {
-                    _Concurrency.Task {
-                        await syncEngine.syncTaskStates()
-                    }
-                }
-            } else {
-                ForEach(taskStateOptions, id: \.id) { option in
-                    Button {
-                        _Concurrency.Task {
-                            try? await syncEngine.updateTaskState(
-                                taskID: taskID,
-                                projectID: projectID,
-                                state: option.id
-                            )
-                        }
-                    } label: {
-                        if taskModel.state == option.id {
-                            Label(option.label, systemImage: "checkmark")
-                        } else {
-                            Text(option.label)
-                        }
-                    }
-                }
-            }
-        } label: {
-            Text(taskModel.stateLabel)
-                .foregroundStyle(Color.accentColor)
-        }
-    }
-
-    private func sortedWatchers(_ watchers: [User]) -> [User] {
-        watchers.sorted {
-            let nameOrder = $0.displayName.localizedCaseInsensitiveCompare($1.displayName)
-            if nameOrder == .orderedSame {
-                return $0.id < $1.id
-            }
-            return nameOrder == .orderedAscending
         }
     }
 
@@ -285,118 +197,6 @@ struct TaskDetailView: View {
     }
 }
 
-
-private struct UserTaskBucketsView: View {
-    let userID: String
-    let syncContainer: SyncContainer
-    @ObservedObject var syncEngine: DemoSyncEngine
-
-    @SyncModel private var userModel: User?
-    @SyncQuery private var assignedTasks: [Task]
-    @SyncQuery private var reviewTasks: [Task]
-    @SyncQuery private var authoredTasks: [Task]
-    @SyncQuery private var watchedTasks: [Task]
-    @State private var hasTriggeredInitialSync = false
-
-    init(userID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
-        self.userID = userID
-        self.syncContainer = syncContainer
-        self.syncEngine = syncEngine
-
-        _userModel = SyncModel(User.self, id: userID, in: syncContainer, animation: .snappy(duration: 0.22))
-        _assignedTasks = SyncQuery(
-            Task.self,
-            relatedTo: User.self,
-            relatedID: userID,
-            through: \Task.assignee,
-            in: syncContainer,
-            sortBy: [\.title, \.id],
-            refreshOn: [\.assignee],
-            animation: .snappy(duration: 0.22)
-        )
-        _reviewTasks = SyncQuery(
-            Task.self,
-            relatedTo: User.self,
-            relatedID: userID,
-            through: \Task.reviewers,
-            in: syncContainer,
-            sortBy: [\.title, \.id],
-            refreshOn: [\.reviewers],
-            animation: .snappy(duration: 0.22)
-        )
-        _authoredTasks = SyncQuery(
-            Task.self,
-            relatedTo: User.self,
-            relatedID: userID,
-            through: \Task.author,
-            in: syncContainer,
-            sortBy: [\.title, \.id],
-            refreshOn: [\.author],
-            animation: .snappy(duration: 0.22)
-        )
-        _watchedTasks = SyncQuery(
-            Task.self,
-            relatedTo: User.self,
-            relatedID: userID,
-            through: \Task.watchers,
-            in: syncContainer,
-            sortBy: [\.title, \.id],
-            refreshOn: [\.watchers],
-            animation: .snappy(duration: 0.22)
-        )
-    }
-
-    var body: some View {
-        List {
-            Section("User") {
-                if let userModel {
-                    LabeledContent("Name", value: userModel.displayName)
-                    LabeledContent("Role", value: userModel.roleLabel)
-                } else {
-                    Text("User not found")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            taskBucketSection("Assigned", tasks: assignedTasks)
-            taskBucketSection("Reviewer", tasks: reviewTasks)
-            taskBucketSection("Author", tasks: authoredTasks)
-            taskBucketSection("Watcher", tasks: watchedTasks)
-        }
-        .navigationTitle(userModel?.displayName ?? "User")
-        .refreshable {
-            await syncEngine.syncUsers()
-        }
-        .task {
-            guard !hasTriggeredInitialSync else { return }
-            hasTriggeredInitialSync = true
-            await syncEngine.syncUsers()
-        }
-    }
-
-    @ViewBuilder
-    private func taskBucketSection(_ title: String, tasks: [Task]) -> some View {
-        Section(title) {
-            if tasks.isEmpty {
-                Text("No tasks")
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(tasks, id: \.id) { task in
-                    NavigationLink {
-                        TaskDetailView(taskID: task.id, syncContainer: syncContainer, syncEngine: syncEngine)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(task.title)
-                            Text(task.stateLabel)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 private enum TaskDetailSheet: String, Identifiable {
     case description
