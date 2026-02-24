@@ -15,14 +15,10 @@ enum DemoNetworkScenario: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .fastStable:
-            return "Fast Stable"
-        case .slowNetwork:
-            return "Slow Network"
-        case .flakyNetwork:
-            return "Flaky Network"
-        case .offline:
-            return "Offline"
+        case .fastStable: "Fast Stable"
+        case .slowNetwork: "Slow Network"
+        case .flakyNetwork: "Flaky Network"
+        case .offline: "Offline"
         }
     }
 }
@@ -88,11 +84,7 @@ final class FakeDemoAPIClient: DemoAPIClient {
             return
         }
 
-        let databaseURL = if seedData == nil {
-            Self.defaultBackendDatabaseURL()
-        } else {
-            Self.temporaryBackendDatabaseURL()
-        }
+        let databaseURL = seedData == nil ? Self.defaultBackendDatabaseURL() : Self.temporaryBackendDatabaseURL()
 
         do {
             if seedData == nil {
@@ -202,46 +194,18 @@ final class FakeDemoAPIClient: DemoAPIClient {
             break
         }
 
-        let baseDelayMS: UInt64
-        switch scenario {
-        case .fastStable:
-            baseDelayMS = 150
-        case .slowNetwork:
-            baseDelayMS = 950
-        case .flakyNetwork:
-            baseDelayMS = 450
-        case .offline:
-            baseDelayMS = 0
+        let baseDelayMS: UInt64 = switch scenario {
+        case .fastStable: 150
+        case .slowNetwork: 950
+        case .flakyNetwork: 450
+        case .offline: 0
         }
 
-        let jitter = UInt64((stableHash(endpoint) + callIndex * 17) % 250)
-        let delay = baseDelayMS + jitter + extraMutationDelayMS(endpoint: endpoint)
-        try await _Concurrency.Task.sleep(nanoseconds: delay * 1_000_000)
-    }
-
-    private func extraMutationDelayMS(endpoint: String) -> UInt64 {
-        let isMutation =
-            endpoint.hasPrefix("PATCH ") ||
-            endpoint.hasPrefix("POST ") ||
-            endpoint.hasPrefix("PUT ") ||
-            endpoint.hasPrefix("DELETE ")
-
-        guard isMutation else { return 0 }
-
-        switch scenario {
-        case .fastStable:
-            return 220
-        case .flakyNetwork:
-            return 120
-        case .slowNetwork, .offline:
-            return 0
-        }
-    }
-
-    private func stableHash(_ value: String) -> Int {
-        value.unicodeScalars.reduce(0) { partial, scalar in
-            (partial * 31 + Int(scalar.value)) % 10_000
-        }
+        let isMutation = endpoint.hasPrefix("PATCH ") || endpoint.hasPrefix("POST ") || endpoint.hasPrefix("PUT ") || endpoint.hasPrefix("DELETE ")
+        let mutationExtra: UInt64 = isMutation ? (scenario == .fastStable ? 220 : scenario == .flakyNetwork ? 120 : 0) : 0
+        let hash = endpoint.unicodeScalars.reduce(0) { ($0 * 31 + Int($1.value)) % 10_000 }
+        let jitter = UInt64((hash + callIndex * 17) % 250)
+        try await _Concurrency.Task.sleep(nanoseconds: (baseDelayMS + jitter + mutationExtra) * 1_000_000)
     }
 
     private static func defaultBackendDatabaseURL() -> URL {
