@@ -64,9 +64,9 @@ public enum SyncDateParser {
         guard bytes.count >= 19 else { return nil }
 
         guard isDigit(bytes, 0, 4),
-              bytes[safe: 4] == asciiHyphen,
+              bytes[safe: 4] == asciiMinus,
               isDigit(bytes, 5, 2),
-              bytes[safe: 7] == asciiHyphen,
+              bytes[safe: 7] == asciiMinus,
               isDigit(bytes, 8, 2),
               (bytes[safe: 10] == asciiT || bytes[safe: 10] == asciiSpace),
               isDigit(bytes, 11, 2),
@@ -111,37 +111,23 @@ public enum SyncDateParser {
         }
 
         var timezoneOffsetSeconds = 0
-        if index == bytes.count {
-            timezoneOffsetSeconds = 0
-        } else if bytes[safe: index] == asciiZ, index + 1 == bytes.count {
-            timezoneOffsetSeconds = 0
+        if bytes[safe: index] == asciiZ, index + 1 == bytes.count {
             index += 1
-        } else if bytes[safe: index] == asciiPlus || bytes[safe: index] == asciiMinus {
-            guard let signByte = bytes[safe: index] else { return nil }
+        } else if index != bytes.count, let signByte = bytes[safe: index],
+                  signByte == asciiPlus || signByte == asciiMinus {
             let sign = signByte == asciiMinus ? -1 : 1
             index += 1
 
-            guard isDigit(bytes, index, 2) else { return nil }
-            guard let tzHour = int(bytes, index, 2) else { return nil }
+            guard isDigit(bytes, index, 2), let tzHour = int(bytes, index, 2) else { return nil }
             index += 2
 
-            let tzMinute: Int
-            if bytes[safe: index] == asciiColon {
-                index += 1
-                guard isDigit(bytes, index, 2) else { return nil }
-                guard let value = int(bytes, index, 2) else { return nil }
-                tzMinute = value
-                index += 2
-            } else {
-                guard isDigit(bytes, index, 2) else { return nil }
-                guard let value = int(bytes, index, 2) else { return nil }
-                tzMinute = value
-                index += 2
-            }
+            if bytes[safe: index] == asciiColon { index += 1 }
+            guard isDigit(bytes, index, 2), let tzMinute = int(bytes, index, 2) else { return nil }
+            index += 2
             guard (0...23).contains(tzHour), (0...59).contains(tzMinute) else { return nil }
 
             timezoneOffsetSeconds = sign * ((tzHour * 3600) + (tzMinute * 60))
-        } else {
+        } else if index != bytes.count {
             return nil
         }
 
@@ -178,9 +164,9 @@ public enum SyncDateParser {
         let bytes = Array(utf8)
         guard bytes.count == 10 else { return false }
         return isDigit(bytes, 0, 4) &&
-            bytes[safe: 4] == asciiHyphen &&
+            bytes[safe: 4] == asciiMinus &&
             isDigit(bytes, 5, 2) &&
-            bytes[safe: 7] == asciiHyphen &&
+            bytes[safe: 7] == asciiMinus &&
             isDigit(bytes, 8, 2)
     }
 
@@ -229,4 +215,3 @@ private let asciiDot: UInt8 = 46
 private let asciiColon: UInt8 = 58
 private let asciiT: UInt8 = 84
 private let asciiZ: UInt8 = 90
-private let asciiHyphen: UInt8 = 45
