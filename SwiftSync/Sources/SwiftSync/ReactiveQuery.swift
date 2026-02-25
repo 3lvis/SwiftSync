@@ -123,12 +123,11 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
     public var wrappedValue: [Model] { observer.rows }
 
     public init(
-        _ model: Model.Type,
+        _ _: Model.Type,
         in syncContainer: SyncContainer,
         sortBy: [SortDescriptor<Model>] = [],
         animation: Animation? = nil
     ) {
-        _ = model
         self.init(
             syncContainer: syncContainer,
             predicate: nil,
@@ -140,13 +139,12 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
     }
 
     public init(
-        _ model: Model.Type,
+        _ _: Model.Type,
         predicate: Predicate<Model>,
         in syncContainer: SyncContainer,
         sortBy: [SortDescriptor<Model>] = [],
         animation: Animation? = nil
     ) {
-        _ = model
         self.init(
             syncContainer: syncContainer,
             predicate: predicate,
@@ -158,14 +156,13 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
     }
 
     public init<Related: SyncModelable>(
-        _ model: Model.Type,
+        _ _: Model.Type,
         relatedTo related: Related.Type,
         relatedID: Related.SyncID,
         in syncContainer: SyncContainer,
         sortBy: [SortDescriptor<Model>] = [],
         animation: Animation? = nil
     ) {
-        _ = model
         self.init(
             syncContainer: syncContainer,
             predicate: nil,
@@ -177,7 +174,7 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
     }
 
     public init<Related: SyncModelable>(
-        _ model: Model.Type,
+        _ _: Model.Type,
         relatedTo related: Related.Type,
         relatedID: Related.SyncID,
         through relationship: ReferenceWritableKeyPath<Model, Related?>,
@@ -185,7 +182,6 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
         sortBy: [SortDescriptor<Model>] = [],
         animation: Animation? = nil
     ) {
-        _ = model
         self.init(
             syncContainer: syncContainer,
             predicate: nil,
@@ -197,7 +193,7 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
     }
 
     public init<Related: SyncModelable>(
-        _ model: Model.Type,
+        _ _: Model.Type,
         relatedTo related: Related.Type,
         relatedID: Related.SyncID,
         through relationship: ReferenceWritableKeyPath<Model, [Related]>,
@@ -205,7 +201,6 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
         sortBy: [SortDescriptor<Model>] = [],
         animation: Animation? = nil
     ) {
-        _ = model
         self.init(
             syncContainer: syncContainer,
             predicate: nil,
@@ -245,10 +240,9 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
     }
 
     private static func inferredRelatedIDFilter<Related: SyncModelable>(
-        relatedTo related: Related.Type,
+        relatedTo _: Related.Type,
         relatedID: Related.SyncID
     ) -> (Model) -> Bool {
-        _ = related
 
         let inferredToOne = Result { try SwiftSync.inferToOneRelationship(for: Model.self, parent: Related.self) }
         let inferredToMany = Result { try SwiftSync.inferToManyRelationship(for: Model.self, related: Related.self) }
@@ -270,11 +264,10 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
     }
 
     private static func explicitToOneRelatedIDFilter<Related: SyncModelable>(
-        relatedTo related: Related.Type,
+        relatedTo _: Related.Type,
         relatedID: Related.SyncID,
         relationship: ReferenceWritableKeyPath<Model, Related?>
     ) -> (Model) -> Bool {
-        _ = related
         return { row in
             guard let relatedRow = row[keyPath: relationship] else { return false }
             return relatedRow[keyPath: Related.syncIdentity] == relatedID
@@ -282,11 +275,10 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
     }
 
     private static func explicitToManyRelatedIDFilter<Related: SyncModelable>(
-        relatedTo related: Related.Type,
+        relatedTo _: Related.Type,
         relatedID: Related.SyncID,
         relationship: ReferenceWritableKeyPath<Model, [Related]>
     ) -> (Model) -> Bool {
-        _ = related
         return { row in
             row[keyPath: relationship].contains { relatedRow in
                 relatedRow[keyPath: Related.syncIdentity] == relatedID
@@ -298,13 +290,12 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
 
 public extension SyncQuery where Model: SyncModelable {
     init(
-        _ model: Model.Type,
+        _ _: Model.Type,
         in syncContainer: SyncContainer,
         sortBy: [SortDescriptor<Model>] = [],
         refreshOn: [PartialKeyPath<Model>] = [],
         animation: Animation? = nil
     ) {
-        _ = model
         self.init(
             syncContainer: syncContainer,
             predicate: nil,
@@ -316,14 +307,13 @@ public extension SyncQuery where Model: SyncModelable {
     }
 
     init(
-        _ model: Model.Type,
+        _ _: Model.Type,
         predicate: Predicate<Model>,
         in syncContainer: SyncContainer,
         sortBy: [SortDescriptor<Model>] = [],
         refreshOn: [PartialKeyPath<Model>] = [],
         animation: Animation? = nil
     ) {
-        _ = model
         self.init(
             syncContainer: syncContainer,
             predicate: predicate,
@@ -335,7 +325,7 @@ public extension SyncQuery where Model: SyncModelable {
     }
 
     init<Related: SyncModelable>(
-        _ model: Model.Type,
+        _ _: Model.Type,
         relatedTo related: Related.Type,
         relatedID: Related.SyncID,
         in syncContainer: SyncContainer,
@@ -343,7 +333,6 @@ public extension SyncQuery where Model: SyncModelable {
         refreshOn: [PartialKeyPath<Model>] = [],
         animation: Animation? = nil
     ) {
-        _ = model
         self.init(
             syncContainer: syncContainer,
             predicate: nil,
@@ -355,7 +344,7 @@ public extension SyncQuery where Model: SyncModelable {
     }
 
     init<Related: SyncModelable>(
-        _ model: Model.Type,
+        _ _: Model.Type,
         relatedTo related: Related.Type,
         relatedID: Related.SyncID,
         through relationship: ReferenceWritableKeyPath<Model, Related?>,
@@ -364,7 +353,6 @@ public extension SyncQuery where Model: SyncModelable {
         refreshOn: [PartialKeyPath<Model>] = [],
         animation: Animation? = nil
     ) {
-        _ = model
         self.init(
             syncContainer: syncContainer,
             predicate: nil,
@@ -376,7 +364,7 @@ public extension SyncQuery where Model: SyncModelable {
     }
 
     init<Related: SyncModelable>(
-        _ model: Model.Type,
+        _ _: Model.Type,
         relatedTo related: Related.Type,
         relatedID: Related.SyncID,
         through relationship: ReferenceWritableKeyPath<Model, [Related]>,
@@ -385,7 +373,6 @@ public extension SyncQuery where Model: SyncModelable {
         refreshOn: [PartialKeyPath<Model>] = [],
         animation: Animation? = nil
     ) {
-        _ = model
         self.init(
             syncContainer: syncContainer,
             predicate: nil,
@@ -583,12 +570,11 @@ public struct SyncModel<Model: PersistentModel & SyncModelable>: DynamicProperty
     public var wrappedValue: Model? { observer.model }
 
     public init(
-        _ model: Model.Type,
+        _ _: Model.Type,
         id: Model.SyncID,
         in syncContainer: SyncContainer,
         animation: Animation? = nil
     ) {
-        _ = model
         _observer = StateObject(
             wrappedValue: SyncModelObserver(
                 syncContainer: syncContainer,

@@ -9,7 +9,6 @@ final class Project {
     var name: String
     var taskCount: Int
     var updatedAt: Date
-    @Relationship(inverse: \Task.project)
     var tasks: [Task]
 
     init(

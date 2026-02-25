@@ -1266,9 +1266,7 @@ extension ConcurrentRaceUser: SyncRelationshipUpdatableModel {
         return changed
     }
 
-    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
-        _ = payload
-        _ = context
+    func applyRelationships(_: SyncPayload, in _: ModelContext) async throws -> Bool {
         if id == 1 {
             await ConcurrentRaceHooks.shared.waitIfInstalled()
             await Task.yield()
