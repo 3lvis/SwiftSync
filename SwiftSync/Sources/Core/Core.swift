@@ -31,14 +31,12 @@ public protocol SyncModelable: PersistentModel {
     associatedtype SyncID: Hashable & Codable & Sendable
     static var syncIdentity: KeyPath<Self, SyncID> { get }
     static var syncIdentityRemoteKeys: [String] { get }
-    static var syncIdentityPolicy: SyncIdentityPolicy { get }
     static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] { get }
     static func syncRelatedModelType(for keyPath: PartialKeyPath<Self>) -> (any PersistentModel.Type)?
 }
 
 public extension SyncModelable {
     static var syncIdentityRemoteKeys: [String] { ["id", "remote_id", "remoteID"] }
-    static var syncIdentityPolicy: SyncIdentityPolicy { .global }
     static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] { [] }
 
     static func syncRelatedModelType(for keyPath: PartialKeyPath<Self>) -> (any PersistentModel.Type)? {
@@ -580,21 +578,6 @@ private func syncIdentityKey<ID: Hashable>(from identity: ID) -> String {
 public protocol ParentScopedModel: SyncUpdatableModel {
     associatedtype SyncParent: PersistentModel
     static var parentRelationship: ReferenceWritableKeyPath<Self, SyncParent?> { get }
-}
-
-public extension ParentScopedModel {
-    static var syncIdentityPolicy: SyncIdentityPolicy { .scopedByParent }
-}
-
-public protocol GlobalParentScopedModel: ParentScopedModel {}
-
-public extension GlobalParentScopedModel {
-    static var syncIdentityPolicy: SyncIdentityPolicy { .global }
-}
-
-public enum SyncIdentityPolicy: Sendable {
-    case global
-    case scopedByParent
 }
 
 public struct SyncRelationshipOperations: OptionSet, Sendable {

@@ -880,7 +880,6 @@ final class GlobalItem {
 extension GlobalItem: SyncUpdatableModel {
     typealias SyncID = Int
     static var syncIdentity: KeyPath<GlobalItem, Int> { \.id }
-    static var syncIdentityPolicy: SyncIdentityPolicy { .global }
 
     static func make(from payload: SyncPayload) throws -> GlobalItem {
         GlobalItem(
@@ -905,6 +904,143 @@ extension GlobalItem: SyncUpdatableModel {
 extension GlobalItem: ParentScopedModel {
     typealias SyncParent = GlobalBucket
     static var parentRelationship: ReferenceWritableKeyPath<GlobalItem, GlobalBucket?> { \.bucket }
+}
+
+@Model
+final class NoteFolder {
+    @Attribute(.unique) var id: Int
+    var name: String
+
+    init(id: Int, name: String) {
+        self.id = id
+        self.name = name
+    }
+}
+
+@Model
+final class UniqueIDNote {
+    @Attribute(.unique) var id: Int
+    var text: String
+    var folder: NoteFolder?
+
+    init(id: Int, text: String, folder: NoteFolder? = nil) {
+        self.id = id
+        self.text = text
+        self.folder = folder
+    }
+}
+
+extension UniqueIDNote: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<UniqueIDNote, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> UniqueIDNote {
+        UniqueIDNote(
+            id: try payload.required(Int.self, for: "id"),
+            text: try payload.required(String.self, for: "text")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        var changed = false
+        if payload.contains("text") {
+            let incoming: String = try payload.required(String.self, for: "text")
+            if text != incoming {
+                text = incoming
+                changed = true
+            }
+        }
+        return changed
+    }
+}
+
+extension UniqueIDNote: ParentScopedModel {
+    typealias SyncParent = NoteFolder
+    static var parentRelationship: ReferenceWritableKeyPath<UniqueIDNote, NoteFolder?> { \.folder }
+}
+
+@Model
+final class UniqueEmailNote {
+    var id: Int
+    @Attribute(.unique) var email: String
+    var text: String
+    var folder: NoteFolder?
+
+    init(id: Int, email: String, text: String, folder: NoteFolder? = nil) {
+        self.id = id
+        self.email = email
+        self.text = text
+        self.folder = folder
+    }
+}
+
+extension UniqueEmailNote: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<UniqueEmailNote, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> UniqueEmailNote {
+        UniqueEmailNote(
+            id: try payload.required(Int.self, for: "id"),
+            email: try payload.required(String.self, for: "email"),
+            text: try payload.required(String.self, for: "text")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        var changed = false
+        if payload.contains("text") {
+            let incoming: String = try payload.required(String.self, for: "text")
+            if text != incoming {
+                text = incoming
+                changed = true
+            }
+        }
+        return changed
+    }
+}
+
+extension UniqueEmailNote: ParentScopedModel {
+    typealias SyncParent = NoteFolder
+    static var parentRelationship: ReferenceWritableKeyPath<UniqueEmailNote, NoteFolder?> { \.folder }
+}
+
+// InferredNote: non-unique id, NOT ParentScopedModel – uses the inferred sync overload.
+// Without @Attribute(.unique) on id, the new behavior should be scoped (two parents → two rows).
+@Model
+final class InferredNote {
+    var id: Int
+    var text: String
+    var folder: NoteFolder?
+
+    init(id: Int, text: String, folder: NoteFolder? = nil) {
+        self.id = id
+        self.text = text
+        self.folder = folder
+    }
+}
+
+extension InferredNote: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<InferredNote, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> InferredNote {
+        InferredNote(
+            id: try payload.required(Int.self, for: "id"),
+            text: try payload.required(String.self, for: "text")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        var changed = false
+        if payload.contains("text") {
+            let incoming: String = try payload.required(String.self, for: "text")
+            if text != incoming {
+                text = incoming
+                changed = true
+            }
+        }
+        return changed
+    }
 }
 
 @Model
@@ -3394,6 +3530,102 @@ final class IntegrationTests: XCTestCase {
         XCTAssertEqual(Set(rows.filter { $0.bucket?.id == 1 }.map(\.id)), Set([1]))
         XCTAssertEqual(rows.first(where: { $0.bucket?.id == 1 && $0.id == 1 })?.text, "A-1 updated")
         XCTAssertEqual(Set(rows.filter { $0.bucket?.id == 2 }.map(\.id)), Set([1, 3]))
+    }
+
+    @MainActor
+    func testUniqueAttributeOnSyncIdentityImpliesGlobalPolicy() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: NoteFolder.self, UniqueIDNote.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let folderA = NoteFolder(id: 1, name: "A")
+        let folderB = NoteFolder(id: 2, name: "B")
+        context.insert(folderA)
+        context.insert(folderB)
+        try context.save()
+
+        try await SwiftSync.sync(
+            payload: [["id": 10, "text": "original"]],
+            as: UniqueIDNote.self,
+            in: context,
+            parent: folderA
+        )
+
+        try await SwiftSync.sync(
+            payload: [["id": 10, "text": "moved"]],
+            as: UniqueIDNote.self,
+            in: context,
+            parent: folderB
+        )
+
+        let all = try context.fetch(FetchDescriptor<UniqueIDNote>())
+        XCTAssertEqual(all.count, 1)
+        XCTAssertEqual(all.first?.text, "moved")
+        XCTAssertEqual(all.first?.folder?.id, 2)
+    }
+
+    @MainActor
+    func testInferredParentSyncWithoutUniqueAttributeUsesScopedPolicy() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: NoteFolder.self, InferredNote.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let folderA = NoteFolder(id: 1, name: "A")
+        let folderB = NoteFolder(id: 2, name: "B")
+        context.insert(folderA)
+        context.insert(folderB)
+        try context.save()
+
+        try await SwiftSync.sync(
+            payload: [["id": 10, "text": "A-note"]],
+            as: InferredNote.self,
+            in: context,
+            parent: folderA
+        )
+
+        try await SwiftSync.sync(
+            payload: [["id": 10, "text": "B-note"]],
+            as: InferredNote.self,
+            in: context,
+            parent: folderB
+        )
+
+        let all = try context.fetch(FetchDescriptor<InferredNote>())
+        XCTAssertEqual(all.count, 2)
+        XCTAssertEqual(all.first(where: { $0.folder?.id == 1 })?.text, "A-note")
+        XCTAssertEqual(all.first(where: { $0.folder?.id == 2 })?.text, "B-note")
+    }
+
+    @MainActor
+    func testUniqueAttributeOnNonIdentityFieldDoesNotImplyGlobalPolicy() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: NoteFolder.self, UniqueEmailNote.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let folderA = NoteFolder(id: 1, name: "A")
+        let folderB = NoteFolder(id: 2, name: "B")
+        context.insert(folderA)
+        context.insert(folderB)
+        try context.save()
+
+        try await SwiftSync.sync(
+            payload: [["id": 10, "email": "a@example.com", "text": "A-note"]],
+            as: UniqueEmailNote.self,
+            in: context,
+            parent: folderA
+        )
+
+        try await SwiftSync.sync(
+            payload: [["id": 10, "email": "b@example.com", "text": "B-note"]],
+            as: UniqueEmailNote.self,
+            in: context,
+            parent: folderB
+        )
+
+        let all = try context.fetch(FetchDescriptor<UniqueEmailNote>())
+        XCTAssertEqual(all.count, 2)
+        XCTAssertEqual(all.first(where: { $0.folder?.id == 1 })?.text, "A-note")
+        XCTAssertEqual(all.first(where: { $0.folder?.id == 2 })?.text, "B-note")
     }
 
     @MainActor

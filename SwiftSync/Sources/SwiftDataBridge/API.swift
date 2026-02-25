@@ -141,7 +141,7 @@ public extension SwiftSync {
             in: context,
             parent: parent,
             parentRelationship: Model.parentRelationship,
-            identityPolicy: Model.syncIdentityPolicy,
+            isGlobal: syncIdentityHasUniqueAttribute(Model.self),
             inputKeyStyle: inputKeyStyle,
             missingRowPolicy: missingRowPolicy,
             relationshipOperations: relationshipOperations
@@ -153,7 +153,6 @@ public extension SwiftSync {
         as _: Model.Type,
         in context: ModelContext,
         parent: Parent,
-        identityPolicy: SyncIdentityPolicy = .global,
         inputKeyStyle: SyncInputKeyStyle = .snakeCase,
         missingRowPolicy: SyncMissingRowPolicy = .delete,
         relationshipOperations: SyncRelationshipOperations = .all
@@ -165,7 +164,7 @@ public extension SwiftSync {
             in: context,
             parent: parent,
             parentRelationship: inferred,
-            identityPolicy: identityPolicy,
+            isGlobal: syncIdentityHasUniqueAttribute(Model.self),
             inputKeyStyle: inputKeyStyle,
             missingRowPolicy: missingRowPolicy,
             relationshipOperations: relationshipOperations
@@ -178,7 +177,7 @@ public extension SwiftSync {
         in context: ModelContext,
         parent: Parent,
         parentRelationship: ReferenceWritableKeyPath<Model, Parent?>,
-        identityPolicy: SyncIdentityPolicy,
+        isGlobal: Bool,
         inputKeyStyle: SyncInputKeyStyle,
         missingRowPolicy: SyncMissingRowPolicy,
         relationshipOperations: SyncRelationshipOperations
@@ -200,22 +199,21 @@ public extension SwiftSync {
 
             var index: [String: Model] = [:]
             var duplicates: [Model] = []
-            switch identityPolicy {
-            case .scopedByParent:
-                for row in scopeRows {
-                    let key = scopedIdentityKey(
-                        from: row[keyPath: Model.syncIdentity],
-                        parentPersistentID: resolvedParent.persistentModelID
-                    )
+            if isGlobal {
+                for row in existing {
+                    let key = identityKey(from: row[keyPath: Model.syncIdentity])
                     if index[key] != nil {
                         duplicates.append(row)
                         continue
                     }
                     index[key] = row
                 }
-            case .global:
-                for row in existing {
-                    let key = identityKey(from: row[keyPath: Model.syncIdentity])
+            } else {
+                for row in scopeRows {
+                    let key = scopedIdentityKey(
+                        from: row[keyPath: Model.syncIdentity],
+                        parentPersistentID: resolvedParent.persistentModelID
+                    )
                     if index[key] != nil {
                         duplicates.append(row)
                         continue
@@ -242,14 +240,13 @@ public extension SwiftSync {
                     continue
                 }
                 let key: String
-                switch identityPolicy {
-                case .scopedByParent:
+                if isGlobal {
+                    key = identityKey(from: identity)
+                } else {
                     key = scopedIdentityKey(
                         from: identity,
                         parentPersistentID: resolvedParent.persistentModelID
                     )
-                case .global:
-                    key = identityKey(from: identity)
                 }
                 seenKeys.insert(key)
 
@@ -301,14 +298,13 @@ public extension SwiftSync {
                 try throwIfCancelled()
                 for row in scopeRows {
                     let key: String
-                    switch identityPolicy {
-                    case .scopedByParent:
+                    if isGlobal {
+                        key = identityKey(from: row[keyPath: Model.syncIdentity])
+                    } else {
                         key = scopedIdentityKey(
                             from: row[keyPath: Model.syncIdentity],
                             parentPersistentID: resolvedParent.persistentModelID
                         )
-                    case .global:
-                        key = identityKey(from: row[keyPath: Model.syncIdentity])
                     }
                     if seenKeys.contains(key) {
                         continue
@@ -492,6 +488,23 @@ public extension SwiftSync {
         }
 
         return candidates[0]
+    }
+
+    private static func syncIdentityHasUniqueAttribute<Model: SyncModelable>(_ model: Model.Type) -> Bool {
+        let identityKeyPath = Model.syncIdentity as AnyKeyPath
+        for propertyMetadata in Model.schemaMetadata {
+            let mirror = Mirror(reflecting: propertyMetadata)
+            guard let candidateKeyPath = mirror.children.first(where: { $0.label == "keypath" })?.value as? AnyKeyPath,
+                  candidateKeyPath == identityKeyPath else { continue }
+            guard let rawMetadata = mirror.children.first(where: { $0.label == "metadata" })?.value else { return false }
+            let metadataMirror = Mirror(reflecting: rawMetadata)
+            let unwrapped: Any? = metadataMirror.displayStyle == .optional
+                ? metadataMirror.children.first?.value
+                : rawMetadata
+            guard let attribute = unwrapped as? Schema.Attribute else { return false }
+            return attribute.options.contains(.unique)
+        }
+        return false
     }
 
     private static func identityKey<ID: Hashable>(from identity: ID) -> String {

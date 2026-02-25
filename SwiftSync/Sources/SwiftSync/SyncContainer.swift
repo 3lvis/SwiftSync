@@ -131,7 +131,6 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         payload: [Any],
         as model: Model.Type,
         parent: Parent,
-        identityPolicy: SyncIdentityPolicy = .global,
         missingRowPolicy: SyncMissingRowPolicy = .delete,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
@@ -141,7 +140,6 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             as: model,
             in: context,
             parent: parent,
-            identityPolicy: identityPolicy,
             inputKeyStyle: inputKeyStyle,
             missingRowPolicy: missingRowPolicy,
             relationshipOperations: relationshipOperations
