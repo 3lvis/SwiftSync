@@ -43,7 +43,6 @@ PersistentModel (SwiftData)
         └─ SyncUpdatableModel       make(from:), apply(_:) → Bool
               └─ SyncRelationshipUpdatableModel   applyRelationships(_:in:operations:) → Bool
               └─ ParentScopedModel                parentRelationship keypath
-                    └─ GlobalParentScopedModel    (overrides identity back to .global)
 
 SyncModelable
   └─ ExportModel             exportObject(using:state:) → [String: Any]
@@ -102,13 +101,6 @@ Result cached per `SyncPayload` instance in `CandidateKeysCache`.
 **`required(for:)` vs `strictValue(for:)`:**
 - `required` uses coercion + Date fallback to epoch + null defaults; throws on unresolvable
 - `strictValue` uses direct cast only, returns nil silently
-
-### Identity policy
-
-- `.global` — identity unique across all rows (default)
-- `.scopedByParent` — identity unique within parent scope
-  - Scoped key: `"TypeName|<PersistentIdentifier>|<identityValue>"`
-  - Default for `ParentScopedModel`
 
 ### Duplicate handling
 
@@ -362,14 +354,12 @@ Areas with the most surface area relative to usage:
 
 3. **`SyncRelationshipUpdatableModel` two-method protocol** — one method with `operations:` and one without; the one without is just `applyRelationships(payload, in: context, operations: .all)`. The default implementation delegates correctly but adds noise.
 
-4. **`GlobalParentScopedModel`** — a protocol that exists only to flip the identity policy back to `.global` on a `ParentScopedModel`. Two lines of concept wrapped in a full protocol declaration.
+4. **`SyncQuerySortableModel` sort-sugar extension on `SyncQuery`** — 5 init overloads that each just call the `SyncModelable` init with `sortBy: Model.syncSortDescriptors(for: sortBy)`. Thin layer.
 
-5. **`SyncQuerySortableModel` sort-sugar extension on `SyncQuery`** — 5 init overloads that each just call the `SyncModelable` init with `sortBy: Model.syncSortDescriptors(for: sortBy)`. Thin layer.
+5. **`ExportRelationshipMode.nested`** — the `.nested` / `_attributes` output mode (Rails-style). If unused in your app, the branch can be deleted from the macro's generated export code.
 
-6. **`ExportRelationshipMode.nested`** — the `.nested` / `_attributes` output mode (Rails-style). If unused in your app, the branch can be deleted from the macro's generated export code.
+6. **`SyncInputKeyStyle.camelCase`** — if all your payloads are snake_case, the camelCase branch in `candidateKeys` is dead weight.
 
-7. **`SyncInputKeyStyle.camelCase`** — if all your payloads are snake_case, the camelCase branch in `candidateKeys` is dead weight.
+7. **`SyncMissingRowPolicy.keep`** — if you always delete missing rows, this branch is unused.
 
-8. **`SyncMissingRowPolicy.keep`** — if you always delete missing rows, this branch is unused.
-
-9. **Date parser breadth** — handles 15+ ISO8601 variants + Unix timestamps. If your server only emits one format, most branches are never hit.
+8. **Date parser breadth** — handles 15+ ISO8601 variants + Unix timestamps. If your server only emits one format, most branches are never hit.

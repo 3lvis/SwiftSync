@@ -96,16 +96,6 @@ extension Ticket: ParentScopedModel {
 }
 ```
 
-## Identity Policy Notes
-
-- `ParentScopedModel` defaults to `.scopedByParent`.
-- Inferred parent sync (no `ParentScopedModel` conformance) defaults to `.global`.
-- If inferred sync should allow duplicate child IDs across different parents, pass:
-
-```swift
-identityPolicy: .scopedByParent
-```
-
 ## Safety Contract
 
 SwiftSync does not silently guess between multiple candidate parent relationships.

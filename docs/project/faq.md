@@ -21,11 +21,7 @@ import SwiftSync
 
 ## 2) Can two different parents have children with the same `id`?
 
-Yes, if the model uses parent-scoped identity.
-
-- `ParentScopedModel` defaults to `.scopedByParent`
-- inferred parent sync defaults to `.global` unless you pass `identityPolicy: .scopedByParent`
-- `@Attribute(.unique)` on raw `id` still enforces global uniqueness at the store level
+Yes, if the model uses `ParentScopedModel`. Note that `@Attribute(.unique)` on raw `id` still enforces global uniqueness at the store level.
 
 See `docs/project/parent-scope.md`.
 

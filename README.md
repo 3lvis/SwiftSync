@@ -265,8 +265,6 @@ Notes:
 - If `Note` has exactly one to-one relationship to `User`, `parentRelationship` is inferred.
 - `parentRelationship` is only required when there are multiple candidate relationships to the same parent type.
 - If there are zero candidates, sync fails because the requested parent scope cannot be resolved for that model.
-- `identityPolicy` defaults to `.global` for inferred parent sync. Use `.scopedByParent` when duplicate child IDs across different parents are valid.
-- Inferred scoped example: `try await SwiftSync.sync(payload: payload, as: Note.self, in: context, parent: user, identityPolicy: .scopedByParent)`
 
 ### Scenario: to-one relationship by nested object
 
@@ -532,28 +530,6 @@ Identity selection order:
 2. `id`
 3. `remoteID`
 
-### Identity policy (global vs parent-scoped)
-
-`SyncModelable` supports two identity policies:
-- `.global`: one row per identity for the whole store.
-- `.scopedByParent`: identity is scoped to the parent for `ParentScopedModel`.
-
-Defaults:
-- `SyncUpdatableModel` -> `.global`
-- `ParentScopedModel` -> `.scopedByParent`
-- inferred parent sync (`sync(... parent: Parent)`) -> `.global` unless you pass `identityPolicy: .scopedByParent`
-
-If you need global behavior on a parent-scoped model, override it:
-
-```swift
-extension Note: GlobalParentScopedModel {
-  static var parentRelationship: ReferenceWritableKeyPath<Note, User?> { \.user }
-}
-```
-
-`GlobalParentScopedModel` is just a convenience protocol that sets
-`syncIdentityPolicy = .global` for `ParentScopedModel`.
-
 ### Custom primary key
 
 ```swift
@@ -696,7 +672,6 @@ public extension SwiftSync {
     as model: Model.Type,
     in context: ModelContext,
     parent: Parent,
-    identityPolicy: SyncIdentityPolicy = .global,
     missingRowPolicy: SyncMissingRowPolicy = .delete,
     relationshipOperations: SyncRelationshipOperations = .all
   ) async throws
@@ -732,8 +707,4 @@ public struct SyncRelationshipOperations: OptionSet, Sendable {
   public static let all: SyncRelationshipOperations
 }
 
-public enum SyncIdentityPolicy: Sendable {
-  case global
-  case scopedByParent
-}
 ```

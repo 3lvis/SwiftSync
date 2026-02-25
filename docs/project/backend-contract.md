@@ -13,9 +13,7 @@ Use one stable identity key per resource:
 - default: `id`
 - keep identity type stable per resource (`Int` stays `Int`, `String` stays `String`)
 
-For parent-scoped resources:
-- decide explicitly: global identity vs parent-scoped identity
-- if parent-scoped, treat identity as `(parent_id, id)` at API-contract level
+For parent-scoped resources, treat identity as `(parent_id, id)` at the API-contract level.
 
 ## 2) Naming Rules
 
