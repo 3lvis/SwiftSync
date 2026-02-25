@@ -826,7 +826,7 @@ public struct SyncPayload {
         if let value: T = value(for: key, as: type) {
             return value
         }
-        if T.self == Date.self, containsCandidateValue(for: key) {
+        if T.self == Date.self, contains(key) {
             // Date parsing is best-effort; invalid values fall back to epoch for required fields.
             return Date(timeIntervalSince1970: 0) as! T
         }
@@ -840,7 +840,7 @@ public struct SyncPayload {
         if let value: T = strictValue(for: key, as: type) {
             return value
         }
-        if T.self == Date.self, containsCandidateValue(for: key) {
+        if T.self == Date.self, contains(key) {
             return Date(timeIntervalSince1970: 0) as! T
         }
         if isExplicitNull(for: key), let fallback: T = defaultValueForNull(as: type) {
@@ -893,12 +893,6 @@ public struct SyncPayload {
 
         candidateKeysCache.cache[key] = ordered
         return ordered
-    }
-
-    private func containsCandidateValue(for key: String) -> Bool {
-        candidateKeys(for: key).contains { candidate in
-            rawValue(for: candidate) != nil
-        }
     }
 
     private func isExplicitNull(for key: String) -> Bool {
