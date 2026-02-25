@@ -4,33 +4,28 @@ import Core
 
 public extension SwiftSync {
     static func inferToOneRelationship<Model: PersistentModel, Parent: PersistentModel>(
-        for model: Model.Type,
-        parent: Parent.Type
+        for _: Model.Type,
+        parent _: Parent.Type
     ) throws -> ReferenceWritableKeyPath<Model, Parent?> {
-        _ = model
-        _ = parent
-        return try inferSingleParentRelationship(for: Model.self, parent: Parent.self).keyPath
+        try inferSingleParentRelationship(for: Model.self, parent: Parent.self).keyPath
     }
 
     static func inferToManyRelationship<Model: PersistentModel, Related: PersistentModel>(
-        for model: Model.Type,
-        related: Related.Type
+        for _: Model.Type,
+        related _: Related.Type
     ) throws -> ReferenceWritableKeyPath<Model, [Related]> {
-        _ = model
-        _ = related
-        return try inferSingleToManyRelationship(for: Model.self, related: Related.self).keyPath
+        try inferSingleToManyRelationship(for: Model.self, related: Related.self).keyPath
     }
 
     static func sync<Model: SyncUpdatableModel>(
         payload: [Any],
-        as model: Model.Type,
+        as _: Model.Type,
         in context: ModelContext,
         inputKeyStyle: SyncInputKeyStyle = .snakeCase,
         missingRowPolicy: SyncMissingRowPolicy = .delete,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         let lease = await acquireSyncLease(for: context)
-        _ = model
         do {
             try throwIfCancelled()
             let entries = try normalize(payload: payload, model: Model.self)
@@ -133,7 +128,7 @@ public extension SwiftSync {
 
     static func sync<Model: ParentScopedModel>(
         payload: [Any],
-        as model: Model.Type,
+        as _: Model.Type,
         in context: ModelContext,
         parent: Model.SyncParent,
         inputKeyStyle: SyncInputKeyStyle = .snakeCase,
@@ -142,7 +137,7 @@ public extension SwiftSync {
     ) async throws {
         try await sync(
             payload: payload,
-            as: model,
+            as: Model.self,
             in: context,
             parent: parent,
             parentRelationship: Model.parentRelationship,
@@ -155,7 +150,7 @@ public extension SwiftSync {
 
     static func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
         payload: [Any],
-        as model: Model.Type,
+        as _: Model.Type,
         in context: ModelContext,
         parent: Parent,
         identityPolicy: SyncIdentityPolicy = .global,
@@ -163,11 +158,10 @@ public extension SwiftSync {
         missingRowPolicy: SyncMissingRowPolicy = .delete,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
-        _ = model
         let inferred = try inferToOneRelationship(for: Model.self, parent: Parent.self)
         try await sync(
             payload: payload,
-            as: model,
+            as: Model.self,
             in: context,
             parent: parent,
             parentRelationship: inferred,
@@ -180,7 +174,7 @@ public extension SwiftSync {
 
     private static func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
         payload: [Any],
-        as model: Model.Type,
+        as _: Model.Type,
         in context: ModelContext,
         parent: Parent,
         parentRelationship: ReferenceWritableKeyPath<Model, Parent?>,
@@ -190,7 +184,6 @@ public extension SwiftSync {
         relationshipOperations: SyncRelationshipOperations
     ) async throws {
         let lease = await acquireSyncLease(for: context)
-        _ = model
         do {
             try throwIfCancelled()
             let entries = try normalize(payload: payload, model: Model.self)
@@ -342,12 +335,10 @@ public extension SwiftSync {
     }
 
     static func export<Model: ExportModel>(
-        as model: Model.Type,
+        as _: Model.Type,
         in context: ModelContext,
         using options: ExportOptions = ExportOptions()
     ) throws -> [[String: Any]] {
-        _ = model
-
         let rows = try context.fetch(FetchDescriptor<Model>())
         let sorted = rows.sorted { lhs, rhs in
             identityKey(from: lhs[keyPath: Model.syncIdentity]) < identityKey(from: rhs[keyPath: Model.syncIdentity])
@@ -359,13 +350,11 @@ public extension SwiftSync {
     }
 
     static func export<Model: ExportModel & ParentScopedModel>(
-        as model: Model.Type,
+        as _: Model.Type,
         in context: ModelContext,
         parent: Model.SyncParent,
         using options: ExportOptions = ExportOptions()
     ) throws -> [[String: Any]] {
-        _ = model
-
         let rows = try context.fetch(FetchDescriptor<Model>())
             .filter { $0[keyPath: Model.parentRelationship]?.persistentModelID == parent.persistentModelID }
         let sorted = rows.sorted { lhs, rhs in
@@ -420,12 +409,9 @@ public extension SwiftSync {
     }
 
     private static func inferSingleParentRelationship<Model: PersistentModel, Parent: PersistentModel>(
-        for model: Model.Type,
-        parent: Parent.Type
+        for _: Model.Type,
+        parent _: Parent.Type
     ) throws -> ParentRelationshipCandidate<Model, Parent> {
-        _ = model
-        _ = parent
-
         var candidates: [ParentRelationshipCandidate<Model, Parent>] = []
         for metadata in Model.schemaMetadata {
             let metadataMirror = Mirror(reflecting: metadata)
@@ -466,12 +452,9 @@ public extension SwiftSync {
     }
 
     private static func inferSingleToManyRelationship<Model: PersistentModel, Related: PersistentModel>(
-        for model: Model.Type,
-        related: Related.Type
+        for _: Model.Type,
+        related _: Related.Type
     ) throws -> ToManyRelationshipCandidate<Model, Related> {
-        _ = model
-        _ = related
-
         var candidates: [ToManyRelationshipCandidate<Model, Related>] = []
         for metadata in Model.schemaMetadata {
             let metadataMirror = Mirror(reflecting: metadata)
