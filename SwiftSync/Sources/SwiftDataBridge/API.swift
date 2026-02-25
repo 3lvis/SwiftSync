@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 import Core
 
-public extension SwiftSync {
+extension SwiftSync {
     static func inferToOneRelationship<Model: PersistentModel, Parent: PersistentModel>(
         for _: Model.Type,
         parent _: Parent.Type
@@ -67,11 +67,9 @@ public extension SwiftSync {
                     if try row.apply(payloadModel) {
                         changed = true
                     }
-                    if !relationshipOperations.isDisjoint(with: [.update, .delete]),
-                        let relationshipRow = row as? any SyncRelationshipUpdatableModel
-                    {
+                    if !relationshipOperations.isDisjoint(with: [.update, .delete]) {
                         try throwIfCancelled()
-                        if try await relationshipRow.applyRelationships(
+                        if try await row.applyRelationships(
                             payloadModel,
                             in: context,
                             operations: relationshipOperations
@@ -85,11 +83,9 @@ public extension SwiftSync {
 
                 let created = try Model.make(from: payloadModel)
                 context.insert(created)
-                if relationshipOperations.contains(.insert),
-                    let relationshipRow = created as? any SyncRelationshipUpdatableModel
-                {
+                if relationshipOperations.contains(.insert) {
                     try throwIfCancelled()
-                    if try await relationshipRow.applyRelationships(
+                    if try await created.applyRelationships(
                         payloadModel,
                         in: context,
                         operations: relationshipOperations
@@ -124,51 +120,6 @@ public extension SwiftSync {
             await releaseSyncLease(lease)
             throw error
         }
-    }
-
-    static func sync<Model: ParentScopedModel>(
-        payload: [Any],
-        as _: Model.Type,
-        in context: ModelContext,
-        parent: Model.SyncParent,
-        inputKeyStyle: SyncInputKeyStyle = .snakeCase,
-        missingRowPolicy: SyncMissingRowPolicy = .delete,
-        relationshipOperations: SyncRelationshipOperations = .all
-    ) async throws {
-        try await sync(
-            payload: payload,
-            as: Model.self,
-            in: context,
-            parent: parent,
-            parentRelationship: Model.parentRelationship,
-            isGlobal: syncIdentityHasUniqueAttribute(Model.self),
-            inputKeyStyle: inputKeyStyle,
-            missingRowPolicy: missingRowPolicy,
-            relationshipOperations: relationshipOperations
-        )
-    }
-
-    static func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
-        payload: [Any],
-        as _: Model.Type,
-        in context: ModelContext,
-        parent: Parent,
-        inputKeyStyle: SyncInputKeyStyle = .snakeCase,
-        missingRowPolicy: SyncMissingRowPolicy = .delete,
-        relationshipOperations: SyncRelationshipOperations = .all
-    ) async throws {
-        let inferred = try inferToOneRelationship(for: Model.self, parent: Parent.self)
-        try await sync(
-            payload: payload,
-            as: Model.self,
-            in: context,
-            parent: parent,
-            parentRelationship: inferred,
-            isGlobal: syncIdentityHasUniqueAttribute(Model.self),
-            inputKeyStyle: inputKeyStyle,
-            missingRowPolicy: missingRowPolicy,
-            relationshipOperations: relationshipOperations
-        )
     }
 
     private static func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
@@ -258,11 +209,9 @@ public extension SwiftSync {
                     if try row.apply(payloadModel) {
                         changed = true
                     }
-                    if !relationshipOperations.isDisjoint(with: [.update, .delete]),
-                        let relationshipRow = row as? any SyncRelationshipUpdatableModel
-                    {
+                    if !relationshipOperations.isDisjoint(with: [.update, .delete]) {
                         try throwIfCancelled()
-                        if try await relationshipRow.applyRelationships(
+                        if try await row.applyRelationships(
                             payloadModel,
                             in: context,
                             operations: relationshipOperations
@@ -277,11 +226,9 @@ public extension SwiftSync {
                 let created = try Model.make(from: payloadModel)
                 created[keyPath: parentRelationship] = resolvedParent
                 context.insert(created)
-                if relationshipOperations.contains(.insert),
-                    let relationshipRow = created as? any SyncRelationshipUpdatableModel
-                {
+                if relationshipOperations.contains(.insert) {
                     try throwIfCancelled()
-                    if try await relationshipRow.applyRelationships(
+                    if try await created.applyRelationships(
                         payloadModel,
                         in: context,
                         operations: relationshipOperations
@@ -330,38 +277,6 @@ public extension SwiftSync {
         }
     }
 
-    static func export<Model: ExportModel>(
-        as _: Model.Type,
-        in context: ModelContext,
-        using options: ExportOptions = ExportOptions()
-    ) throws -> [[String: Any]] {
-        let rows = try context.fetch(FetchDescriptor<Model>())
-        let sorted = rows.sorted { lhs, rhs in
-            identityKey(from: lhs[keyPath: Model.syncIdentity]) < identityKey(from: rhs[keyPath: Model.syncIdentity])
-        }
-        return sorted.map { row in
-            var state = ExportState()
-            return row.exportObject(using: options, state: &state)
-        }
-    }
-
-    static func export<Model: ExportModel & ParentScopedModel>(
-        as _: Model.Type,
-        in context: ModelContext,
-        parent: Model.SyncParent,
-        using options: ExportOptions = ExportOptions()
-    ) throws -> [[String: Any]] {
-        let rows = try context.fetch(FetchDescriptor<Model>())
-            .filter { $0[keyPath: Model.parentRelationship]?.persistentModelID == parent.persistentModelID }
-        let sorted = rows.sorted { lhs, rhs in
-            identityKey(from: lhs[keyPath: Model.syncIdentity]) < identityKey(from: rhs[keyPath: Model.syncIdentity])
-        }
-        return sorted.map { row in
-            var state = ExportState()
-            return row.exportObject(using: options, state: &state)
-        }
-    }
-
     private static func normalize<Model: PersistentModel>(payload: [Any], model: Model.Type) throws -> [[String: Any]] {
         try payload.map { raw in
             guard let map = raw as? [String: Any] else {
@@ -384,14 +299,6 @@ public extension SwiftSync {
             }
         }
         return nil
-    }
-
-    private static func resolveParent<Parent: PersistentModel>(
-        _ parent: Parent,
-        in context: ModelContext
-    ) throws -> Parent? {
-        let parents = try context.fetch(FetchDescriptor<Parent>())
-        return parents.first { $0.persistentModelID == parent.persistentModelID }
     }
 
     private struct ParentRelationshipCandidate<Model: PersistentModel, Parent: PersistentModel> {

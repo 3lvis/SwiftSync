@@ -434,9 +434,7 @@ extension Team: SyncUpdatableModel {
         }
         return false
     }
-}
 
-extension Team: SyncRelationshipUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         var changed = false
 
@@ -531,9 +529,7 @@ extension Employee: SyncUpdatableModel {
         }
         return changed
     }
-}
 
-extension Employee: SyncRelationshipUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         // Support to-one by foreign key scalar (company_id).
         guard payload.contains("company_id") else { return false }
@@ -599,9 +595,7 @@ extension UserWithNotes: SyncUpdatableModel {
         }
         return changed
     }
-}
 
-extension UserWithNotes: SyncRelationshipUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         // Support to-many by foreign key scalar array (notes_ids).
         guard payload.contains("notes_ids") else { return false }
@@ -667,9 +661,7 @@ extension UserTagsByObjects: SyncUpdatableModel {
         }
         return changed
     }
-}
 
-extension UserTagsByObjects: SyncRelationshipUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         guard payload.contains("tags") else { return false }
         let desiredTags: [Tag]
@@ -723,9 +715,7 @@ extension UserTagsByIDs: SyncUpdatableModel {
         }
         return changed
     }
-}
 
-extension UserTagsByIDs: SyncRelationshipUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         guard payload.contains("tags_ids") else { return false }
         let desiredIDs: [Int]
@@ -1113,9 +1103,7 @@ extension OpsEmployee: SyncUpdatableModel {
         }
         return changed
     }
-}
 
-extension OpsEmployee: SyncRelationshipUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         try await applyRelationships(payload, in: context, operations: .all)
     }
@@ -1379,7 +1367,7 @@ private actor CancellationGate {
     }
 }
 
-extension ConcurrentRaceUser: SyncRelationshipUpdatableModel {
+extension ConcurrentRaceUser: SyncUpdatableModel {
     typealias SyncID = Int
     static var syncIdentity: KeyPath<ConcurrentRaceUser, Int> { \.id }
 

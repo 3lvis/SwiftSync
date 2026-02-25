@@ -154,7 +154,7 @@ SwiftSync cooperatively cancels and rolls back unsaved in-memory work for that r
 
 - `sortBy: [\.field]` => concise ascending sort
 - `sortBy: [SortDescriptor(...)]` => descending/mixed ordering
-- shorthand requires `SyncQuerySortableModel` (or `@Syncable` generated support)
+- shorthand requires `SyncModelable` (all `@Syncable` models satisfy this)
 
 ## 20) In app code, should views perform saves directly?
 

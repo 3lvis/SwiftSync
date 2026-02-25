@@ -38,19 +38,19 @@ ObjCExceptionCatcher      (mixed Swift/ObjC, catches NSException from ModelConta
 
 ```
 PersistentModel (SwiftData)
-  └─ SyncModelable          syncIdentity, syncIdentityRemoteKeys, syncDefaultRefreshModelTypes
-        └─ SyncQuerySortableModel   syncSortDescriptor(for:)
-        └─ SyncUpdatableModel       make(from:), apply(_:) → Bool
-              └─ SyncRelationshipUpdatableModel   applyRelationships(_:in:operations:) → Bool
-              └─ ParentScopedModel                parentRelationship keypath
+  └─ SyncModelable          syncIdentity, syncIdentityRemoteKeys, syncDefaultRefreshModelTypes,
+     │                       syncSortDescriptor(for:), syncRelationshipSchemaDescriptors
+     └─ SyncUpdatableModel   make(from:), apply(_:) → Bool,
+     │                       applyRelationships(_:in:) → Bool,
+     │                       applyRelationships(_:in:operations:) → Bool
+     └─ ParentScopedModel    parentRelationship keypath
 
 SyncModelable
   └─ ExportModel             exportObject(using:state:) → [String: Any]
-  └─ SyncRelationshipSchemaIntrospectable   syncRelationshipSchemaDescriptors
 ```
 
-**@Syncable makes a class conform to all of:**
-`SyncRelationshipUpdatableModel`, `ExportModel`, `SyncQuerySortableModel`, `SyncRelationshipSchemaIntrospectable`
+**@Syncable makes a class conform to:**
+`SyncUpdatableModel`, `ExportModel`
 
 ---
 
@@ -125,7 +125,7 @@ final class Task {
 }
 ```
 
-The macro emits an `extension Task: SyncRelationshipUpdatableModel, ExportModel, ...` containing:
+The macro emits an `extension Task: SyncUpdatableModel, ExportModel` containing:
 
 **`typealias SyncID = String`**
 **`static var syncIdentity: KeyPath<Task, String> { \.id }`**
@@ -348,15 +348,9 @@ Error type: `ObjectiveCInitializationExceptionError` with `name` + `reason` from
 
 Areas with the most surface area relative to usage:
 
-1. **Protocol hierarchy** — `SyncQuerySortableModel` is a thin extra protocol just for the sort-sugar init overloads. Could be folded into `SyncModelable` with a default no-op implementation.
+1. **Four relationship application globals** — each exists in two overloads (stub + real). The stubs return `false` unconditionally. If all related types were required to be `SyncModelable`, the stubs could disappear (8 functions → 4).
 
-2. **Four relationship application globals** — each exists in two overloads (stub + real). The stubs return `false` unconditionally. If all related types were required to be `SyncModelable`, the stubs could disappear (8 functions → 4).
-
-3. **`SyncRelationshipUpdatableModel` two-method protocol** — one method with `operations:` and one without; the one without is just `applyRelationships(payload, in: context, operations: .all)`. The default implementation delegates correctly but adds noise.
-
-4. **`SyncQuerySortableModel` sort-sugar extension on `SyncQuery`** — 5 init overloads that each just call the `SyncModelable` init with `sortBy: Model.syncSortDescriptors(for: sortBy)`. Thin layer.
-
-5. **`ExportRelationshipMode.nested`** — the `.nested` / `_attributes` output mode (Rails-style). If unused in your app, the branch can be deleted from the macro's generated export code.
+2. **`ExportRelationshipMode.nested`** — the `.nested` / `_attributes` output mode (Rails-style). If unused in your app, the branch can be deleted from the macro's generated export code.
 
 6. **`SyncInputKeyStyle.camelCase`** — if all your payloads are snake_case, the camelCase branch in `candidateKeys` is dead weight.
 

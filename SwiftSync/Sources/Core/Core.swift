@@ -44,6 +44,17 @@ public extension SyncModelable {
         return nil
     }
 
+    static func syncSortDescriptor(for keyPath: PartialKeyPath<Self>) -> SortDescriptor<Self>? {
+        _ = keyPath
+        return nil
+    }
+
+    static func syncSortDescriptors(for keyPaths: [PartialKeyPath<Self>]) -> [SortDescriptor<Self>] {
+        keyPaths.compactMap { syncSortDescriptor(for: $0) }
+    }
+
+    static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] { [] }
+
     static var syncDefaultRefreshModelTypeNames: Set<String> {
         Set(syncDefaultRefreshModelTypes.map { String(reflecting: $0) })
     }
@@ -54,16 +65,6 @@ public extension SyncModelable {
 
     static func syncRefreshModelTypeNames(for keyPaths: [PartialKeyPath<Self>]) -> Set<String> {
         Set(syncRefreshModelTypes(for: keyPaths).map { String(reflecting: $0) })
-    }
-}
-
-public protocol SyncQuerySortableModel: SyncModelable {
-    static func syncSortDescriptor(for keyPath: PartialKeyPath<Self>) -> SortDescriptor<Self>?
-}
-
-public extension SyncQuerySortableModel {
-    static func syncSortDescriptors(for keyPaths: [PartialKeyPath<Self>]) -> [SortDescriptor<Self>] {
-        keyPaths.compactMap { syncSortDescriptor(for: $0) }
     }
 }
 
@@ -86,20 +87,9 @@ public struct SyncRelationshipSchemaDescriptor: Sendable {
     }
 }
 
-public protocol SyncRelationshipSchemaIntrospectable {
-    static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] { get }
-}
-
-public extension SyncRelationshipSchemaIntrospectable {
-    static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] { [] }
-}
-
 public protocol SyncUpdatableModel: SyncModelable {
     static func make(from payload: SyncPayload) throws -> Self
     func apply(_ payload: SyncPayload) throws -> Bool
-}
-
-public protocol SyncRelationshipUpdatableModel: SyncUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool
     func applyRelationships(
         _ payload: SyncPayload,
@@ -108,7 +98,11 @@ public protocol SyncRelationshipUpdatableModel: SyncUpdatableModel {
     ) async throws -> Bool
 }
 
-public extension SyncRelationshipUpdatableModel {
+public extension SyncUpdatableModel {
+    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+        return false
+    }
+
     func applyRelationships(
         _ payload: SyncPayload,
         in context: ModelContext,
@@ -573,11 +567,6 @@ private func resolveIdentity<Model: SyncModelable>(from row: Model) -> String? {
 
 private func syncIdentityKey<ID: Hashable>(from identity: ID) -> String {
     String(describing: identity)
-}
-
-public protocol ParentScopedModel: SyncUpdatableModel {
-    associatedtype SyncParent: PersistentModel
-    static var parentRelationship: ReferenceWritableKeyPath<Self, SyncParent?> { get }
 }
 
 public struct SyncRelationshipOperations: OptionSet, Sendable {

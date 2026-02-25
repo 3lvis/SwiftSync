@@ -515,9 +515,8 @@ let rows = try SwiftSync.export(as: User.self, in: context)
 ### `@Syncable`
 
 `@Syncable` generates:
-- `SyncUpdatableModel` conformance (make/apply)
-- `SyncRelationshipUpdatableModel` conformance (auto relationship sync)
-- `ExportModel` and `SyncQuerySortableModel` conformance
+- `SyncUpdatableModel` conformance (make/apply/applyRelationships)
+- `ExportModel` conformance
 
 Built-in relationship sync behavior:
 - to-one by `*_id` (strict typed FK lookup)
