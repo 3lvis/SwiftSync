@@ -390,7 +390,7 @@ public extension SyncQuery where Model: SyncModelable {
     }
 }
 
-public extension SyncQuery where Model: SyncQuerySortableModel {
+public extension SyncQuery where Model: SyncModelable {
     init(
         _ model: Model.Type,
         in syncContainer: SyncContainer,
