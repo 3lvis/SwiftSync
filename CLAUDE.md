@@ -51,11 +51,13 @@
 ## Commit Guidelines
 
 - Do NOT add attribution footer to commits:
+
   ```
   🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
   Co-Authored-By: Claude <noreply@anthropic.com>
   ```
+
 - Do NOT auto-commit changes. Wait for explicit user instruction to commit.
 - Before every commit:
   - run `git status --short`
@@ -87,3 +89,174 @@
   - mutates git state
   - runs build/test tooling
   - depends on another command's output in that same group
+
+## Agent RAM Persistence Protocol (.agents)
+
+### Why
+
+Agents remember two things:
+
+- **Disk context** = what’s in the repo (persists via git)
+- **RAM context** = the current working memory (gets lost if the agent stops or you switch machines)
+
+RAM context is: what you tried, what failed, why choices were made, current hypotheses, key errors, and the exact next steps.
+
+### Goal
+
+Make work **restart-safe** by writing the agent’s RAM into the repo.
+
+---
+
+## Where it lives
+
+Put all continuity files in **`.agents/`**:
+
+- **`.agents/state.md`** — the current “brain snapshot” (source of truth)
+- **`.agents/log.md`** — important commands + trimmed outputs (errors, failing tests)
+- **`.agents/handoff.md`** — one paste-ready message to restart any agent
+
+Keep these updated while working.
+
+---
+
+## 1) `.agents/state.md` (State Capsule)
+
+**Purpose:** restore context in under a minute.
+
+**Rules:**
+
+- Short (≤ ~80 lines)
+- Update whenever decisions change, you get blocked, or the plan shifts
+- Facts > prose
+
+**Template:**
+
+```md
+# State Capsule
+
+## Goal
+
+<one sentence>
+
+## Current status
+
+- ✅ Done:
+- 🔄 In progress:
+- ⛔ Blocked by:
+
+## Decisions (don’t revisit)
+
+- <decision> — <why>
+
+## Constraints
+
+- <must stay true>
+
+## Key findings
+
+- Tried: <x> → <result>
+- Learned: <y>
+
+## Next steps (exact)
+
+1. <command/file/change>
+2. ...
+
+## Files touched
+
+- path
+- path
+```
+
+---
+
+## 2) `.agents/log.md` (Transcript Delta)
+
+**Purpose:** avoid re-discovering errors and important outputs.
+
+**Rules:**
+
+- Only high-signal snippets
+- Always include the command that produced the output
+- Trim aggressively; no walls of text
+
+**Template:**
+
+````md
+# Transcript Delta
+
+## <timestamp> <topic>
+
+Command:
+
+```bash
+...
+```
+
+Output (trimmed):
+
+```text
+...
+```
+
+Notes:
+
+- <why it matters>
+````
+
+---
+
+## 3) `.agents/handoff.md` (Restart message)
+
+**Purpose:** one message you can paste into a fresh agent and continue immediately.
+
+**Rules:**
+
+- Must fit in one message
+- Must tell the agent to read `.agents/state.md` and `.agents/log.md` first
+- Must specify the first 2–5 commands to run
+- Must forbid re-litigating recorded decisions
+
+**Template:**
+
+```md
+You are continuing work in this repo.
+
+1. Read `.agents/state.md` and `.agents/log.md`.
+2. Do NOT revisit anything under “Decisions (don’t revisit)”.
+3. Start by running:
+
+- <cmd>
+- <cmd>
+- <cmd> (optional)
+
+Then execute “Next steps (exact)” from `.agents/state.md` in order.
+If anything fails, append the command + trimmed output to `.agents/log.md`, then update `.agents/state.md`.
+```
+
+---
+
+## Operating procedure
+
+### Start (every agent run)
+
+1. Read `.agents/state.md`
+2. Read `.agents/log.md`
+3. Execute `.agents/state.md -> Next steps (exact)`
+
+### During work
+
+- Decision made → update **Decisions** in `.agents/state.md`
+- Meaningful error/output → append to `.agents/log.md`
+- Keep **Next steps** accurate and ordered
+
+### On stop (before ending or when nearing usage cap)
+
+1. Update `.agents/state.md` so it reflects reality
+2. Append the last meaningful outputs to `.agents/log.md`
+3. Refresh `.agents/handoff.md` so it can be pasted into a new agent immediately
+
+This is required specifically to survive:
+
+- sudden stop due to **usage caps**
+- switching between **home/work computers**
