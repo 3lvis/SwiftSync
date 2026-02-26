@@ -230,3 +230,30 @@ This is required specifically to survive:
 
 - sudden stop due to **usage caps**
 - switching between **home/work computers**
+
+---
+
+## Memory Lifecycle: Feature Branches
+
+`.agents/` is **branch-scoped**. It lives and dies with the feature branch.
+
+### Rules
+
+- `.agents/` is only valid on feature branches — never on `main`.
+- When a feature branch is merged, **delete `.agents/`** as part of the merge/PR cleanup step.
+- Do NOT merge `.agents/` state files into `main`. They are stale the moment the branch closes.
+- Each feature branch owns its own isolated `.agents/` — no cross-branch memory.
+
+### Lifecycle
+
+| Event | Action |
+|---|---|
+| Start feature branch | Create `.agents/` and begin state tracking |
+| Switch machines mid-task | Read `.agents/` to restore context — no lost work |
+| Usage cap hit mid-task | Read `.agents/` on resume — continue exactly where you left off |
+| PR merged / branch closed | Delete `.agents/` entirely before or as part of the merge |
+| Hard context switch (abandon task) | Delete `.agents/` — stale state misleads more than it helps |
+
+### Why not gitignore it?
+
+Gitignoring `.agents/` defeats the "switch machines" goal. The files must be committed to survive machine switches. The tradeoff is: commit freely on feature branches, delete before merging.
