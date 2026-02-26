@@ -19,6 +19,7 @@ xcuserdata/
 *.xcuserstate
 *.xcworkspace/xcuserdata/
 DerivedData/
+.opencode/
 
 # Logs and caches
 *.log
