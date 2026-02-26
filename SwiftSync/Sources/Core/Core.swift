@@ -100,9 +100,6 @@ public extension SyncRelationshipSchemaIntrospectable {
 public protocol SyncUpdatableModel: SyncModelable {
     static func make(from payload: SyncPayload) throws -> Self
     func apply(_ payload: SyncPayload) throws -> Bool
-}
-
-public protocol SyncRelationshipUpdatableModel: SyncUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool
     func applyRelationships(
         _ payload: SyncPayload,
@@ -111,14 +108,17 @@ public protocol SyncRelationshipUpdatableModel: SyncUpdatableModel {
     ) async throws -> Bool
 }
 
-public extension SyncRelationshipUpdatableModel {
+public extension SyncUpdatableModel {
+    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+        false
+    }
+
     func applyRelationships(
         _ payload: SyncPayload,
         in context: ModelContext,
         operations: SyncRelationshipOperations
     ) async throws -> Bool {
-        _ = operations
-        return try await applyRelationships(payload, in: context)
+        try await applyRelationships(payload, in: context)
     }
 }
 

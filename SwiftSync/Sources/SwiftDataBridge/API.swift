@@ -67,11 +67,9 @@ public extension SwiftSync {
                     if try row.apply(payloadModel) {
                         changed = true
                     }
-                    if !relationshipOperations.isDisjoint(with: [.update, .delete]),
-                        let relationshipRow = row as? any SyncRelationshipUpdatableModel
-                    {
+                    if !relationshipOperations.isDisjoint(with: [.update, .delete]) {
                         try throwIfCancelled()
-                        if try await relationshipRow.applyRelationships(
+                        if try await row.applyRelationships(
                             payloadModel,
                             in: context,
                             operations: relationshipOperations
@@ -85,11 +83,9 @@ public extension SwiftSync {
 
                 let created = try Model.make(from: payloadModel)
                 context.insert(created)
-                if relationshipOperations.contains(.insert),
-                    let relationshipRow = created as? any SyncRelationshipUpdatableModel
-                {
+                if relationshipOperations.contains(.insert) {
                     try throwIfCancelled()
-                    if try await relationshipRow.applyRelationships(
+                    if try await created.applyRelationships(
                         payloadModel,
                         in: context,
                         operations: relationshipOperations
@@ -258,11 +254,9 @@ public extension SwiftSync {
                     if try row.apply(payloadModel) {
                         changed = true
                     }
-                    if !relationshipOperations.isDisjoint(with: [.update, .delete]),
-                        let relationshipRow = row as? any SyncRelationshipUpdatableModel
-                    {
+                    if !relationshipOperations.isDisjoint(with: [.update, .delete]) {
                         try throwIfCancelled()
-                        if try await relationshipRow.applyRelationships(
+                        if try await row.applyRelationships(
                             payloadModel,
                             in: context,
                             operations: relationshipOperations
@@ -277,11 +271,9 @@ public extension SwiftSync {
                 let created = try Model.make(from: payloadModel)
                 created[keyPath: parentRelationship] = resolvedParent
                 context.insert(created)
-                if relationshipOperations.contains(.insert),
-                    let relationshipRow = created as? any SyncRelationshipUpdatableModel
-                {
+                if relationshipOperations.contains(.insert) {
                     try throwIfCancelled()
-                    if try await relationshipRow.applyRelationships(
+                    if try await created.applyRelationships(
                         payloadModel,
                         in: context,
                         operations: relationshipOperations

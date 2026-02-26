@@ -24,20 +24,17 @@ The base of everything. Provides:
 
 **Used by:** the reactive query system (`SyncQuery`, `SyncModel`) to match rows by ID after a sync; `SyncQuery`'s keypath-based sort overloads; and `SyncContainer`'s schema validation logic. The sort and schema descriptor methods have default implementations — `@Syncable` overrides them with generated code; a bare `SyncModelable` conformance gets the safe no-op defaults.
 
-### `SyncUpdatableModel` — create and update
+### `SyncUpdatableModel` — create, update, and relationship wiring
 
-Adds two methods:
+Adds three methods:
 
 - `make(from:)` — create a new model instance from a payload dict
-- `apply(_:)` — update an existing instance from a payload dict
+- `apply(_:)` — update an existing instance's scalar fields from a payload dict
+- `applyRelationships(_:in:operations:)` — resolve foreign-key references after a row is created or updated (default implementation returns `false` and is a no-op)
 
-**Used by:** `SwiftSync.sync()`. This is the constraint that makes `sync(payload:as:)` compile — the model must know how to build and update itself.
+Models without relationships use the default no-op. Models with relationships (e.g. `@Syncable` types) override `applyRelationships` to link related objects fetched from the context.
 
-### `SyncRelationshipUpdatableModel` — relationship wiring
-
-Adds one method: `applyRelationships(_:in:operations:)`. After a model row is saved, this is called to resolve foreign-key references (e.g. set `task.project = <fetched Project>`).
-
-**Used by:** the sync engine, but via a _runtime cast_, not a static constraint. The engine does `row as? any SyncRelationshipUpdatableModel` at runtime so the sync entry point only needs `SyncUpdatableModel` in its signature.
+**Used by:** `SwiftSync.sync()`. This is the constraint that makes `sync(payload:as:)` compile — the model must know how to build, update, and wire its relationships.
 
 ### `ParentScopedModel` — parent-scoped sync
 
@@ -59,7 +56,7 @@ The protocols serve one purpose: **making the generic entry points type-safe**. 
 
 The cost is the layering:
 
-- Five protocols instead of one or two
+- Four protocols instead of one or two
 - More generic overloads to keep in sync with each other
 - More expansion surface for the macro
 - More things to explain
@@ -74,11 +71,11 @@ The hierarchy is larger than strictly necessary. Here's the practical breakdown:
 
 - Done: **Delete `SyncQuerySortableModel`** — sort sugar folded directly into `SyncModelable` with a default `nil` implementation. The `SyncQuery` keypath-based sort overloads still work; one protocol declaration is gone. Net change: `-1 protocol, ~0 behavior change`.
 
-- Done: **Not deletable** `SyncRelationshipSchemaIntrospectable`\*\* — `syncRelationshipSchemaDescriptors` folded into `SyncModelable` with a default `[]` implementation. The `SyncContainer` schema validation cast now targets `SyncModelable` directly. Net change: `-1 protocol, ~0 behavior change`.
+- Done: **Fold `SyncRelationshipSchemaIntrospectable`** — `syncRelationshipSchemaDescriptors` folded into `SyncModelable` with a default `[]` implementation. The `SyncContainer` schema validation cast now targets `SyncModelable` directly. Net change: `-1 protocol, ~0 behavior change`.
 
 **Medium complexity:**
 
-- **Collapse `SyncUpdatableModel` + `SyncRelationshipUpdatableModel` into one** — since the engine already runtime-casts for relationships, the separation between "basic updatable" and "relationship updatable" doesn't enforce anything useful at the call site. One combined protocol would work.
+- Done: **Fold relationship wiring into `SyncUpdatableModel`** — `applyRelationships` is now a requirement on `SyncUpdatableModel` with a default no-op. The runtime cast is eliminated; the engine calls `applyRelationships` directly. Net change: `-1 protocol, -4 runtime casts, ~0 behavior change`.
 
 **Harder (more architectural change):**
 
@@ -90,4 +87,4 @@ The hierarchy is larger than strictly necessary. Here's the practical breakdown:
 
 If your only consumers of these protocols are `@Syncable` models, the hierarchy is doing almost no real work — the macro generates everything and users never see it. The protocols exist to make the engine's generic constraints precise. Collapsing to 3 protocols (one model protocol, one export protocol, one parent-scoped protocol) is viable without losing observable behavior, but requires touching the macro output, the engine entry points, and the query overloads simultaneously.
 
-The next move is collapsing `SyncUpdatableModel` + `SyncRelationshipUpdatableModel` into one protocol, which eliminates the runtime cast and reduces the protocol count from five to four.
+The protocol count is now four: `SyncModelable`, `SyncUpdatableModel`, `ParentScopedModel`, `ExportModel`.

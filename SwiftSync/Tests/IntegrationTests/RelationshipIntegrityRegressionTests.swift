@@ -84,7 +84,7 @@ extension MissingInverseRegressionTag: SyncUpdatableModel {
     }
 }
 
-extension MissingInverseRegressionTask: SyncRelationshipUpdatableModel {
+extension MissingInverseRegressionTask: SyncUpdatableModel {
     typealias SyncID = Int
     static var syncIdentity: KeyPath<MissingInverseRegressionTask, Int> { \.id }
 
@@ -154,7 +154,7 @@ extension ExplicitInverseRegressionTag: SyncUpdatableModel {
     }
 }
 
-extension ExplicitInverseRegressionTask: SyncRelationshipUpdatableModel {
+extension ExplicitInverseRegressionTask: SyncUpdatableModel {
     typealias SyncID = Int
     static var syncIdentity: KeyPath<ExplicitInverseRegressionTask, Int> { \.id }
 
