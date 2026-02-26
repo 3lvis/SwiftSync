@@ -93,7 +93,7 @@ public struct SyncableMacro: ExtensionMacro {
         return [
             try ExtensionDeclSyntax(
                 """
-                extension \(type.trimmed): SyncRelationshipUpdatableModel, ExportModel, SyncRelationshipSchemaIntrospectable {
+                extension \(type.trimmed): SyncRelationshipUpdatableModel, ExportModel {
                     typealias SyncID = \(raw: identityProperty.typeSource)
 
                     static var syncIdentity: KeyPath<\(raw: typeName), \(raw: identityProperty.typeSource)> { \\.\(raw: identityProperty.name) }
