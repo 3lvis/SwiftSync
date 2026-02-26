@@ -270,9 +270,9 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     static func _schemaRelationships(from modelTypes: [any PersistentModel.Type]) -> [_SchemaRelationship] {
         var output: [_SchemaRelationship] = []
         for modelType in modelTypes {
-            guard let introspectable = modelType as? any SyncModelable.Type else { continue }
+            guard let syncModelType = modelType as? any SyncModelable.Type else { continue }
             let ownerTypeName = String(reflecting: modelType)
-            for descriptor in introspectable.syncRelationshipSchemaDescriptors {
+            for descriptor in syncModelType.syncRelationshipSchemaDescriptors {
                 output.append(
                     _SchemaRelationship(
                         ownerTypeName: ownerTypeName,

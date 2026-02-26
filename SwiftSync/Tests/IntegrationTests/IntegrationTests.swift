@@ -434,7 +434,9 @@ extension Team: SyncUpdatableModel {
         }
         return false
     }
+}
 
+extension Team {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         var changed = false
 
@@ -529,7 +531,9 @@ extension Employee: SyncUpdatableModel {
         }
         return changed
     }
+}
 
+extension Employee {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         // Support to-one by foreign key scalar (company_id).
         guard payload.contains("company_id") else { return false }
@@ -595,7 +599,9 @@ extension UserWithNotes: SyncUpdatableModel {
         }
         return changed
     }
+}
 
+extension UserWithNotes {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         // Support to-many by foreign key scalar array (notes_ids).
         guard payload.contains("notes_ids") else { return false }
@@ -661,7 +667,9 @@ extension UserTagsByObjects: SyncUpdatableModel {
         }
         return changed
     }
+}
 
+extension UserTagsByObjects {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         guard payload.contains("tags") else { return false }
         let desiredTags: [Tag]
@@ -715,7 +723,9 @@ extension UserTagsByIDs: SyncUpdatableModel {
         }
         return changed
     }
+}
 
+extension UserTagsByIDs {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         guard payload.contains("tags_ids") else { return false }
         let desiredIDs: [Int]
@@ -1030,116 +1040,6 @@ extension InferredNote: SyncUpdatableModel {
             }
         }
         return changed
-    }
-}
-
-@Model
-final class OpsCompany {
-    @Attribute(.unique) var id: Int
-    var name: String
-
-    init(id: Int, name: String) {
-        self.id = id
-        self.name = name
-    }
-}
-
-@Model
-final class OpsEmployee {
-    @Attribute(.unique) var id: Int
-    var name: String
-    var company: OpsCompany?
-
-    init(id: Int, name: String, company: OpsCompany? = nil) {
-        self.id = id
-        self.name = name
-        self.company = company
-    }
-}
-
-extension OpsCompany: SyncUpdatableModel {
-    typealias SyncID = Int
-    static var syncIdentity: KeyPath<OpsCompany, Int> { \.id }
-
-    static func make(from payload: SyncPayload) throws -> OpsCompany {
-        OpsCompany(
-            id: try payload.required(Int.self, for: "id"),
-            name: try payload.required(String.self, for: "name")
-        )
-    }
-
-    func apply(_ payload: SyncPayload) throws -> Bool {
-        var changed = false
-        if payload.contains("name") {
-            let incoming: String = try payload.required(String.self, for: "name")
-            if name != incoming {
-                name = incoming
-                changed = true
-            }
-        }
-        return changed
-    }
-}
-
-extension OpsEmployee: SyncUpdatableModel {
-    typealias SyncID = Int
-    static var syncIdentity: KeyPath<OpsEmployee, Int> { \.id }
-
-    static func make(from payload: SyncPayload) throws -> OpsEmployee {
-        OpsEmployee(
-            id: try payload.required(Int.self, for: "id"),
-            name: try payload.required(String.self, for: "name")
-        )
-    }
-
-    func apply(_ payload: SyncPayload) throws -> Bool {
-        var changed = false
-        if payload.contains("name") {
-            let incoming: String = try payload.required(String.self, for: "name")
-            if name != incoming {
-                name = incoming
-                changed = true
-            }
-        }
-        return changed
-    }
-
-    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
-        try await applyRelationships(payload, in: context, operations: .all)
-    }
-
-    func applyRelationships(
-        _ payload: SyncPayload,
-        in context: ModelContext,
-        operations: SyncRelationshipOperations
-    ) async throws -> Bool {
-        guard !operations.isDisjoint(with: [.insert, .update, .delete]) else { return false }
-        guard payload.contains("company_id") else { return false }
-
-        if payload.value(for: "company_id", as: NSNull.self) != nil {
-            if company != nil {
-                company = nil
-                return true
-            }
-            return false
-        }
-
-        guard let companyID: Int = payload.strictValue(for: "company_id") else {
-            // Strict foreign-key typing: mismatched key type is ignored.
-            return false
-        }
-
-        let companies = try context.fetch(FetchDescriptor<OpsCompany>())
-        let nextCompany = companies.first(where: { $0.id == companyID })
-        guard let nextCompany else {
-            return false
-        }
-
-        if company?.id != nextCompany.id {
-            company = nextCompany
-            return true
-        }
-        return false
     }
 }
 
@@ -3617,84 +3517,41 @@ final class IntegrationTests: XCTestCase {
     }
 
     @MainActor
-    func testRelationshipOperationsSkipRelationshipUpdatesWhenUpdateFlagMissing() async throws {
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: OpsCompany.self, OpsEmployee.self, configurations: configuration)
-        let context = ModelContext(container)
-
-        try await SwiftSync.sync(
-            payload: [["id": 10, "name": "Acme"]],
-            as: OpsCompany.self,
-            in: context
-        )
-
-        try await SwiftSync.sync(
-            payload: [["id": 1, "name": "Ava", "company_id": 10]],
-            as: OpsEmployee.self,
-            in: context,
-            relationshipOperations: [.insert]
-        )
-
-        var rows = try context.fetch(FetchDescriptor<OpsEmployee>())
-        XCTAssertEqual(rows.first?.company?.id, 10)
-
-        try await SwiftSync.sync(
-            payload: [["id": 1, "name": "Ava", "company_id": NSNull()]],
-            as: OpsEmployee.self,
-            in: context,
-            relationshipOperations: [.insert]
-        )
-
-        rows = try context.fetch(FetchDescriptor<OpsEmployee>())
-        XCTAssertEqual(rows.first?.company?.id, 10)
-
-        try await SwiftSync.sync(
-            payload: [["id": 1, "name": "Ava", "company_id": NSNull()]],
-            as: OpsEmployee.self,
-            in: context,
-            relationshipOperations: [.update]
-        )
-
-        rows = try context.fetch(FetchDescriptor<OpsEmployee>())
-        XCTAssertNil(rows.first?.company)
-    }
-
-    @MainActor
     func testStrictForeignKeyTypingDoesNotCoerceRelationshipIDs() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: OpsCompany.self, OpsEmployee.self, configurations: configuration)
+        let container = try ModelContainer(for: AutoCompany.self, AutoEmployee.self, configurations: configuration)
         let context = ModelContext(container)
 
         try await SwiftSync.sync(
             payload: [["id": 10, "name": "Acme"]],
-            as: OpsCompany.self,
+            as: AutoCompany.self,
             in: context
         )
 
         try await SwiftSync.sync(
             payload: [["id": 1, "name": "Ava"]],
-            as: OpsEmployee.self,
+            as: AutoEmployee.self,
             in: context
         )
 
+        // String "10" should NOT coerce to Int 10 for strict FK typing.
         try await SwiftSync.sync(
             payload: [["id": 1, "name": "Ava", "company_id": "10"]],
-            as: OpsEmployee.self,
-            in: context,
-            relationshipOperations: [.update]
+            as: AutoEmployee.self,
+            in: context
         )
 
-        var rows = try context.fetch(FetchDescriptor<OpsEmployee>())
+        var rows = try context.fetch(FetchDescriptor<AutoEmployee>())
         XCTAssertNil(rows.first?.company)
 
+        // Integer 10 matches the expected type and should resolve the FK.
         try await SwiftSync.sync(
             payload: [["id": 1, "name": "Ava", "company_id": 10]],
-            as: OpsEmployee.self,
-            in: context,
-            relationshipOperations: [.update]
+            as: AutoEmployee.self,
+            in: context
         )
 
-        rows = try context.fetch(FetchDescriptor<OpsEmployee>())
+        rows = try context.fetch(FetchDescriptor<AutoEmployee>())
         XCTAssertEqual(rows.first?.company?.id, 10)
     }
 

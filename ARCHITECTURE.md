@@ -39,17 +39,16 @@ ObjCExceptionCatcher      (mixed Swift/ObjC, catches NSException from ModelConta
 ```
 PersistentModel (SwiftData)
   └─ SyncModelable          syncIdentity, syncIdentityRemoteKeys, syncDefaultRefreshModelTypes,
-     │                       syncSortDescriptor(for:), syncRelationshipSchemaDescriptors
-     └─ SyncUpdatableModel   make(from:), apply(_:) → Bool,
-     │                       applyRelationships(_:in:) → Bool,
-     │                       applyRelationships(_:in:operations:) → Bool
-     └─ ParentScopedModel    parentRelationship keypath
+    │                       syncSortDescriptor(for:), syncRelationshipSchemaDescriptors
+    └─ SyncUpdatableModel       make(from:), apply(_:) → Bool,
+          │                     applyRelationships(_:in:operations:) → Bool (default no-op)
+          └─ ParentScopedModel  parentRelationship keypath
 
 SyncModelable
   └─ ExportModel             exportObject(using:state:) → [String: Any]
 ```
 
-**@Syncable makes a class conform to:**
+**@Syncable makes a class conform to all of:**
 `SyncUpdatableModel`, `ExportModel`
 
 ---
@@ -102,6 +101,13 @@ Result cached per `SyncPayload` instance in `CandidateKeysCache`.
 - `required` uses coercion + Date fallback to epoch + null defaults; throws on unresolvable
 - `strictValue` uses direct cast only, returns nil silently
 
+### Identity policy
+
+- `.global` — identity unique across all rows (default)
+- `.scopedByParent` — identity unique within parent scope
+  - Scoped key: `"TypeName|<PersistentIdentifier>|<identityValue>"`
+  - Default for `ParentScopedModel`
+
 ### Duplicate handling
 
 Before processing entries, old rows with the same identity key are deleted. This cleans up any duplicates that crept in from previous partial syncs.
@@ -125,7 +131,7 @@ final class Task {
 }
 ```
 
-The macro emits an `extension Task: SyncUpdatableModel, ExportModel` containing:
+The macro emits an `extension Task: SyncUpdatableModel, ExportModel, ...` containing:
 
 **`typealias SyncID = String`**
 **`static var syncIdentity: KeyPath<Task, String> { \.id }`**
@@ -352,8 +358,8 @@ Areas with the most surface area relative to usage:
 
 2. **`ExportRelationshipMode.nested`** — the `.nested` / `_attributes` output mode (Rails-style). If unused in your app, the branch can be deleted from the macro's generated export code.
 
-6. **`SyncInputKeyStyle.camelCase`** — if all your payloads are snake_case, the camelCase branch in `candidateKeys` is dead weight.
+3. **`SyncInputKeyStyle.camelCase`** — if all your payloads are snake_case, the camelCase branch in `candidateKeys` is dead weight.
 
-7. **`SyncMissingRowPolicy.keep`** — if you always delete missing rows, this branch is unused.
+4. **`SyncMissingRowPolicy.keep`** — if you always delete missing rows, this branch is unused.
 
-8. **Date parser breadth** — handles 15+ ISO8601 variants + Unix timestamps. If your server only emits one format, most branches are never hit.
+5. **Date parser breadth** — handles 15+ ISO8601 variants + Unix timestamps. If your server only emits one format, most branches are never hit.

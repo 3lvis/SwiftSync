@@ -33,6 +33,8 @@ public protocol SyncModelable: PersistentModel {
     static var syncIdentityRemoteKeys: [String] { get }
     static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] { get }
     static func syncRelatedModelType(for keyPath: PartialKeyPath<Self>) -> (any PersistentModel.Type)?
+    static func syncSortDescriptor(for keyPath: PartialKeyPath<Self>) -> SortDescriptor<Self>?
+    static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] { get }
 }
 
 public extension SyncModelable {
@@ -43,17 +45,6 @@ public extension SyncModelable {
         _ = keyPath
         return nil
     }
-
-    static func syncSortDescriptor(for keyPath: PartialKeyPath<Self>) -> SortDescriptor<Self>? {
-        _ = keyPath
-        return nil
-    }
-
-    static func syncSortDescriptors(for keyPaths: [PartialKeyPath<Self>]) -> [SortDescriptor<Self>] {
-        keyPaths.compactMap { syncSortDescriptor(for: $0) }
-    }
-
-    static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] { [] }
 
     static var syncDefaultRefreshModelTypeNames: Set<String> {
         Set(syncDefaultRefreshModelTypes.map { String(reflecting: $0) })
@@ -66,6 +57,17 @@ public extension SyncModelable {
     static func syncRefreshModelTypeNames(for keyPaths: [PartialKeyPath<Self>]) -> Set<String> {
         Set(syncRefreshModelTypes(for: keyPaths).map { String(reflecting: $0) })
     }
+
+    static func syncSortDescriptor(for keyPath: PartialKeyPath<Self>) -> SortDescriptor<Self>? {
+        _ = keyPath
+        return nil
+    }
+
+    static func syncSortDescriptors(for keyPaths: [PartialKeyPath<Self>]) -> [SortDescriptor<Self>] {
+        keyPaths.compactMap { syncSortDescriptor(for: $0) }
+    }
+
+    static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] { [] }
 }
 
 public struct SyncRelationshipSchemaDescriptor: Sendable {
@@ -87,6 +89,14 @@ public struct SyncRelationshipSchemaDescriptor: Sendable {
     }
 }
 
+public protocol SyncRelationshipSchemaIntrospectable {
+    static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] { get }
+}
+
+public extension SyncRelationshipSchemaIntrospectable {
+    static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] { [] }
+}
+
 public protocol SyncUpdatableModel: SyncModelable {
     static func make(from payload: SyncPayload) throws -> Self
     func apply(_ payload: SyncPayload) throws -> Bool
@@ -100,7 +110,7 @@ public protocol SyncUpdatableModel: SyncModelable {
 
 public extension SyncUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
-        return false
+        false
     }
 
     func applyRelationships(
@@ -108,8 +118,7 @@ public extension SyncUpdatableModel {
         in context: ModelContext,
         operations: SyncRelationshipOperations
     ) async throws -> Bool {
-        _ = operations
-        return try await applyRelationships(payload, in: context)
+        try await applyRelationships(payload, in: context)
     }
 }
 
@@ -567,6 +576,11 @@ private func resolveIdentity<Model: SyncModelable>(from row: Model) -> String? {
 
 private func syncIdentityKey<ID: Hashable>(from identity: ID) -> String {
     String(describing: identity)
+}
+
+public protocol ParentScopedModel: SyncUpdatableModel {
+    associatedtype SyncParent: PersistentModel
+    static var parentRelationship: ReferenceWritableKeyPath<Self, SyncParent?> { get }
 }
 
 public struct SyncRelationshipOperations: OptionSet, Sendable {
