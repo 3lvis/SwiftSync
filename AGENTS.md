@@ -240,9 +240,9 @@ This is required specifically to survive:
 ### Rules
 
 - `.agents/` is only valid on feature branches — never on `main`.
-- When a feature branch is merged, **delete `.agents/`** as part of the merge/PR cleanup step.
-- Do NOT merge `.agents/` state files into `main`. They are stale the moment the branch closes.
+- Prefer not to include `.agents/` in PR diffs, but if it lands on `main`, CI will clean it up automatically.
 - Each feature branch owns its own isolated `.agents/` — no cross-branch memory.
+- `.agents/` is automatically deleted from `main` by the **Purge .agents on main** GitHub Actions workflow (`.github/workflows/purge-agents.yml`). No manual cleanup is required.
 
 ### Lifecycle
 
@@ -251,9 +251,9 @@ This is required specifically to survive:
 | Start feature branch | Create `.agents/` and begin state tracking |
 | Switch machines mid-task | Read `.agents/` to restore context — no lost work |
 | Usage cap hit mid-task | Read `.agents/` on resume — continue exactly where you left off |
-| PR merged / branch closed | Delete `.agents/` entirely before or as part of the merge |
+| PR merged / branch closed | CI purges `.agents/` automatically on next push to `main` |
 | Hard context switch (abandon task) | Delete `.agents/` — stale state misleads more than it helps |
 
 ### Why not gitignore it?
 
-Gitignoring `.agents/` defeats the "switch machines" goal. The files must be committed to survive machine switches. The tradeoff is: commit freely on feature branches, delete before merging.
+Gitignoring `.agents/` defeats the "switch machines" goal. The files must be committed to survive machine switches. The tradeoff is: commit freely on feature branches, CI cleans up on merge.
