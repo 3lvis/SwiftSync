@@ -151,37 +151,23 @@ struct TaskDetailView: View {
     private var peopleSection: some View {
         if let taskModel {
             Section("People") {
-                // Assignee — tappable if present; opens UIKit User Tasks screen.
-                if let assignee = taskModel.assignee {
-                    NavigationLink(destination: UserTasksScreen(user: assignee, syncContainer: syncContainer)) {
-                        LabeledContent("Assignee") {
-                            Text(assignee.displayName)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                } else {
-                    LabeledContent("Assignee") {
-                        Text("Unassigned")
-                            .foregroundStyle(.secondary)
-                    }
+                LabeledContent("Assignee") {
+                    Text(taskModel.assignee?.displayName ?? "Unassigned")
+                        .foregroundStyle(.secondary)
                 }
 
-                // Reviewers — each reviewer is a tappable row.
                 if taskModel.reviewers.isEmpty {
                     LabeledContent("Reviewers") {
                         Text("None").foregroundStyle(.secondary)
                     }
                 } else {
                     ForEach(taskModel.reviewers.sorted { $0.displayName < $1.displayName }, id: \.id) { reviewer in
-                        NavigationLink(destination: UserTasksScreen(user: reviewer, syncContainer: syncContainer)) {
-                            LabeledContent("Reviewer") {
-                                Text(reviewer.displayName).foregroundStyle(.secondary)
-                            }
+                        LabeledContent("Reviewer") {
+                            Text(reviewer.displayName).foregroundStyle(.secondary)
                         }
                     }
                 }
 
-                // Watchers — each watcher is a tappable row.
                 if taskModel.watchers.isEmpty {
                     LabeledContent("Watchers") {
                         Text("None").foregroundStyle(.secondary)
@@ -191,10 +177,8 @@ struct TaskDetailView: View {
                         taskModel.watchers.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending },
                         id: \.id
                     ) { watcher in
-                        NavigationLink(destination: UserTasksScreen(user: watcher, syncContainer: syncContainer)) {
-                            LabeledContent("Watcher") {
-                                Text(watcher.displayName).foregroundStyle(.secondary)
-                            }
+                        LabeledContent("Watcher") {
+                            Text(watcher.displayName).foregroundStyle(.secondary)
                         }
                     }
                 }
