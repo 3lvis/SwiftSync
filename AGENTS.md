@@ -95,7 +95,7 @@ Keep these updated while working.
 
 **Rules:**
 
-- Short (≤ ~80 lines)
+- Keep it brief — facts over prose, but completeness beats an arbitrary line count
 - Update whenever decisions change, you get blocked, or the plan shifts
 - Facts > prose
 
