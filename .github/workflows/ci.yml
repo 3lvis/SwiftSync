@@ -32,19 +32,3 @@ jobs:
       - name: Test (Swift Testing + XCTest)
         run: swift test -v
 
-  ios-tests:
-    name: iOS Simulator Test
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Xcode Version
-        run: xcodebuild -version && swift --version
-
-      - name: Test on iOS Simulator
-        run: |
-          xcodebuild \
-            -scheme SwiftSync-Package \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
-            -skipMacroValidation \
-            test
