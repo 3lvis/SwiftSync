@@ -106,6 +106,7 @@ public protocol SyncUpdatableModel: SyncModelable {
         in context: ModelContext,
         operations: SyncRelationshipOperations
     ) async throws -> Bool
+    func exportObject(using options: ExportOptions, state: inout ExportState) -> [String: Any]
 }
 
 public extension SyncUpdatableModel {
@@ -119,6 +120,10 @@ public extension SyncUpdatableModel {
         operations: SyncRelationshipOperations
     ) async throws -> Bool {
         try await applyRelationships(payload, in: context)
+    }
+
+    func exportObject(using options: ExportOptions, state: inout ExportState) -> [String: Any] {
+        [:]
     }
 }
 
@@ -690,10 +695,6 @@ public struct ExportState {
         let key = String(describing: model.persistentModelID)
         visiting.remove(key)
     }
-}
-
-public protocol ExportModel: SyncModelable {
-    func exportObject(using options: ExportOptions, state: inout ExportState) -> [String: Any]
 }
 
 public func exportEncodeValue(_ raw: Any, options: ExportOptions) -> Any? {

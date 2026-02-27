@@ -148,6 +148,17 @@ final class CycleNode {
     }
 }
 
+// Compile-time regression: exportObject must be a requirement of SyncUpdatableModel,
+// not a separate ExportModel protocol. This function would not compile if exportObject
+// were missing from SyncUpdatableModel.
+private func _assertExportObjectIsOnSyncUpdatableModel<M: SyncUpdatableModel>(
+    _ model: M,
+    options: ExportOptions,
+    state: inout ExportState
+) -> [String: Any] {
+    model.exportObject(using: options, state: &state)
+}
+
 final class ExportTests: XCTestCase {
     @MainActor
     func testExportDefaultsSnakeCaseAndISODate() throws {

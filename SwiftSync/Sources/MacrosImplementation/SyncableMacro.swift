@@ -93,7 +93,7 @@ public struct SyncableMacro: ExtensionMacro {
         return [
             try ExtensionDeclSyntax(
                 """
-                extension \(type.trimmed): SyncUpdatableModel, ExportModel {
+                extension \(type.trimmed): SyncUpdatableModel {
                     typealias SyncID = \(raw: identityProperty.typeSource)
 
                     static var syncIdentity: KeyPath<\(raw: typeName), \(raw: identityProperty.typeSource)> { \\.\(raw: identityProperty.name) }
@@ -464,7 +464,7 @@ public struct SyncableMacro: ExtensionMacro {
                     let baseKey = \(keyExpr)
                     let exportedChildren: [[String: Any]] = \(property.name).compactMap { child in
                         let anyChild: Any = child
-                        guard let exportable = anyChild as? any ExportModel else { return nil }
+                        guard let exportable = anyChild as? any SyncUpdatableModel else { return nil }
                         return exportable.exportObject(using: options, state: &state)
                     }
                     switch options.relationshipMode {
@@ -486,7 +486,7 @@ public struct SyncableMacro: ExtensionMacro {
             if options.relationshipMode != .none {
                 let baseKey = \(keyExpr)
                 let anyChild: Any? = \(property.name)
-                if let exportable = anyChild as? any ExportModel {
+                if let exportable = anyChild as? any SyncUpdatableModel {
                     let child = exportable.exportObject(using: options, state: &state)
                     switch options.relationshipMode {
                     case .array:

@@ -71,7 +71,7 @@ The hierarchy is larger than strictly necessary. Here's the practical breakdown:
 
 - Done: **Delete `SyncQuerySortableModel`** — sort sugar folded directly into `SyncModelable` with a default `nil` implementation. The `SyncQuery` keypath-based sort overloads still work; one protocol declaration is gone. Net change: `-1 protocol, ~0 behavior change`.
 
-- Done: **Fold `SyncRelationshipSchemaIntrospectable`** — `syncRelationshipSchemaDescriptors` folded into `SyncModelable` with a default `[]` implementation. The `SyncContainer` schema validation cast now targets `SyncModelable` directly. Net change: `-1 protocol, ~0 behavior change`.
+- BLOCKED DUE TO LACK OF FEASIBILITY: **Fold `SyncRelationshipSchemaIntrospectable`** — `syncRelationshipSchemaDescriptors` folded into `SyncModelable` with a default `[]` implementation. The `SyncContainer` schema validation cast now targets `SyncModelable` directly. Net change: `-1 protocol, ~0 behavior change`.
 
 **Medium complexity:**
 
