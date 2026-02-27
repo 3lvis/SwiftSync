@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 import Core
 
-extension SwiftSync {
+public extension SwiftSync {
     static func inferToOneRelationship<Model: PersistentModel, Parent: PersistentModel>(
         for _: Model.Type,
         parent _: Parent.Type
@@ -120,6 +120,51 @@ extension SwiftSync {
             await releaseSyncLease(lease)
             throw error
         }
+    }
+
+    static func sync<Model: ParentScopedModel>(
+        payload: [Any],
+        as _: Model.Type,
+        in context: ModelContext,
+        parent: Model.SyncParent,
+        inputKeyStyle: SyncInputKeyStyle = .snakeCase,
+        missingRowPolicy: SyncMissingRowPolicy = .delete,
+        relationshipOperations: SyncRelationshipOperations = .all
+    ) async throws {
+        try await sync(
+            payload: payload,
+            as: Model.self,
+            in: context,
+            parent: parent,
+            parentRelationship: Model.parentRelationship,
+            isGlobal: syncIdentityHasUniqueAttribute(Model.self),
+            inputKeyStyle: inputKeyStyle,
+            missingRowPolicy: missingRowPolicy,
+            relationshipOperations: relationshipOperations
+        )
+    }
+
+    static func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
+        payload: [Any],
+        as _: Model.Type,
+        in context: ModelContext,
+        parent: Parent,
+        inputKeyStyle: SyncInputKeyStyle = .snakeCase,
+        missingRowPolicy: SyncMissingRowPolicy = .delete,
+        relationshipOperations: SyncRelationshipOperations = .all
+    ) async throws {
+        let inferred = try inferToOneRelationship(for: Model.self, parent: Parent.self)
+        try await sync(
+            payload: payload,
+            as: Model.self,
+            in: context,
+            parent: parent,
+            parentRelationship: inferred,
+            isGlobal: syncIdentityHasUniqueAttribute(Model.self),
+            inputKeyStyle: inputKeyStyle,
+            missingRowPolicy: missingRowPolicy,
+            relationshipOperations: relationshipOperations
+        )
     }
 
     private static func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
@@ -275,6 +320,46 @@ extension SwiftSync {
             await releaseSyncLease(lease)
             throw error
         }
+    }
+
+    static func export<Model: SyncUpdatableModel>(
+        as _: Model.Type,
+        in context: ModelContext,
+        using options: ExportOptions = ExportOptions()
+    ) throws -> [[String: Any]] {
+        let rows = try context.fetch(FetchDescriptor<Model>())
+        let sorted = rows.sorted { lhs, rhs in
+            identityKey(from: lhs[keyPath: Model.syncIdentity]) < identityKey(from: rhs[keyPath: Model.syncIdentity])
+        }
+        return sorted.map { row in
+            var state = ExportState()
+            return row.exportObject(using: options, state: &state)
+        }
+    }
+
+    static func export<Model: SyncUpdatableModel & ParentScopedModel>(
+        as _: Model.Type,
+        in context: ModelContext,
+        parent: Model.SyncParent,
+        using options: ExportOptions = ExportOptions()
+    ) throws -> [[String: Any]] {
+        let rows = try context.fetch(FetchDescriptor<Model>())
+            .filter { $0[keyPath: Model.parentRelationship]?.persistentModelID == parent.persistentModelID }
+        let sorted = rows.sorted { lhs, rhs in
+            identityKey(from: lhs[keyPath: Model.syncIdentity]) < identityKey(from: rhs[keyPath: Model.syncIdentity])
+        }
+        return sorted.map { row in
+            var state = ExportState()
+            return row.exportObject(using: options, state: &state)
+        }
+    }
+
+    private static func resolveParent<Parent: PersistentModel>(
+        _ parent: Parent,
+        in context: ModelContext
+    ) throws -> Parent? {
+        let parents = try context.fetch(FetchDescriptor<Parent>())
+        return parents.first { $0.persistentModelID == parent.persistentModelID }
     }
 
     private static func normalize<Model: PersistentModel>(payload: [Any], model: Model.Type) throws -> [[String: Any]] {
