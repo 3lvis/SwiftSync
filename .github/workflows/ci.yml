@@ -4,6 +4,9 @@ on:
   push:
   pull_request:
 
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+
 jobs:
   macos-tests:
     name: macOS Swift Test
