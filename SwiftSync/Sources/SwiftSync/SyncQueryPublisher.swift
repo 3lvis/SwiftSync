@@ -3,50 +3,13 @@ import Core
 import Foundation
 import SwiftData
 
-/// A Combine-backed observable that tracks a SwiftData query and republishes
-/// the result set whenever relevant changes are saved through a `SyncContainer`.
-///
-/// This is the UIKit (and plain-Swift) counterpart to `@SyncQuery`. Because it
-/// does not depend on SwiftUI, it can be used from any context — `UIViewController`,
-/// `UITableViewDiffableDataSource`, or a plain coordinator object.
-///
-/// ### Basic usage
-/// ```swift
-/// // Hold a strong reference (e.g. as a property on your view controller).
-/// let taskPublisher = SyncQueryPublisher(
-///     Task.self,
-///     in: syncContainer,
-///     sortBy: [SortDescriptor(\Task.title)]
-/// )
-///
-/// // Subscribe in viewDidLoad / viewWillAppear.
-/// taskPublisher.rowsPublisher
-///     .receive(on: DispatchQueue.main)
-///     .sink { [weak self] tasks in
-///         self?.applySnapshot(tasks)
-///     }
-///     .store(in: &cancellables)
-/// ```
-///
-/// ### Filtered by a related model (UIKit "User Tasks" pattern)
-/// ```swift
-/// let publisher = SyncQueryPublisher(
-///     Task.self,
-///     relatedTo: User.self,
-///     relatedID: userID,
-///     through: \Task.assignee,
-///     in: syncContainer,
-///     sortBy: [SortDescriptor(\Task.title)]
-/// )
-/// ```
+// @unchecked Sendable matches the pattern used by the private observers in ReactiveQuery.swift;
+// the notification closure is dispatched on queue: .main so mutation is always on the main thread.
 public final class SyncQueryPublisher<Model: PersistentModel>: ObservableObject, @unchecked Sendable {
 
     // MARK: - Public interface
 
-    /// The current result set. Always updated on the main thread.
     @Published public private(set) var rows: [Model] = []
-
-    /// A type-erased publisher that emits the new `rows` array whenever it changes.
     public var rowsPublisher: AnyPublisher<[Model], Never> { $rows.eraseToAnyPublisher() }
 
     // MARK: - Private state
@@ -60,7 +23,6 @@ public final class SyncQueryPublisher<Model: PersistentModel>: ObservableObject,
 
     // MARK: - Init (plain fetch)
 
-    /// Observes all rows of `Model`, sorted by `sortBy`.
     public init(
         _ _: Model.Type,
         in syncContainer: SyncContainer,
@@ -74,7 +36,6 @@ public final class SyncQueryPublisher<Model: PersistentModel>: ObservableObject,
         setup()
     }
 
-    /// Observes rows of `Model` matching `predicate`, sorted by `sortBy`.
     public init(
         _ _: Model.Type,
         predicate: Predicate<Model>,
@@ -89,9 +50,8 @@ public final class SyncQueryPublisher<Model: PersistentModel>: ObservableObject,
         setup()
     }
 
-    // MARK: - Init (relatedTo — explicit to-one)
+    // MARK: - Init (relatedTo)
 
-    /// Observes rows of `Model` whose `relationship` points to the given `relatedID`.
     public init<Related: SyncModelable>(
         _ _: Model.Type,
         relatedTo _: Related.Type,
@@ -108,9 +68,6 @@ public final class SyncQueryPublisher<Model: PersistentModel>: ObservableObject,
         setup()
     }
 
-    // MARK: - Init (relatedTo — explicit to-many)
-
-    /// Observes rows of `Model` that appear in the `relationship` collection for the given `relatedID`.
     public init<Related: SyncModelable>(
         _ _: Model.Type,
         relatedTo _: Related.Type,

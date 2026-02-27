@@ -3,20 +3,6 @@ import SwiftData
 import SwiftSync
 import UIKit
 
-// ---------------------------------------------------------------------------
-// UserTasksViewController
-//
-// A UIKit screen that lists all Tasks assigned to, reviewed by, or watched by
-// a given User.  It uses SyncQueryPublisher — the UIKit-compatible counterpart
-// to @SyncQuery — to stay live as the sync engine updates the store.
-//
-// Flow:
-//   TaskDetailView (SwiftUI)
-//     └─ tap Assignee / Reviewer / Watcher row
-//          └─ NavigationLink → UserTasksScreen (UIViewControllerRepresentable)
-//               └─ embeds this UITableViewController
-// ---------------------------------------------------------------------------
-
 final class UserTasksViewController: UITableViewController {
 
     // MARK: - Dependencies
@@ -26,19 +12,11 @@ final class UserTasksViewController: UITableViewController {
 
     // MARK: - State
 
-    /// Publisher for tasks where the user appears as assignee.
     private var assignedPublisher: SyncQueryPublisher<Task>!
-
-    /// Publisher for tasks where the user appears in the reviewers list.
     private var reviewerPublisher: SyncQueryPublisher<Task>!
-
-    /// Publisher for tasks where the user appears in the watchers list.
     private var watcherPublisher: SyncQueryPublisher<Task>!
-
     private var cancellables = Set<AnyCancellable>()
     private var dataSource: UITableViewDiffableDataSource<String, String>!
-
-    /// Merged, deduplicated, sorted task IDs derived from all three publishers.
     private var displayedTasks: [Task] = []
 
     // MARK: - Init
@@ -49,7 +27,6 @@ final class UserTasksViewController: UITableViewController {
         self.syncContainer = syncContainer
         super.init(style: .insetGrouped)
 
-        // Three separate publishers — one per role the user can have on a task.
         assignedPublisher = SyncQueryPublisher(
             Task.self,
             relatedTo: User.self,
@@ -104,10 +81,7 @@ final class UserTasksViewController: UITableViewController {
             }
             var config = cell.defaultContentConfiguration()
             config.text = task.title
-            config.secondaryText = Self.roleDescription(
-                task: task,
-                user: self?.user
-            )
+            config.secondaryText = Self.roleDescription(task: task, user: self?.user)
             config.secondaryTextProperties.color = .secondaryLabel
             cell.contentConfiguration = config
             cell.accessoryType = .none
@@ -119,7 +93,6 @@ final class UserTasksViewController: UITableViewController {
     // MARK: - Combine subscriptions
 
     private func subscribeToPublishers() {
-        // Merge all three publishers — whenever any changes, recompute the deduplicated list.
         Publishers.CombineLatest3(
             assignedPublisher.$rows,
             reviewerPublisher.$rows,
@@ -133,7 +106,6 @@ final class UserTasksViewController: UITableViewController {
     }
 
     private func applyMergedTasks(assigned: [Task], reviewers: [Task], watchers: [Task]) {
-        // Deduplicate by ID (a task can appear in multiple roles), preserve title sort order.
         var seen = Set<String>()
         var merged: [Task] = []
         for task in (assigned + reviewers + watchers) {

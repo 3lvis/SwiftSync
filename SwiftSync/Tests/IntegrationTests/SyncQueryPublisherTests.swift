@@ -3,10 +3,6 @@ import XCTest
 import SwiftData
 import SwiftSync
 
-// ---------------------------------------------------------------------------
-// Minimal models used only in these tests
-// ---------------------------------------------------------------------------
-
 @Syncable
 @Model
 final class PubTask {
@@ -35,8 +31,7 @@ final class PubUser {
     }
 }
 
-/// A model with no relationship to PubTask or PubUser, used to verify that
-/// publishing changes to it does not trigger a PubTask publisher reload.
+// Unrelated to PubTask/PubUser — used to verify no spurious reloads across type boundaries.
 @Syncable
 @Model
 final class PubUnrelatedTag {
@@ -48,10 +43,6 @@ final class PubUnrelatedTag {
         self.name = name
     }
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 final class SyncQueryPublisherTests: XCTestCase {
 
@@ -66,7 +57,6 @@ final class SyncQueryPublisherTests: XCTestCase {
 
     // MARK: - Basic population
 
-    /// Publisher emits the initial set of rows on creation.
     @MainActor
     func testPublisherEmitsInitialRows() throws {
         let syncContainer = try makeContainer(modelTypes: PubTask.self, PubUser.self)
@@ -86,7 +76,6 @@ final class SyncQueryPublisherTests: XCTestCase {
 
     // MARK: - Reactive reload after sync
 
-    /// Publisher updates its rows after a sync() call adds a new model.
     @MainActor
     func testPublisherReloadsAfterSync() async throws {
         let syncContainer = try makeContainer(modelTypes: PubTask.self, PubUser.self)
@@ -104,13 +93,11 @@ final class SyncQueryPublisherTests: XCTestCase {
             as: PubTask.self
         )
 
-        // Give the main run-loop one cycle so the notification fires.
         await Task.yield()
 
         XCTAssertEqual(publisher.rows.map(\.id), ["t1"])
     }
 
-    /// Publisher reflects an update to an existing row after a subsequent sync.
     @MainActor
     func testPublisherReloadsAfterUpdate() async throws {
         let syncContainer = try makeContainer(modelTypes: PubTask.self, PubUser.self)
@@ -140,7 +127,6 @@ final class SyncQueryPublisherTests: XCTestCase {
 
     // MARK: - Predicate filtering
 
-    /// Publisher with a predicate only returns rows matching that predicate.
     @MainActor
     func testPublisherWithPredicateFiltersRows() async throws {
         let syncContainer = try makeContainer(modelTypes: PubTask.self, PubUser.self)
@@ -169,10 +155,6 @@ final class SyncQueryPublisherTests: XCTestCase {
 
     // MARK: - No spurious reload for unrelated types
 
-    /// A publisher for a model that has no relationship to the changed type does not reload.
-    ///
-    /// PubUnrelatedTag has no relationship to PubTask, so a PubTask publisher should
-    /// not reload when only PubUnrelatedTag rows change.
     @MainActor
     func testPublisherDoesNotReloadForUnrelatedTypeChange() async throws {
         let syncContainer = try makeContainer(modelTypes: PubTask.self, PubUser.self, PubUnrelatedTag.self)
@@ -191,11 +173,10 @@ final class SyncQueryPublisherTests: XCTestCase {
         var reloadCount = 0
         var cancellables = Set<AnyCancellable>()
         publisher.$rows
-            .dropFirst() // skip initial value
+            .dropFirst()
             .sink { _ in reloadCount += 1 }
             .store(in: &cancellables)
 
-        // Sync only PubUnrelatedTag rows — PubTask publisher should not fire.
         try await syncContainer.sync(
             payload: [["id": "tag1", "name": "swift"]],
             as: PubUnrelatedTag.self
@@ -208,12 +189,10 @@ final class SyncQueryPublisherTests: XCTestCase {
 
     // MARK: - postFetchFilter (relatedTo)
 
-    /// Publisher with an explicit post-fetch filter (to-one) only returns matching rows.
     @MainActor
     func testPublisherWithToOneRelatedIDFilter() async throws {
         let syncContainer = try makeContainer(modelTypes: PubTask.self, PubUser.self)
 
-        // Insert users
         try await syncContainer.sync(
             payload: [
                 ["id": "u1", "display_name": "Alice", "role": ["id": "eng", "label": "Engineer"]],
@@ -222,7 +201,6 @@ final class SyncQueryPublisherTests: XCTestCase {
             as: PubUser.self
         )
 
-        // Insert tasks with assignees
         try await syncContainer.sync(
             payload: [
                 ["id": "t1", "title": "Alice Task 1", "assignee_id": "u1"],
@@ -246,7 +224,6 @@ final class SyncQueryPublisherTests: XCTestCase {
         XCTAssertEqual(publisher.rows.map(\.id).sorted(), ["t1", "t2"])
     }
 
-    /// Publisher with a to-one filter reloads when a previously-loaded row changes.
     @MainActor
     func testPublisherReloadsWhenLoadedRowIDAppears() async throws {
         let syncContainer = try makeContainer(modelTypes: PubTask.self, PubUser.self)
@@ -272,7 +249,6 @@ final class SyncQueryPublisherTests: XCTestCase {
         await Task.yield()
         XCTAssertEqual(publisher.rows.first?.title, "Original")
 
-        // Update the task title — publisher should see the new value.
         try await syncContainer.sync(
             payload: [["id": "t1", "title": "Updated", "assignee_id": "u1"]],
             as: PubTask.self
@@ -285,7 +261,6 @@ final class SyncQueryPublisherTests: XCTestCase {
 
     // MARK: - Combine publisher surface
 
-    /// rowsPublisher emits the same values as rows.
     @MainActor
     func testRowsPublisherEmitsValues() async throws {
         let syncContainer = try makeContainer(modelTypes: PubTask.self, PubUser.self)
@@ -302,7 +277,6 @@ final class SyncQueryPublisherTests: XCTestCase {
             .sink { received.append($0) }
             .store(in: &cancellables)
 
-        // Initial emission.
         XCTAssertEqual(received.count, 1)
         XCTAssertTrue(received[0].isEmpty)
 
