@@ -85,7 +85,6 @@ final class UserTasksViewController: UITableViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = user.displayName
         configureTableView()
         configureDataSource()
         subscribeToPublishers()
@@ -111,7 +110,7 @@ final class UserTasksViewController: UITableViewController {
             )
             config.secondaryTextProperties.color = .secondaryLabel
             cell.contentConfiguration = config
-            cell.accessoryType = .disclosureIndicator
+            cell.accessoryType = .none
             return cell
         }
         dataSource.defaultRowAnimation = .fade

@@ -2,7 +2,8 @@ import SwiftSync
 import SwiftUI
 import UIKit
 
-/// SwiftUI wrapper that embeds `UserTasksViewController` in a navigation stack.
+/// SwiftUI view that embeds `UserTasksViewController` and owns the navigation
+/// title so SwiftUI (which controls the nav bar when hosting UIKit) renders it.
 ///
 /// Usage (inside a SwiftUI `NavigationStack`):
 /// ```swift
@@ -10,7 +11,21 @@ import UIKit
 ///     Text(user.displayName)
 /// }
 /// ```
-struct UserTasksScreen: UIViewControllerRepresentable {
+struct UserTasksScreen: View {
+
+    let user: User
+    let syncContainer: SyncContainer
+
+    var body: some View {
+        _UserTasksRepresentable(user: user, syncContainer: syncContainer)
+            .navigationTitle(user.displayName)
+            .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - UIViewControllerRepresentable
+
+private struct _UserTasksRepresentable: UIViewControllerRepresentable {
 
     let user: User
     let syncContainer: SyncContainer
