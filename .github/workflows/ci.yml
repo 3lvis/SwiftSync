@@ -2,7 +2,12 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
@@ -13,10 +18,17 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cache SPM
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('Package.resolved') }}
+          restore-keys: ${{ runner.os }}-spm-
+
       - name: Xcode Version
-        run: xcodebuild -version
-      - name: Build
-        run: swift build -v
+        run: xcodebuild -version && swift --version
+
       - name: Test (Swift Testing + XCTest)
         run: swift test -v
 
@@ -25,6 +37,10 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+
+      - name: Xcode Version
+        run: xcodebuild -version && swift --version
+
       - name: Test on iOS Simulator
         run: |
           xcodebuild \
