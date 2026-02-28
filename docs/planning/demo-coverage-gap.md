@@ -25,8 +25,8 @@ it needs a strong justification to stay public.
 | `@SyncQuery(_:relatedTo:relatedID:in:sortBy:refreshOn:animation:)` | Tasks for a Project |
 | `@SyncModel(_:id:in:animation:)` | Project and Task lookup |
 | `SyncQueryPublisher(_:in:sortBy:)` | `ProjectsViewController` (UIKit table) |
-| `exportObject(using:state:)` | `DemoSyncEngine.buildCreateTaskBody` — builds POST body via export system |
-| `ExportOptions` | `buildCreateTaskBody` — `ExportOptions(relationshipMode: .none, includeNulls: false)` |
+| `exportObject(using:state:)` | UI call sites — `CreateTaskSheet.save()`, state/description/assignee update actions in `TaskDetailView` — each calls `exportObject` directly on the live or draft `Task` to produce the request body before passing it to the engine |
+| `ExportOptions` | All UI export call sites — `ExportOptions(relationshipMode: .none, includeNulls: false)` |
 | `SyncContainer.SchemaValidationError` | thrown by `SyncContainer.init` on unanchored many-to-many |
 | `SyncContainer.ObjectiveCInitializationExceptionError` | thrown by `SyncContainer.init` on NSException from ModelContainer |
 
@@ -42,7 +42,7 @@ Ordered by estimated reduction impact (largest first).
 
 ### 2.1 Export system
 
-The export subsystem is now exercised by the demo for task creation. `DemoSyncEngine.buildCreateTaskBody` uses `exportObject(using:state:)` with `ExportOptions(relationshipMode: .none, includeNulls: false)` to produce the POST body before sending to the server.
+The export subsystem is exercised by the demo for both task creation and updates. UI call sites — `CreateTaskSheet.save()` and the description, assignee, and state update actions in `TaskDetailView` — call `exportObject(using:state:)` directly on the live or draft `Task` to produce the request body. `DemoSyncEngine` no longer builds or owns the body; it is a thin pass-through that receives `[String: Any]` and forwards it to the API client.
 
 Items now covered by the demo:
 
@@ -239,7 +239,7 @@ clearly marked as advanced in docs rather than being hidden or removed.
 
 | Subsystem | Approx. symbols | Demo usage | Action |
 |---|---|---|---|
-| Export system | ~10 | Partial (`exportObject` used in create body; bulk export unused) | Cover remaining via round-trip demo or extract to separate module |
+| Export system | ~10 | Partial (`exportObject` used in create and update bodies from UI; bulk export unused) | Cover remaining via round-trip demo or extract to separate module |
 | Low-level context API | 5 overloads | None | Make `internal` |
 | Manual relationship helpers | 5 free functions | None (macro-generated) | Make `internal` or `package` |
 | `SyncPayload` accessors | 3 methods | None | Make `internal` |
