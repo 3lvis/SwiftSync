@@ -338,7 +338,36 @@ public final class DemoServerSimulator {
         return try getTaskDetailPayload(taskID: taskID)
     }
 
-    public func createTask(
+    public func createTask(body: [String: Any]) throws -> [String: Any] {
+        guard let projectID = body["project_id"] as? String else {
+            throw DemoBackendError.validation(message: "project_id is required")
+        }
+        guard let title = body["title"] as? String else {
+            throw DemoBackendError.validation(message: "title is required")
+        }
+        guard let description = body["description"] as? String else {
+            throw DemoBackendError.validation(message: "description is required")
+        }
+        guard let stateDict = body["state"] as? [String: Any],
+              let stateID = stateDict["id"] as? String else {
+            throw DemoBackendError.validation(message: "state.id is required")
+        }
+        guard let authorID = body["author_id"] as? String else {
+            throw DemoBackendError.validation(message: "author_id is required")
+        }
+        let assigneeID = body["assignee_id"] as? String
+
+        return try createTaskInternal(
+            projectID: projectID,
+            title: title,
+            descriptionText: description,
+            state: stateID,
+            assigneeID: assigneeID,
+            authorID: authorID
+        )
+    }
+
+    private func createTaskInternal(
         projectID: String,
         title: String,
         descriptionText: String,
@@ -488,7 +517,7 @@ public final class DemoServerSimulator {
         let assigneeID: String? = (step % 4 == 0) ? nil : userIDs[step % userIDs.count]
         let authorID = assigneeID ?? userIDs.first ?? "user-1"
 
-        _ = try createTask(
+        _ = try createTaskInternal(
             projectID: projectID,
             title: selectedTitle,
             descriptionText: "Ambient backend update generated for the demo live-sync effect.",
