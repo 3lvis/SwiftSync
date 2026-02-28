@@ -1,19 +1,5 @@
 # Documentation
 
-This folder is split into two groups:
+This folder contains user-facing documentation on how SwiftSync works, API behavior, and backend contract.
 
-- `docs/project/` — user-facing documentation (how SwiftSync works, API behavior, backend contract)
-- `docs/planning/` — internal implementation planning / test planning documents
-
-Rule of thumb:
-- If you are using SwiftSync in an app, start in `docs/project/`.
-- If you are working on SwiftSync internals, check `docs/planning/` as needed.
-
-Completed implementation plans are removed once the behavior is implemented and documented in `docs/project/` and `README.md`.
-
-Current planning docs:
-- `docs/planning/swiftdata-concurrency-edge-cases.md`
-- `docs/planning/swiftsync-demo-backend-plan.md`
-- `docs/planning/swiftsync-demo-app-plan.md`
-- `docs/planning/swiftsync-demo-field-reduction-plan.md`
-- `docs/planning/swiftsync-demo-crud-flows-plan.md`
+If you are using SwiftSync in an app, start in `docs/project/`.

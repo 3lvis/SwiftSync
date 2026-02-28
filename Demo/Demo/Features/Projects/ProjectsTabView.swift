@@ -1,58 +1,20 @@
 import SwiftData
 import SwiftSync
 import SwiftUI
+import UIKit
 
 struct ProjectsTabView: View {
     let syncContainer: SyncContainer
     @ObservedObject var syncEngine: DemoSyncEngine
-
-    @SyncQuery private var projects: [Project]
-    @State private var hasTriggeredInitialSync = false
-
-    init(syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
-        self.syncContainer = syncContainer
-        self.syncEngine = syncEngine
-        _projects = SyncQuery(
-            Project.self,
-            in: syncContainer,
-            sortBy: [\.name, \.id],
-            animation: .snappy(duration: 0.24)
-        )
-    }
+    @State private var selectedProjectID: String?
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(projects, id: \.id) { project in
-                    NavigationLink(value: project.id) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(project.name)
-                                .font(.headline)
-                                .lineLimit(2)
-
-                            Text(project.taskCount == 1 ? "1 task" : "\(project.taskCount) tasks")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
-            .listStyle(.plain)
-            .overlay {
-                if projects.isEmpty && syncEngine.isSyncing {
-                    ProgressView("Syncing projects...")
-                }
+            _ProjectsRepresentable(syncContainer: syncContainer, syncEngine: syncEngine) { projectID in
+                selectedProjectID = projectID
             }
             .navigationTitle("Projects")
-            .refreshable {
-                await syncEngine.syncProjects()
-            }
-            .task {
-                guard !hasTriggeredInitialSync else { return }
-                hasTriggeredInitialSync = true
-                await syncEngine.syncProjects()
-            }
-            .navigationDestination(for: String.self) { projectID in
+            .navigationDestination(item: $selectedProjectID) { projectID in
                 ProjectDetailView(
                     projectID: projectID,
                     syncContainer: syncContainer,
@@ -62,6 +24,20 @@ struct ProjectsTabView: View {
         }
     }
 }
+
+private struct _ProjectsRepresentable: UIViewControllerRepresentable {
+    let syncContainer: SyncContainer
+    let syncEngine: DemoSyncEngine
+    let onSelect: (String) -> Void
+
+    func makeUIViewController(context: Context) -> ProjectsViewController {
+        ProjectsViewController(syncContainer: syncContainer, syncEngine: syncEngine, onSelect: onSelect)
+    }
+
+    func updateUIViewController(_ uiViewController: ProjectsViewController, context: Context) {}
+}
+
+// MARK: - Project Detail
 
 private struct ProjectDetailView: View {
     let projectID: String
@@ -182,9 +158,7 @@ private struct ProjectDetailView: View {
             "Delete Task?",
             isPresented: Binding(
                 get: { taskPendingDelete != nil },
-                set: { isPresented in
-                    if !isPresented { taskPendingDelete = nil }
-                }
+                set: { if !$0 { taskPendingDelete = nil } }
             ),
             presenting: taskPendingDelete
         ) { prompt in
@@ -194,9 +168,7 @@ private struct ProjectDetailView: View {
                     taskPendingDelete = nil
                 }
             }
-            Button("Cancel", role: .cancel) {
-                taskPendingDelete = nil
-            }
+            Button("Cancel", role: .cancel) { taskPendingDelete = nil }
         } message: { prompt in
             Text("Delete \"\(prompt.title)\" from this project?")
         }
@@ -225,11 +197,7 @@ private struct CreateTaskSheet: View {
     @State private var isSaving = false
     @State private var saveErrorMessage: String?
 
-    init(
-        projectID: String,
-        syncContainer: SyncContainer,
-        syncEngine: DemoSyncEngine
-    ) {
+    init(projectID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.projectID = projectID
         self.syncEngine = syncEngine
         _users = SyncQuery(
@@ -263,9 +231,7 @@ private struct CreateTaskSheet: View {
                         }
 
                         if !isLoadingTaskStates {
-                            Button("Retry Loading States") {
-                                loadTaskStates()
-                            }
+                            Button("Retry Loading States") { loadTaskStates() }
                         }
                     } else {
                         Picker("State", selection: $stateID) {
@@ -298,47 +264,13 @@ private struct CreateTaskSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                    .disabled(isSaving)
+                    Button("Cancel") { dismiss() }
+                        .disabled(isSaving)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: {
-                        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-                        let trimmedDescription = descriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !trimmedTitle.isEmpty, let stateID, let authorID else { return }
-
-                        isSaving = true
-                        saveErrorMessage = nil
-                        _Concurrency.Task {
-                            do {
-                                try await syncEngine.createTask(
-                                    projectID: projectID,
-                                    title: trimmedTitle,
-                                    descriptionText: trimmedDescription.isEmpty ? "No description yet." : trimmedDescription,
-                                    state: stateID,
-                                    assigneeID: assigneeID,
-                                    authorID: authorID
-                                )
-                                await MainActor.run {
-                                    isSaving = false
-                                    dismiss()
-                                }
-                            } catch {
-                                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                                await MainActor.run {
-                                    isSaving = false
-                                    saveErrorMessage = message
-                                }
-                            }
-                        }
-                    }) {
+                    Button(action: save) {
                         HStack(spacing: 6) {
-                            if isSaving {
-                                ProgressView()
-                                    .controlSize(.small)
-                            }
+                            if isSaving { ProgressView().controlSize(.small) }
                             Text("Create")
                         }
                     }
@@ -351,19 +283,13 @@ private struct CreateTaskSheet: View {
                 }
             }
         }
-        .task {
-            loadTaskStates()
-        }
+        .task { loadTaskStates() }
         .task(id: taskStateOptions.map(\.id)) {
-            if let stateID, taskStateOptions.contains(where: { $0.id == stateID }) {
-                return
-            }
+            if let stateID, taskStateOptions.contains(where: { $0.id == stateID }) { return }
             self.stateID = taskStateOptions.first?.id
         }
         .task(id: users.map(\.id)) {
-            if let authorID, users.contains(where: { $0.id == authorID }) {
-                return
-            }
+            if let authorID, users.contains(where: { $0.id == authorID }) { return }
             authorID = assigneeID.flatMap { id in
                 users.contains(where: { $0.id == id }) ? id : nil
             } ?? users.first?.id
@@ -372,9 +298,7 @@ private struct CreateTaskSheet: View {
             "Save Failed",
             isPresented: Binding(
                 get: { saveErrorMessage != nil },
-                set: { isPresented in
-                    if !isPresented { saveErrorMessage = nil }
-                }
+                set: { if !$0 { saveErrorMessage = nil } }
             )
         ) {
             Button("OK", role: .cancel) {}
@@ -389,8 +313,30 @@ private struct CreateTaskSheet: View {
         isLoadingTaskStates = true
         _Concurrency.Task {
             await syncEngine.syncTaskStates()
-            await MainActor.run {
-                isLoadingTaskStates = false
+            await MainActor.run { isLoadingTaskStates = false }
+        }
+    }
+
+    private func save() {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDescription = descriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty, let stateID, let authorID else { return }
+        isSaving = true
+        saveErrorMessage = nil
+        _Concurrency.Task {
+            do {
+                try await syncEngine.createTask(
+                    projectID: projectID,
+                    title: trimmedTitle,
+                    descriptionText: trimmedDescription.isEmpty ? "No description yet." : trimmedDescription,
+                    state: stateID,
+                    assigneeID: assigneeID,
+                    authorID: authorID
+                )
+                await MainActor.run { isSaving = false; dismiss() }
+            } catch {
+                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                await MainActor.run { isSaving = false; saveErrorMessage = message }
             }
         }
     }

@@ -21,7 +21,7 @@ import SwiftSync
 - [Why SwiftSync](#why-swiftsync)
 - [Property Mapping](#property-mapping)
 - [Basic Example](#basic-example)
-- [Reactive Reads (SwiftUI)](#reactive-reads-swiftui)
+- [Reactive Reads](#reactive-reads)
 - [Scenario -> Way of Use](#scenario---way-of-use)
 - [Modeling and Mapping](#modeling-and-mapping)
 - [Exporting JSON](#exporting-json)
@@ -136,9 +136,9 @@ Behavior note:
 - fresh fetches on `mainContext` see background saves
 - retained object references may still need explicit UI rebind/requery
 
-## Reactive Reads (SwiftUI)
+## Reactive Reads
 
-Use `@SyncQuery` for list reads and `@SyncModel` for detail reads.
+SwiftUI is the primary integration path. Use `@SyncQuery` for list reads and `@SyncModel` for detail reads.
 
 Shorthand ascending sort:
 
@@ -194,6 +194,38 @@ Keep using `predicate` when `toOne:` is not the right shape:
 - screens that only have scalar IDs (no related model instance)
 - non-parent filters (for example `assigneeID == userID`)
 - compound business filters (for example status + date window + membership)
+
+### UIKit (SyncQueryPublisher)
+
+SwiftUI is first class. `SyncQueryPublisher` exists for UIKit screens where `@SyncQuery` is not available — it covers the same reactive contract using Combine.
+
+```swift
+let publisher = SyncQueryPublisher(
+    Project.self,
+    in: syncContainer,
+    sortBy: [SortDescriptor(\Project.name)]
+)
+
+publisher.$rows
+    .receive(on: DispatchQueue.main)
+    .sink { [weak self] projects in self?.applySnapshot(projects) }
+    .store(in: &cancellables)
+```
+
+Relationship-scoped variant (to-one):
+
+```swift
+let publisher = SyncQueryPublisher(
+    Task.self,
+    relatedTo: User.self,
+    relatedID: userID,
+    through: \Task.assignee,
+    in: syncContainer,
+    sortBy: [SortDescriptor(\Task.title)]
+)
+```
+
+`SyncQueryPublisher` reloads on the same `SyncContainer.didSaveChangesNotification` events as `@SyncQuery`.
 
 ## Scenario -> Way of Use
 

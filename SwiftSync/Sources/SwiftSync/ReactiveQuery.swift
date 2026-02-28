@@ -51,7 +51,7 @@ private final class SyncQueryObserver<Model: PersistentModel>: ObservableObject,
     }
 
     private func shouldReload(for notification: Notification) -> Bool {
-        let changedModelTypeNames = changedModelTypeNames(from: notification.userInfo)
+        let changedModelTypeNames = syncQueryChangedModelTypeNames(from: notification.userInfo)
         if changedModelTypeNames.isEmpty {
             return true
         }
@@ -60,7 +60,7 @@ private final class SyncQueryObserver<Model: PersistentModel>: ObservableObject,
             return true
         }
 
-        let changedIDs = changedIdentifiers(from: notification.userInfo)
+        let changedIDs = syncQueryChangedIdentifiers(from: notification.userInfo)
         if changedIDs.isEmpty {
             return false
         }
@@ -93,7 +93,7 @@ private final class SyncQueryObserver<Model: PersistentModel>: ObservableObject,
     }
 }
 
-private func changedIdentifiers(from userInfo: [AnyHashable: Any]?) -> Set<PersistentIdentifier> {
+func syncQueryChangedIdentifiers(from userInfo: [AnyHashable: Any]?) -> Set<PersistentIdentifier> {
     guard let raw = userInfo?[SyncContainer.changedIdentifiersUserInfoKey] else { return [] }
     if let setValue = raw as? Set<PersistentIdentifier> {
         return setValue
@@ -104,7 +104,7 @@ private func changedIdentifiers(from userInfo: [AnyHashable: Any]?) -> Set<Persi
     return []
 }
 
-private func changedModelTypeNames(from userInfo: [AnyHashable: Any]?) -> Set<String> {
+func syncQueryChangedModelTypeNames(from userInfo: [AnyHashable: Any]?) -> Set<String> {
     guard let raw = userInfo?[SyncContainer.changedModelTypeNamesUserInfoKey] else { return [] }
     if let setValue = raw as? Set<String> {
         return setValue
@@ -532,7 +532,7 @@ private final class SyncModelObserver<Model: PersistentModel & SyncModelable>: O
     }
 
     private func shouldReload(for notification: Notification) -> Bool {
-        let changedTypeNames = changedModelTypeNames(from: notification.userInfo)
+        let changedTypeNames = syncQueryChangedModelTypeNames(from: notification.userInfo)
         if changedTypeNames.isEmpty {
             return true
         }
@@ -541,7 +541,7 @@ private final class SyncModelObserver<Model: PersistentModel & SyncModelable>: O
         }
 
         guard let loadedModel = model else { return false }
-        let changedIDs = changedIdentifiers(from: notification.userInfo)
+        let changedIDs = syncQueryChangedIdentifiers(from: notification.userInfo)
         return changedIDs.contains(loadedModel.persistentModelID)
     }
 

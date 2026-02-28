@@ -155,21 +155,32 @@ struct TaskDetailView: View {
                     Text(taskModel.assignee?.displayName ?? "Unassigned")
                         .foregroundStyle(.secondary)
                 }
-                LabeledContent("Reviewers") {
-                    Text(
-                        taskModel.reviewers.isEmpty
-                            ? "None"
-                            : taskModel.reviewers.sorted { $0.displayName < $1.displayName }.map(\.displayName).joined(separator: ", ")
-                    )
-                    .foregroundStyle(.secondary)
+
+                if taskModel.reviewers.isEmpty {
+                    LabeledContent("Reviewers") {
+                        Text("None").foregroundStyle(.secondary)
+                    }
+                } else {
+                    ForEach(taskModel.reviewers.sorted { $0.displayName < $1.displayName }, id: \.id) { reviewer in
+                        LabeledContent("Reviewer") {
+                            Text(reviewer.displayName).foregroundStyle(.secondary)
+                        }
+                    }
                 }
-                LabeledContent("Watchers") {
-                    Text(
-                        taskModel.watchers.isEmpty
-                            ? "None"
-                            : taskModel.watchers.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }.map(\.displayName).joined(separator: ", ")
-                    )
-                    .foregroundStyle(.secondary)
+
+                if taskModel.watchers.isEmpty {
+                    LabeledContent("Watchers") {
+                        Text("None").foregroundStyle(.secondary)
+                    }
+                } else {
+                    ForEach(
+                        taskModel.watchers.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending },
+                        id: \.id
+                    ) { watcher in
+                        LabeledContent("Watcher") {
+                            Text(watcher.displayName).foregroundStyle(.secondary)
+                        }
+                    }
                 }
             }
         }
