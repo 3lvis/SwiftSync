@@ -33,7 +33,6 @@ public protocol SyncModelable: PersistentModel {
     static var syncIdentityRemoteKeys: [String] { get }
     static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] { get }
     static func syncRelatedModelType(for keyPath: PartialKeyPath<Self>) -> (any PersistentModel.Type)?
-    static func syncSortDescriptor(for keyPath: PartialKeyPath<Self>) -> SortDescriptor<Self>?
     static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] { get }
 }
 
@@ -56,15 +55,6 @@ public extension SyncModelable {
 
     static func syncRefreshModelTypeNames(for keyPaths: [PartialKeyPath<Self>]) -> Set<String> {
         Set(syncRefreshModelTypes(for: keyPaths).map { String(reflecting: $0) })
-    }
-
-    static func syncSortDescriptor(for keyPath: PartialKeyPath<Self>) -> SortDescriptor<Self>? {
-        _ = keyPath
-        return nil
-    }
-
-    static func syncSortDescriptors(for keyPaths: [PartialKeyPath<Self>]) -> [SortDescriptor<Self>] {
-        keyPaths.compactMap { syncSortDescriptor(for: $0) }
     }
 
     static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] { [] }

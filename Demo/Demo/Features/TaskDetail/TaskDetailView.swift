@@ -21,7 +21,7 @@ struct TaskDetailView: View {
         _taskStateOptions = SyncQuery(
             TaskStateOption.self,
             in: syncContainer,
-            sortBy: [\.sortOrder, \.id],
+            sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.id)],
             animation: .snappy(duration: 0.22)
         )
     }
@@ -308,7 +308,7 @@ private struct AssigneePickerSheet: View {
         _users = SyncQuery(
             User.self,
             in: syncContainer,
-            sortBy: [\.displayName, \.id],
+            sortBy: [SortDescriptor(\.displayName), SortDescriptor(\.id)],
             animation: .snappy(duration: 0.22)
         )
     }
@@ -429,7 +429,7 @@ private struct EditTaskReviewersSheet: View {
         _users = SyncQuery(
             User.self,
             in: syncContainer,
-            sortBy: [\.displayName, \.id],
+            sortBy: [SortDescriptor(\.displayName), SortDescriptor(\.id)],
             animation: .snappy(duration: 0.22)
         )
     }
@@ -540,7 +540,7 @@ private struct EditTaskWatchersSheet: View {
         _users = SyncQuery(
             User.self,
             in: syncContainer,
-            sortBy: [\.displayName, \.id],
+            sortBy: [SortDescriptor(\.displayName), SortDescriptor(\.id)],
             animation: .snappy(duration: 0.22)
         )
     }

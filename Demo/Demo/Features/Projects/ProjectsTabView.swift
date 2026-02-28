@@ -203,13 +203,13 @@ private struct CreateTaskSheet: View {
         _users = SyncQuery(
             User.self,
             in: syncContainer,
-            sortBy: [\.displayName, \.id],
+            sortBy: [SortDescriptor(\.displayName), SortDescriptor(\.id)],
             animation: .snappy(duration: 0.22)
         )
         _taskStateOptions = SyncQuery(
             TaskStateOption.self,
             in: syncContainer,
-            sortBy: [\.sortOrder, \.id],
+            sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.id)],
             animation: .snappy(duration: 0.22)
         )
     }
