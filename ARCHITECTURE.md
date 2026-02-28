@@ -375,6 +375,4 @@ Areas with the most surface area relative to usage:
 
 3. **`SyncInputKeyStyle.camelCase`** — if all your payloads are snake_case, the camelCase branch in `candidateKeys` is dead weight.
 
-4. **`SyncMissingRowPolicy.keep`** — if you always delete missing rows, this branch is unused.
-
-5. **Date parser breadth** — handles 15+ ISO8601 variants + Unix timestamps. If your server only emits one format, most branches are never hit.
+4. **Date parser breadth** — handles 15+ ISO8601 variants + Unix timestamps. If your server only emits one format, most branches are never hit.

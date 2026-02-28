@@ -22,7 +22,6 @@ public extension SwiftSync {
         as _: Model.Type,
         in context: ModelContext,
         inputKeyStyle: SyncInputKeyStyle = .snakeCase,
-        missingRowPolicy: SyncMissingRowPolicy = .delete,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         let lease = await acquireSyncLease(for: context)
@@ -98,12 +97,10 @@ public extension SwiftSync {
                 changed = true
             }
 
-            if missingRowPolicy == .delete {
-                try throwIfCancelled()
-                for (key, row) in index where !seenKeys.contains(key) {
-                    context.delete(row)
-                    changed = true
-                }
+            try throwIfCancelled()
+            for (key, row) in index where !seenKeys.contains(key) {
+                context.delete(row)
+                changed = true
             }
 
             try throwIfCancelled()
@@ -122,13 +119,134 @@ public extension SwiftSync {
         }
     }
 
+    static func sync<Model: SyncUpdatableModel>(
+        item: [String: Any],
+        as _: Model.Type,
+        in context: ModelContext,
+        inputKeyStyle: SyncInputKeyStyle = .snakeCase,
+        relationshipOperations: SyncRelationshipOperations = .all
+    ) async throws {
+        let lease = await acquireSyncLease(for: context)
+        do {
+            try throwIfCancelled()
+            let payloadModel = SyncPayload(values: item, keyStyle: inputKeyStyle)
+            guard let identity = resolveIdentity(from: payloadModel, model: Model.self) else {
+                await releaseSyncLease(lease)
+                return
+            }
+            let key = identityKey(from: identity)
+            let existing = try context.fetch(FetchDescriptor<Model>())
+            var changed = false
+
+            if let row = existing.first(where: { identityKey(from: $0[keyPath: Model.syncIdentity]) == key }) {
+                if try row.apply(payloadModel) { changed = true }
+                if !relationshipOperations.isDisjoint(with: [.update, .delete]) {
+                    try throwIfCancelled()
+                    if try await row.applyRelationships(payloadModel, in: context, operations: relationshipOperations) {
+                        changed = true
+                    }
+                    try throwIfCancelled()
+                }
+            } else {
+                let created = try Model.make(from: payloadModel)
+                context.insert(created)
+                if relationshipOperations.contains(.insert) {
+                    try throwIfCancelled()
+                    if try await created.applyRelationships(payloadModel, in: context, operations: relationshipOperations) {
+                        changed = true
+                    }
+                    try throwIfCancelled()
+                }
+                changed = true
+            }
+
+            try throwIfCancelled()
+            if changed { try context.save() }
+            await releaseSyncLease(lease)
+        } catch {
+            if isCancellation(error) {
+                context.rollback()
+                await releaseSyncLease(lease)
+                throw SyncError.cancelled
+            }
+            await releaseSyncLease(lease)
+            throw error
+        }
+    }
+
+    static func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
+        item: [String: Any],
+        as _: Model.Type,
+        in context: ModelContext,
+        parent: Parent,
+        inputKeyStyle: SyncInputKeyStyle = .snakeCase,
+        relationshipOperations: SyncRelationshipOperations = .all
+    ) async throws {
+        let inferred = try inferToOneRelationship(for: Model.self, parent: Parent.self)
+        let lease = await acquireSyncLease(for: context)
+        do {
+            try throwIfCancelled()
+            let payloadModel = SyncPayload(values: item, keyStyle: inputKeyStyle)
+            guard let identity = resolveIdentity(from: payloadModel, model: Model.self) else {
+                await releaseSyncLease(lease)
+                return
+            }
+            let key = identityKey(from: identity)
+            guard let resolvedParent = try resolveParent(parent, in: context) else {
+                throw SyncError.invalidPayload(
+                    model: String(describing: Model.self),
+                    reason: "Parent must be resolved in the same ModelContext used for sync."
+                )
+            }
+            let existing = try context.fetch(FetchDescriptor<Model>())
+            let scopeRows = existing.filter {
+                $0[keyPath: inferred]?.persistentModelID == resolvedParent.persistentModelID
+            }
+            var changed = false
+
+            if let row = scopeRows.first(where: { identityKey(from: $0[keyPath: Model.syncIdentity]) == key }) {
+                if try row.apply(payloadModel) { changed = true }
+                if !relationshipOperations.isDisjoint(with: [.update, .delete]) {
+                    try throwIfCancelled()
+                    if try await row.applyRelationships(payloadModel, in: context, operations: relationshipOperations) {
+                        changed = true
+                    }
+                    try throwIfCancelled()
+                }
+            } else {
+                let created = try Model.make(from: payloadModel)
+                created[keyPath: inferred] = resolvedParent
+                context.insert(created)
+                if relationshipOperations.contains(.insert) {
+                    try throwIfCancelled()
+                    if try await created.applyRelationships(payloadModel, in: context, operations: relationshipOperations) {
+                        changed = true
+                    }
+                    try throwIfCancelled()
+                }
+                changed = true
+            }
+
+            try throwIfCancelled()
+            if changed { try context.save() }
+            await releaseSyncLease(lease)
+        } catch {
+            if isCancellation(error) {
+                context.rollback()
+                await releaseSyncLease(lease)
+                throw SyncError.cancelled
+            }
+            await releaseSyncLease(lease)
+            throw error
+        }
+    }
+
     static func sync<Model: ParentScopedModel>(
         payload: [Any],
         as _: Model.Type,
         in context: ModelContext,
         parent: Model.SyncParent,
         inputKeyStyle: SyncInputKeyStyle = .snakeCase,
-        missingRowPolicy: SyncMissingRowPolicy = .delete,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         try await sync(
@@ -139,7 +257,6 @@ public extension SwiftSync {
             parentRelationship: Model.parentRelationship,
             isGlobal: syncIdentityHasUniqueAttribute(Model.self),
             inputKeyStyle: inputKeyStyle,
-            missingRowPolicy: missingRowPolicy,
             relationshipOperations: relationshipOperations
         )
     }
@@ -150,7 +267,6 @@ public extension SwiftSync {
         in context: ModelContext,
         parent: Parent,
         inputKeyStyle: SyncInputKeyStyle = .snakeCase,
-        missingRowPolicy: SyncMissingRowPolicy = .delete,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         let inferred = try inferToOneRelationship(for: Model.self, parent: Parent.self)
@@ -162,7 +278,6 @@ public extension SwiftSync {
             parentRelationship: inferred,
             isGlobal: syncIdentityHasUniqueAttribute(Model.self),
             inputKeyStyle: inputKeyStyle,
-            missingRowPolicy: missingRowPolicy,
             relationshipOperations: relationshipOperations
         )
     }
@@ -175,7 +290,6 @@ public extension SwiftSync {
         parentRelationship: ReferenceWritableKeyPath<Model, Parent?>,
         isGlobal: Bool,
         inputKeyStyle: SyncInputKeyStyle,
-        missingRowPolicy: SyncMissingRowPolicy,
         relationshipOperations: SyncRelationshipOperations
     ) async throws {
         let lease = await acquireSyncLease(for: context)
@@ -286,24 +400,22 @@ public extension SwiftSync {
                 changed = true
             }
 
-            if missingRowPolicy == .delete {
-                try throwIfCancelled()
-                for row in scopeRows {
-                    let key: String
-                    if isGlobal {
-                        key = identityKey(from: row[keyPath: Model.syncIdentity])
-                    } else {
-                        key = scopedIdentityKey(
-                            from: row[keyPath: Model.syncIdentity],
-                            parentPersistentID: resolvedParent.persistentModelID
-                        )
-                    }
-                    if seenKeys.contains(key) {
-                        continue
-                    }
-                    context.delete(row)
-                    changed = true
+            try throwIfCancelled()
+            for row in scopeRows {
+                let key: String
+                if isGlobal {
+                    key = identityKey(from: row[keyPath: Model.syncIdentity])
+                } else {
+                    key = scopedIdentityKey(
+                        from: row[keyPath: Model.syncIdentity],
+                        parentPersistentID: resolvedParent.persistentModelID
+                    )
                 }
+                if seenKeys.contains(key) {
+                    continue
+                }
+                context.delete(row)
+                changed = true
             }
 
             try throwIfCancelled()

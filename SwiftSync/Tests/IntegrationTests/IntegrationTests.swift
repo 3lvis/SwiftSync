@@ -3243,7 +3243,7 @@ final class IntegrationTests: XCTestCase {
     }
 
     @MainActor
-    func testSyncMissingRowPolicyKeepPreservesExistingRows() async throws {
+    func testSyncItemUpdatesExistingRowWithoutDeletingOthers() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: User.self, configurations: configuration)
         let context = ModelContext(container)
@@ -3258,12 +3258,9 @@ final class IntegrationTests: XCTestCase {
         )
 
         try await SwiftSync.sync(
-            payload: [
-                ["id": 1, "full_name": "One Updated"]
-            ],
+            item: ["id": 1, "full_name": "One Updated"],
             as: User.self,
-            in: context,
-            missingRowPolicy: .keep
+            in: context
         )
 
         let rows = try context.fetch(FetchDescriptor<User>())
@@ -3273,7 +3270,31 @@ final class IntegrationTests: XCTestCase {
     }
 
     @MainActor
-    func testParentScopedSyncMissingRowPolicyKeepPreservesExistingRows() async throws {
+    func testSyncItemInsertsNewRowWhenNotFound() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: User.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [["id": 1, "full_name": "One"]],
+            as: User.self,
+            in: context
+        )
+
+        try await SwiftSync.sync(
+            item: ["id": 2, "full_name": "Two"],
+            as: User.self,
+            in: context
+        )
+
+        let rows = try context.fetch(FetchDescriptor<User>())
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertNotNil(rows.first(where: { $0.id == 1 }))
+        XCTAssertNotNil(rows.first(where: { $0.id == 2 }))
+    }
+
+    @MainActor
+    func testSyncItemWithParentUpdatesExistingRowWithoutDeletingOthers() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: SuperUser.self, SuperNote.self, configurations: configuration)
         let context = ModelContext(container)
@@ -3292,13 +3313,10 @@ final class IntegrationTests: XCTestCase {
         )
 
         try await SwiftSync.sync(
-            payload: [
-                ["id": 1, "text": "First Updated"]
-            ],
+            item: ["id": 1, "text": "First Updated"],
             as: SuperNote.self,
             in: context,
-            parent: parent,
-            missingRowPolicy: .keep
+            parent: parent
         )
 
         let notes = try context.fetch(FetchDescriptor<SuperNote>())
@@ -3307,6 +3325,37 @@ final class IntegrationTests: XCTestCase {
         XCTAssertEqual(notes.first(where: { $0.id == 1 })?.text, "First Updated")
         XCTAssertEqual(notes.first(where: { $0.id == 2 })?.text, "Second")
     }
+
+    @MainActor
+    func testSyncItemWithParentInsertsNewRowWhenNotFound() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: SuperUser.self, SuperNote.self, configurations: configuration)
+        let context = ModelContext(container)
+        let parent = SuperUser(id: 10, name: "Parent")
+        context.insert(parent)
+        try context.save()
+
+        try await SwiftSync.sync(
+            payload: [["id": 1, "text": "First"]],
+            as: SuperNote.self,
+            in: context,
+            parent: parent
+        )
+
+        try await SwiftSync.sync(
+            item: ["id": 2, "text": "Second"],
+            as: SuperNote.self,
+            in: context,
+            parent: parent
+        )
+
+        let notes = try context.fetch(FetchDescriptor<SuperNote>())
+            .filter { $0.superUser?.persistentModelID == parent.persistentModelID }
+        XCTAssertEqual(notes.count, 2)
+        XCTAssertNotNil(notes.first(where: { $0.id == 1 }))
+        XCTAssertNotNil(notes.first(where: { $0.id == 2 }))
+    }
+
 
     @MainActor
     func testParentScopedSyncScopedIdentityAllowsDuplicateIDsAcrossParents() async throws {

@@ -18,10 +18,9 @@ it needs a strong justification to stay public.
 | `SyncContainer(for:recoverOnFailure:configurations:)` | `DemoRuntime` |
 | `SyncContainer.modelContainer` | `DemoApp` (scene modifier) |
 | `SyncContainer.mainContext` | `DemoSyncEngine` (direct fetch) |
-| `syncContainer.sync(payload:as:missingRowPolicy:)` | Projects, Users, TaskStateOptions, UserRoleOptions |
-| `syncContainer.sync(payload:as:parent:missingRowPolicy:)` | Tasks scoped to a Project |
-| `SyncMissingRowPolicy.delete` | All collection syncs |
-| `SyncMissingRowPolicy.keep` | Single-task detail re-sync (`syncTaskDetailInternal`) |
+| `syncContainer.sync(payload:as:)` | Projects, Users, TaskStateOptions, UserRoleOptions |
+| `syncContainer.sync(payload:as:parent:)` | Tasks scoped to a Project |
+| `syncContainer.sync(item:as:)` | Single-task detail re-sync (`syncTaskDetailInternal`) |
 | `@SyncQuery(_:in:sortBy:[PartialKeyPath])` | Users, TaskStateOptions (sort sugar) |
 | `@SyncQuery(_:in:sortBy:[SortDescriptor])` | Projects |
 | `@SyncQuery(_:relatedTo:relatedID:in:sortBy:refreshOn:animation:)` | Tasks for a Project |
@@ -70,9 +69,11 @@ path, not discarding the work.
 These static methods let callers bypass `SyncContainer` entirely and drive sync against a raw
 `ModelContext`. The demo never calls them — it always goes through `SyncContainer`.
 
-- [ ] `SwiftSync.sync(payload:as:in:inputKeyStyle:missingRowPolicy:relationshipOperations:)` — global
-- [ ] `SwiftSync.sync(payload:as:in:parent:inputKeyStyle:missingRowPolicy:relationshipOperations:)` — ParentScopedModel
-- [ ] `SwiftSync.sync(payload:as:in:parent:inputKeyStyle:missingRowPolicy:relationshipOperations:)` — inferred parent
+- [ ] `SwiftSync.sync(payload:as:in:inputKeyStyle:relationshipOperations:)` — global
+- [ ] `SwiftSync.sync(item:as:in:inputKeyStyle:relationshipOperations:)` — global single-item
+- [ ] `SwiftSync.sync(payload:as:in:parent:inputKeyStyle:relationshipOperations:)` — ParentScopedModel
+- [ ] `SwiftSync.sync(payload:as:in:parent:inputKeyStyle:relationshipOperations:)` — inferred parent
+- [ ] `SwiftSync.sync(item:as:in:parent:inputKeyStyle:relationshipOperations:)` — inferred parent single-item
 - [ ] `SwiftSync.export(as:in:using:)` — (also listed under 2.1; listed here for completeness)
 - [ ] `SwiftSync.export(as:in:parent:using:)` — (same)
 
@@ -303,7 +304,7 @@ after each item before proceeding.
 - [ ] 7. Remove or reduce `SyncQueryPublisher` init variants not used by the demo (predicate, `relatedTo:through:`)
 - [ ] 8. Evaluate removing `TestingKit` target — absorb fixtures into test helpers or delete
 - [ ] 9. Evaluate `SyncRelationshipOperations` simplification — replace OptionSet with a plain `Bool` or remove the parameter and always apply `.all`
-- [ ] 10. Evaluate `SyncMissingRowPolicy.keep` — determine if the single demo usage (`syncTaskDetailInternal`) can be redesigned to not require it, then decide whether to keep or remove the case
+- [x] 10. ~~Evaluate `SyncMissingRowPolicy.keep`~~ — removed; replaced by `sync(item:)` targeted upsert overload
 
 **Structural (highest effort, highest payoff):**
 

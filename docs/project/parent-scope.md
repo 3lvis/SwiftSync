@@ -39,7 +39,7 @@ No fallback guessing is used for ambiguous cases.
 
 ## Why This Matters
 
-With `missingRowPolicy: .delete`, parent sync must compute:
+Parent sync computes deletions scoped to the parent:
 
 ```text
 toDelete = (rows belonging to this parent scope) - (payload identities)

@@ -106,8 +106,17 @@ try await SwiftSync.sync(
   payload: payload,
   as: User.self,
   in: context,
-  missingRowPolicy: .delete,
   relationshipOperations: .all
+)
+```
+
+To update a single item without touching other rows, use `sync(item:)`:
+
+```swift
+try await SwiftSync.sync(
+  item: taskDict,
+  as: Task.self,
+  in: context
 )
 ```
 
@@ -710,7 +719,13 @@ public extension SwiftSync {
     payload: [Any],
     as model: Model.Type,
     in context: ModelContext,
-    missingRowPolicy: SyncMissingRowPolicy = .delete,
+    relationshipOperations: SyncRelationshipOperations = .all
+  ) async throws
+
+  static func sync<Model: SyncUpdatableModel>(
+    item: [String: Any],
+    as model: Model.Type,
+    in context: ModelContext,
     relationshipOperations: SyncRelationshipOperations = .all
   ) async throws
 
@@ -719,7 +734,6 @@ public extension SwiftSync {
     as model: Model.Type,
     in context: ModelContext,
     parent: Model.SyncParent,
-    missingRowPolicy: SyncMissingRowPolicy = .delete,
     relationshipOperations: SyncRelationshipOperations = .all
   ) async throws
 
@@ -728,8 +742,14 @@ public extension SwiftSync {
     as model: Model.Type,
     in context: ModelContext,
     parent: Parent,
-    identityPolicy: SyncIdentityPolicy = .global,
-    missingRowPolicy: SyncMissingRowPolicy = .delete,
+    relationshipOperations: SyncRelationshipOperations = .all
+  ) async throws
+
+  static func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
+    item: [String: Any],
+    as model: Model.Type,
+    in context: ModelContext,
+    parent: Parent,
     relationshipOperations: SyncRelationshipOperations = .all
   ) async throws
 
@@ -750,11 +770,6 @@ public extension SwiftSync {
 public enum SyncError: Error, Sendable, Equatable {
   case invalidPayload(model: String, reason: String)
   case cancelled
-}
-
-public enum SyncMissingRowPolicy: Sendable {
-  case delete
-  case keep
 }
 
 public struct SyncRelationshipOperations: OptionSet, Sendable {

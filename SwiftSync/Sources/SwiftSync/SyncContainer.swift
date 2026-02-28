@@ -81,7 +81,6 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     public func sync<Model: SyncUpdatableModel>(
         payload: [Any],
         as model: Model.Type,
-        missingRowPolicy: SyncMissingRowPolicy = .delete,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         let context = makeBackgroundContext()
@@ -90,7 +89,6 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             as: model,
             in: context,
             inputKeyStyle: inputKeyStyle,
-            missingRowPolicy: missingRowPolicy,
             relationshipOperations: relationshipOperations
         )
     }
@@ -99,7 +97,6 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         payload: [Any],
         as model: Model.Type,
         parent: Model.SyncParent,
-        missingRowPolicy: SyncMissingRowPolicy = .delete,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         let context = makeBackgroundContext()
@@ -109,7 +106,6 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             in: context,
             parent: parent,
             inputKeyStyle: inputKeyStyle,
-            missingRowPolicy: missingRowPolicy,
             relationshipOperations: relationshipOperations
         )
     }
@@ -118,7 +114,6 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         payload: [Any],
         as model: Model.Type,
         parent: Parent,
-        missingRowPolicy: SyncMissingRowPolicy = .delete,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         let context = makeBackgroundContext()
@@ -128,7 +123,38 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             in: context,
             parent: parent,
             inputKeyStyle: inputKeyStyle,
-            missingRowPolicy: missingRowPolicy,
+            relationshipOperations: relationshipOperations
+        )
+    }
+
+    public func sync<Model: SyncUpdatableModel>(
+        item: [String: Any],
+        as model: Model.Type,
+        relationshipOperations: SyncRelationshipOperations = .all
+    ) async throws {
+        let context = makeBackgroundContext()
+        try await SwiftSync.sync(
+            item: item,
+            as: model,
+            in: context,
+            inputKeyStyle: inputKeyStyle,
+            relationshipOperations: relationshipOperations
+        )
+    }
+
+    public func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
+        item: [String: Any],
+        as model: Model.Type,
+        parent: Parent,
+        relationshipOperations: SyncRelationshipOperations = .all
+    ) async throws {
+        let context = makeBackgroundContext()
+        try await SwiftSync.sync(
+            item: item,
+            as: model,
+            in: context,
+            parent: parent,
+            inputKeyStyle: inputKeyStyle,
             relationshipOperations: relationshipOperations
         )
     }

@@ -111,16 +111,7 @@ Yes. Use `relationshipOperations` (default: `.all`).
 
 Use this when you want row updates but need to narrow relationship-side work for a specific sync pass.
 
-## 12) What does `missingRowPolicy` do?
-
-It controls what happens to local rows missing from the payload in that sync scope:
-
-- `.delete` (default)
-- `.keep`
-
-For parent-scoped sync, delete behavior is scoped to that parent subset.
-
-## 13) What if payload has duplicate rows with the same identity?
+## 12) What if payload has duplicate rows with the same identity?
 
 Later payload rows win (payload order is applied in order).
 

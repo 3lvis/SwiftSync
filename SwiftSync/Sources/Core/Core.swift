@@ -1113,11 +1113,6 @@ public enum SyncError: Error, Sendable, Equatable {
     case cancelled
 }
 
-public enum SyncMissingRowPolicy: Sendable {
-    case delete
-    case keep
-}
-
 public enum SyncInputKeyStyle: Sendable {
     case snakeCase
     case camelCase
