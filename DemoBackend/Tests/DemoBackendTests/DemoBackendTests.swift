@@ -26,6 +26,15 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(userRoles.count, 1)
         XCTAssertEqual(projectTasks.count, 1)
 
+        XCTAssertNotNil(projects.first?["created_at"])
+        XCTAssertNotNil(projects.first?["updated_at"])
+        XCTAssertNotNil(users.first?["created_at"])
+        XCTAssertNotNil(users.first?["updated_at"])
+        XCTAssertNotNil(taskStates.first?["created_at"])
+        XCTAssertNotNil(userRoles.first?["created_at"])
+        XCTAssertNotNil(projectTasks.first?["created_at"])
+        XCTAssertNotNil(projectTasks.first?["updated_at"])
+
         XCTAssertEqual((users.first?["role"] as? [String: Any])?["id"] as? String, "Engineer")
         XCTAssertEqual((users.first?["role"] as? [String: Any])?["label"] as? String, "Engineer")
         XCTAssertNil(users.first?["avatar_seed"])
@@ -36,7 +45,6 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(stateID(in: projectTasks.first), "todo")
         XCTAssertEqual(stateLabel(in: projectTasks.first), "To Do")
         XCTAssertNotNil(projectTasks.first?["description"])
-        XCTAssertNotNil(projectTasks.first?["updated_at"])
         XCTAssertEqual(taskStates.map { $0["id"] as? String }, ["todo", "inProgress", "done"])
         XCTAssertEqual(taskStates.map { ($0["label"] as? String) ?? "" }, ["To Do", "In Progress", "Done"])
         XCTAssertEqual(userRoles.map { $0["id"] as? String }, ["Engineer"])
@@ -73,17 +81,22 @@ final class DemoBackendTests: XCTestCase {
 
         let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
 
+        let newID = UUID().uuidString
+        let now = iso8601(Date())
         let body: [String: Any] = [
+            "id": newID,
             "project_id": projectID,
             "title": "UUID id test",
             "description": "Check generated id",
             "state": ["id": "todo"],
-            "author_id": userID
+            "author_id": userID,
+            "created_at": now,
+            "updated_at": now
         ]
         let created = try backend.createTask(body: body)
 
-        let newID = created["id"] as? String ?? ""
-        XCTAssertNotNil(UUID(uuidString: newID), "created task id '\(newID)' is not a UUID")
+        XCTAssertEqual(created["id"] as? String, newID)
+        XCTAssertNotNil(UUID(uuidString: newID), "task id '\(newID)' is not a UUID")
     }
 
     func testSQLiteBackendPatchTaskDescriptionPersistsAcrossReopen() async throws {
@@ -103,6 +116,8 @@ final class DemoBackendTests: XCTestCase {
 
         XCTAssertEqual(patched?["description"] as? String, "New description from server")
         XCTAssertNotEqual(patched?["updated_at"] as? String, beforeUpdatedAt)
+        // created_at must not change on patch
+        XCTAssertEqual(patched?["created_at"] as? String, before?["created_at"] as? String)
 
         let reopened = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
         let reopenedTask = try reopened.getTaskDetailPayload(taskID: taskID)
@@ -144,23 +159,26 @@ final class DemoBackendTests: XCTestCase {
 
         let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
 
+        let newID = UUID().uuidString
+        let createdAtString = iso8601(Date(timeIntervalSince1970: 1_700_100_000))
+        let updatedAtString = iso8601(Date(timeIntervalSince1970: 1_700_100_001))
+
         let body: [String: Any] = [
+            "id": newID,
             "project_id": projectID,
             "title": "New task from body",
             "description": "Body description",
             "state": ["id": "inProgress"],
             "assignee_id": userID,
-            "author_id": userID
+            "author_id": userID,
+            "created_at": createdAtString,
+            "updated_at": updatedAtString
         ]
 
         let created = try backend.createTask(body: body)
 
-        guard let newTaskID = created["id"] as? String else {
-            XCTFail("Expected created task id")
-            return
-        }
-        XCTAssertFalse(newTaskID.isEmpty)
-        XCTAssertNotNil(UUID(uuidString: newTaskID), "created task id '\(newTaskID)' is not a UUID")
+        // id round-trips exactly
+        XCTAssertEqual(created["id"] as? String, newID)
         XCTAssertEqual(created["project_id"] as? String, projectID)
         XCTAssertEqual(created["assignee_id"] as? String, userID)
         XCTAssertEqual(created["author_id"] as? String, userID)
@@ -170,6 +188,9 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(stateLabel(in: created), "In Progress")
         XCTAssertEqual(created["reviewer_ids"] as? [String], [])
         XCTAssertEqual(created["watcher_ids"] as? [String], [])
+        // timestamps round-trip
+        XCTAssertEqual(created["created_at"] as? String, createdAtString)
+        XCTAssertEqual(created["updated_at"] as? String, updatedAtString)
     }
 
     func testCreateTaskFromBodyDictNilAssignee() throws {
@@ -178,13 +199,16 @@ final class DemoBackendTests: XCTestCase {
 
         let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
 
-        // assignee_id absent from body → task created with no assignee
+        let now = iso8601(Date())
         let body: [String: Any] = [
+            "id": UUID().uuidString,
             "project_id": projectID,
             "title": "Unassigned task",
             "description": "No one yet",
             "state": ["id": "todo"],
-            "author_id": userID
+            "author_id": userID,
+            "created_at": now,
+            "updated_at": now
         ]
 
         let created = try backend.createTask(body: body)
@@ -197,13 +221,22 @@ final class DemoBackendTests: XCTestCase {
 
         let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
 
+        let now = iso8601(Date())
         let base: [String: Any] = [
+            "id": UUID().uuidString,
             "project_id": projectID,
             "title": "Valid title",
             "description": "Valid desc",
             "state": ["id": "todo"],
-            "author_id": userID
+            "author_id": userID,
+            "created_at": now,
+            "updated_at": now
         ]
+
+        // missing id
+        var missingID = base
+        missingID.removeValue(forKey: "id")
+        XCTAssertThrowsError(try backend.createTask(body: missingID))
 
         // missing project_id
         var missingProject = base
@@ -240,10 +273,29 @@ final class DemoBackendTests: XCTestCase {
         badState["state"] = ["id": "flying"]
         XCTAssertThrowsError(try backend.createTask(body: badState))
 
-        // missing state dict entirely
+        // missing state dict
         var noState = base
         noState.removeValue(forKey: "state")
         XCTAssertThrowsError(try backend.createTask(body: noState))
+
+        // missing created_at
+        var missingCreatedAt = base
+        missingCreatedAt.removeValue(forKey: "created_at")
+        XCTAssertThrowsError(try backend.createTask(body: missingCreatedAt))
+
+        // missing updated_at
+        var missingUpdatedAt = base
+        missingUpdatedAt.removeValue(forKey: "updated_at")
+        XCTAssertThrowsError(try backend.createTask(body: missingUpdatedAt))
+
+        // duplicate id
+        var firstBody = base
+        let sharedID = UUID().uuidString
+        firstBody["id"] = sharedID
+        _ = try backend.createTask(body: firstBody)
+        var duplicateBody = base
+        duplicateBody["id"] = sharedID
+        XCTAssertThrowsError(try backend.createTask(body: duplicateBody))
     }
 
     func testSQLiteBackendCreateAndDeleteTaskUpdatesProjectSlice() async throws {
@@ -252,21 +304,23 @@ final class DemoBackendTests: XCTestCase {
 
         let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
 
+        let newID = UUID().uuidString
+        let now = iso8601(Date())
         let body: [String: Any] = [
+            "id": newID,
             "project_id": projectID,
             "title": "New task",
             "description": "Server description",
             "state": ["id": "todo"],
             "assignee_id": userID,
-            "author_id": userID
+            "author_id": userID,
+            "created_at": now,
+            "updated_at": now
         ]
 
         let created = try backend.createTask(body: body)
 
-        guard let newTaskID = created["id"] as? String else {
-            XCTFail("Expected created task id")
-            return
-        }
+        XCTAssertEqual(created["id"] as? String, newID)
         XCTAssertEqual(created["project_id"] as? String, projectID)
         XCTAssertEqual(created["assignee_id"] as? String, userID)
         XCTAssertEqual(created["reviewer_ids"] as? [String], [])
@@ -277,11 +331,11 @@ final class DemoBackendTests: XCTestCase {
 
         let projectTasksAfterCreate = try backend.getProjectTasksPayload(projectID: projectID)
         XCTAssertEqual(projectTasksAfterCreate.count, 2)
-        XCTAssertTrue(projectTasksAfterCreate.contains { ($0["id"] as? String) == newTaskID })
+        XCTAssertTrue(projectTasksAfterCreate.contains { ($0["id"] as? String) == newID })
 
-        try backend.deleteTask(taskID: newTaskID)
+        try backend.deleteTask(taskID: newID)
 
-        XCTAssertNil(try backend.getTaskDetailPayload(taskID: newTaskID))
+        XCTAssertNil(try backend.getTaskDetailPayload(taskID: newID))
 
         let projectTasksAfterDelete = try backend.getProjectTasksPayload(projectID: projectID)
         XCTAssertEqual(projectTasksAfterDelete.count, 1)
@@ -310,8 +364,11 @@ final class DemoBackendTests: XCTestCase {
             let state = (task["state"] as? [String: Any])?["id"] as? String
             XCTAssertTrue(["todo", "inProgress", "done"].contains(state ?? ""))
             XCTAssertNotNil((task["state"] as? [String: Any])?["label"] as? String)
+            XCTAssertNotNil(task["created_at"])
         }
     }
+
+    // MARK: - Helpers
 
     private func stateID(in task: [String: Any]?) -> String? {
         (task?["state"] as? [String: Any])?["id"] as? String
@@ -319,6 +376,12 @@ final class DemoBackendTests: XCTestCase {
 
     private func stateLabel(in task: [String: Any]?) -> String? {
         (task?["state"] as? [String: Any])?["label"] as? String
+    }
+
+    private func iso8601(_ date: Date) -> String {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f.string(from: date)
     }
 
     private func makeTemporaryDatabaseURL() -> URL {
@@ -330,8 +393,8 @@ final class DemoBackendTests: XCTestCase {
     private func smallSeedData() -> DemoSeedData {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         return DemoSeedData(
-            projects: [.init(id: projectID, name: "Project", updatedAt: now)],
-            users: [.init(id: userID, displayName: "User", role: "Engineer", updatedAt: now)],
+            projects: [.init(id: projectID, name: "Project", createdAt: now, updatedAt: now)],
+            users: [.init(id: userID, displayName: "User", role: "Engineer", createdAt: now, updatedAt: now)],
             tasks: [
                 .init(
                     id: taskID,
@@ -343,6 +406,7 @@ final class DemoBackendTests: XCTestCase {
                     descriptionText: "Old description",
                     state: "todo",
                     watcherIDs: [userID],
+                    createdAt: now,
                     updatedAt: now
                 )
             ]

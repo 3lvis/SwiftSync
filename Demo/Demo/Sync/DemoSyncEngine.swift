@@ -95,7 +95,7 @@ final class DemoSyncEngine: ObservableObject {
 
     /// Builds the JSON create-body for a new Task by inserting a transient Task into a
     /// temporary in-memory ModelContext and exporting it with SwiftSync's export system.
-    /// `id` and `updated_at` are stripped from the result since those are server-assigned.
+    /// The client is the authority for id, created_at, and updated_at on creation.
     private static func buildCreateTaskBody(
         projectID: String,
         title: String,
@@ -109,8 +109,9 @@ final class DemoSyncEngine: ObservableObject {
         let container = try ModelContainer(for: schema, configurations: [config])
         let context = ModelContext(container)
 
+        let now = Date()
         let task = Task(
-            id: "",
+            id: UUID().uuidString,
             projectID: projectID,
             assigneeID: assigneeID,
             authorID: authorID,
@@ -118,19 +119,14 @@ final class DemoSyncEngine: ObservableObject {
             descriptionText: descriptionText,
             state: state,
             stateLabel: "",
-            updatedAt: Date()
+            createdAt: now,
+            updatedAt: now
         )
         context.insert(task)
 
         var exportState = ExportState()
         let options = ExportOptions(relationshipMode: .none, includeNulls: false)
-        var body = task.exportObject(using: options, state: &exportState)
-
-        // Strip server-assigned fields — the backend generates its own id and updated_at.
-        body.removeValue(forKey: "id")
-        body.removeValue(forKey: "updated_at")
-
-        return body
+        return task.exportObject(using: options, state: &exportState)
     }
 
     func deleteTask(taskID: String, projectID: String) async {

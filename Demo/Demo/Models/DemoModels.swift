@@ -8,6 +8,7 @@ final class Project {
     @Attribute(.unique) var id: String
     var name: String
     var taskCount: Int
+    var createdAt: Date
     var updatedAt: Date
     var tasks: [Task]
 
@@ -15,12 +16,14 @@ final class Project {
         id: String,
         name: String,
         taskCount: Int = 0,
+        createdAt: Date,
         updatedAt: Date,
         tasks: [Task] = []
     ) {
         self.id = id
         self.name = name
         self.taskCount = taskCount
+        self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.tasks = tasks
     }
@@ -35,13 +38,15 @@ final class User {
     var role: String
     @RemoteKey("role.label")
     var roleLabel: String
+    var createdAt: Date
     var updatedAt: Date
 
-    init(id: String, displayName: String, role: String, roleLabel: String, updatedAt: Date) {
+    init(id: String, displayName: String, role: String, roleLabel: String, createdAt: Date, updatedAt: Date) {
         self.id = id
         self.displayName = displayName
         self.role = role
         self.roleLabel = roleLabel
+        self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
 }
@@ -52,12 +57,14 @@ final class TaskStateOption {
     @Attribute(.unique) var id: String
     var label: String
     var sortOrder: Int
+    var createdAt: Date
     var updatedAt: Date
 
-    init(id: String, label: String, sortOrder: Int, updatedAt: Date) {
+    init(id: String, label: String, sortOrder: Int, createdAt: Date, updatedAt: Date) {
         self.id = id
         self.label = label
         self.sortOrder = sortOrder
+        self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
 }
@@ -68,12 +75,14 @@ final class UserRoleOption {
     @Attribute(.unique) var id: String
     var label: String
     var sortOrder: Int
+    var createdAt: Date
     var updatedAt: Date
 
-    init(id: String, label: String, sortOrder: Int, updatedAt: Date) {
+    init(id: String, label: String, sortOrder: Int, createdAt: Date, updatedAt: Date) {
         self.id = id
         self.label = label
         self.sortOrder = sortOrder
+        self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
 }
@@ -97,6 +106,7 @@ final class Task {
     var state: String
     @RemoteKey("state.label")
     var stateLabel: String
+    var createdAt: Date
     var updatedAt: Date
     var project: Project?
 
@@ -115,6 +125,7 @@ final class Task {
         descriptionText: String,
         state: String,
         stateLabel: String,
+        createdAt: Date,
         updatedAt: Date,
         project: Project? = nil,
         author: User? = nil,
@@ -130,6 +141,7 @@ final class Task {
         self.descriptionText = descriptionText
         self.state = state
         self.stateLabel = stateLabel
+        self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.project = project
         self.author = author
