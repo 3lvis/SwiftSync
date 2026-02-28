@@ -268,11 +268,22 @@ retry ModelContainer(...)
 
 ## Reactive Query System
 
+Two implementations, same contract:
+
+| | `@SyncQuery` / `@SyncModel` | `SyncQueryPublisher` |
+|---|---|---|
+| Integration | SwiftUI (primary) | UIKit / plain Swift |
+| Observation | `SyncQueryObserver` | `SyncQueryPublisher` |
+| Output | `@Published` property on wrapper | `@Published var rows` + `rowsPublisher` |
+| Reload trigger | same `didSaveChangesNotification` | same `didSaveChangesNotification` |
+
+Both use identical reload heuristics:
+
 ```
 SyncContainer.didSaveChangesNotification
         │
         ▼
-SyncQueryObserver.shouldReload(for notification)
+shouldReload(for notification)
   1. changedModelTypeNames empty? → reload (no type info, be safe)
   2. changedModelTypeNames ∩ observedModelTypeNames non-empty? → reload
   3. changedIDs ∩ loadedRowIDs non-empty? → reload (a loaded row changed)
@@ -281,15 +292,15 @@ SyncQueryObserver.shouldReload(for notification)
         ▼  (if reload)
 FetchDescriptor<Model>(predicate:, sortBy:)
   + optional postFetchFilter (for relatedTo queries)
-        │
-        ▼
-withAnimation(animation) { rows = resolved }
 ```
+
+SwiftUI path applies animation: `withAnimation(animation) { rows = resolved }`
+UIKit path assigns directly: `rows = resolved`
 
 **`observedModelTypeNames` built at init:**
 - Always includes `String(reflecting: Model.self)`
 - Plus `syncDefaultRefreshModelTypeNames` (declared by the model)
-- Plus `syncRefreshModelTypeNames(for: refreshOn)` (from `refreshOn:` parameter)
+- Plus `syncRefreshModelTypeNames(for: refreshOn)` (from `refreshOn:` parameter, SwiftUI only)
 
 **`postFetchFilter` for relatedTo queries:**
 - Inferred: tries `inferToOneRelationship` + `inferToManyRelationship`; picks whichever succeeds alone

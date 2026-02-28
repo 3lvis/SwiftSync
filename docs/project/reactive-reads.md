@@ -1,4 +1,6 @@
-# Reactive Reads (SwiftData + SwiftUI)
+# Reactive Reads
+
+SwiftUI is the primary integration path. UIKit is supported via `SyncQueryPublisher` for cases where SwiftUI is not available.
 
 This document explains both:
 
@@ -63,11 +65,11 @@ Example (ambiguous relationship):
 var assignedTickets: [Ticket]
 ```
 
-Real Demo example (same queried model + same related model, multiple paths):
+Example (same queried model + same related model, multiple paths):
 - `Task.assignee` (`User?`)
 - `Task.reviewer` (`User?`)
 - `Task.watchers` (`[User]`)
-- `@SyncQuery(Task.self, relatedTo: User.self, relatedID: userID, ...)` is ambiguous, so Demo uses explicit `through:` for all three task buckets.
+- `@SyncQuery(Task.self, relatedTo: User.self, relatedID: userID, ...)` is ambiguous, so pass explicit `through:` for each path.
 
 Related modeling note:
 - relationship-scoped queries assume the local relationship graph is trustworthy
@@ -168,6 +170,31 @@ UI should refresh from the local store, not directly from the backend response p
 - domain layer decides sync strategy (targeted re-fetch, response-driven sync, optimistic write + reconciliation)
 
 The key invariant is stable: views read local reactive state; the domain layer keeps that local state current.
+
+## UIKit: SyncQueryPublisher
+
+For UIKit screens, use `SyncQueryPublisher` — the Combine-backed equivalent of `@SyncQuery`.
+
+```swift
+let publisher = SyncQueryPublisher(
+    Project.self,
+    in: syncContainer,
+    sortBy: [SortDescriptor(\Project.name)]
+)
+
+publisher.$rows
+    .receive(on: DispatchQueue.main)
+    .sink { [weak self] rows in self?.applySnapshot(rows) }
+    .store(in: &cancellables)
+```
+
+It supports the same query shapes as `@SyncQuery`:
+- plain fetch with optional predicate
+- `relatedTo:` + `through:` for relationship-scoped queries
+
+It reacts to the same `SyncContainer.didSaveChangesNotification` events and applies the same reload heuristics (`changedTypeNames`, `changedIDs`).
+
+Hold it as a property — it starts observing on init and stops on deinit.
 
 ## Design Rationale / Tradeoffs
 
