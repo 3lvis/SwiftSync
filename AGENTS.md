@@ -66,14 +66,14 @@
 
 Agents remember two things:
 
-- **Disk context** = what’s in the repo (persists via git)
+- **Disk context** = what's in the repo (persists via git)
 - **RAM context** = the current working memory (gets lost if the agent stops or you switch machines)
 
-RAM context is: what you tried, what failed, why choices were made, current hypotheses, key errors, and the exact next steps.
+RAM context is: the plan, which steps are done, which was in-progress when stopped, and any decisions that cost time to reach.
 
 ### Goal
 
-Make work **restart-safe** by writing the agent’s RAM into the repo.
+Make work **restart-safe** by writing the agent's RAM into the repo.
 
 ---
 
@@ -81,127 +81,46 @@ Make work **restart-safe** by writing the agent’s RAM into the repo.
 
 Put all continuity files in **`.agents/`**:
 
-- **`.agents/state.md`** — the current “brain snapshot” (source of truth)
-- **`.agents/log.md`** — important commands + trimmed outputs (errors, failing tests)
-- **`.agents/handoff.md`** — one paste-ready message to restart any agent
+- **`.agents/state.md`** — the plan and its execution state (source of truth)
 
-Keep these updated while working.
+Keep it committed and current while working.
 
 ---
 
 ## 1) `.agents/state.md` (State Capsule)
 
-**Purpose:** restore context in under a minute.
+**Purpose:** survive an abrupt stop — usage cap, crash, machine switch — and resume exactly where work left off.
+
+**Write the plan before implementation starts. Update checkboxes as steps complete. Never wait until "on stop" to fill this in — that moment may never come.**
 
 **Rules:**
 
-- Keep it brief — facts over prose, but completeness beats an arbitrary line count
-- Update whenever decisions change, you get blocked, or the plan shifts
-- Facts > prose
+- Write the full plan upfront as a checkbox list
+- Mark steps complete (`[x]`) immediately after finishing — in the same commit as the code for that step
+- Mark the in-progress step `[~]` with a brief trailing note if it's partially done
+- Update `Last known state:` after any test or build run
+- Decisions that cost time to reach go in **Decisions** — not in commit messages, not in your head
+- Amend the plan freely if reality diverges — the plan is a map, not a contract
 
 **Template:**
 
 ```md
 # State Capsule
 
-## Goal
+## Plan
+- [x] Step already done
+- [~] Step in progress — brief note on exactly where it stopped
+- [ ] Step not started yet
+- [ ] Step not started yet
 
-<one sentence>
+## Last known state
+tests green / build failing / untested
 
-## Current status
-
-- ✅ Done:
-- 🔄 In progress:
-- ⛔ Blocked by:
-
-## Decisions (don’t revisit)
-
+## Decisions (don't revisit)
 - <decision> — <why>
 
-## Constraints
-
-- <must stay true>
-
-## Key findings
-
-- Tried: <x> → <result>
-- Learned: <y>
-
-## Next steps (exact)
-
-1. <command/file/change>
-2. ...
-
 ## Files touched
-
 - path
-- path
-```
-
----
-
-## 2) `.agents/log.md` (Transcript Delta)
-
-**Purpose:** avoid re-discovering errors and important outputs.
-
-**Rules:**
-
-- Only high-signal snippets
-- Always include the command that produced the output
-- Trim aggressively; no walls of text
-
-**Template:**
-
-````md
-# Transcript Delta
-
-## <timestamp> <topic>
-
-Command:
-
-```bash
-...
-```
-
-Output (trimmed):
-
-```text
-...
-```
-
-Notes:
-
-- <why it matters>
-````
-
----
-
-## 3) `.agents/handoff.md` (Restart message)
-
-**Purpose:** one message you can paste into a fresh agent and continue immediately.
-
-**Rules:**
-
-- Must fit in one message
-- Must tell the agent to read `.agents/state.md` and `.agents/log.md` first
-- Must specify the first 2–5 commands to run
-- Must forbid re-litigating recorded decisions
-
-**Template:**
-
-```md
-You are continuing work in this repo.
-
-1. Read `.agents/state.md` and `.agents/log.md`.
-2. Do NOT revisit anything under “Decisions (don’t revisit)”.
-3. Start by running:
-
-- <cmd>
-- <cmd>
-- <cmd> (optional)
-
-Then execute “Next steps (exact)” from `.agents/state.md` in order.
-If anything fails, append the command + trimmed output to `.agents/log.md`, then update `.agents/state.md`.
 ```
 
 ---
@@ -211,25 +130,19 @@ If anything fails, append the command + trimmed output to `.agents/log.md`, then
 ### Start (every agent run)
 
 1. Read `.agents/state.md`
-2. Read `.agents/log.md`
-3. Execute `.agents/state.md -> Next steps (exact)`
+2. Run `git status` and `git log --oneline -5` to orient
+3. Resume from the `[~]` step if one exists, otherwise the first `[ ]` step in the Plan
 
 ### During work
 
-- Decision made → update **Decisions** in `.agents/state.md`
-- Meaningful error/output → append to `.agents/log.md`
-- Keep **Next steps** accurate and ordered
+- **Before starting each step** — mark it `[~]` in the Plan
+- **After completing each step** — mark it `[x]`; include the `state.md` update in the same commit as the code for that step
+- **After any test or build run** — update `Last known state:`
+- **When a non-obvious decision is made** — add it to **Decisions** immediately
 
-### On stop (before ending or when nearing usage cap)
+### On stop
 
-1. Update `.agents/state.md` so it reflects reality
-2. Append the last meaningful outputs to `.agents/log.md`
-3. Refresh `.agents/handoff.md` so it can be pasted into a new agent immediately
-
-This is required specifically to survive:
-
-- sudden stop due to **usage caps**
-- switching between **home/work computers**
+No special procedure needed. If the plan was kept current during work, `state.md` already reflects reality.
 
 ---
 
@@ -248,9 +161,9 @@ This is required specifically to survive:
 
 | Event | Action |
 |---|---|
-| Start feature branch | Create `.agents/` and begin state tracking |
-| Switch machines mid-task | Read `.agents/` to restore context — no lost work |
-| Usage cap hit mid-task | Read `.agents/` on resume — continue exactly where you left off |
+| Start feature branch | Create `.agents/state.md` and write the full plan before touching code |
+| Switch machines mid-task | Read `.agents/state.md` to restore context — no lost work |
+| Usage cap hit mid-task | Read `.agents/state.md` on resume — continue from the `[~]` or first `[ ]` step |
 | PR merged / branch closed | CI purges `.agents/` automatically on next push to `main` |
 | Hard context switch (abandon task) | Delete `.agents/` — stale state misleads more than it helps |
 

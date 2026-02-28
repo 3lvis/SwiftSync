@@ -1,42 +1,23 @@
 # State Capsule
 
-## Goal
+## Plan
+- [x] Write failing tests for DemoServerSimulator.createTask(body:)
+- [x] Implement DemoServerSimulator.createTask(body:) + rename internal method
+- [x] Update FakeDemoAPIClient.createTask to accept body dict
+- [x] Update DemoSyncEngine.createTask to build body via export
+- [x] Update existing createTask test to use new body: signature
+- [x] Run DemoBackendTests + SwiftSync test suite
 
-Wire the demo's task-creation flow through SwiftSync's export system so DemoSyncEngine builds a [String: Any] JSON body before "POSTing" to the fake backend, matching how a real REST client would work.
-
-## Current status
-
-- ✅ Done: Everything. Branch is complete and all tests green.
-- 🔄 In progress: —
-- ⛔ Blocked by: —
+## Last known state
+tests green / build succeeded
 
 ## Decisions (don't revisit)
-
-- `@NotExport` is NOT used on `Task.id` / `Task.updatedAt` — that macro is for local-only UI state, not server-assigned fields. Instead, `DemoSyncEngine` strips `id` and `updated_at` from the export body after the fact.
-- `DemoServerSimulator.createTask(body:)` is the new public entry point; the old positional-param version was renamed `createTaskInternal` (private) and is still called by `ambientCreateTask`.
-- `ExportOptions(relationshipMode: .none, includeNulls: false)` — no nested relationship objects in the create body, no null noise.
-- Scratch in-memory `ModelContainer` used in `DemoSyncEngine.buildCreateTaskBody` to get a persisted-enough Task object for `exportObject` to operate on.
-
-## Constraints
-
-- `CreateTaskSheet` / `ProjectsTabView.swift` — no changes (UI signature unchanged)
-- `DemoSyncEngine.createTask(...)` public signature unchanged
-- `ambientCreateTask` still calls `createTaskInternal` directly (no JSON round-trip for ambient mutations)
-
-## Key findings
-
-- `exportObject(using:state:)` is an instance method on Task — can be called after inserting into an in-memory context
-- `state` field exports as `{"state": {"id": "todo"}}` via `@RemoteKey("state.id")` — backend parses `body["state"]["id"]`
-- `stateLabel` exports as `{"state": {"label": ""}}` — backend ignores `state.label` on create
-
-## Next steps (exact)
-
-Nothing — work is complete. If resuming for a follow-up PR:
-1. Read this file and `.agents/log.md`
-2. Check `git log --oneline -5` to see what was committed
+- `@NotExport` not used on `Task.id`/`updatedAt` — that macro is for local-only UI state, not server-assigned fields; strip them from the export body in DemoSyncEngine instead
+- `createTaskInternal` kept private for ambient mutations — no reason to route internal backend mutations through JSON
+- `ExportOptions(relationshipMode: .none, includeNulls: false)` — keeps the create body clean; no nil noise, no nested relationship objects
+- Scratch in-memory `ModelContainer` used in `buildCreateTaskBody` — gives exportObject a properly inserted model to operate on
 
 ## Files touched
-
 - `DemoBackend/Sources/DemoBackend/DemoServerSimulator.swift`
 - `DemoBackend/Tests/DemoBackendTests/DemoBackendTests.swift`
 - `Demo/Demo/Networking/DemoAPI.swift`
