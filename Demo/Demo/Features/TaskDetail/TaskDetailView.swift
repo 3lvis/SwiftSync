@@ -78,17 +78,13 @@ struct TaskDetailView: View {
                 ForEach(taskStateOptions, id: \.id) { option in
                     Button {
                         guard let taskModel else { return }
-                        taskModel.state = option.id
                         var exportState = ExportState()
-                        let options = ExportOptions(relationshipMode: .none, includeNulls: false)
-                        let body = taskModel.exportObject(using: options, state: &exportState)
+                        let exportOptions = ExportOptions(relationshipMode: .none, includeNulls: false)
+                        var body = taskModel.exportObject(using: exportOptions, state: &exportState)
+                        body["state"] = ["id": option.id] as [String: Any]
                         let projectID = taskModel.projectID
                         _Concurrency.Task {
-                            do {
-                                try await syncEngine.updateTask(taskID: taskID, projectID: projectID, body: body)
-                            } catch {
-                                syncContainer.mainContext.rollback()
-                            }
+                            try? await syncEngine.updateTask(taskID: taskID, projectID: projectID, body: body)
                         }
                     } label: {
                         if taskModel?.state == option.id {
@@ -206,17 +202,17 @@ private enum TaskDetailSheet: String, Identifiable {
 
 private struct EditTaskDescriptionSheet: View {
     let taskID: String
-    let syncContainer: SyncContainer
     let syncEngine: DemoSyncEngine
 
     @Environment(\.dismiss) private var dismiss
     @SyncModel private var taskModel: Task?
+    @State private var text = ""
+    @State private var hasLoadedInitialValue = false
     @State private var isSaving = false
     @State private var saveErrorMessage: String?
 
     init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.taskID = taskID
-        self.syncContainer = syncContainer
         self.syncEngine = syncEngine
         _taskModel = SyncModel(Task.self, id: taskID, in: syncContainer, animation: .snappy(duration: 0.22))
     }
@@ -225,34 +221,26 @@ private struct EditTaskDescriptionSheet: View {
         NavigationStack {
             Form {
                 Section("Description") {
-                    if let taskModel {
-                        TextEditor(text: Binding(
-                            get: { taskModel.descriptionText },
-                            set: { taskModel.descriptionText = $0 }
-                        ))
+                    TextEditor(text: $text)
                         .frame(minHeight: 220)
-                    }
                 }
             }
             .navigationTitle("Edit Description")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") {
-                        syncContainer.mainContext.rollback()
-                        dismiss()
-                    }
-                    .disabled(isSaving)
+                    Button("Cancel") { dismiss() }
+                        .disabled(isSaving)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: {
                         guard let taskModel else { return }
-                        let trimmed = taskModel.descriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !trimmed.isEmpty else { return }
-                        taskModel.descriptionText = trimmed
                         var exportState = ExportState()
                         let options = ExportOptions(relationshipMode: .none, includeNulls: false)
-                        let body = taskModel.exportObject(using: options, state: &exportState)
+                        var body = taskModel.exportObject(using: options, state: &exportState)
+                        body["description"] = trimmed
                         let projectID = taskModel.projectID
                         isSaving = true
                         saveErrorMessage = nil
@@ -261,7 +249,6 @@ private struct EditTaskDescriptionSheet: View {
                                 try await syncEngine.updateTask(taskID: taskID, projectID: projectID, body: body)
                                 await MainActor.run { dismiss() }
                             } catch {
-                                syncContainer.mainContext.rollback()
                                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                                 await MainActor.run {
                                     isSaving = false
@@ -271,24 +258,24 @@ private struct EditTaskDescriptionSheet: View {
                         }
                     }) {
                         HStack(spacing: 6) {
-                            if isSaving {
-                                ProgressView()
-                                    .controlSize(.small)
-                            }
+                            if isSaving { ProgressView().controlSize(.small) }
                             Text("Save")
                         }
                     }
-                    .disabled(isSaving || taskModel?.descriptionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true)
+                    .disabled(isSaving || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
+        }
+        .task(id: taskModel?.id) {
+            guard !hasLoadedInitialValue, let taskModel else { return }
+            text = taskModel.descriptionText
+            hasLoadedInitialValue = true
         }
         .alert(
             "Save Failed",
             isPresented: Binding(
                 get: { saveErrorMessage != nil },
-                set: { isPresented in
-                    if !isPresented { saveErrorMessage = nil }
-                }
+                set: { if !$0 { saveErrorMessage = nil } }
             )
         ) {
             Button("OK", role: .cancel) {}
@@ -301,18 +288,18 @@ private struct EditTaskDescriptionSheet: View {
 
 private struct AssigneePickerSheet: View {
     let taskID: String
-    let syncContainer: SyncContainer
     let syncEngine: DemoSyncEngine
 
     @Environment(\.dismiss) private var dismiss
     @SyncModel private var taskModel: Task?
     @SyncQuery private var users: [User]
+    @State private var pendingAssigneeID: String?
+    @State private var hasLoadedInitialValue = false
     @State private var isSaving = false
     @State private var saveErrorMessage: String?
 
     init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.taskID = taskID
-        self.syncContainer = syncContainer
         self.syncEngine = syncEngine
         _taskModel = SyncModel(Task.self, id: taskID, in: syncContainer, animation: .snappy(duration: 0.22))
         _users = SyncQuery(
@@ -327,12 +314,12 @@ private struct AssigneePickerSheet: View {
         NavigationStack {
             List {
                 Button {
-                    taskModel?.assigneeID = nil
+                    pendingAssigneeID = nil
                 } label: {
                     HStack {
                         Text("Unassigned")
                         Spacer()
-                        if taskModel?.assigneeID == nil {
+                        if pendingAssigneeID == nil {
                             Image(systemName: "checkmark")
                                 .foregroundStyle(Color.accentColor)
                         }
@@ -341,12 +328,12 @@ private struct AssigneePickerSheet: View {
 
                 ForEach(users, id: \.id) { user in
                     Button {
-                        taskModel?.assigneeID = user.id
+                        pendingAssigneeID = user.id
                     } label: {
                         HStack {
                             Text(user.displayName)
                             Spacer()
-                            if taskModel?.assigneeID == user.id {
+                            if pendingAssigneeID == user.id {
                                 Image(systemName: "checkmark")
                                     .foregroundStyle(Color.accentColor)
                             }
@@ -358,18 +345,16 @@ private struct AssigneePickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") {
-                        syncContainer.mainContext.rollback()
-                        dismiss()
-                    }
-                    .disabled(isSaving)
+                    Button("Cancel") { dismiss() }
+                        .disabled(isSaving)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: {
                         guard let taskModel else { return }
                         var exportState = ExportState()
                         let options = ExportOptions(relationshipMode: .none, includeNulls: false)
-                        let body = taskModel.exportObject(using: options, state: &exportState)
+                        var body = taskModel.exportObject(using: options, state: &exportState)
+                        body["assignee_id"] = pendingAssigneeID ?? NSNull()
                         let projectID = taskModel.projectID
                         isSaving = true
                         saveErrorMessage = nil
@@ -378,7 +363,6 @@ private struct AssigneePickerSheet: View {
                                 try await syncEngine.updateTask(taskID: taskID, projectID: projectID, body: body)
                                 await MainActor.run { dismiss() }
                             } catch {
-                                syncContainer.mainContext.rollback()
                                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                                 await MainActor.run {
                                     isSaving = false
@@ -388,10 +372,7 @@ private struct AssigneePickerSheet: View {
                         }
                     }) {
                         HStack(spacing: 6) {
-                            if isSaving {
-                                ProgressView()
-                                    .controlSize(.small)
-                            }
+                            if isSaving { ProgressView().controlSize(.small) }
                             Text("Save")
                         }
                     }
@@ -399,13 +380,16 @@ private struct AssigneePickerSheet: View {
                 }
             }
         }
+        .task(id: taskModel?.id) {
+            guard !hasLoadedInitialValue, let taskModel else { return }
+            pendingAssigneeID = taskModel.assigneeID
+            hasLoadedInitialValue = true
+        }
         .alert(
             "Save Failed",
             isPresented: Binding(
                 get: { saveErrorMessage != nil },
-                set: { isPresented in
-                    if !isPresented { saveErrorMessage = nil }
-                }
+                set: { if !$0 { saveErrorMessage = nil } }
             )
         ) {
             Button("OK", role: .cancel) {}

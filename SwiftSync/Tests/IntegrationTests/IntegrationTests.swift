@@ -794,6 +794,24 @@ extension SuperNote: ParentScopedModel {
     static var parentRelationship: ReferenceWritableKeyPath<SuperNote, SuperUser?> { \.superUser }
 }
 
+@Syncable
+@Model
+final class StatusItem {
+    @Attribute(.unique) var id: String
+    var title: String
+    @RemoteKey("status.id")
+    var statusID: String
+    @RemoteKey("status.label")
+    var statusLabel: String
+
+    init(id: String, title: String, statusID: String, statusLabel: String) {
+        self.id = id
+        self.title = title
+        self.statusID = statusID
+        self.statusLabel = statusLabel
+    }
+}
+
 @Model
 final class ScopedBucket {
     @Attribute(.unique) var id: Int
@@ -1339,6 +1357,41 @@ final class IntegrationTests: XCTestCase {
         users = try context.fetch(FetchDescriptor<User>())
         XCTAssertEqual(users.count, 1)
         XCTAssertEqual(users.first?.fullName, "Ava Updated")
+    }
+
+    @MainActor
+    func testSyncAppliesNestedRemoteKeyFieldsOnUpdate() async throws {
+        // Regression: apply(_:) must update fields mapped via @RemoteKey with dot-notation
+        // (e.g. @RemoteKey("status.id"), @RemoteKey("status.label")) when the payload contains
+        // a nested dict. Previously these fields were silently skipped on update because
+        // apply(_:) did not traverse nested dicts for @RemoteKey dot-paths.
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: StatusItem.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let insertPayload: [Any] = [[
+            "id": "item-1",
+            "title": "My Task",
+            "status": ["id": "todo", "label": "To Do"]
+        ]]
+        try await SwiftSync.sync(payload: insertPayload, as: StatusItem.self, in: context)
+
+        var items = try context.fetch(FetchDescriptor<StatusItem>())
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items.first?.statusID, "todo")
+        XCTAssertEqual(items.first?.statusLabel, "To Do")
+
+        let updatePayload: [Any] = [[
+            "id": "item-1",
+            "title": "My Task",
+            "status": ["id": "done", "label": "Done"]
+        ]]
+        try await SwiftSync.sync(payload: updatePayload, as: StatusItem.self, in: context)
+
+        items = try context.fetch(FetchDescriptor<StatusItem>())
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items.first?.statusID, "done", "statusID must be updated by apply(_:) via nested @RemoteKey path")
+        XCTAssertEqual(items.first?.statusLabel, "Done", "statusLabel must be updated by apply(_:) via nested @RemoteKey path")
     }
 
     @MainActor
