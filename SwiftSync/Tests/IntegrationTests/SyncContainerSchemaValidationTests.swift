@@ -84,7 +84,6 @@ final class SyncContainerSchemaValidationTests: XCTestCase {
             try SyncContainer(
                 for: ValidationMissingAnchorTask.self,
                 ValidationMissingAnchorTag.self,
-                schemaValidation: .failFast,
                 configurations: configuration
             )
         ) { error in
@@ -101,7 +100,6 @@ final class SyncContainerSchemaValidationTests: XCTestCase {
         _ = try SyncContainer(
             for: ValidationAnchoredTask.self,
             ValidationAnchoredTag.self,
-            schemaValidation: .failFast,
             configurations: configuration
         )
     }
@@ -113,7 +111,6 @@ final class SyncContainerSchemaValidationTests: XCTestCase {
         _ = try SyncContainer(
             for: ValidationOneToManyProject.self,
             ValidationOneToManyTask.self,
-            schemaValidation: .failFast,
             configurations: configuration
         )
     }

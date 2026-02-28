@@ -75,9 +75,9 @@ String key for index lookup
                                ↓
                      applyRelationships(payload, context, operations)
                                ↓
-                     context.save()
-                               ↓
-                     post didSaveChangesNotification
+                      context.save()
+                                ↓
+                      post SyncContainer.didSaveChangesNotification (internal)
 ```
 
 ### SyncPayload: key resolution + coercion
@@ -243,26 +243,30 @@ Thin orchestration layer over `SwiftSync.*` functions:
 
 - Stores `ModelContainer`, `mainContext`, `inputKeyStyle`
 - Creates a fresh `ModelContext` per `sync()` call (background context)
-- Observes `ModelContext.didSave` on all contexts → re-posts as `SyncContainer.didSaveChangesNotification` with:
+- Observes `ModelContext.didSave` on all contexts → re-posts as an internal `didSaveChangesNotification` with:
   - `changedIdentifiers`: union of inserted + updated + deleted IDs
   - `changedModelTypeNames`: type names derived from those IDs
 
 **Initialization pipeline:**
 ```
-validateSchema (if .failFast)
+_validateSchema(modelTypes)   ← always runs; throws SchemaValidationError on unanchored many-to-many
   ↓
 Schema(modelTypes)
   ↓
+_recoverContainerInitialization(recoverOnFailure:configurations:makeContainer:resetPersistentStores:)
+  ↓
 _executeCatchingObjectiveCException {
-    ModelContainer(for:schema, migrationPlan:, configurations:)
-}
-  ↓ (if fails + recovery == .resetAndRetry)
-_resetPersistentStoreFiles(for:)   ← deletes .sqlite + sidecar files
+    ModelContainer(for: schema, configurations:)
+}   ← bridges NSException → ObjectiveCInitializationExceptionError
+  ↓ (if throws + recoverOnFailure == true)
+_resetPersistentStoreFiles(for:)   ← deletes .store + WAL/SHM/support sidecars
   ↓
 retry ModelContainer(...)
 ```
 
-**`_resetPersistentStoreFiles`:** enumerates the directory of each configuration URL, deletes files whose names start with the database filename. Catches SQLite WAL/SHM sidecars.
+**`_resetPersistentStoreFiles`:** enumerates the directory of each configuration URL, deletes files whose names equal or start with the database filename. Catches SQLite WAL/SHM sidecars.
+
+**When to use `recoverOnFailure: true`:** only when the local store is a pure client cache and remote is the source of truth. A wipe means all local data is lost and rebuilt on the next sync. For apps with user-owned data, provide a `SchemaMigrationPlan` instead — construct `ModelContainer` directly and pass it to `SyncContainer(_ modelContainer:)`.
 
 ---
 
@@ -275,12 +279,12 @@ Two implementations, same contract:
 | Integration | SwiftUI (primary) | UIKit / plain Swift |
 | Observation | `SyncQueryObserver` | `SyncQueryPublisher` |
 | Output | `@Published` property on wrapper | `@Published var rows` + `rowsPublisher` |
-| Reload trigger | same `didSaveChangesNotification` | same `didSaveChangesNotification` |
+| Reload trigger | same internal `didSaveChangesNotification` | same internal `didSaveChangesNotification` |
 
 Both use identical reload heuristics:
 
 ```
-SyncContainer.didSaveChangesNotification
+SyncContainer.didSaveChangesNotification (internal)
         │
         ▼
 shouldReload(for notification)
@@ -336,7 +340,7 @@ SwiftSync.export(as: Task.self, in: context, using: options)
 
 ## Schema Validation
 
-Only runs when `schemaValidation: .failFast`. Detects many-to-many pairs where neither side has `@Relationship(inverse: …)`, which would silently create two separate join tables in SwiftData.
+Runs unconditionally on every `SyncContainer` init. Detects many-to-many pairs where neither side has `@Relationship(inverse: …)`, which would silently create two separate join tables in SwiftData.
 
 ```
 for each isToMany relationship R:

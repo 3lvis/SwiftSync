@@ -15,7 +15,7 @@ final class SyncContainerRecoveryTests: XCTestCase {
         var resetCalls = 0
 
         let value: Int = try SyncContainer._recoverContainerInitialization(
-            recovery: .resetAndRetry,
+            recoverOnFailure: true,
             configurations: [config],
             makeContainer: {
                 attempts += 1
@@ -43,7 +43,7 @@ final class SyncContainerRecoveryTests: XCTestCase {
 
         XCTAssertThrowsError(
             try SyncContainer._recoverContainerInitialization(
-                recovery: .none,
+                recoverOnFailure: false,
                 configurations: [config],
                 makeContainer: {
                     attempts += 1
@@ -96,7 +96,7 @@ final class SyncContainerRecoveryTests: XCTestCase {
         var resetCalls = 0
 
         let value: Int = try SyncContainer._recoverContainerInitialization(
-            recovery: .resetAndRetry,
+            recoverOnFailure: true,
             configurations: [config],
             makeContainer: {
                 attempts += 1

@@ -25,19 +25,9 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         }
     }
 
-    public enum InitializationFailureRecovery: Sendable {
-        case none
-        case resetAndRetry
-    }
-
-    public enum SchemaValidation: Sendable {
-        case none
-        case failFast
-    }
-
-    public static let didSaveChangesNotification = Notification.Name("SwiftSync.SyncContainer.didSaveChanges")
-    public static let changedIdentifiersUserInfoKey = "changedIdentifiers"
-    public static let changedModelTypeNamesUserInfoKey = "changedModelTypeNames"
+    static let didSaveChangesNotification = Notification.Name("SwiftSync.SyncContainer.didSaveChanges")
+    static let changedIdentifiersUserInfoKey = "changedIdentifiers"
+    static let changedModelTypeNamesUserInfoKey = "changedModelTypeNames"
 
     public let modelContainer: ModelContainer
     public let mainContext: ModelContext
@@ -47,21 +37,18 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     public init(
         for modelTypes: any PersistentModel.Type...,
         inputKeyStyle: SyncInputKeyStyle = .snakeCase,
-        migrationPlan: (any SchemaMigrationPlan.Type)? = nil,
-        schemaValidation: SchemaValidation = .none,
-        initializationFailureRecovery: InitializationFailureRecovery = .none,
+        recoverOnFailure: Bool = false,
         configurations: ModelConfiguration...
     ) throws {
-        try Self._validateSchema(modelTypes: modelTypes, mode: schemaValidation)
+        try Self._validateSchema(modelTypes: modelTypes)
         let schema = Schema(modelTypes)
         self.modelContainer = try Self._recoverContainerInitialization(
-            recovery: initializationFailureRecovery,
+            recoverOnFailure: recoverOnFailure,
             configurations: configurations,
             makeContainer: {
                 try Self._executeCatchingObjectiveCException {
                     try ModelContainer(
                         for: schema,
-                        migrationPlan: migrationPlan,
                         configurations: configurations
                     )
                 }
@@ -156,7 +143,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     }
 
     static func _recoverContainerInitialization<T>(
-        recovery: InitializationFailureRecovery,
+        recoverOnFailure: Bool,
         configurations: [ModelConfiguration],
         makeContainer: () throws -> T,
         resetPersistentStores: ([ModelConfiguration]) throws -> Void
@@ -164,11 +151,29 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         do {
             return try makeContainer()
         } catch {
-            guard recovery == .resetAndRetry else {
-                throw error
-            }
+            guard recoverOnFailure else { throw error }
             try resetPersistentStores(configurations)
             return try makeContainer()
+        }
+    }
+
+    static func _resetPersistentStoreFiles(for configurations: [ModelConfiguration]) throws {
+        let fm = FileManager.default
+        for configuration in configurations {
+            let storeURL = configuration.url
+            let directory = storeURL.deletingLastPathComponent()
+            let baseName = storeURL.lastPathComponent
+            guard fm.fileExists(atPath: directory.path) else { continue }
+            let children = try fm.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: nil,
+                options: [.skipsSubdirectoryDescendants]
+            )
+            for child in children {
+                let name = child.lastPathComponent
+                guard name == baseName || name.hasPrefix(baseName) else { continue }
+                try fm.removeItem(at: child)
+            }
         }
     }
 
@@ -197,30 +202,6 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         fatalError("SwiftSyncObjCExceptionCatcher returned no result and no error.")
     }
 
-    static func _resetPersistentStoreFiles(for configurations: [ModelConfiguration]) throws {
-        let fm = FileManager.default
-
-        for configuration in configurations {
-            let storeURL = configuration.url
-
-            let directory = storeURL.deletingLastPathComponent()
-            let baseName = storeURL.lastPathComponent
-            guard fm.fileExists(atPath: directory.path) else { continue }
-
-            let children = try fm.contentsOfDirectory(
-                at: directory,
-                includingPropertiesForKeys: nil,
-                options: [.skipsSubdirectoryDescendants]
-            )
-
-            for child in children {
-                let name = child.lastPathComponent
-                guard name == baseName || name.hasPrefix(baseName) else { continue }
-                try fm.removeItem(at: child)
-            }
-        }
-    }
-
     struct _SchemaRelationship: Sendable {
         let ownerTypeName: String
         let propertyName: String
@@ -232,10 +213,8 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     }
 
     static func _validateSchema(
-        modelTypes: [any PersistentModel.Type],
-        mode: SchemaValidation
+        modelTypes: [any PersistentModel.Type]
     ) throws {
-        guard mode == .failFast else { return }
 
         let relationships = _schemaRelationships(from: modelTypes)
             .sorted { lhs, rhs in

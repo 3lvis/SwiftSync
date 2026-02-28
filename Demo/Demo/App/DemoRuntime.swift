@@ -41,8 +41,7 @@ final class DemoRuntime: ObservableObject {
             Task.self,
             TaskStateOption.self,
             UserRoleOption.self,
-            schemaValidation: .failFast,
-            initializationFailureRecovery: .resetAndRetry,
+            recoverOnFailure: true,
             configurations: configuration
         )
     }

@@ -15,7 +15,7 @@ it needs a strong justification to stay public.
 |---|---|
 | `@Syncable` | All 5 model classes |
 | `@RemoteKey` | `Task.descriptionText`, `Task.state`, `Task.stateLabel`, `User.role`, `User.roleLabel` |
-| `SyncContainer(for:schemaValidation:initializationFailureRecovery:configurations:)` | `DemoRuntime` |
+| `SyncContainer(for:recoverOnFailure:configurations:)` | `DemoRuntime` |
 | `SyncContainer.modelContainer` | `DemoApp` (scene modifier) |
 | `SyncContainer.mainContext` | `DemoSyncEngine` (direct fetch) |
 | `syncContainer.sync(payload:as:missingRowPolicy:)` | Projects, Users, TaskStateOptions, UserRoleOptions |
@@ -27,8 +27,8 @@ it needs a strong justification to stay public.
 | `@SyncQuery(_:relatedTo:relatedID:in:sortBy:refreshOn:animation:)` | Tasks for a Project |
 | `@SyncModel(_:id:in:animation:)` | Project and Task lookup |
 | `SyncQueryPublisher(_:in:sortBy:)` | `ProjectsViewController` (UIKit table) |
-| `SyncContainer.SchemaValidation.failFast` | `DemoRuntime` |
-| `SyncContainer.InitializationFailureRecovery.resetAndRetry` | `DemoRuntime` |
+| `SyncContainer.SchemaValidationError` | thrown by `SyncContainer.init` on unanchored many-to-many |
+| `SyncContainer.ObjectiveCInitializationExceptionError` | thrown by `SyncContainer.init` on NSException from ModelContainer |
 
 Everything not in this table is unused by the demo.
 
@@ -155,12 +155,9 @@ user-facing use case — the inference happens transparently when calling `sync(
 These three static strings are used internally by `SyncQuery` and `SyncQueryPublisher` to
 coordinate reload decisions after a save. They are `public` but the demo never references them.
 
-- [ ] `SyncContainer.didSaveChangesNotification`
-- [ ] `SyncContainer.changedIdentifiersUserInfoKey`
-- [ ] `SyncContainer.changedModelTypeNamesUserInfoKey`
-
-**Recommendation:** Make `internal`. If a future use case requires external observers, they can
-be re-promoted then with a defined contract.
+~~`SyncContainer.didSaveChangesNotification`~~ — made `internal`
+~~`SyncContainer.changedIdentifiersUserInfoKey`~~ — made `internal`
+~~`SyncContainer.changedModelTypeNamesUserInfoKey`~~ — made `internal`
 
 ---
 
@@ -256,7 +253,7 @@ clearly marked as advanced in docs rather than being hidden or removed.
 | `SyncPayload` accessors | 3 methods | None | Make `internal` |
 | `SyncDateParser` / `DateType` | 6 | None | Make `internal` |
 | Inference functions | 2 | None (internal) | Make `internal` |
-| Notification constants | 3 statics | None (internal) | Make `internal` |
+| Notification constants | 3 statics | None (internal) | ✅ Made `internal` |
 | `SyncRelationshipOperations` bits | 4 | `.all` default only | Evaluate simplification |
 | `SyncQueryPublisher` extra inits | 3 | None | Evaluate removal |
 | `SyncContainer` alternate init | 1 | None | Keep |
@@ -296,7 +293,7 @@ after each item before proceeding.
 
 - [ ] 1. Make `SyncDateParser`, `DateType`, and `String.dateType()` `internal`
 - [ ] 2. Make `SwiftSync.inferToOneRelationship` and `inferToManyRelationship` `internal`
-- [ ] 3. Make `SyncContainer.didSaveChangesNotification`, `changedIdentifiersUserInfoKey`, `changedModelTypeNamesUserInfoKey` `internal`
+- [x] 3. Made `SyncContainer.didSaveChangesNotification`, `changedIdentifiersUserInfoKey`, `changedModelTypeNamesUserInfoKey` `internal`
 - [ ] 4. Make `SyncPayload.strictValue`, `SyncPayload.required`, `SyncPayload.strictRequired` `internal`
 - [ ] 5. Make `syncApplyToOneForeignKey`, `syncApplyToManyForeignKeys`, `syncApplyToOneNestedObject`, `syncApplyToManyNestedObjects` `internal` (or `package`)
 
