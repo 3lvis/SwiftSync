@@ -85,9 +85,19 @@ For existing APIs:
 ## Implemented In This Repo
 
 Current demo backend payloads now follow:
-- stable `id`
+- stable UUID `id` on all entities (no opaque integer or slug IDs)
 - snake_case naming
 - `*_id` / `*_ids` relationship keys
 - explicit `null` emission for optional fields in task payloads
-- `updated_at` on all demo resources
+- `created_at` and `updated_at` on all demo resources
 - no ordered-relationship assumptions
+
+### Client-Authoritative Create
+
+Task creation in the demo uses client-authoritative identity:
+
+- The client generates `id` (UUID string), `created_at`, and `updated_at` before sending.
+- The server validates presence and uniqueness of `id`; duplicate `id` returns a validation error.
+- Server-side PATCH endpoints remain authoritative for `updated_at` on updates.
+
+This pattern is enforced in `DemoServerSimulator.createTask(body:)`: the body dict must include `id`, `created_at`, and `updated_at` or the call is rejected with a validation error.

@@ -124,23 +124,9 @@ final class FakeDemoAPIClient {
         return try backend.replaceTaskWatchers(taskID: taskID, watcherIDs: watcherIDs)
     }
 
-    func createTask(
-        projectID: String,
-        title: String,
-        descriptionText: String,
-        state: String,
-        assigneeID: String?,
-        authorID: String
-    ) async throws -> [String: Any] {
+    func createTask(body: [String: Any]) async throws -> [String: Any] {
         try await networkGate(endpoint: "POST /tasks")
-        return try backend.createTask(
-            projectID: projectID,
-            title: title,
-            descriptionText: descriptionText,
-            state: state,
-            assigneeID: assigneeID,
-            authorID: authorID
-        )
+        return try backend.createTask(body: body)
     }
 
     func deleteTask(taskID: String) async throws {

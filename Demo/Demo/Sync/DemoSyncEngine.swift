@@ -80,7 +80,7 @@ final class DemoSyncEngine: ObservableObject {
         authorID: String
     ) async throws {
         try await syncOperationThrowing("createTask-\(projectID)") {
-            _ = try await apiClient.createTask(
+            let body = try Self.buildCreateTaskBody(
                 projectID: projectID,
                 title: title,
                 descriptionText: descriptionText,
@@ -88,8 +88,45 @@ final class DemoSyncEngine: ObservableObject {
                 assigneeID: assigneeID,
                 authorID: authorID
             )
+            _ = try await apiClient.createTask(body: body)
             try await syncProjectTasksInternal(projectID: projectID)
         }
+    }
+
+    /// Builds the JSON create-body for a new Task by inserting a transient Task into a
+    /// temporary in-memory ModelContext and exporting it with SwiftSync's export system.
+    /// The client is the authority for id, created_at, and updated_at on creation.
+    private static func buildCreateTaskBody(
+        projectID: String,
+        title: String,
+        descriptionText: String,
+        state: String,
+        assigneeID: String?,
+        authorID: String
+    ) throws -> [String: Any] {
+        let schema = Schema([Task.self])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [config])
+        let context = ModelContext(container)
+
+        let now = Date()
+        let task = Task(
+            id: UUID().uuidString,
+            projectID: projectID,
+            assigneeID: assigneeID,
+            authorID: authorID,
+            title: title,
+            descriptionText: descriptionText,
+            state: state,
+            stateLabel: "",
+            createdAt: now,
+            updatedAt: now
+        )
+        context.insert(task)
+
+        var exportState = ExportState()
+        let options = ExportOptions(relationshipMode: .none, includeNulls: false)
+        return task.exportObject(using: options, state: &exportState)
     }
 
     func deleteTask(taskID: String, projectID: String) async {

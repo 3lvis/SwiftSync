@@ -50,11 +50,12 @@ public final class DemoServerSimulator {
             SELECT
                 projects.id,
                 projects.name,
+                projects.created_at,
                 projects.updated_at,
                 COUNT(tasks.id) AS task_count
             FROM projects
             LEFT JOIN tasks ON tasks.project_id = projects.id
-            GROUP BY projects.id, projects.name, projects.updated_at
+            GROUP BY projects.id, projects.name, projects.created_at, projects.updated_at
             ORDER BY projects.id ASC
             """
         )
@@ -63,6 +64,7 @@ public final class DemoServerSimulator {
                 "id": row.string("id"),
                 "name": row.string("name"),
                 "task_count": Int(row.int64("task_count")),
+                "created_at": iso8601(row.double("created_at")),
                 "updated_at": iso8601(row.double("updated_at"))
             ]
         }
@@ -91,7 +93,7 @@ public final class DemoServerSimulator {
     public func getUsersPayload() throws -> [[String: Any]] {
         let rows = try self.sqlite.query(
             """
-            SELECT id, display_name, role, updated_at
+            SELECT id, display_name, role, created_at, updated_at
             FROM users
             ORDER BY id ASC
             """
@@ -101,31 +103,35 @@ public final class DemoServerSimulator {
                 "id": row.string("id"),
                 "display_name": row.string("display_name"),
                 "role": labeledValuePayload(id: row.string("role"), label: row.string("role")),
+                "created_at": iso8601(row.double("created_at")),
                 "updated_at": iso8601(row.double("updated_at"))
             ]
         }
     }
 
     public func getTaskStateOptionsPayload() throws -> [[String: Any]] {
-        let updatedAt = iso8601(0)
+        let timestamp = iso8601(0)
         return [
             [
                 "id": "todo",
                 "label": "To Do",
                 "sort_order": 0,
-                "updated_at": updatedAt
+                "created_at": timestamp,
+                "updated_at": timestamp
             ],
             [
                 "id": "inProgress",
                 "label": "In Progress",
                 "sort_order": 1,
-                "updated_at": updatedAt
+                "created_at": timestamp,
+                "updated_at": timestamp
             ],
             [
                 "id": "done",
                 "label": "Done",
                 "sort_order": 2,
-                "updated_at": updatedAt
+                "created_at": timestamp,
+                "updated_at": timestamp
             ]
         ]
     }
@@ -145,7 +151,7 @@ public final class DemoServerSimulator {
     public func getTaskDetailPayload(taskID: String) throws -> [String: Any]? {
         let rows = try self.sqlite.query(
             """
-            SELECT id, project_id, assignee_id, author_id, title, description, state, updated_at
+            SELECT id, project_id, assignee_id, author_id, title, description, state, created_at, updated_at
             FROM tasks
             WHERE id = ?
             LIMIT 1
@@ -338,14 +344,63 @@ public final class DemoServerSimulator {
         return try getTaskDetailPayload(taskID: taskID)
     }
 
-    public func createTask(
+    public func createTask(body: [String: Any]) throws -> [String: Any] {
+        guard let id = body["id"] as? String, !id.isEmpty else {
+            throw DemoBackendError.validation(message: "id is required")
+        }
+        guard let projectID = body["project_id"] as? String else {
+            throw DemoBackendError.validation(message: "project_id is required")
+        }
+        guard let title = body["title"] as? String else {
+            throw DemoBackendError.validation(message: "title is required")
+        }
+        guard let description = body["description"] as? String else {
+            throw DemoBackendError.validation(message: "description is required")
+        }
+        guard let stateDict = body["state"] as? [String: Any],
+              let stateID = stateDict["id"] as? String else {
+            throw DemoBackendError.validation(message: "state.id is required")
+        }
+        guard let authorID = body["author_id"] as? String else {
+            throw DemoBackendError.validation(message: "author_id is required")
+        }
+        guard let createdAtString = body["created_at"] as? String,
+              let createdAt = parseISO8601String(createdAtString) else {
+            throw DemoBackendError.validation(message: "created_at is required (ISO 8601)")
+        }
+        guard let updatedAtString = body["updated_at"] as? String,
+              let updatedAt = parseISO8601String(updatedAtString) else {
+            throw DemoBackendError.validation(message: "updated_at is required (ISO 8601)")
+        }
+        let assigneeID = body["assignee_id"] as? String
+
+        return try createTaskInternal(
+            id: id,
+            projectID: projectID,
+            title: title,
+            descriptionText: description,
+            state: stateID,
+            assigneeID: assigneeID,
+            authorID: authorID,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+    }
+
+    private func createTaskInternal(
+        id: String,
         projectID: String,
         title: String,
         descriptionText: String,
         state: String,
         assigneeID: String?,
-        authorID: String
+        authorID: String,
+        createdAt: Date,
+        updatedAt: Date
     ) throws -> [String: Any] {
+        if try exists(in: "tasks", id: id) {
+            throw DemoBackendError.validation(message: "task with id \(id) already exists")
+        }
         guard try exists(in: "projects", id: projectID) else {
             throw DemoBackendError.invalidReference(entity: "project_id", id: projectID)
         }
@@ -359,29 +414,28 @@ public final class DemoServerSimulator {
         let normalizedDescription = try validatedNonEmpty(descriptionText, field: "description")
         let normalizedState = try validatedTaskState(state)
 
-        let newID = try nextTaskID()
-        let now = nextTimestamp(after: nil)
         suspendAmbientMutationsAfterWrite()
 
         try self.sqlite.execute(
             """
-            INSERT INTO tasks (id, project_id, assignee_id, author_id, title, description, state, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tasks (id, project_id, assignee_id, author_id, title, description, state, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             bind: { stmt in
-                self.sqlite.bind(text: newID, at: 1, in: stmt)
+                self.sqlite.bind(text: id, at: 1, in: stmt)
                 self.sqlite.bind(text: projectID, at: 2, in: stmt)
                 self.sqlite.bind(nullableText: assigneeID, at: 3, in: stmt)
                 self.sqlite.bind(text: authorID, at: 4, in: stmt)
                 self.sqlite.bind(text: normalizedTitle, at: 5, in: stmt)
                 self.sqlite.bind(text: normalizedDescription, at: 6, in: stmt)
                 self.sqlite.bind(text: normalizedState, at: 7, in: stmt)
-                self.sqlite.bind(double: now.timeIntervalSince1970, at: 8, in: stmt)
+                self.sqlite.bind(double: createdAt.timeIntervalSince1970, at: 8, in: stmt)
+                self.sqlite.bind(double: updatedAt.timeIntervalSince1970, at: 9, in: stmt)
             }
         )
 
-        guard let payload = try getTaskDetailPayload(taskID: newID) else {
-            throw DemoBackendError.notFound(entity: "task", id: newID)
+        guard let payload = try getTaskDetailPayload(taskID: id) else {
+            throw DemoBackendError.notFound(entity: "task", id: id)
         }
         return payload
     }
@@ -425,7 +479,7 @@ public final class DemoServerSimulator {
     ) throws -> [[String: Any]] {
         let rows = try self.sqlite.query(
             """
-            SELECT tasks.id, tasks.project_id, tasks.assignee_id, tasks.author_id, tasks.title, tasks.description, tasks.state, tasks.updated_at
+            SELECT tasks.id, tasks.project_id, tasks.assignee_id, tasks.author_id, tasks.title, tasks.description, tasks.state, tasks.created_at, tasks.updated_at
             FROM tasks
             \(whereClause)
             ORDER BY tasks.id ASC
@@ -486,15 +540,19 @@ public final class DemoServerSimulator {
         let selectedTitle = titles[step % titles.count]
         let state = states[(step / 2) % states.count]
         let assigneeID: String? = (step % 4 == 0) ? nil : userIDs[step % userIDs.count]
-        let authorID = assigneeID ?? userIDs.first ?? "user-1"
+        let authorID = assigneeID ?? userIDs.first!
 
-        _ = try createTask(
+        let now = Date()
+        _ = try createTaskInternal(
+            id: UUID().uuidString,
             projectID: projectID,
             title: selectedTitle,
             descriptionText: "Ambient backend update generated for the demo live-sync effect.",
             state: state,
             assigneeID: assigneeID,
-            authorID: authorID
+            authorID: authorID,
+            createdAt: now,
+            updatedAt: now
         )
     }
 
@@ -518,6 +576,7 @@ public final class DemoServerSimulator {
             "description": row.string("description"),
             "state": labeledValuePayload(id: stateID, label: taskStateLabel(id: stateID)),
             "watcher_ids": try watcherIDs(forTaskID: taskID),
+            "created_at": iso8601(row.double("created_at")),
             "updated_at": iso8601(row.double("updated_at"))
         ]
     }
@@ -539,14 +598,15 @@ public final class DemoServerSimulator {
     }
 
     private func optionsPayload(rows: [DemoSQLiteRow]) throws -> [[String: Any]] {
-        let updatedAt = iso8601(0)
+        let timestamp = iso8601(0)
         return rows.enumerated().map { index, row in
             let id = row.string("id")
             return [
                 "id": id,
                 "label": id,
                 "sort_order": index,
-                "updated_at": updatedAt
+                "created_at": timestamp,
+                "updated_at": timestamp
             ]
         }
     }
@@ -598,18 +658,6 @@ public final class DemoServerSimulator {
         return rows.map { $0.string("id") }
     }
 
-    private func nextTaskID() throws -> String {
-        let rows = try self.sqlite.query(
-            """
-            SELECT COALESCE(MAX(CAST(SUBSTR(id, 6) AS INTEGER)), 0) AS max_id
-            FROM tasks
-            WHERE id LIKE 'task-%'
-            """
-        )
-        let next = Int(rows.first?.int64("max_id") ?? 0) + 1
-        return "task-\(next)"
-    }
-
     private func validatedNonEmpty(_ value: String, field: String) throws -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -632,6 +680,10 @@ public final class DemoServerSimulator {
             return date
         }
         throw DemoBackendError.sqlite(message: "Invalid ISO-8601 timestamp in payload: \(string)")
+    }
+
+    private func parseISO8601String(_ string: String) -> Date? {
+        formatter.date(from: string)
     }
 
     private func nextTimestamp(after previous: Date?) -> Date {
@@ -666,6 +718,7 @@ public final class DemoServerSimulator {
             CREATE TABLE IF NOT EXISTS projects (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
+                created_at REAL NOT NULL,
                 updated_at REAL NOT NULL
             );
 
@@ -673,6 +726,7 @@ public final class DemoServerSimulator {
                 id TEXT PRIMARY KEY,
                 display_name TEXT NOT NULL,
                 role TEXT NOT NULL,
+                created_at REAL NOT NULL,
                 updated_at REAL NOT NULL
             );
 
@@ -684,6 +738,7 @@ public final class DemoServerSimulator {
                 title TEXT NOT NULL,
                 description TEXT NOT NULL,
                 state TEXT NOT NULL,
+                created_at REAL NOT NULL,
                 updated_at REAL NOT NULL,
                 FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE RESTRICT,
                 FOREIGN KEY(assignee_id) REFERENCES users(id) ON DELETE SET NULL,
@@ -720,13 +775,14 @@ public final class DemoServerSimulator {
             for project in seedData.projects {
             try sqlite.execute(
                 """
-                INSERT INTO projects (id, name, updated_at)
-                VALUES (?, ?, ?)
+                INSERT INTO projects (id, name, created_at, updated_at)
+                VALUES (?, ?, ?, ?)
                 """,
                 bind: { stmt in
                     sqlite.bind(text: project.id, at: 1, in: stmt)
                     sqlite.bind(text: project.name, at: 2, in: stmt)
-                    sqlite.bind(double: project.updatedAt.timeIntervalSince1970, at: 3, in: stmt)
+                    sqlite.bind(double: project.createdAt.timeIntervalSince1970, at: 3, in: stmt)
+                    sqlite.bind(double: project.updatedAt.timeIntervalSince1970, at: 4, in: stmt)
                 }
             )
             }
@@ -734,14 +790,15 @@ public final class DemoServerSimulator {
             for user in seedData.users {
                 try sqlite.execute(
                     """
-                    INSERT INTO users (id, display_name, role, updated_at)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO users (id, display_name, role, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
                     """,
                     bind: { stmt in
                         sqlite.bind(text: user.id, at: 1, in: stmt)
                         sqlite.bind(text: user.displayName, at: 2, in: stmt)
                         sqlite.bind(text: user.role, at: 3, in: stmt)
-                        sqlite.bind(double: user.updatedAt.timeIntervalSince1970, at: 4, in: stmt)
+                        sqlite.bind(double: user.createdAt.timeIntervalSince1970, at: 4, in: stmt)
+                        sqlite.bind(double: user.updatedAt.timeIntervalSince1970, at: 5, in: stmt)
                     }
                 )
             }
@@ -749,8 +806,8 @@ public final class DemoServerSimulator {
             for task in seedData.tasks {
                 try sqlite.execute(
                     """
-                    INSERT INTO tasks (id, project_id, assignee_id, author_id, title, description, state, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO tasks (id, project_id, assignee_id, author_id, title, description, state, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     bind: { stmt in
                         sqlite.bind(text: task.id, at: 1, in: stmt)
@@ -760,7 +817,8 @@ public final class DemoServerSimulator {
                         sqlite.bind(text: task.title, at: 5, in: stmt)
                         sqlite.bind(text: task.descriptionText, at: 6, in: stmt)
                         sqlite.bind(text: task.state, at: 7, in: stmt)
-                        sqlite.bind(double: task.updatedAt.timeIntervalSince1970, at: 8, in: stmt)
+                        sqlite.bind(double: task.createdAt.timeIntervalSince1970, at: 8, in: stmt)
+                        sqlite.bind(double: task.updatedAt.timeIntervalSince1970, at: 9, in: stmt)
                     }
                 )
 
