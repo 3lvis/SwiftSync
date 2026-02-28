@@ -150,18 +150,7 @@ user-facing use case — the inference happens transparently when calling `sync(
 
 ---
 
-### 2.7 `SyncContainer` notification constants
-
-These three static strings are used internally by `SyncQuery` and `SyncQueryPublisher` to
-coordinate reload decisions after a save. They are `public` but the demo never references them.
-
-~~`SyncContainer.didSaveChangesNotification`~~ — made `internal`
-~~`SyncContainer.changedIdentifiersUserInfoKey`~~ — made `internal`
-~~`SyncContainer.changedModelTypeNamesUserInfoKey`~~ — made `internal`
-
----
-
-### 2.8 `SyncRelationshipOperations` granularity
+### 2.7 `SyncRelationshipOperations` granularity
 
 The demo passes the default `.all` everywhere (by not passing `relationshipOperations:` at all).
 The individual bit values (`.insert`, `.update`, `.delete`) are tested in
@@ -291,19 +280,17 @@ after each item before proceeding.
 
 - [ ] 1. Make `SyncDateParser`, `DateType`, and `String.dateType()` `internal`
 - [ ] 2. Make `SwiftSync.inferToOneRelationship` and `inferToManyRelationship` `internal`
-- [x] 3. Made `SyncContainer.didSaveChangesNotification`, `changedIdentifiersUserInfoKey`, `changedModelTypeNamesUserInfoKey` `internal`
-- [ ] 4. Make `SyncPayload.strictValue`, `SyncPayload.required`, `SyncPayload.strictRequired` `internal`
-- [ ] 5. Make `syncApplyToOneForeignKey`, `syncApplyToManyForeignKeys`, `syncApplyToOneNestedObject`, `syncApplyToManyNestedObjects` `internal` (or `package`)
+- [ ] 3. Make `SyncPayload.strictValue`, `SyncPayload.required`, `SyncPayload.strictRequired` `internal`
+- [ ] 4. Make `syncApplyToOneForeignKey`, `syncApplyToManyForeignKeys`, `syncApplyToOneNestedObject`, `syncApplyToManyNestedObjects` `internal` (or `package`)
 
 **Evaluate and decide (may affect external callers):**
 
-- [ ] 6. Remove `SwiftSync.sync(payload:as:in:…)` public static overloads — make `internal` and route all public entry points through `SyncContainer`
-- [ ] 7. Remove or reduce `SyncQueryPublisher` init variants not used by the demo (predicate, `relatedTo:through:`)
-- [ ] 8. Evaluate removing `TestingKit` target — absorb fixtures into test helpers or delete
-- [ ] 9. Evaluate `SyncRelationshipOperations` simplification — replace OptionSet with a plain `Bool` or remove the parameter and always apply `.all`
-- [x] 10. ~~Evaluate `SyncMissingRowPolicy.keep`~~ — removed; replaced by `sync(item:)` targeted upsert overload
+- [ ] 5. Remove `SwiftSync.sync(payload:as:in:…)` public static overloads — make `internal` and route all public entry points through `SyncContainer`
+- [ ] 6. Remove or reduce `SyncQueryPublisher` init variants not used by the demo (predicate, `relatedTo:through:`)
+- [ ] 7. Evaluate removing `TestingKit` target — absorb fixtures into test helpers or delete
+- [ ] 8. Evaluate `SyncRelationshipOperations` simplification — replace OptionSet with a plain `Bool` or remove the parameter and always apply `.all`
 
 **Structural (highest effort, highest payoff):**
 
-- [ ] 11. Extract the export subsystem (`ExportOptions`, `ExportState`, `ExportRelationshipMode`, `ExportKeyStyle`, `exportEncodeValue`, `exportSetValue`, `export()` overloads, `exportObject` protocol requirement, `@NotExport`) into a separate `SwiftSyncExport` module or guard behind a compiler flag — do not ship as part of the core `SwiftSync` import
-- [ ] 12. Audit `SyncModelable` protocol extension methods for `internal` candidacy once the macro and query targets' module boundaries are settled
+- [ ] 9. Extract the export subsystem (`ExportOptions`, `ExportState`, `ExportRelationshipMode`, `ExportKeyStyle`, `exportEncodeValue`, `exportSetValue`, `export()` overloads, `exportObject` protocol requirement, `@NotExport`) into a separate `SwiftSyncExport` module or guard behind a compiler flag — do not ship as part of the core `SwiftSync` import
+- [ ] 10. Audit `SyncModelable` protocol extension methods for `internal` candidacy once the macro and query targets' module boundaries are settled
