@@ -1,24 +1,25 @@
 # State Capsule
 
 ## Plan
-- [x] Write failing tests for DemoServerSimulator.createTask(body:)
-- [x] Implement DemoServerSimulator.createTask(body:) + rename internal method
-- [x] Update FakeDemoAPIClient.createTask to accept body dict
-- [x] Update DemoSyncEngine.createTask to build body via export
-- [x] Update existing createTask test to use new body: signature
-- [x] Run DemoBackendTests + SwiftSync test suite
+- [x] Write failing tests that pin UUID format expectations
+- [x] Replace seed IDs in DemoSeedData.generate() with stable UUID constants
+- [x] Replace nextTaskID() with UUID generation in DemoServerSimulator
+- [x] Remove "user-1" hardcoded fallbacks in SeedTask.init and ambientCreateTask
+- [x] Update smallSeedData() in tests to use UUID constants
+- [x] Update test assertions that compare against "task-1", "project-1", "user-1" literals
+- [x] Run DemoBackendTests + SwiftSync suite + Demo build
 
 ## Last known state
-tests green / build succeeded
+10/10 DemoBackendTests green / Demo BUILD SUCCEEDED
 
 ## Decisions (don't revisit)
-- `@NotExport` not used on `Task.id`/`updatedAt` — that macro is for local-only UI state, not server-assigned fields; strip them from the export body in DemoSyncEngine instead
-- `createTaskInternal` kept private for ambient mutations — no reason to route internal backend mutations through JSON
-- `ExportOptions(relationshipMode: .none, includeNulls: false)` — keeps the create body clean; no nil noise, no nested relationship objects
-- Scratch in-memory `ModelContainer` used in `buildCreateTaskBody` — gives exportObject a properly inserted model to operate on
+- Seed IDs use stable UUID constants in DemoSeedData.SeedIDs — not random, deterministic across installs
+- State IDs ("todo", "inProgress", "done") unchanged — enum-like values, not entity IDs
+- SeedTask.init "user-1" fallback replaced with task's own id — no magic string fallback
+- ambientCreateTask "user-1" fallback replaced with userIDs.first! (array already guarded non-empty)
+- nextTaskID() now returns UUID().uuidString — SUBSTR/LIKE 'task-%' SQL entirely removed
 
 ## Files touched
+- `DemoBackend/Sources/DemoBackend/DemoSeedData.swift`
 - `DemoBackend/Sources/DemoBackend/DemoServerSimulator.swift`
 - `DemoBackend/Tests/DemoBackendTests/DemoBackendTests.swift`
-- `Demo/Demo/Networking/DemoAPI.swift`
-- `Demo/Demo/Sync/DemoSyncEngine.swift`

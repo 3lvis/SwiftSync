@@ -388,7 +388,7 @@ public final class DemoServerSimulator {
         let normalizedDescription = try validatedNonEmpty(descriptionText, field: "description")
         let normalizedState = try validatedTaskState(state)
 
-        let newID = try nextTaskID()
+        let newID = nextTaskID()
         let now = nextTimestamp(after: nil)
         suspendAmbientMutationsAfterWrite()
 
@@ -515,7 +515,7 @@ public final class DemoServerSimulator {
         let selectedTitle = titles[step % titles.count]
         let state = states[(step / 2) % states.count]
         let assigneeID: String? = (step % 4 == 0) ? nil : userIDs[step % userIDs.count]
-        let authorID = assigneeID ?? userIDs.first ?? "user-1"
+        let authorID = assigneeID ?? userIDs.first!
 
         _ = try createTaskInternal(
             projectID: projectID,
@@ -627,16 +627,8 @@ public final class DemoServerSimulator {
         return rows.map { $0.string("id") }
     }
 
-    private func nextTaskID() throws -> String {
-        let rows = try self.sqlite.query(
-            """
-            SELECT COALESCE(MAX(CAST(SUBSTR(id, 6) AS INTEGER)), 0) AS max_id
-            FROM tasks
-            WHERE id LIKE 'task-%'
-            """
-        )
-        let next = Int(rows.first?.int64("max_id") ?? 0) + 1
-        return "task-\(next)"
+    private func nextTaskID() -> String {
+        UUID().uuidString
     }
 
     private func validatedNonEmpty(_ value: String, field: String) throws -> String {

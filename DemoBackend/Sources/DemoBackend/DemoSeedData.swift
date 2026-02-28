@@ -55,7 +55,7 @@ public struct DemoSeedData {
             self.projectID = projectID
             self.assigneeID = assigneeID
             self.reviewerIDs = reviewerIDs
-            self.authorID = authorID ?? assigneeID ?? reviewerIDs.first ?? "user-1"
+            self.authorID = authorID ?? assigneeID ?? reviewerIDs.first ?? id
             self.title = title
             self.descriptionText = descriptionText
             self.state = state
@@ -78,33 +78,69 @@ public struct DemoSeedData {
         self.tasks = tasks
     }
 
+    // Stable UUID constants for the canonical seed dataset.
+    // These are fixed — not random — so the demo loads consistent data across fresh installs.
+    public enum SeedIDs {
+        public enum Projects {
+            public static let accountSecurity      = "C3E7A1B2-1001-0000-0000-000000000001"
+            public static let notificationsReliability = "C3E7A1B2-1001-0000-0000-000000000002"
+            public static let supportInbox         = "C3E7A1B2-1001-0000-0000-000000000003"
+        }
+        public enum Users {
+            public static let avaMartinez  = "C3E7A1B2-2001-0000-0000-000000000001"
+            public static let noahKim      = "C3E7A1B2-2001-0000-0000-000000000002"
+            public static let miaPatel     = "C3E7A1B2-2001-0000-0000-000000000003"
+            public static let liamBrown    = "C3E7A1B2-2001-0000-0000-000000000004"
+            public static let sofiaGarcia  = "C3E7A1B2-2001-0000-0000-000000000005"
+            public static let ethanLee     = "C3E7A1B2-2001-0000-0000-000000000006"
+        }
+        public enum Tasks {
+            public static let sessionTimeout       = "C3E7A1B2-3001-0000-0000-000000000001"
+            public static let securityPolicyPatch  = "C3E7A1B2-3001-0000-0000-000000000002"
+            public static let qaChecklist          = "C3E7A1B2-3001-0000-0000-000000000003"
+            public static let warningCopy          = "C3E7A1B2-3001-0000-0000-000000000004"
+            public static let rolloutFlag          = "C3E7A1B2-3001-0000-0000-000000000005"
+            public static let duplicatePushFix     = "C3E7A1B2-3001-0000-0000-000000000006"
+            public static let idempotencyGuard     = "C3E7A1B2-3001-0000-0000-000000000007"
+            public static let scopedDeleteVerify   = "C3E7A1B2-3001-0000-0000-000000000008"
+            public static let incidentPlaybook     = "C3E7A1B2-3001-0000-0000-000000000009"
+            public static let assigneeChip         = "C3E7A1B2-3001-0000-0000-000000000010"
+            public static let inboxFilterKeys      = "C3E7A1B2-3001-0000-0000-000000000011"
+            public static let regressionChecks     = "C3E7A1B2-3001-0000-0000-000000000012"
+        }
+    }
+
     public static func generate() -> DemoSeedData {
         let baseDate = Date(timeIntervalSince1970: 1_735_689_600) // 2025-01-01T00:00:00Z
         func at(_ minutes: Int) -> Date {
             baseDate.addingTimeInterval(TimeInterval(minutes * 60))
         }
 
+        let p = SeedIDs.Projects.self
+        let u = SeedIDs.Users.self
+        let t = SeedIDs.Tasks.self
+
         let projects: [SeedProject] = [
-            .init(id: "project-1", name: "Account Security Controls", updatedAt: at(540)),
-            .init(id: "project-2", name: "Team Notifications Reliability", updatedAt: at(525)),
-            .init(id: "project-3", name: "Support Inbox Refresh", updatedAt: at(510))
+            .init(id: p.accountSecurity,          name: "Account Security Controls",       updatedAt: at(540)),
+            .init(id: p.notificationsReliability,  name: "Team Notifications Reliability",  updatedAt: at(525)),
+            .init(id: p.supportInbox,              name: "Support Inbox Refresh",            updatedAt: at(510))
         ]
 
         let users: [SeedUser] = [
-            .init(id: "user-1", displayName: "Ava Martinez", role: "iOS Engineer", updatedAt: at(60)),
-            .init(id: "user-2", displayName: "Noah Kim", role: "Backend Engineer", updatedAt: at(70)),
-            .init(id: "user-3", displayName: "Mia Patel", role: "Product Designer", updatedAt: at(80)),
-            .init(id: "user-4", displayName: "Liam Brown", role: "Product Manager", updatedAt: at(90)),
-            .init(id: "user-5", displayName: "Sofia Garcia", role: "QA Engineer", updatedAt: at(100)),
-            .init(id: "user-6", displayName: "Ethan Lee", role: "DevOps Engineer", updatedAt: at(110))
+            .init(id: u.avaMartinez,  displayName: "Ava Martinez",  role: "iOS Engineer",     updatedAt: at(60)),
+            .init(id: u.noahKim,      displayName: "Noah Kim",       role: "Backend Engineer", updatedAt: at(70)),
+            .init(id: u.miaPatel,     displayName: "Mia Patel",      role: "Product Designer", updatedAt: at(80)),
+            .init(id: u.liamBrown,    displayName: "Liam Brown",     role: "Product Manager",  updatedAt: at(90)),
+            .init(id: u.sofiaGarcia,  displayName: "Sofia Garcia",   role: "QA Engineer",      updatedAt: at(100)),
+            .init(id: u.ethanLee,     displayName: "Ethan Lee",      role: "DevOps Engineer",  updatedAt: at(110))
         ]
 
         let tasks: [SeedTask] = [
             .init(
-                id: "task-1",
-                projectID: "project-1",
-                assigneeID: "user-1",
-                reviewerIDs: ["user-4"],
+                id: t.sessionTimeout,
+                projectID: p.accountSecurity,
+                assigneeID: u.avaMartinez,
+                reviewerIDs: [u.liamBrown],
                 title: "Add session timeout controls to account settings",
                 descriptionText: """
                 Build the mobile settings UI for session timeout and forced re-authentication controls.
@@ -112,117 +148,117 @@ public struct DemoSeedData {
                 This is the primary demo task for account-security work and is intentionally rich: it has an assignee.
                 """,
                 state: "inProgress",
-                watcherIDs: ["user-2", "user-5"],
+                watcherIDs: [u.noahKim, u.sofiaGarcia],
                 updatedAt: at(300)
             ),
             .init(
-                id: "task-2",
-                projectID: "project-1",
-                assigneeID: "user-2",
-                reviewerIDs: ["user-1"],
+                id: t.securityPolicyPatch,
+                projectID: p.accountSecurity,
+                assigneeID: u.noahKim,
+                reviewerIDs: [u.avaMartinez],
                 title: "Validate security policy PATCH payload on backend",
                 descriptionText: """
                 Enforce allowed values for timeout minutes and re-auth policy. Reject unknown keys so mobile payloads stay explicit.
                 """,
                 state: "todo",
-                watcherIDs: ["user-4"],
+                watcherIDs: [u.liamBrown],
                 updatedAt: at(305)
             ),
             .init(
-                id: "task-3",
-                projectID: "project-1",
-                assigneeID: "user-5",
-                reviewerIDs: ["user-4"],
+                id: t.qaChecklist,
+                projectID: p.accountSecurity,
+                assigneeID: u.sofiaGarcia,
+                reviewerIDs: [u.liamBrown],
                 title: "Write QA checklist for forced re-auth scenarios",
                 descriptionText: """
                 Cover app relaunch, expired session recovery, and offline-to-online transitions after the policy changes.
                 """,
                 state: "todo",
-                watcherIDs: ["user-1", "user-3"],
+                watcherIDs: [u.avaMartinez, u.miaPatel],
                 updatedAt: at(310)
             ),
             .init(
-                id: "task-4",
-                projectID: "project-1",
-                assigneeID: "user-3",
-                reviewerIDs: ["user-1"],
+                id: t.warningCopy,
+                projectID: p.accountSecurity,
+                assigneeID: u.miaPatel,
+                reviewerIDs: [u.avaMartinez],
                 title: "Polish warning copy and hierarchy in security settings",
                 descriptionText: """
                 Refine the warning copy and screen hierarchy so risky actions are clear without blocking the flow.
                 """,
                 state: "done",
-                watcherIDs: ["user-4"],
+                watcherIDs: [u.liamBrown],
                 updatedAt: at(315)
             ),
             .init(
-                id: "task-5",
-                projectID: "project-1",
-                assigneeID: "user-6",
-                reviewerIDs: ["user-2"],
+                id: t.rolloutFlag,
+                projectID: p.accountSecurity,
+                assigneeID: u.ethanLee,
+                reviewerIDs: [u.noahKim],
                 title: "Enable rollout flag for account security controls",
                 descriptionText: """
                 Prepare release gating so the feature can be enabled per environment after QA sign-off.
                 """,
                 state: "inProgress",
-                watcherIDs: ["user-4", "user-5"],
+                watcherIDs: [u.liamBrown, u.sofiaGarcia],
                 updatedAt: at(320)
             ),
             .init(
-                id: "task-6",
-                projectID: "project-2",
-                assigneeID: "user-1",
-                reviewerIDs: ["user-2"],
+                id: t.duplicatePushFix,
+                projectID: p.notificationsReliability,
+                assigneeID: u.avaMartinez,
+                reviewerIDs: [u.noahKim],
                 title: "Fix duplicate push preference sync after reconnect",
                 descriptionText: """
                 The preferences screen can duplicate local rows after reconnect. Backend remains correct; the client refresh path needs better scoped sync.
                 """,
                 state: "inProgress",
-                watcherIDs: ["user-4", "user-6"],
+                watcherIDs: [u.liamBrown, u.ethanLee],
                 updatedAt: at(330)
             ),
             .init(
-                id: "task-7",
-                projectID: "project-2",
-                assigneeID: "user-2",
-                reviewerIDs: ["user-6"],
+                id: t.idempotencyGuard,
+                projectID: p.notificationsReliability,
+                assigneeID: u.noahKim,
+                reviewerIDs: [u.ethanLee],
                 title: "Add idempotency guard to notification preference writes",
                 descriptionText: """
                 Prevent duplicate writes when the same save is retried. Keep the response payload stable for targeted refresh.
                 """,
                 state: "todo",
-                watcherIDs: ["user-1", "user-4"],
+                watcherIDs: [u.avaMartinez, u.liamBrown],
                 updatedAt: at(335)
             ),
             .init(
-                id: "task-8",
-                projectID: "project-2",
-                assigneeID: "user-5",
-                reviewerIDs: ["user-2"],
+                id: t.scopedDeleteVerify,
+                projectID: p.notificationsReliability,
+                assigneeID: u.sofiaGarcia,
+                reviewerIDs: [u.noahKim],
                 title: "Verify scoped delete behavior for removed notification channels",
                 descriptionText: """
                 Confirm channel lists only delete rows inside the synced parent scope and never remove channels from other users/projects.
                 """,
                 state: "todo",
-                watcherIDs: ["user-4"],
+                watcherIDs: [u.liamBrown],
                 updatedAt: at(340)
             ),
             .init(
-                id: "task-9",
-                projectID: "project-2",
+                id: t.incidentPlaybook,
+                projectID: p.notificationsReliability,
                 assigneeID: nil,
-                reviewerIDs: ["user-4"],
+                reviewerIDs: [u.liamBrown],
                 title: "Draft incident playbook for notification delivery degradation",
                 descriptionText: """
                 Capture triage steps, rollback criteria, and communication templates. This task starts unassigned to demonstrate null assignee handling.
                 """,
                 state: "todo",
-                watcherIDs: ["user-2", "user-6"],
+                watcherIDs: [u.noahKim, u.ethanLee],
                 updatedAt: at(345)
             ),
             .init(
-                id: "task-10",
-                projectID: "project-3",
-                assigneeID: "user-3",
+                id: t.assigneeChip,
+                projectID: p.supportInbox,
+                assigneeID: u.miaPatel,
                 title: "Add assignee chip to support conversation rows",
                 descriptionText: """
                 Show assigned owner directly in the inbox list to reduce context switching for support agents.
@@ -231,9 +267,9 @@ public struct DemoSeedData {
                 updatedAt: at(350)
             ),
             .init(
-                id: "task-11",
-                projectID: "project-3",
-                assigneeID: "user-2",
+                id: t.inboxFilterKeys,
+                projectID: p.supportInbox,
+                assigneeID: u.noahKim,
                 title: "Normalize inbox filter payload keys across clients",
                 descriptionText: """
                 Align filter key naming across iOS and backend so imports/exports and analytics events use the same contract.
@@ -242,9 +278,9 @@ public struct DemoSeedData {
                 updatedAt: at(355)
             ),
             .init(
-                id: "task-12",
-                projectID: "project-3",
-                assigneeID: "user-5",
+                id: t.regressionChecks,
+                projectID: p.supportInbox,
+                assigneeID: u.sofiaGarcia,
                 title: "Backfill regression checks for task detail edits",
                 descriptionText: """
                 Add regression coverage for failed saves, retry UI, and list refresh after task edits.
