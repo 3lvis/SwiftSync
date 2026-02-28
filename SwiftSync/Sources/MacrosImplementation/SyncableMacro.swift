@@ -418,7 +418,7 @@ public struct SyncableMacro: ExtensionMacro {
                 return """
                 if options.relationshipMode != .none {
                     let baseKey = \(keyExpr)
-                    let exportedChildren: [[String: Any]] = \(property.name).compactMap { child in
+                    let exportedChildren: [[String: Any]] = self.\(property.name).compactMap { child in
                         let anyChild: Any = child
                         guard let exportable = anyChild as? any SyncUpdatableModel else { return nil }
                         return exportable.exportObject(using: options, state: &state)
@@ -441,7 +441,7 @@ public struct SyncableMacro: ExtensionMacro {
             return """
             if options.relationshipMode != .none {
                 let baseKey = \(keyExpr)
-                let anyChild: Any? = \(property.name)
+                let anyChild: Any? = self.\(property.name)
                 if let exportable = anyChild as? any SyncUpdatableModel {
                     let child = exportable.exportObject(using: options, state: &state)
                     switch options.relationshipMode {
@@ -468,7 +468,7 @@ public struct SyncableMacro: ExtensionMacro {
 
         if property.isOptional {
             return """
-            if let value = \(property.name) {
+            if let value = self.\(property.name) {
                 if let encoded = exportEncodeValue(value, options: options) {
                     exportSetValue(encoded, for: \(keyExpr), into: &result)
                 } else if options.includeNulls {
@@ -481,7 +481,7 @@ public struct SyncableMacro: ExtensionMacro {
         }
 
         return """
-        if let encoded = exportEncodeValue(\(property.name), options: options) {
+        if let encoded = exportEncodeValue(self.\(property.name), options: options) {
             exportSetValue(encoded, for: \(keyExpr), into: &result)
         } else if options.includeNulls {
             exportSetValue(NSNull(), for: \(keyExpr), into: &result)
@@ -531,8 +531,8 @@ public struct SyncableMacro: ExtensionMacro {
         return """
         if payload.contains("\(inputKey)") {
             \(read)
-            if \(property.name) != \(incoming) {
-                \(property.name) = \(incoming)
+            if self.\(property.name) != \(incoming) {
+                self.\(property.name) = \(incoming)
                 changed = true
             }
         }

@@ -129,6 +129,11 @@ final class FakeDemoAPIClient {
         return try backend.createTask(body: body)
     }
 
+    func updateTask(taskID: String, body: [String: Any]) async throws -> [String: Any]? {
+        try await networkGate(endpoint: "PUT /tasks/{id}")
+        return try backend.updateTask(taskID: taskID, body: body)
+    }
+
     func deleteTask(taskID: String) async throws {
         try await networkGate(endpoint: "DELETE /tasks/{id}")
         try backend.deleteTask(taskID: taskID)

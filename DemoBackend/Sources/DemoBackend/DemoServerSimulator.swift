@@ -440,6 +440,75 @@ public final class DemoServerSimulator {
         return payload
     }
 
+    /// PUT /tasks/:id — full-object update. Accepts the same field shape that createTask produces
+    /// (exported via SwiftSync's exportObject), reads all mutable scalar fields, and applies them.
+    /// id, project_id, author_id, and created_at are immutable; they are validated for consistency
+    /// but not updated. updated_at is always advanced by the server regardless of the incoming value.
+    @discardableResult
+    public func updateTask(taskID: String, body: [String: Any]) throws -> [String: Any] {
+        guard let current = try getTaskDetailPayload(taskID: taskID) else {
+            throw DemoBackendError.notFound(entity: "task", id: taskID)
+        }
+
+        // Validate immutable field consistency
+        if let incomingID = body["id"] as? String, incomingID != taskID {
+            throw DemoBackendError.validation(message: "id in body does not match taskID")
+        }
+
+        guard let title = body["title"] as? String else {
+            throw DemoBackendError.validation(message: "title is required")
+        }
+        guard let description = body["description"] as? String else {
+            throw DemoBackendError.validation(message: "description is required")
+        }
+        guard let stateDict = body["state"] as? [String: Any],
+              let stateID = stateDict["id"] as? String else {
+            throw DemoBackendError.validation(message: "state.id is required")
+        }
+
+        let normalizedTitle = try validatedNonEmpty(title, field: "title")
+        let normalizedDescription = try validatedNonEmpty(description, field: "description")
+        let normalizedState = try validatedTaskState(stateID)
+
+        // assignee_id: present key means update (NSNull clears, String sets)
+        let assigneeID: String?
+        if body.keys.contains("assignee_id") {
+            assigneeID = body["assignee_id"] as? String   // nil if NSNull
+        } else {
+            // Preserve current value if key is absent
+            assigneeID = current["assignee_id"] as? String
+        }
+
+        if let assigneeID, !(try exists(in: "users", id: assigneeID)) {
+            throw DemoBackendError.invalidReference(entity: "assignee_id", id: assigneeID)
+        }
+
+        suspendAmbientMutationsAfterWrite()
+        let currentUpdatedAt = try parseISO8601(current["updated_at"])
+        let next = nextTimestamp(after: currentUpdatedAt)
+
+        try self.sqlite.execute(
+            """
+            UPDATE tasks
+            SET title = ?, description = ?, state = ?, assignee_id = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            bind: { stmt in
+                self.sqlite.bind(text: normalizedTitle, at: 1, in: stmt)
+                self.sqlite.bind(text: normalizedDescription, at: 2, in: stmt)
+                self.sqlite.bind(text: normalizedState, at: 3, in: stmt)
+                self.sqlite.bind(nullableText: assigneeID, at: 4, in: stmt)
+                self.sqlite.bind(double: next.timeIntervalSince1970, at: 5, in: stmt)
+                self.sqlite.bind(text: taskID, at: 6, in: stmt)
+            }
+        )
+
+        guard let result = try getTaskDetailPayload(taskID: taskID) else {
+            throw DemoBackendError.notFound(entity: "task", id: taskID)
+        }
+        return result
+    }
+
     public func deleteTask(taskID: String) throws {
         guard try exists(in: "tasks", id: taskID) else {
             throw DemoBackendError.notFound(entity: "task", id: taskID)

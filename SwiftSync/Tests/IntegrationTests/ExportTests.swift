@@ -148,6 +148,25 @@ final class CycleNode {
     }
 }
 
+/// A Task-like model used to test that update bodies via exportObject
+/// correctly honor @RemoteKey("description") and @RemoteKey("state.id/label"),
+/// matching the gap that existed before update adopted the export pattern.
+@Syncable
+@Model
+final class UpdateTaskLike {
+    @Attribute(.unique) var id: String
+    @RemoteKey("description") var descriptionText: String
+    @RemoteKey("state.id") var state: String
+    @RemoteKey("state.label") var stateLabel: String
+
+    init(id: String, descriptionText: String, state: String, stateLabel: String) {
+        self.id = id
+        self.descriptionText = descriptionText
+        self.state = state
+        self.stateLabel = stateLabel
+    }
+}
+
 // Compile-time regression: exportObject must be a requirement of SyncUpdatableModel,
 // not a separate ExportModel protocol. This function would not compile if exportObject
 // were missing from SyncUpdatableModel.
@@ -368,6 +387,83 @@ final class ExportTests: XCTestCase {
         let rows = try SwiftSync.export(as: CycleNode.self, in: context)
         XCTAssertEqual(rows.count, 2)
         XCTAssertNotNil(rows.first(where: { ($0["id"] as? Int) == 1 }))
+    }
+
+    // MARK: - Update body via export
+
+    /// Regression: buildUpdateBody must use @RemoteKey and @RemotePath mappings,
+    /// not raw Swift property names. This mirrors the pattern used in DemoSyncEngine
+    /// for createTask and must apply equally to updateTask.
+    @MainActor
+    func testBuildUpdateBodyUsesRemoteKeyMappings() throws {
+        // ExportMappedFields has @RemoteKey("type") on userType and @RemotePath("profile.contact.email") on email.
+        // Simulate the buildUpdateBody pattern: transient model → exportObject → inspect keys.
+        let schema = Schema([ExportMappedFields.self])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: config)
+        let context = ModelContext(container)
+
+        let model = ExportMappedFields(id: 42, userType: "editor", email: "update@example.com", localOnly: "ignored")
+        context.insert(model)
+
+        var exportState = ExportState()
+        let options = ExportOptions(relationshipMode: .none, includeNulls: false)
+        let body = model.exportObject(using: options, state: &exportState)
+
+        // @RemoteKey("type") must appear as "type", not "user_type"
+        XCTAssertEqual(body["type"] as? String, "editor", "Expected @RemoteKey(\"type\") to map userType → \"type\"")
+        XCTAssertNil(body["user_type"], "Raw snake_case key must not appear when @RemoteKey overrides it")
+
+        // @RemotePath("profile.contact.email") must appear nested
+        let profile = body["profile"] as? [String: Any]
+        let contact = profile?["contact"] as? [String: Any]
+        XCTAssertEqual(contact?["email"] as? String, "update@example.com",
+                       "Expected @RemotePath(\"profile.contact.email\") to produce nested structure")
+        XCTAssertNil(body["email"], "Flat key must not appear when @RemotePath overrides it")
+
+        // @NotExport field must be absent
+        XCTAssertNil(body["local_only"], "@NotExport field must be excluded from update body")
+        XCTAssertNil(body["localOnly"], "@NotExport field must be excluded from update body (camelCase variant)")
+    }
+
+    /// Regression: buildUpdateBody for a Task-like model must use @RemoteKey("description")
+    /// for descriptionText and nested state dict for @RemoteKey("state.id") / @RemoteKey("state.label").
+    /// This is the exact mapping gap that existed before update adopted export.
+    @MainActor
+    func testBuildUpdateBodyUsesRemoteKeyForTaskLikeModel() throws {
+        let schema = Schema([UpdateTaskLike.self])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: config)
+        let context = ModelContext(container)
+
+        let model = UpdateTaskLike(
+            id: "task-1",
+            descriptionText: "Updated body text",
+            state: "inProgress",
+            stateLabel: "In Progress"
+        )
+        context.insert(model)
+
+        var exportState = ExportState()
+        let options = ExportOptions(relationshipMode: .none, includeNulls: false)
+        let body = model.exportObject(using: options, state: &exportState)
+
+        // descriptionText → @RemoteKey("description") → must appear as "description"
+        XCTAssertEqual(body["description"] as? String, "Updated body text",
+                       "Expected @RemoteKey(\"description\") to map descriptionText → \"description\"")
+        XCTAssertNil(body["description_text"],
+                     "Raw snake_case key must not appear when @RemoteKey overrides it")
+        XCTAssertNil(body["descriptionText"],
+                     "Camel-case key must not appear when @RemoteKey overrides it")
+
+        // state → @RemoteKey("state.id") → must appear nested under "state" dict
+        let stateDict = body["state"] as? [String: Any]
+        XCTAssertEqual(stateDict?["id"] as? String, "inProgress",
+                       "Expected @RemoteKey(\"state.id\") to produce nested state.id")
+        XCTAssertEqual(stateDict?["label"] as? String, "In Progress",
+                       "Expected @RemoteKey(\"state.label\") to produce nested state.label")
+        XCTAssertNil(body["state_id"], "Flat state_id key must not appear")
+        XCTAssertNil(body["state_label"], "Flat state_label key must not appear")
     }
 
     @MainActor

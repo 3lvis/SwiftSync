@@ -129,6 +129,46 @@ final class DemoSyncEngine: ObservableObject {
         return task.exportObject(using: options, state: &exportState)
     }
 
+    /// Builds the JSON update-body for an existing Task using the same export-based pattern as
+    /// buildCreateTaskBody: a transient Task is populated with the full set of field values and
+    /// exported via SwiftSync's export system so that @RemoteKey, @RemotePath, and snake_case
+    /// transforms are applied consistently. stateLabel is left empty because the server resolves
+    /// the label from the state id; it is not part of the PUT contract.
+    private static func buildUpdateTaskBody(
+        taskID: String,
+        projectID: String,
+        title: String,
+        descriptionText: String,
+        state: String,
+        assigneeID: String?,
+        authorID: String,
+        createdAt: Date,
+        updatedAt: Date
+    ) throws -> [String: Any] {
+        let schema = Schema([Task.self])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [config])
+        let context = ModelContext(container)
+
+        let task = Task(
+            id: taskID,
+            projectID: projectID,
+            assigneeID: assigneeID,
+            authorID: authorID,
+            title: title,
+            descriptionText: descriptionText,
+            state: state,
+            stateLabel: "",
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+        context.insert(task)
+
+        var exportState = ExportState()
+        let options = ExportOptions(relationshipMode: .none, includeNulls: false)
+        return task.exportObject(using: options, state: &exportState)
+    }
+
     func deleteTask(taskID: String, projectID: String) async {
         await syncOperation("deleteTask-\(taskID)") {
             try await apiClient.deleteTask(taskID: taskID)
@@ -137,28 +177,43 @@ final class DemoSyncEngine: ObservableObject {
     }
 
     func updateTaskDescription(taskID: String, projectID: String?, descriptionText: String) async throws {
-        try await syncOperationThrowing("patchTaskDescription-\(taskID)") {
-            _ = try await apiClient.patchTaskDescription(taskID: taskID, descriptionText: descriptionText)
-            try await syncTaskDetailInternal(taskID: taskID)
-            if let projectID {
-                try await syncProjectTasksInternal(projectID: projectID)
-            }
-        }
+        try await updateTask(taskID: taskID, projectID: projectID, descriptionText: descriptionText)
     }
 
     func updateTaskState(taskID: String, projectID: String?, state: String) async throws {
-        try await syncOperationThrowing("patchTaskState-\(taskID)") {
-            _ = try await apiClient.patchTaskState(taskID: taskID, state: state)
-            try await syncTaskDetailInternal(taskID: taskID)
-            if let projectID {
-                try await syncProjectTasksInternal(projectID: projectID)
-            }
-        }
+        try await updateTask(taskID: taskID, projectID: projectID, state: state)
     }
 
     func updateTaskAssignee(taskID: String, projectID: String?, assigneeID: String?) async throws {
-        try await syncOperationThrowing("patchTaskAssignee-\(taskID)") {
-            _ = try await apiClient.patchTaskAssignee(taskID: taskID, assigneeID: assigneeID)
+        try await updateTask(taskID: taskID, projectID: projectID, assigneeID: assigneeID)
+    }
+
+    /// Sends a full PUT update for a task, building the request body via SwiftSync's export system
+    /// so that @RemoteKey and @RemotePath field mappings are applied consistently with createTask.
+    /// Only the provided non-nil overrides are applied; all other fields are read from the local store.
+    private func updateTask(
+        taskID: String,
+        projectID: String?,
+        title: String? = nil,
+        descriptionText: String? = nil,
+        state: String? = nil,
+        assigneeID: String?? = nil
+    ) async throws {
+        try await syncOperationThrowing("updateTask-\(taskID)") {
+            guard let current = try self.task(withID: taskID) else { return }
+
+            let body = try Self.buildUpdateTaskBody(
+                taskID: current.id,
+                projectID: current.projectID,
+                title: title ?? current.title,
+                descriptionText: descriptionText ?? current.descriptionText,
+                state: state ?? current.state,
+                assigneeID: assigneeID ?? current.assigneeID,
+                authorID: current.authorID,
+                createdAt: current.createdAt,
+                updatedAt: current.updatedAt
+            )
+            _ = try await apiClient.updateTask(taskID: taskID, body: body)
             try await syncTaskDetailInternal(taskID: taskID)
             if let projectID {
                 try await syncProjectTasksInternal(projectID: projectID)
@@ -256,5 +311,9 @@ final class DemoSyncEngine: ObservableObject {
 
     private func project(withID projectID: String) throws -> Project? {
         try syncContainer.mainContext.fetch(FetchDescriptor<Project>()).first { $0.id == projectID }
+    }
+
+    private func task(withID taskID: String) throws -> Task? {
+        try syncContainer.mainContext.fetch(FetchDescriptor<Task>()).first { $0.id == taskID }
     }
 }

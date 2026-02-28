@@ -342,6 +342,116 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(projectTasksAfterDelete[0]["id"] as? String, taskID)
     }
 
+    func testUpdateTaskFromBodyDictUpdatesAllMutableFields() throws {
+        let url = makeTemporaryDatabaseURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
+
+        let before = try backend.getTaskDetailPayload(taskID: taskID)
+        let beforeUpdatedAt = before?["updated_at"] as? String
+
+        // Build a body that mirrors the shape SwiftSync's exportObject produces:
+        // - description (not description_text) from @RemoteKey("description")
+        // - state as a nested dict with id+label from @RemoteKey("state.id") / @RemoteKey("state.label")
+        let body: [String: Any] = [
+            "id": taskID,
+            "title": "Updated title via PUT",
+            "description": "Updated description via PUT",
+            "state": ["id": "done", "label": "Done"],
+            "assignee_id": NSNull()
+        ]
+
+        let updated = try backend.updateTask(taskID: taskID, body: body)
+
+        XCTAssertEqual(updated["id"] as? String, taskID)
+        XCTAssertEqual(updated["title"] as? String, "Updated title via PUT")
+        XCTAssertEqual(updated["description"] as? String, "Updated description via PUT")
+        XCTAssertEqual(stateID(in: updated), "done")
+        XCTAssertEqual(stateLabel(in: updated), "Done")
+        XCTAssertTrue(updated["assignee_id"] is NSNull || updated["assignee_id"] == nil,
+                      "NSNull assignee_id must clear the assignee")
+        // updated_at must advance
+        XCTAssertNotEqual(updated["updated_at"] as? String, beforeUpdatedAt)
+        // created_at must not change
+        XCTAssertEqual(updated["created_at"] as? String, before?["created_at"] as? String)
+    }
+
+    func testUpdateTaskFromBodyDictNotFoundThrows() throws {
+        let url = makeTemporaryDatabaseURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
+
+        let body: [String: Any] = [
+            "title": "irrelevant",
+            "description": "irrelevant",
+            "state": ["id": "todo"]
+        ]
+        XCTAssertThrowsError(
+            try backend.updateTask(taskID: "00000000-0000-0000-0000-000000000000", body: body)
+        )
+    }
+
+    func testUpdateTaskFromBodyDictIDMismatchThrows() throws {
+        let url = makeTemporaryDatabaseURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
+
+        let body: [String: Any] = [
+            "id": "different-id",
+            "title": "T",
+            "description": "D",
+            "state": ["id": "todo"]
+        ]
+        XCTAssertThrowsError(try backend.updateTask(taskID: taskID, body: body))
+    }
+
+    func testUpdateTaskFromBodyDictMissingRequiredFieldThrows() throws {
+        let url = makeTemporaryDatabaseURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
+
+        // missing title
+        XCTAssertThrowsError(try backend.updateTask(taskID: taskID, body: [
+            "description": "D", "state": ["id": "todo"]
+        ]))
+
+        // missing description
+        XCTAssertThrowsError(try backend.updateTask(taskID: taskID, body: [
+            "title": "T", "state": ["id": "todo"]
+        ]))
+
+        // missing state
+        XCTAssertThrowsError(try backend.updateTask(taskID: taskID, body: [
+            "title": "T", "description": "D"
+        ]))
+
+        // invalid state value
+        XCTAssertThrowsError(try backend.updateTask(taskID: taskID, body: [
+            "title": "T", "description": "D", "state": ["id": "invalid"]
+        ]))
+    }
+
+    func testUpdateTaskPreservesAssigneeWhenKeyAbsent() throws {
+        let url = makeTemporaryDatabaseURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
+
+        // The seeded task has assigneeID = userID. Omitting assignee_id from body must preserve it.
+        let body: [String: Any] = [
+            "title": "No assignee key",
+            "description": "Preserve existing assignee",
+            "state": ["id": "todo"]
+        ]
+        let updated = try backend.updateTask(taskID: taskID, body: body)
+        XCTAssertEqual(updated["assignee_id"] as? String, userID,
+                       "Omitting assignee_id must preserve the existing assignee")
+    }
+
     func testSQLiteBackendAmbientProjectMutationKeepsSliceValid() async throws {
         let url = makeTemporaryDatabaseURL()
         defer { try? FileManager.default.removeItem(at: url) }
