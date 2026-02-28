@@ -39,7 +39,7 @@ ObjCExceptionCatcher      (mixed Swift/ObjC, catches NSException from ModelConta
 ```
 PersistentModel (SwiftData)
   └─ SyncModelable          syncIdentity, syncIdentityRemoteKeys, syncDefaultRefreshModelTypes,
-    │                       syncSortDescriptor(for:), syncRelationshipSchemaDescriptors
+    │                       syncRelationshipSchemaDescriptors
     └─ SyncUpdatableModel       make(from:), apply(_:) → Bool,
           │                     applyRelationships(_:in:operations:) → Bool (default no-op)
           └─ ParentScopedModel  parentRelationship keypath
@@ -159,10 +159,6 @@ The macro emits an `extension Task: SyncUpdatableModel, ExportModel, ...` contai
 - `stateID` exported under key `"state.id"` (nested dict)
 - `assignee` exported as object or NSNull
 - `tags` exported as array of objects
-
-**`static func syncSortDescriptor(for keyPath:) -> SortDescriptor<Task>?`**
-- Returns `SortDescriptor(\Task.title)` if `keyPath == \Task.title`, etc.
-- Only for Comparable scalar types (String, Int, Date, UUID, …)
 
 **`static var syncRelationshipSchemaDescriptors`**
 - Metadata for schema validation: each relationship's name, related type, isToMany, hasExplicitInverse

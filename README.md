@@ -149,18 +149,7 @@ Behavior note:
 
 SwiftUI is the primary integration path. Use `@SyncQuery` for list reads and `@SyncModel` for detail reads.
 
-Shorthand ascending sort:
-
-```swift
-@SyncQuery(
-  User.self,
-  in: syncContainer,
-  sortBy: [\.displayName, \.id]
-)
-var users: [User]
-```
-
-Descending or mixed sort order:
+Sort order (ascending or mixed/descending):
 
 ```swift
 @SyncQuery(
@@ -560,8 +549,6 @@ let rows = try SwiftSync.export(as: User.self, in: context)
 `@Syncable` generates:
 - `SyncUpdatableModel` conformance (make/apply + relationship sync)
 - `ExportModel` conformance
-- `syncSortDescriptor(for:)` implementation for `SyncModelable` sort sugar
-
 Built-in relationship sync behavior:
 - to-one by `*_id` (strict typed FK lookup)
 - to-many by `*_ids` (unordered membership updates)

@@ -21,8 +21,7 @@ it needs a strong justification to stay public.
 | `syncContainer.sync(payload:as:)` | Projects, Users, TaskStateOptions, UserRoleOptions |
 | `syncContainer.sync(payload:as:parent:)` | Tasks scoped to a Project |
 | `syncContainer.sync(item:as:)` | Single-task detail re-sync (`syncTaskDetailInternal`) |
-| `@SyncQuery(_:in:sortBy:[PartialKeyPath])` | Users, TaskStateOptions (sort sugar) |
-| `@SyncQuery(_:in:sortBy:[SortDescriptor])` | Projects |
+| `@SyncQuery(_:in:sortBy:[SortDescriptor])` | Users, TaskStateOptions, Projects |
 | `@SyncQuery(_:relatedTo:relatedID:in:sortBy:refreshOn:animation:)` | Tasks for a Project |
 | `@SyncModel(_:id:in:animation:)` | Project and Task lookup |
 | `SyncQueryPublisher(_:in:sortBy:)` | `ProjectsViewController` (UIKit table) |
@@ -272,8 +271,6 @@ removal candidates (they power the reactive layer), but they should be audited f
 - [ ] `syncDefaultRefreshModelTypeNames` (computed var)
 - [ ] `syncRefreshModelTypes(for:)` static func
 - [ ] `syncRefreshModelTypeNames(for:)` static func
-- [ ] `syncSortDescriptor(for:)` static func (single key path)
-- [ ] `syncSortDescriptors(for:)` static func (array of key paths)
 - [ ] `syncRelatedModelType(for:)` static func
 - [ ] `syncRelationshipSchemaDescriptors` static var
 - [ ] `SyncRelationshipSchemaDescriptor` struct
