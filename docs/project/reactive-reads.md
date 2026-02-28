@@ -192,7 +192,7 @@ It supports the same query shapes as `@SyncQuery`:
 - plain fetch with optional predicate
 - `relatedTo:` + `through:` for relationship-scoped queries
 
-It reacts to the same `SyncContainer.didSaveChangesNotification` events and applies the same reload heuristics (`changedTypeNames`, `changedIDs`).
+It reacts to the same internal save notifications as `@SyncQuery` and applies the same reload heuristics (`changedTypeNames`, `changedIDs`).
 
 Hold it as a property — it starts observing on init and stops on deinit.
 

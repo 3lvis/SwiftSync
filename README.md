@@ -225,7 +225,7 @@ let publisher = SyncQueryPublisher(
 )
 ```
 
-`SyncQueryPublisher` reloads on the same `SyncContainer.didSaveChangesNotification` events as `@SyncQuery`.
+`SyncQueryPublisher` reloads automatically after every sync, using the same internal mechanism as `@SyncQuery`.
 
 ## Scenario -> Way of Use
 
