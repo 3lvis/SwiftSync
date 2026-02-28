@@ -77,12 +77,18 @@ struct TaskDetailView: View {
             Menu("Change State") {
                 ForEach(taskStateOptions, id: \.id) { option in
                     Button {
+                        guard let taskModel else { return }
+                        taskModel.state = option.id
+                        var exportState = ExportState()
+                        let options = ExportOptions(relationshipMode: .none, includeNulls: false)
+                        let body = taskModel.exportObject(using: options, state: &exportState)
+                        let projectID = taskModel.projectID
                         _Concurrency.Task {
-                            try? await syncEngine.updateTaskState(
-                                taskID: taskID,
-                                projectID: taskModel?.projectID,
-                                state: option.id
-                            )
+                            do {
+                                try await syncEngine.updateTask(taskID: taskID, projectID: projectID, body: body)
+                            } catch {
+                                syncContainer.mainContext.rollback()
+                            }
                         }
                     } label: {
                         if taskModel?.state == option.id {
@@ -200,17 +206,17 @@ private enum TaskDetailSheet: String, Identifiable {
 
 private struct EditTaskDescriptionSheet: View {
     let taskID: String
+    let syncContainer: SyncContainer
     let syncEngine: DemoSyncEngine
 
     @Environment(\.dismiss) private var dismiss
     @SyncModel private var taskModel: Task?
-    @State private var text = ""
-    @State private var hasLoadedInitialValue = false
     @State private var isSaving = false
     @State private var saveErrorMessage: String?
 
     init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.taskID = taskID
+        self.syncContainer = syncContainer
         self.syncEngine = syncEngine
         _taskModel = SyncModel(Task.self, id: taskID, in: syncContainer, animation: .snappy(duration: 0.22))
     }
@@ -219,34 +225,43 @@ private struct EditTaskDescriptionSheet: View {
         NavigationStack {
             Form {
                 Section("Description") {
-                    TextEditor(text: $text)
+                    if let taskModel {
+                        TextEditor(text: Binding(
+                            get: { taskModel.descriptionText },
+                            set: { taskModel.descriptionText = $0 }
+                        ))
                         .frame(minHeight: 220)
+                    }
                 }
             }
             .navigationTitle("Edit Description")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                        .disabled(isSaving)
+                    Button("Cancel") {
+                        syncContainer.mainContext.rollback()
+                        dismiss()
+                    }
+                    .disabled(isSaving)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: {
-                        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard let taskModel else { return }
+                        let trimmed = taskModel.descriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !trimmed.isEmpty else { return }
+                        taskModel.descriptionText = trimmed
+                        var exportState = ExportState()
+                        let options = ExportOptions(relationshipMode: .none, includeNulls: false)
+                        let body = taskModel.exportObject(using: options, state: &exportState)
+                        let projectID = taskModel.projectID
                         isSaving = true
                         saveErrorMessage = nil
                         _Concurrency.Task {
                             do {
-                                try await syncEngine.updateTaskDescription(
-                                    taskID: taskID,
-                                    projectID: taskModel?.projectID,
-                                    descriptionText: trimmed
-                                )
-                                await MainActor.run {
-                                    dismiss()
-                                }
+                                try await syncEngine.updateTask(taskID: taskID, projectID: projectID, body: body)
+                                await MainActor.run { dismiss() }
                             } catch {
+                                syncContainer.mainContext.rollback()
                                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                                 await MainActor.run {
                                     isSaving = false
@@ -263,14 +278,9 @@ private struct EditTaskDescriptionSheet: View {
                             Text("Save")
                         }
                     }
-                    .disabled(isSaving || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(isSaving || taskModel?.descriptionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true)
                 }
             }
-        }
-        .task(id: taskModel?.id) {
-            guard !hasLoadedInitialValue, let taskModel else { return }
-            text = taskModel.descriptionText
-            hasLoadedInitialValue = true
         }
         .alert(
             "Save Failed",
@@ -291,18 +301,18 @@ private struct EditTaskDescriptionSheet: View {
 
 private struct AssigneePickerSheet: View {
     let taskID: String
+    let syncContainer: SyncContainer
     let syncEngine: DemoSyncEngine
 
     @Environment(\.dismiss) private var dismiss
     @SyncModel private var taskModel: Task?
     @SyncQuery private var users: [User]
-    @State private var pendingAssigneeID: String?
-    @State private var hasLoadedInitialValue = false
     @State private var isSaving = false
     @State private var saveErrorMessage: String?
 
     init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.taskID = taskID
+        self.syncContainer = syncContainer
         self.syncEngine = syncEngine
         _taskModel = SyncModel(Task.self, id: taskID, in: syncContainer, animation: .snappy(duration: 0.22))
         _users = SyncQuery(
@@ -317,26 +327,26 @@ private struct AssigneePickerSheet: View {
         NavigationStack {
             List {
                 Button {
-                    pendingAssigneeID = nil
+                    taskModel?.assigneeID = nil
                 } label: {
                     HStack {
                         Text("Unassigned")
                         Spacer()
-                            if pendingAssigneeID == nil {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(Color.accentColor)
-                            }
+                        if taskModel?.assigneeID == nil {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(Color.accentColor)
                         }
+                    }
                 }
 
                 ForEach(users, id: \.id) { user in
                     Button {
-                        pendingAssigneeID = user.id
+                        taskModel?.assigneeID = user.id
                     } label: {
                         HStack {
                             Text(user.displayName)
                             Spacer()
-                            if pendingAssigneeID == user.id {
+                            if taskModel?.assigneeID == user.id {
                                 Image(systemName: "checkmark")
                                     .foregroundStyle(Color.accentColor)
                             }
@@ -348,26 +358,27 @@ private struct AssigneePickerSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                        .disabled(isSaving)
+                    Button("Cancel") {
+                        syncContainer.mainContext.rollback()
+                        dismiss()
+                    }
+                    .disabled(isSaving)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: {
-                        let selection = pendingAssigneeID
-                        let projectID = taskModel?.projectID
+                        guard let taskModel else { return }
+                        var exportState = ExportState()
+                        let options = ExportOptions(relationshipMode: .none, includeNulls: false)
+                        let body = taskModel.exportObject(using: options, state: &exportState)
+                        let projectID = taskModel.projectID
                         isSaving = true
                         saveErrorMessage = nil
                         _Concurrency.Task {
                             do {
-                                try await syncEngine.updateTaskAssignee(
-                                    taskID: taskID,
-                                    projectID: projectID,
-                                    assigneeID: selection
-                                )
-                                await MainActor.run {
-                                    dismiss()
-                                }
+                                try await syncEngine.updateTask(taskID: taskID, projectID: projectID, body: body)
+                                await MainActor.run { dismiss() }
                             } catch {
+                                syncContainer.mainContext.rollback()
                                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                                 await MainActor.run {
                                     isSaving = false
@@ -387,11 +398,6 @@ private struct AssigneePickerSheet: View {
                     .disabled(isSaving)
                 }
             }
-        }
-        .task(id: taskModel?.id) {
-            guard !hasLoadedInitialValue, let taskModel else { return }
-            pendingAssigneeID = taskModel.assigneeID
-            hasLoadedInitialValue = true
         }
         .alert(
             "Save Failed",
