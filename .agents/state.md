@@ -7,9 +7,11 @@
 - [x] Update buildCreateTaskBody in DemoSyncEngine
 - [x] Update tests
 - [x] Run DemoBackendTests + SwiftSync suite + Demo build
+- [x] Update all docs (backend-contract.md, demo-coverage-gap.md, review all others)
+- [x] Delete .agents/handoff.md and .agents/log.md (old protocol files)
 
 ## Last known state
-10/10 DemoBackendTests green / Demo BUILD SUCCEEDED
+10/10 DemoBackendTests green / Demo BUILD SUCCEEDED / all docs refreshed
 
 ## Decisions (don't revisit)
 - Client is authority for id, created_at, updated_at on CREATE only — PATCH endpoints still own updated_at server-side
@@ -19,6 +21,9 @@
 - recoverOnFailure handles SwiftData migration — no VersionedSchema needed for demo
 - nextTaskID() deleted entirely — id always comes from body dict or ambientCreateTask (UUID().uuidString)
 - Seed createdAt = updatedAt for every entity
+- All entity IDs are UUIDs (stable constants in DemoSeedData.SeedIDs for seed data)
+- ARCHITECTURE.md and README.md are library-level docs — UUID/createdAt are demo choices, not library API changes; no changes needed
+- demo-coverage-gap.md section 2.1 updated: exportObject is now exercised by demo (create body); bulk SwiftSync.export() still uncovered
 
 ## Files touched
 - `Demo/Demo/Models/DemoModels.swift`
@@ -26,3 +31,8 @@
 - `DemoBackend/Sources/DemoBackend/DemoServerSimulator.swift`
 - `Demo/Demo/Sync/DemoSyncEngine.swift`
 - `DemoBackend/Tests/DemoBackendTests/DemoBackendTests.swift`
+- `docs/project/backend-contract.md`
+- `docs/planning/demo-coverage-gap.md`
+- `.agents/state.md`
+- `.agents/handoff.md` (deleted)
+- `.agents/log.md` (deleted)

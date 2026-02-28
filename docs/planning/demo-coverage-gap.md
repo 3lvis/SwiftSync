@@ -25,6 +25,8 @@ it needs a strong justification to stay public.
 | `@SyncQuery(_:relatedTo:relatedID:in:sortBy:refreshOn:animation:)` | Tasks for a Project |
 | `@SyncModel(_:id:in:animation:)` | Project and Task lookup |
 | `SyncQueryPublisher(_:in:sortBy:)` | `ProjectsViewController` (UIKit table) |
+| `exportObject(using:state:)` | `DemoSyncEngine.buildCreateTaskBody` — builds POST body via export system |
+| `ExportOptions` | `buildCreateTaskBody` — `ExportOptions(relationshipMode: .none, includeNulls: false)` |
 | `SyncContainer.SchemaValidationError` | thrown by `SyncContainer.init` on unanchored many-to-many |
 | `SyncContainer.ObjectiveCInitializationExceptionError` | thrown by `SyncContainer.init` on NSException from ModelContainer |
 
@@ -40,26 +42,27 @@ Ordered by estimated reduction impact (largest first).
 
 ### 2.1 Export system
 
-The entire export subsystem — protocol requirement, options, state, free functions, and the
-`@NotExport` macro — is absent from the demo. It is fully tested in `ExportTests.swift` but
-represents a significant surface area that a first-time integrator never needs to touch.
+The export subsystem is now exercised by the demo for task creation. `DemoSyncEngine.buildCreateTaskBody` uses `exportObject(using:state:)` with `ExportOptions(relationshipMode: .none, includeNulls: false)` to produce the POST body before sending to the server.
 
-Specific unused items:
+Items now covered by the demo:
 
-- [ ] `ExportOptions` struct (all properties, static presets, `defaultDateFormatter()`)
+- [x] `ExportOptions` struct — `ExportOptions(relationshipMode: .none, includeNulls: false)` used in `buildCreateTaskBody`
+- [x] `enum ExportRelationshipMode` — `.none` used explicitly
+- [x] `exportObject(using:state:)` protocol requirement on `SyncUpdatableModel` — called by `DemoSyncEngine`
+
+Items still not directly exercised by the demo:
+
+- [ ] `ExportOptions` static presets (`.camelCase`, `.excludedRelationships`, `.nested`), `defaultDateFormatter()`
 - [ ] `ExportState` struct (`enter(_:)`, `leave(_:)`)
-- [ ] `enum ExportRelationshipMode` (`.array`, `.nested`, `.none`)
+- [ ] `enum ExportRelationshipMode` — `.array`, `.nested` variants
 - [ ] `enum ExportKeyStyle` (`.snakeCase`, `.camelCase`, `transform(_:)`)
 - [ ] `exportEncodeValue(_:options:)` free function
 - [ ] `exportSetValue(_:for:into:)` free function
-- [ ] `SwiftSync.export(as:in:using:)` static method
+- [ ] `SwiftSync.export(as:in:using:)` static method (bulk export)
 - [ ] `SwiftSync.export(as:in:parent:using:)` static method
-- [ ] `exportObject(using:state:)` protocol requirement on `SyncUpdatableModel`
 - [ ] `@NotExport` macro
 
-**Recommendation:** Extract to a separate `SwiftSyncExport` module or hide behind a build flag.
-The implementation is complete and tested — this is about decoupling it from the core import
-path, not discarding the work.
+**Recommendation:** The core `exportObject` path is now exercised. The bulk `SwiftSync.export()` entry point and mode variants (`.array`, `.nested`) remain uncovered. Consider whether a full round-trip export demo scenario (e.g. export tasks to a share sheet) would cover the remaining surface before moving to module extraction.
 
 ---
 
@@ -236,7 +239,7 @@ clearly marked as advanced in docs rather than being hidden or removed.
 
 | Subsystem | Approx. symbols | Demo usage | Action |
 |---|---|---|---|
-| Export system | ~10 | None | Extract to separate module |
+| Export system | ~10 | Partial (`exportObject` used in create body; bulk export unused) | Cover remaining via round-trip demo or extract to separate module |
 | Low-level context API | 5 overloads | None | Make `internal` |
 | Manual relationship helpers | 5 free functions | None (macro-generated) | Make `internal` or `package` |
 | `SyncPayload` accessors | 3 methods | None | Make `internal` |
