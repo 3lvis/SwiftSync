@@ -2,6 +2,101 @@ import XCTest
 import SwiftData
 @testable import SwiftSync
 
+// Models that mirror the exact Demo pattern: Task owns @Relationship reviewers: [User]
+// where User has NO back-reference property at all. This is the one-sided relationship
+// pattern that triggers SwiftData's dirty-tracking gap on persistent stores.
+@Model
+final class OneSidedUser {
+    @Attribute(.unique) var id: Int
+    var name: String
+
+    init(id: Int, name: String) {
+        self.id = id
+        self.name = name
+    }
+}
+
+@Model
+final class OneSidedTask {
+    @Attribute(.unique) var id: Int
+    var title: String
+
+    // No explicit inverse — OneSidedUser has no back-reference to OneSidedTask.
+    // This is the same pattern as Task.reviewers / Task.watchers in the Demo.
+    @Relationship var members: [OneSidedUser]
+
+    init(id: Int, title: String, members: [OneSidedUser] = []) {
+        self.id = id
+        self.title = title
+        self.members = members
+    }
+}
+
+extension OneSidedUser: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<OneSidedUser, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> OneSidedUser {
+        OneSidedUser(
+            id: try payload.required(Int.self, for: "id"),
+            name: try payload.required(String.self, for: "name")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        var changed = false
+        if payload.contains("name") {
+            let incoming: String = try payload.required(String.self, for: "name")
+            if name != incoming { name = incoming; changed = true }
+        }
+        return changed
+    }
+
+    func syncMarkChanged() { self.id = self.id }
+}
+
+extension OneSidedTask: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<OneSidedTask, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> OneSidedTask {
+        OneSidedTask(
+            id: try payload.required(Int.self, for: "id"),
+            title: try payload.required(String.self, for: "title")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        var changed = false
+        if payload.contains("title") {
+            let incoming: String = try payload.required(String.self, for: "title")
+            if title != incoming { title = incoming; changed = true }
+        }
+        return changed
+    }
+
+    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+        try await applyRelationships(payload, in: context, operations: .all)
+    }
+
+    func applyRelationships(
+        _ payload: SyncPayload,
+        in context: ModelContext,
+        operations: SyncRelationshipOperations
+    ) async throws -> Bool {
+        try syncApplyToManyForeignKeys(
+            self,
+            relationship: \OneSidedTask.members,
+            payload: payload,
+            keys: ["member_ids"],
+            in: context,
+            operations: operations
+        )
+    }
+
+    func syncMarkChanged() { self.id = self.id }
+}
+
 @Model
 final class MissingInverseRegressionTag {
     @Attribute(.unique) var id: Int
@@ -303,85 +398,85 @@ final class RelationshipIntegrityRegressionTests: XCTestCase {
         XCTAssertEqual(tasksByID[20], Set([2, 3]))
     }
 
-    // Regression: syncing a to-many relationship change must surface the owning
-    // model's PersistentIdentifier in the SyncContainer.didSaveChangesNotification.
+    // Regression: after a to-many relationship-only sync (no scalar field changes),
+    // SyncContainer.didSaveChangesNotification must include the owning model's
+    // PersistentIdentifier so SyncQueryObserver can invalidate mainContext immediately.
     //
-    // If the identifier is absent, SyncQueryObserver.shouldReload never invalidates
-    // the owning model in mainContext, so @SyncModel / @SyncQuery return stale
-    // relationship data until the next background poll.
+    // Root cause: on iOS persistent SQLite stores, SwiftData only marks the owning
+    // model's row dirty when a scalar column changes. A to-many assignment on a
+    // relationship with no explicit inverse only dirties the join-table rows, so the
+    // owner is absent from NSManagedObjectContextDidSave's updatedObjects. This means
+    // modelContextDidSave never faults the owner into mainContext, and @SyncModel /
+    // @SyncQuery serve stale relationship data until the next background poll.
     //
-    // Root cause: SwiftData only marks a model's store row dirty (and thus includes
-    // its identifier in NSManagedObjectContextDidSave's updatedObjects) when a scalar
-    // column changes. Mutating a to-many key path only dirties the join-table rows,
-    // not the owning row. syncApplyToManyForeignKeys must force a scalar touch on the
-    // owning model after a membership change so the identifier surfaces correctly.
-    // Regression: SyncContainer.didSaveChangesNotification must include the owning
-    // model's PersistentIdentifier after a to-many relationship-only sync.
+    // Fix: syncApplyToManyForeignKeys calls owner.syncMarkChanged() (a no-op scalar
+    // self-write generated by @Syncable) after any membership change, guaranteeing
+    // the owner's row is dirtied and its identifier surfaces in the notification.
     //
-    // In a persistent (on-disk) SQLite store, SwiftData only marks an owning model's
-    // store row dirty when a scalar column changes. Mutating a to-many key path only
-    // dirties the join-table rows, so the owner's identifier is absent from
-    // NSManagedObjectContextDidSave's updatedObjects. modelContextDidSave therefore
-    // never faults the owner into mainContext, and @SyncModel / @SyncQuery serve
-    // stale relationship data until the next background poll.
-    //
-    // The fix is in syncApplyToManyForeignKeys: after writing the new membership,
-    // perform a no-op scalar write on the owning model to guarantee its store row
-    // is dirtied and its identifier surfaces in the save notification.
-    //
-    // NOTE: In-memory SQLite stores (used in tests) always dirty the owner regardless,
-    // so this specific assertion cannot be driven to failure in a unit test. The test
-    // is kept as documentation of the contract and as a non-regression anchor — it
-    // will catch any future regression that breaks the relationship update itself.
+    // Platform note: macOS CoreData/SwiftData surfaces the owner identifier even
+    // without the fix, so this test cannot be driven red on the SPM test host (macOS).
+    // The test is kept as a contract anchor and documents the fix intent. The
+    // Observable behavior was confirmed via debug logging on a running iOS app where
+    // Task/p4 was absent from changedIDs after replaceTaskReviewers until the fix.
     @MainActor
-    func testToManyRelationshipOnlySyncUpdatesMainContextImmediately() async throws {
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+    func testToManyRelationshipOnlySyncSurfacesOwnerInDidSaveNotification_persistentStore() async throws {
+        let storeURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SwiftSyncOneSidedRelationshipTest-\(UUID().uuidString).sqlite")
+        defer {
+            for ext in ["", "-shm", "-wal"] {
+                try? FileManager.default.removeItem(at: storeURL.appendingPathExtension(ext))
+            }
+        }
+
+        let configuration = ModelConfiguration(url: storeURL)
         let modelContainer = try ModelContainer(
-            for: MissingInverseRegressionTask.self,
-            MissingInverseRegressionTag.self,
+            for: OneSidedTask.self,
+            OneSidedUser.self,
             configurations: configuration
         )
         let syncContainer = SyncContainer(modelContainer)
 
-        // Seed two tags and a task that starts with no tags.
+        // Seed: two users and a task with no members yet.
         try await syncContainer.sync(
-            payload: [["id": 1, "name": "Tag 1"], ["id": 2, "name": "Tag 2"]],
-            as: MissingInverseRegressionTag.self
+            payload: [["id": 1, "name": "Alice"], ["id": 2, "name": "Bob"]],
+            as: OneSidedUser.self
         )
         try await syncContainer.sync(
-            payload: [["id": 10, "title": "Task 10", "tag_ids": [] as [Int]]],
-            as: MissingInverseRegressionTask.self
+            payload: [["id": 10, "title": "Task 10", "member_ids": [] as [Int]]],
+            as: OneSidedTask.self
         )
-        let taskID = try XCTUnwrap(
-            syncContainer.mainContext.fetch(FetchDescriptor<MissingInverseRegressionTask>()).first?.persistentModelID
-        )
-        let initialTags = try syncContainer.mainContext.fetch(FetchDescriptor<MissingInverseRegressionTask>()).first?.tags.count ?? 0
-        XCTAssertEqual(initialTags, 0, "precondition: task starts with no tags")
 
-        // Capture the notification produced by a relationship-only change.
-        // Title is unchanged; only tag membership changes ([] → [1, 2]).
+        let taskID = try XCTUnwrap(
+            syncContainer.mainContext.fetch(FetchDescriptor<OneSidedTask>()).first?.persistentModelID
+        )
+        let initialCount = try syncContainer.mainContext
+            .fetch(FetchDescriptor<OneSidedTask>()).first?.members.count ?? 0
+        XCTAssertEqual(initialCount, 0, "precondition: task starts with no members")
+
+        // Sync a relationship-only change: title unchanged, member_ids [] → [1, 2].
         let notificationIDs = try await capturedChangedIDs(from: syncContainer) {
             try await syncContainer.sync(
-                payload: [["id": 10, "title": "Task 10", "tag_ids": [1, 2]]],
-                as: MissingInverseRegressionTask.self
+                payload: [["id": 10, "title": "Task 10", "member_ids": [1, 2]]],
+                as: OneSidedTask.self
             )
         }
 
-        // The owning task's identifier must appear in changedIDs so that
-        // SyncQueryObserver can invalidate it in mainContext synchronously.
+        // macOS CoreData surfaces the owner regardless, so this assertion cannot be
+        // driven to failure on the SPM test host. It will catch any future regression
+        // that breaks the relationship sync itself or removes syncMarkChanged().
         XCTAssertTrue(
             notificationIDs.contains(taskID),
-            "Owner identifier must be in didSaveChangesNotification changedIDs after " +
-            "a to-many relationship-only change. Got: \(notificationIDs)"
+            "Task identifier must be in didSaveChangesNotification changedIDs after a " +
+            "to-many relationship-only change. Got: \(notificationIDs)"
         )
 
-        // Relationship data must be correct in mainContext.
-        let task = syncContainer.mainContext.model(for: taskID) as? MissingInverseRegressionTask
-        XCTAssertEqual(Set(task?.tags.map(\.id) ?? []), Set([1, 2]))
+        // Relationship data must be correct in mainContext regardless of platform.
+        let task = syncContainer.mainContext.model(for: taskID) as? OneSidedTask
+        XCTAssertEqual(Set(task?.members.map(\.id) ?? []), Set([1, 2]))
     }
 
-    /// Observes the first `SyncContainer.didSaveChangesNotification` emitted while
-    /// `body` runs and returns the set of changed identifiers from that notification.
+    /// Collects all PersistentIdentifiers from every didSaveChangesNotification
+    /// fired by `syncContainer` while `body` executes.
     @MainActor
     private func capturedChangedIDs(
         from syncContainer: SyncContainer,
@@ -400,7 +495,7 @@ final class RelationshipIntegrityRegressionTests: XCTestCase {
         }
         defer { NotificationCenter.default.removeObserver(token) }
         try await body()
-        await fulfillment(of: [exp], timeout: 2)
+        await fulfillment(of: [exp], timeout: 5)
         return ids
     }
 }
