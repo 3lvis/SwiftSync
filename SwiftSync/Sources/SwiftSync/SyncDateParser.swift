@@ -5,15 +5,15 @@ import Darwin
 import Glibc
 #endif
 
-public enum DateType: Sendable {
+enum DateType: Sendable {
     case iso8601
     case unixTimestamp
 }
 
-public enum SyncDateParser {
+enum SyncDateParser {
     private static let unixTimestampSecondsLength = 10
 
-    public static func dateFromDateString(_ dateString: String) -> Date? {
+    static func dateFromDateString(_ dateString: String) -> Date? {
         switch dateString.dateType() {
         case .iso8601:
             return dateFromISO8601String(dateString)
@@ -22,11 +22,11 @@ public enum SyncDateParser {
         }
     }
 
-    public static func dateFromUnixTimestampNumber(_ unixTimestamp: NSNumber) -> Date? {
+    static func dateFromUnixTimestampNumber(_ unixTimestamp: NSNumber) -> Date? {
         dateFromUnixTimestampString(unixTimestamp.stringValue)
     }
 
-    public static func dateFromUnixTimestampString(_ unixTimestamp: String) -> Date? {
+    static func dateFromUnixTimestampString(_ unixTimestamp: String) -> Date? {
         let trimmed = unixTimestamp.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
@@ -48,7 +48,7 @@ public enum SyncDateParser {
         return Date(timeIntervalSince1970: seconds)
     }
 
-    public static func dateFromISO8601String(_ iso8601: String) -> Date? {
+    static func dateFromISO8601String(_ iso8601: String) -> Date? {
         var input = iso8601.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !input.isEmpty else { return nil }
 
@@ -194,7 +194,7 @@ public enum SyncDateParser {
     }
 }
 
-public extension String {
+extension String {
     func dateType() -> DateType {
         contains("-") ? .iso8601 : .unixTimestamp
     }

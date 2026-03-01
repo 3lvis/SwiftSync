@@ -1,6 +1,6 @@
 import XCTest
 import SwiftData
-import SwiftSync
+@testable import SwiftSync
 
 @Syncable
 @Model
@@ -1317,7 +1317,7 @@ extension ConcurrentRaceUser: SyncUpdatableModel {
     }
 }
 
-final class IntegrationTests: XCTestCase {
+final class SyncTests: XCTestCase {
     func testApplyReturnsFalseWhenPayloadMatchesExistingValues() throws {
         let user = User(id: 1, fullName: "Ava Swift")
         let payload = SyncPayload(values: ["id": 1, "full_name": "Ava Swift"])

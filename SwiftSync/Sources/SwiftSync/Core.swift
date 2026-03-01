@@ -23,6 +23,26 @@ fileprivate func scalarClass(_ scalar: UnicodeScalar) -> ScalarClass {
     return .other
 }
 
+fileprivate func toSnakeCaseString(_ value: String) -> String {
+    guard !value.isEmpty else { return value }
+    var output = ""
+    let scalars = Array(value.unicodeScalars)
+    for (index, scalar) in scalars.enumerated() {
+        let current = scalarClass(scalar)
+        if index > 0, current == .upper {
+            let previous = scalarClass(scalars[index - 1])
+            let next = index + 1 < scalars.count ? scalarClass(scalars[index + 1]) : nil
+            let startsNewWord = previous == .lower || previous == .digit
+            let endsAcronym = previous == .upper && next == .lower
+            if (startsNewWord || endsAcronym), output.last != "_" {
+                output.append("_")
+            }
+        }
+        output.append(String(scalar).lowercased())
+    }
+    return output
+}
+
 // MARK: - SwiftSync API
 
 public enum SwiftSync {}
@@ -623,23 +643,7 @@ public enum KeyStyle: Sendable {
     }
 
     private func toSnakeCase(_ value: String) -> String {
-        guard !value.isEmpty else { return value }
-        var output = ""
-        let scalars = Array(value.unicodeScalars)
-        for (index, scalar) in scalars.enumerated() {
-            let current = scalarClass(scalar)
-            if index > 0, current == .upper {
-                let previous = scalarClass(scalars[index - 1])
-                let next = index + 1 < scalars.count ? scalarClass(scalars[index + 1]) : nil
-                let startsNewWord = previous == .lower || previous == .digit
-                let endsAcronym = previous == .upper && next == .lower
-                if (startsNewWord || endsAcronym), output.last != "_" {
-                    output.append("_")
-                }
-            }
-            output.append(String(scalar).lowercased())
-        }
-        return output
+        toSnakeCaseString(value)
     }
 }
 
@@ -819,7 +823,7 @@ public struct SyncPayload {
         return nil
     }
 
-    public func strictValue<T>(for key: String, as type: T.Type = T.self) -> T? {
+    func strictValue<T>(for key: String, as type: T.Type = T.self) -> T? {
         for candidate in candidateKeys(for: key) {
             guard let raw = rawValue(for: candidate) else { continue }
             if let value = raw as? T {
@@ -843,7 +847,7 @@ public struct SyncPayload {
         throw SyncError.invalidPayload(model: "Payload", reason: "Missing or invalid '\(key)'")
     }
 
-    public func strictRequired<T>(_ type: T.Type = T.self, for key: String) throws -> T {
+    func strictRequired<T>(_ type: T.Type = T.self, for key: String) throws -> T {
         if let value: T = strictValue(for: key, as: type) {
             return value
         }
@@ -973,23 +977,7 @@ public struct SyncPayload {
     }
 
     private func snakeCased(_ value: String) -> String {
-        guard !value.isEmpty else { return value }
-        var output = ""
-        let scalars = Array(value.unicodeScalars)
-        for (index, scalar) in scalars.enumerated() {
-            let current = scalarClass(scalar)
-            if index > 0, current == .upper {
-                let previous = scalarClass(scalars[index - 1])
-                let next = index + 1 < scalars.count ? scalarClass(scalars[index + 1]) : nil
-                let startsNewWord = previous == .lower || previous == .digit
-                let endsAcronym = previous == .upper && next == .lower
-                if (startsNewWord || endsAcronym), output.last != "_" {
-                    output.append("_")
-                }
-            }
-            output.append(String(scalar).lowercased())
-        }
-        return output
+        toSnakeCaseString(value)
     }
 
     private func camelCased(_ value: String) -> String {

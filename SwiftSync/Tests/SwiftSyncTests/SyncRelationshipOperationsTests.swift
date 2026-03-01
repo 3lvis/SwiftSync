@@ -45,7 +45,7 @@
 
 import XCTest
 import SwiftData
-import SwiftSync
+@testable import SwiftSync
 
 // MARK: - Test Models
 

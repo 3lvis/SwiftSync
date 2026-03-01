@@ -35,23 +35,18 @@ let package = Package(
             publicHeadersPath: "include"
         ),
         .testTarget(
-            name: "CoreTests",
+            name: "SwiftSyncTests",
             dependencies: ["SwiftSync"],
-            path: "SwiftSync/Tests/CoreTests"
+            path: "SwiftSync/Tests/SwiftSyncTests"
         ),
         .testTarget(
-            name: "IntegrationTests",
-            dependencies: ["SwiftSync"],
-            path: "SwiftSync/Tests/IntegrationTests"
-        ),
-        .testTarget(
-            name: "MacrosTests",
+            name: "SwiftSyncMacrosTests",
             dependencies: [
                 "MacrosImplementation",
                 .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
                 .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax")
             ],
-            path: "SwiftSync/Tests/MacrosTests"
+            path: "SwiftSync/Tests/SwiftSyncMacrosTests"
         )
     ]
 )

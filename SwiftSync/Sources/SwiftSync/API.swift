@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-public extension SwiftSync {
+extension SwiftSync {
     static func inferToOneRelationship<Model: PersistentModel, Parent: PersistentModel>(
         for _: Model.Type,
         parent _: Parent.Type
@@ -15,7 +15,9 @@ public extension SwiftSync {
     ) throws -> ReferenceWritableKeyPath<Model, [Related]> {
         try inferSingleToManyRelationship(for: Model.self, related: Related.self).keyPath
     }
+}
 
+extension SwiftSync {
     static func sync<Model: SyncUpdatableModel>(
         payload: [Any],
         as _: Model.Type,

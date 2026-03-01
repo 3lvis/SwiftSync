@@ -104,8 +104,8 @@ Run the full test suite and Demo build after each item before proceeding.
   `SyncContainer` is the intended public entry point. These raw-context overloads exist for
   internal plumbing only.  
   **Required follow-up:** Add `@testable import SwiftSync` to any integration test files that
-  call `SwiftSync.sync(...)` or `SwiftSync.export(...)` directly. Currently: `IntegrationTests.swift`,
-  `ExportTests.swift`, `RelationshipIntegrityRegressionTests.swift`.
+  call `SwiftSync.sync(...)` or `SwiftSync.export(...)` directly. Currently: `SyncTests.swift`,
+  `SyncExportTests.swift`, `SyncRelationshipIntegrityTests.swift`.
 
 - [ ] **5. Remove `SyncQueryPublisher` predicate and `relatedTo:through:` inits**  
   File: `SwiftSync/Sources/SwiftSync/SyncQueryPublisher.swift`  
@@ -145,7 +145,7 @@ Run the full test suite and Demo build after each item before proceeding.
 | `SwiftSync/Sources/SwiftSync/API.swift` | Items 2, 4 |
 | `SwiftSync/Sources/SwiftSync/Core.swift` | Item 3 |
 | `SwiftSync/Sources/SwiftSync/SyncQueryPublisher.swift` | Item 5 |
-| `SwiftSync/Tests/IntegrationTests/IntegrationTests.swift` | Item 4 (`@testable import`) |
-| `SwiftSync/Tests/IntegrationTests/ExportTests.swift` | Item 4 (`@testable import`) |
-| `SwiftSync/Tests/IntegrationTests/RelationshipIntegrityRegressionTests.swift` | Item 4 (`@testable import`) |
-| `SwiftSync/Tests/IntegrationTests/SyncQueryPublisherTests.swift` | Item 5 (remove tests first) |
+| `SwiftSync/Tests/SwiftSyncTests/SyncTests.swift` | Item 4 (`@testable import`) |
+| `SwiftSync/Tests/SwiftSyncTests/SyncExportTests.swift` | Item 4 (`@testable import`) |
+| `SwiftSync/Tests/SwiftSyncTests/SyncRelationshipIntegrityTests.swift` | Item 4 (`@testable import`) |
+| `SwiftSync/Tests/SwiftSyncTests/SyncQueryPublisherTests.swift` | Item 5 (remove tests first) |
