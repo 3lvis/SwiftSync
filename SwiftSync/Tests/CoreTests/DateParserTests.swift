@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Core
+@testable import SwiftSync
 
 struct SyncDateParserTests {
     @Test("Date parser ISO A: timezone-preserving instant")

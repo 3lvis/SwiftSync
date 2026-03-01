@@ -96,7 +96,7 @@ public protocol SyncUpdatableModel: SyncModelable {
         in context: ModelContext,
         operations: SyncRelationshipOperations
     ) async throws -> Bool
-    func exportObject(using options: ExportOptions, state: inout ExportState) -> [String: Any]
+    func exportObject(using options: ExportOptions) -> [String: Any]
 }
 
 public extension SyncUpdatableModel {
@@ -112,8 +112,22 @@ public extension SyncUpdatableModel {
         try await applyRelationships(payload, in: context)
     }
 
-    func exportObject(using options: ExportOptions, state: inout ExportState) -> [String: Any] {
+    func exportObject(using options: ExportOptions) -> [String: Any] {
         [:]
+    }
+
+    func exportObject(
+        for container: SyncContainer,
+        relationshipMode: ExportRelationshipMode = .none,
+        includeNulls: Bool = true
+    ) -> [String: Any] {
+        let options = ExportOptions(
+            keyStyle: container.keyStyle,
+            relationshipMode: relationshipMode,
+            dateFormatter: container.dateFormatter,
+            includeNulls: includeNulls
+        )
+        return exportObject(using: options)
     }
 }
 
@@ -597,7 +611,7 @@ public enum ExportRelationshipMode: Sendable {
     case none
 }
 
-public enum ExportKeyStyle: Sendable {
+public enum KeyStyle: Sendable {
     case snakeCase
     case camelCase
 
@@ -632,20 +646,20 @@ public enum ExportKeyStyle: Sendable {
 }
 
 public struct ExportOptions: Sendable {
-    public var keyStyle: ExportKeyStyle
+    public var keyStyle: KeyStyle
     public var relationshipMode: ExportRelationshipMode
     public var dateFormatter: DateFormatter
     public var includeNulls: Bool
 
     public init(
-        keyStyle: ExportKeyStyle = .snakeCase,
+        keyStyle: KeyStyle = .snakeCase,
         relationshipMode: ExportRelationshipMode = .array,
-        dateFormatter: DateFormatter = ExportOptions.defaultDateFormatter(),
+        dateFormatter: DateFormatter? = nil,
         includeNulls: Bool = true
     ) {
         self.keyStyle = keyStyle
         self.relationshipMode = relationshipMode
-        self.dateFormatter = dateFormatter
+        self.dateFormatter = dateFormatter ?? ExportOptions.defaultDateFormatter()
         self.includeNulls = includeNulls
     }
 
@@ -661,7 +675,7 @@ public struct ExportOptions: Sendable {
         return options
     }
 
-    public static func defaultDateFormatter() -> DateFormatter {
+    static func defaultDateFormatter() -> DateFormatter {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
@@ -670,21 +684,42 @@ public struct ExportOptions: Sendable {
     }
 }
 
-public struct ExportState {
-    private var visiting: Set<String> = []
+/// Cycle-detection state for recursive relationship export.
+/// This type is an implementation detail of `@Syncable`-generated code.
+/// Do not instantiate or reference it directly.
+public enum ExportState {
+    private static let threadDictionaryKey = "SwiftSync.ExportState"
 
-    public init() {}
-
-    public mutating func enter<Model: PersistentModel>(_ model: Model) -> Bool {
+    /// Enters cycle-detection scope for a model. Returns false if already visiting (cycle detected).
+    public static func enter<Model: PersistentModel>(_ model: Model) -> Bool {
         let key = String(describing: model.persistentModelID)
-        let inserted = visiting.insert(key).inserted
-        return inserted
+        var visiting = currentVisiting()
+        if visiting.contains(key) { return false }
+        visiting.insert(key)
+        saveVisiting(visiting)
+        return true
     }
 
-    public mutating func leave<Model: PersistentModel>(_ model: Model) {
+    /// Leaves cycle-detection scope for a model.
+    public static func leave<Model: PersistentModel>(_ model: Model) {
         let key = String(describing: model.persistentModelID)
+        var visiting = currentVisiting()
         visiting.remove(key)
+        saveVisiting(visiting)
     }
+
+    private static func currentVisiting() -> Set<String> {
+        (Thread.current.threadDictionary[threadDictionaryKey] as? ExportStateBox)?.visiting ?? []
+    }
+
+    private static func saveVisiting(_ visiting: Set<String>) {
+        Thread.current.threadDictionary[threadDictionaryKey] = ExportStateBox(visiting)
+    }
+}
+
+private final class ExportStateBox {
+    var visiting: Set<String>
+    init(_ visiting: Set<String>) { self.visiting = visiting }
 }
 
 public func exportEncodeValue(_ raw: Any, options: ExportOptions) -> Any? {
@@ -765,10 +800,10 @@ private final class CandidateKeysCache {
 
 public struct SyncPayload {
     public let values: [String: Any]
-    public let keyStyle: SyncInputKeyStyle
+    public let keyStyle: KeyStyle
     private let candidateKeysCache = CandidateKeysCache()
 
-    public init(values: [String: Any], keyStyle: SyncInputKeyStyle = .snakeCase) {
+    public init(values: [String: Any], keyStyle: KeyStyle = .snakeCase) {
         self.values = values
         self.keyStyle = keyStyle
     }
@@ -1103,7 +1138,4 @@ public enum SyncError: Error, Sendable, Equatable {
     case cancelled
 }
 
-public enum SyncInputKeyStyle: Sendable {
-    case snakeCase
-    case camelCase
-}
+

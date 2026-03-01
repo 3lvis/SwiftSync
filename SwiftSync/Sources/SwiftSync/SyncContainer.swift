@@ -1,6 +1,5 @@
 import Foundation
 import SwiftData
-import Core
 import ObjCExceptionCatcher
 
 public final class SyncContainer: NSObject, @unchecked Sendable {
@@ -31,12 +30,14 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
 
     public let modelContainer: ModelContainer
     public let mainContext: ModelContext
-    public let inputKeyStyle: SyncInputKeyStyle
+    public let keyStyle: KeyStyle
+    public let dateFormatter: DateFormatter
 
     @MainActor
     public init(
         for modelTypes: any PersistentModel.Type...,
-        inputKeyStyle: SyncInputKeyStyle = .snakeCase,
+        keyStyle: KeyStyle = .snakeCase,
+        dateFormatter: DateFormatter? = nil,
         recoverOnFailure: Bool = false,
         configurations: ModelConfiguration...
     ) throws {
@@ -56,16 +57,18 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             resetPersistentStores: Self._resetPersistentStoreFiles(for:)
         )
         self.mainContext = modelContainer.mainContext
-        self.inputKeyStyle = inputKeyStyle
+        self.keyStyle = keyStyle
+        self.dateFormatter = dateFormatter ?? ExportOptions.defaultDateFormatter()
         super.init()
         installDidSaveObserver()
     }
 
     @MainActor
-    public init(_ modelContainer: ModelContainer, inputKeyStyle: SyncInputKeyStyle = .snakeCase) {
+    public init(_ modelContainer: ModelContainer, keyStyle: KeyStyle = .snakeCase, dateFormatter: DateFormatter? = nil) {
         self.modelContainer = modelContainer
         self.mainContext = modelContainer.mainContext
-        self.inputKeyStyle = inputKeyStyle
+        self.keyStyle = keyStyle
+        self.dateFormatter = dateFormatter ?? ExportOptions.defaultDateFormatter()
         super.init()
         installDidSaveObserver()
     }
@@ -88,7 +91,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             payload: payload,
             as: model,
             in: context,
-            inputKeyStyle: inputKeyStyle,
+            keyStyle: keyStyle,
             relationshipOperations: relationshipOperations
         )
     }
@@ -105,7 +108,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             as: model,
             in: context,
             parent: parent,
-            inputKeyStyle: inputKeyStyle,
+            keyStyle: keyStyle,
             relationshipOperations: relationshipOperations
         )
     }
@@ -122,7 +125,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             as: model,
             in: context,
             parent: parent,
-            inputKeyStyle: inputKeyStyle,
+            keyStyle: keyStyle,
             relationshipOperations: relationshipOperations
         )
     }
@@ -137,7 +140,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             item: item,
             as: model,
             in: context,
-            inputKeyStyle: inputKeyStyle,
+            keyStyle: keyStyle,
             relationshipOperations: relationshipOperations
         )
     }
@@ -154,7 +157,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             as: model,
             in: context,
             parent: parent,
-            inputKeyStyle: inputKeyStyle,
+            keyStyle: keyStyle,
             relationshipOperations: relationshipOperations
         )
     }

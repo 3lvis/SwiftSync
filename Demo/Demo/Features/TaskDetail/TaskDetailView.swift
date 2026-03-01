@@ -78,9 +78,7 @@ struct TaskDetailView: View {
                 ForEach(taskStateOptions, id: \.id) { option in
                     Button {
                         guard let taskModel else { return }
-                        var exportState = ExportState()
-                        let exportOptions = ExportOptions(relationshipMode: .none, includeNulls: false)
-                        var body = taskModel.exportObject(using: exportOptions, state: &exportState)
+                        var body = taskModel.exportObject(for: syncContainer, relationshipMode: .none, includeNulls: false)
                         body["state"] = ["id": option.id] as [String: Any]
                         let projectID = taskModel.projectID
                         _Concurrency.Task {
@@ -202,6 +200,7 @@ private enum TaskDetailSheet: String, Identifiable {
 
 private struct EditTaskDescriptionSheet: View {
     let taskID: String
+    let syncContainer: SyncContainer
     let syncEngine: DemoSyncEngine
 
     @Environment(\.dismiss) private var dismiss
@@ -213,6 +212,7 @@ private struct EditTaskDescriptionSheet: View {
 
     init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.taskID = taskID
+        self.syncContainer = syncContainer
         self.syncEngine = syncEngine
         _taskModel = SyncModel(Task.self, id: taskID, in: syncContainer, animation: .snappy(duration: 0.22))
     }
@@ -237,9 +237,7 @@ private struct EditTaskDescriptionSheet: View {
                         guard let taskModel else { return }
                         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !trimmed.isEmpty else { return }
-                        var exportState = ExportState()
-                        let options = ExportOptions(relationshipMode: .none, includeNulls: false)
-                        var body = taskModel.exportObject(using: options, state: &exportState)
+                        var body = taskModel.exportObject(for: syncContainer, relationshipMode: .none, includeNulls: false)
                         body["description"] = trimmed
                         let projectID = taskModel.projectID
                         isSaving = true
@@ -288,6 +286,7 @@ private struct EditTaskDescriptionSheet: View {
 
 private struct AssigneePickerSheet: View {
     let taskID: String
+    let syncContainer: SyncContainer
     let syncEngine: DemoSyncEngine
 
     @Environment(\.dismiss) private var dismiss
@@ -300,6 +299,7 @@ private struct AssigneePickerSheet: View {
 
     init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.taskID = taskID
+        self.syncContainer = syncContainer
         self.syncEngine = syncEngine
         _taskModel = SyncModel(Task.self, id: taskID, in: syncContainer, animation: .snappy(duration: 0.22))
         _users = SyncQuery(
@@ -351,9 +351,7 @@ private struct AssigneePickerSheet: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: {
                         guard let taskModel else { return }
-                        var exportState = ExportState()
-                        let options = ExportOptions(relationshipMode: .none, includeNulls: false)
-                        var body = taskModel.exportObject(using: options, state: &exportState)
+                        var body = taskModel.exportObject(for: syncContainer, relationshipMode: .none, includeNulls: false)
                         body["assignee_id"] = pendingAssigneeID ?? NSNull()
                         let projectID = taskModel.projectID
                         isSaving = true

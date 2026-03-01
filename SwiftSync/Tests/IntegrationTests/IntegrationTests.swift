@@ -2911,7 +2911,7 @@ final class IntegrationTests: XCTestCase {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let syncContainer = try SyncContainer(
             for: KeyStyleRecord.self,
-            inputKeyStyle: .camelCase,
+            keyStyle: .camelCase,
             configurations: configuration
         )
 
@@ -2931,7 +2931,7 @@ final class IntegrationTests: XCTestCase {
         let syncContainer = try SyncContainer(
             for: AutoEmployee.self,
             AutoCompany.self,
-            inputKeyStyle: .camelCase,
+            keyStyle: .camelCase,
             configurations: configuration
         )
 
@@ -2964,7 +2964,7 @@ final class IntegrationTests: XCTestCase {
         let syncContainer = try SyncContainer(
             for: AutoTask.self,
             AutoTag.self,
-            inputKeyStyle: .camelCase,
+            keyStyle: .camelCase,
             configurations: configuration
         )
 
@@ -3044,7 +3044,7 @@ final class IntegrationTests: XCTestCase {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let syncContainer = try SyncContainer(
             for: RemotePathCamelRecord.self,
-            inputKeyStyle: .camelCase,
+            keyStyle: .camelCase,
             configurations: configuration
         )
 

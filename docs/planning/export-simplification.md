@@ -1,6 +1,6 @@
 # Export API Simplification
 
-**Status:** Planned  
+**Status:** Complete  
 **Priority:** High — blocks clean demo usage of export at call sites
 
 ---
@@ -125,11 +125,12 @@ let body = task.exportObject(for: syncContainer)
 
 ## Execution checklist
 
-- [ ] 1. Make `ExportState` internal — update protocol, generated code, `ExportTests`, hand-written conformances
-- [ ] 2. Unify `ExportKeyStyle` and `SyncInputKeyStyle` into a single `KeyStyle` enum
-- [ ] 3. Move `keyStyle` to `SyncContainer`, rename `inputKeyStyle` → `keyStyle`
-- [ ] 4. Move `dateFormatter` to `SyncContainer`
-- [ ] 5. Add `exportObject(for:relationshipMode:includeNulls:)` overload on `SyncUpdatableModel`
-- [ ] 6. Update `SwiftSync.export(as:in:using:)` static methods to derive `keyStyle` and `dateFormatter` from container
-- [ ] 7. Update all demo call sites
-- [ ] 8. Update `ExportTests` and `demo-coverage-gap.md`
+- [x] 1. Make `ExportState` internal — update protocol, generated code, `ExportTests`, hand-written conformances
+- [x] 2. Unify `ExportKeyStyle` and `SyncInputKeyStyle` into a single `KeyStyle` enum
+- [x] 3. Move `keyStyle` to `SyncContainer`, rename `inputKeyStyle` → `keyStyle`
+- [x] 4. Move `dateFormatter` to `SyncContainer`
+- [x] 5. Add `exportObject(for:relationshipMode:includeNulls:)` overload on `SyncUpdatableModel`
+- [x] 6. Update `SwiftSync.export(as:in:using:)` static methods to derive `keyStyle` and `dateFormatter` from container
+- [x] 7. Update all demo call sites
+- [x] 8. Update `ExportTests` and `demo-coverage-gap.md`
+- [x] 9. Consolidate module structure: Core + SwiftDataBridge + Macros + TestingKit → single SwiftSync target

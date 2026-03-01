@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Core
+@testable import SwiftSync
 
 struct SyncPayloadCoercionTests {
     @Test("SyncPayload coerces string and integer into Double")

@@ -9,11 +9,7 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .library(name: "SwiftSync", targets: ["SwiftSync"]),
-        .library(name: "Core", targets: ["Core"]),
-        .library(name: "SwiftDataBridge", targets: ["SwiftDataBridge"]),
-        .library(name: "Macros", targets: ["Macros"]),
-        .library(name: "TestingKit", targets: ["TestingKit"])
+        .library(name: "SwiftSync", targets: ["SwiftSync"])
     ],
     dependencies: [
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0-latest")
@@ -29,37 +25,18 @@ let package = Package(
             path: "SwiftSync/Sources/MacrosImplementation"
         ),
         .target(
-            name: "Macros",
-            dependencies: ["MacrosImplementation", "Core"],
-            path: "SwiftSync/Sources/Macros"
-        ),
-        .target(
             name: "SwiftSync",
-            dependencies: ["Core", "SwiftDataBridge", "Macros", "ObjCExceptionCatcher"],
+            dependencies: ["MacrosImplementation", "ObjCExceptionCatcher"],
             path: "SwiftSync/Sources/SwiftSync"
-        ),
-        .target(
-            name: "Core",
-            path: "SwiftSync/Sources/Core"
-        ),
-        .target(
-            name: "SwiftDataBridge",
-            dependencies: ["Core"],
-            path: "SwiftSync/Sources/SwiftDataBridge"
         ),
         .target(
             name: "ObjCExceptionCatcher",
             path: "SwiftSync/Sources/ObjCExceptionCatcher",
             publicHeadersPath: "include"
         ),
-        .target(
-            name: "TestingKit",
-            dependencies: ["Core"],
-            path: "SwiftSync/Sources/TestingKit"
-        ),
         .testTarget(
             name: "CoreTests",
-            dependencies: ["Core"],
+            dependencies: ["SwiftSync"],
             path: "SwiftSync/Tests/CoreTests"
         ),
         .testTarget(

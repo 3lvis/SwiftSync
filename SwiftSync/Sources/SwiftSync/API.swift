@@ -1,6 +1,5 @@
 import Foundation
 import SwiftData
-import Core
 
 public extension SwiftSync {
     static func inferToOneRelationship<Model: PersistentModel, Parent: PersistentModel>(
@@ -21,7 +20,7 @@ public extension SwiftSync {
         payload: [Any],
         as _: Model.Type,
         in context: ModelContext,
-        inputKeyStyle: SyncInputKeyStyle = .snakeCase,
+        keyStyle: KeyStyle = .snakeCase,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         let lease = await acquireSyncLease(for: context)
@@ -54,7 +53,7 @@ public extension SwiftSync {
 
             for entry in entries {
                 try throwIfCancelled()
-                let payloadModel = SyncPayload(values: entry, keyStyle: inputKeyStyle)
+                let payloadModel = SyncPayload(values: entry, keyStyle: keyStyle)
                 guard let identity = resolveIdentity(from: payloadModel, model: Model.self) else {
                     // For hardening: rows without valid identity are skipped from matching/diffing.
                     continue
@@ -123,13 +122,13 @@ public extension SwiftSync {
         item: [String: Any],
         as _: Model.Type,
         in context: ModelContext,
-        inputKeyStyle: SyncInputKeyStyle = .snakeCase,
+        keyStyle: KeyStyle = .snakeCase,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         let lease = await acquireSyncLease(for: context)
         do {
             try throwIfCancelled()
-            let payloadModel = SyncPayload(values: item, keyStyle: inputKeyStyle)
+            let payloadModel = SyncPayload(values: item, keyStyle: keyStyle)
             guard let identity = resolveIdentity(from: payloadModel, model: Model.self) else {
                 await releaseSyncLease(lease)
                 return
@@ -179,14 +178,14 @@ public extension SwiftSync {
         as _: Model.Type,
         in context: ModelContext,
         parent: Parent,
-        inputKeyStyle: SyncInputKeyStyle = .snakeCase,
+        keyStyle: KeyStyle = .snakeCase,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         let inferred = try inferToOneRelationship(for: Model.self, parent: Parent.self)
         let lease = await acquireSyncLease(for: context)
         do {
             try throwIfCancelled()
-            let payloadModel = SyncPayload(values: item, keyStyle: inputKeyStyle)
+            let payloadModel = SyncPayload(values: item, keyStyle: keyStyle)
             guard let identity = resolveIdentity(from: payloadModel, model: Model.self) else {
                 await releaseSyncLease(lease)
                 return
@@ -246,7 +245,7 @@ public extension SwiftSync {
         as _: Model.Type,
         in context: ModelContext,
         parent: Model.SyncParent,
-        inputKeyStyle: SyncInputKeyStyle = .snakeCase,
+        keyStyle: KeyStyle = .snakeCase,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         try await sync(
@@ -256,7 +255,7 @@ public extension SwiftSync {
             parent: parent,
             parentRelationship: Model.parentRelationship,
             isGlobal: syncIdentityHasUniqueAttribute(Model.self),
-            inputKeyStyle: inputKeyStyle,
+            keyStyle: keyStyle,
             relationshipOperations: relationshipOperations
         )
     }
@@ -266,7 +265,7 @@ public extension SwiftSync {
         as _: Model.Type,
         in context: ModelContext,
         parent: Parent,
-        inputKeyStyle: SyncInputKeyStyle = .snakeCase,
+        keyStyle: KeyStyle = .snakeCase,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         let inferred = try inferToOneRelationship(for: Model.self, parent: Parent.self)
@@ -277,7 +276,7 @@ public extension SwiftSync {
             parent: parent,
             parentRelationship: inferred,
             isGlobal: syncIdentityHasUniqueAttribute(Model.self),
-            inputKeyStyle: inputKeyStyle,
+            keyStyle: keyStyle,
             relationshipOperations: relationshipOperations
         )
     }
@@ -289,7 +288,7 @@ public extension SwiftSync {
         parent: Parent,
         parentRelationship: ReferenceWritableKeyPath<Model, Parent?>,
         isGlobal: Bool,
-        inputKeyStyle: SyncInputKeyStyle,
+        keyStyle: KeyStyle,
         relationshipOperations: SyncRelationshipOperations
     ) async throws {
         let lease = await acquireSyncLease(for: context)
@@ -345,7 +344,7 @@ public extension SwiftSync {
 
             for entry in entries {
                 try throwIfCancelled()
-                let payloadModel = SyncPayload(values: entry, keyStyle: inputKeyStyle)
+                let payloadModel = SyncPayload(values: entry, keyStyle: keyStyle)
                 guard let identity = resolveIdentity(from: payloadModel, model: Model.self) else {
                     continue
                 }
@@ -444,8 +443,7 @@ public extension SwiftSync {
             identityKey(from: lhs[keyPath: Model.syncIdentity]) < identityKey(from: rhs[keyPath: Model.syncIdentity])
         }
         return sorted.map { row in
-            var state = ExportState()
-            return row.exportObject(using: options, state: &state)
+            row.exportObject(using: options)
         }
     }
 
@@ -461,8 +459,7 @@ public extension SwiftSync {
             identityKey(from: lhs[keyPath: Model.syncIdentity]) < identityKey(from: rhs[keyPath: Model.syncIdentity])
         }
         return sorted.map { row in
-            var state = ExportState()
-            return row.exportObject(using: options, state: &state)
+            row.exportObject(using: options)
         }
     }
 

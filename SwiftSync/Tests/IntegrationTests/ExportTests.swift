@@ -172,10 +172,9 @@ final class UpdateTaskLike {
 // were missing from SyncUpdatableModel.
 private func _assertExportObjectIsOnSyncUpdatableModel<M: SyncUpdatableModel>(
     _ model: M,
-    options: ExportOptions,
-    state: inout ExportState
+    options: ExportOptions
 ) -> [String: Any] {
-    model.exportObject(using: options, state: &state)
+    model.exportObject(using: options)
 }
 
 final class ExportTests: XCTestCase {
@@ -406,9 +405,8 @@ final class ExportTests: XCTestCase {
         let model = ExportMappedFields(id: 42, userType: "editor", email: "update@example.com", localOnly: "ignored")
         context.insert(model)
 
-        var exportState = ExportState()
         let options = ExportOptions(relationshipMode: .none, includeNulls: false)
-        let body = model.exportObject(using: options, state: &exportState)
+        let body = model.exportObject(using: options)
 
         // @RemoteKey("type") must appear as "type", not "user_type"
         XCTAssertEqual(body["type"] as? String, "editor", "Expected @RemoteKey(\"type\") to map userType → \"type\"")
@@ -444,9 +442,8 @@ final class ExportTests: XCTestCase {
         )
         context.insert(model)
 
-        var exportState = ExportState()
         let options = ExportOptions(relationshipMode: .none, includeNulls: false)
-        let body = model.exportObject(using: options, state: &exportState)
+        let body = model.exportObject(using: options)
 
         // descriptionText → @RemoteKey("description") → must appear as "description"
         XCTAssertEqual(body["description"] as? String, "Updated body text",
@@ -464,6 +461,50 @@ final class ExportTests: XCTestCase {
                        "Expected @RemoteKey(\"state.label\") to produce nested state.label")
         XCTAssertNil(body["state_id"], "Flat state_id key must not appear")
         XCTAssertNil(body["state_label"], "Flat state_label key must not appear")
+    }
+
+    // MARK: - exportObject(for:container:) derives keyStyle and dateFormatter from SyncContainer
+
+    @MainActor
+    func testExportForContainerDerivesKeyStyleFromContainer() throws {
+        let schema = Schema([ExportTask.self])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let modelContainer = try ModelContainer(for: schema, configurations: config)
+        let syncContainer = SyncContainer(modelContainer, keyStyle: .camelCase)
+        let context = syncContainer.mainContext
+
+        context.insert(ExportTask(id: 5, completed: false, createdAt: Date(timeIntervalSince1970: 0)))
+        try context.save()
+
+        let task = try context.fetch(FetchDescriptor<ExportTask>()).first!
+        let body = task.exportObject(for: syncContainer, relationshipMode: .none, includeNulls: false)
+
+        // camelCase keyStyle from container: createdAt, not created_at
+        XCTAssertNotNil(body["createdAt"], "Expected camelCase key from container.keyStyle")
+        XCTAssertNil(body["created_at"], "Snake_case key must not appear when container uses camelCase")
+    }
+
+    @MainActor
+    func testExportForContainerDerivesDateFormatterFromContainer() throws {
+        let schema = Schema([ExportTask.self])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let modelContainer = try ModelContainer(for: schema, configurations: config)
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy/MM/dd"
+        let syncContainer = SyncContainer(modelContainer, dateFormatter: formatter)
+        let context = syncContainer.mainContext
+
+        context.insert(ExportTask(id: 6, completed: false, createdAt: Date(timeIntervalSince1970: 0)))
+        try context.save()
+
+        let task = try context.fetch(FetchDescriptor<ExportTask>()).first!
+        let body = task.exportObject(for: syncContainer, relationshipMode: .none, includeNulls: false)
+
+        XCTAssertEqual(body["created_at"] as? String, "1970/01/01",
+                       "Expected date formatted using container.dateFormatter")
     }
 
     @MainActor

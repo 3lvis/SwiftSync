@@ -142,11 +142,11 @@ public struct SyncableMacro: ExtensionMacro {
                         try syncApplyGeneratedRelationships(payload, in: context, operations: operations)
                     }
 
-                    func exportObject(using options: ExportOptions, state: inout ExportState) -> [String: Any] {
-                        if !state.enter(self) {
+                    func exportObject(using options: ExportOptions) -> [String: Any] {
+                        if !ExportState.enter(self) {
                             return [:]
                         }
-                        defer { state.leave(self) }
+                        defer { ExportState.leave(self) }
 
                         var result: [String: Any] = [:]
                         \(raw: exportBody)
@@ -421,7 +421,7 @@ public struct SyncableMacro: ExtensionMacro {
                     let exportedChildren: [[String: Any]] = self.\(property.name).compactMap { child in
                         let anyChild: Any = child
                         guard let exportable = anyChild as? any SyncUpdatableModel else { return nil }
-                        return exportable.exportObject(using: options, state: &state)
+                        return exportable.exportObject(using: options)
                     }
                     switch options.relationshipMode {
                     case .array:
@@ -443,7 +443,7 @@ public struct SyncableMacro: ExtensionMacro {
                 let baseKey = \(keyExpr)
                 let anyChild: Any? = self.\(property.name)
                 if let exportable = anyChild as? any SyncUpdatableModel {
-                    let child = exportable.exportObject(using: options, state: &state)
+                    let child = exportable.exportObject(using: options)
                     switch options.relationshipMode {
                     case .array:
                         exportSetValue(child, for: baseKey, into: &result)
