@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Core
+@testable import SwiftSync
 
 struct SyncPayloadKeyStyleTests {
     @Test("SyncPayload default snake_case resolves acronym key projectID <- project_id")

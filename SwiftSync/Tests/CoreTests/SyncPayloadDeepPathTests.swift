@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Core
+@testable import SwiftSync
 
 struct SyncPayloadDeepPathTests {
     @Test("SyncPayload resolves deep path values from nested dictionaries")
