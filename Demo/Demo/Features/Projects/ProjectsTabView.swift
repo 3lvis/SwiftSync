@@ -344,7 +344,7 @@ private struct CreateTaskSheet: View {
         draft.updatedAt = Date()
         isSaving = true
         saveErrorMessage = nil
-        let body = draft.exportObject(for: syncContainer, relationshipMode: .none, includeNulls: false)
+        let body = draft.exportObject(for: syncContainer, relationshipMode: .none)
         _Concurrency.Task {
             do {
                 try await syncEngine.createTask(body: body, projectID: projectID)

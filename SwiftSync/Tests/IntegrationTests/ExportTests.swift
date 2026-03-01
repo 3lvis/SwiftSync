@@ -197,9 +197,7 @@ final class ExportTests: XCTestCase {
         context.insert(ExportTask(id: 1, completed: true, createdAt: Date(timeIntervalSince1970: 0)))
         try context.save()
 
-        var options = ExportOptions.camelCase
-        options.includeNulls = false
-        let rows = try SwiftSync.export(as: ExportTask.self, in: context, using: options)
+        let rows = try SwiftSync.export(as: ExportTask.self, in: context, using: .camelCase)
         XCTAssertNotNil(rows[0]["createdAt"])
         XCTAssertNil(rows[0]["created_at"])
     }
@@ -277,20 +275,15 @@ final class ExportTests: XCTestCase {
     }
 
     @MainActor
-    func testExportRemotePathNilIncludesAndOmitsNullByOption() throws {
+    func testExportNilRemotePathAlwaysEmitsNSNull() throws {
         let context = try makeContext(for: ExportMappedFields.self)
         context.insert(ExportMappedFields(id: 3, userType: "member", email: nil, localOnly: "secret"))
         try context.save()
 
-        let withNulls = try SwiftSync.export(as: ExportMappedFields.self, in: context)
-        let withNullProfile = withNulls[0]["profile"] as? [String: Any]
-        let withNullContact = withNullProfile?["contact"] as? [String: Any]
-        XCTAssertTrue(withNullContact?["email"] is NSNull)
-
-        var withoutNullsOptions = ExportOptions()
-        withoutNullsOptions.includeNulls = false
-        let withoutNulls = try SwiftSync.export(as: ExportMappedFields.self, in: context, using: withoutNullsOptions)
-        XCTAssertNil(withoutNulls[0]["profile"])
+        let rows = try SwiftSync.export(as: ExportMappedFields.self, in: context)
+        let profile = rows[0]["profile"] as? [String: Any]
+        let contact = profile?["contact"] as? [String: Any]
+        XCTAssertTrue(contact?["email"] is NSNull, "Nil optional under @RemotePath must always emit NSNull")
     }
 
     @MainActor
@@ -308,33 +301,51 @@ final class ExportTests: XCTestCase {
     }
 
     @MainActor
-    func testExportToOneNilRespectsIncludeNulls() throws {
+    func testExportNilToOneRelationshipAlwaysEmitsNSNull() throws {
         let context = try makeContext(for: ExportUser.self, ExportCompany.self, ExportNote.self)
         context.insert(ExportUser(id: 8, name: "NoCompany", company: nil, notes: []))
         try context.save()
 
-        let withNulls = try SwiftSync.export(as: ExportUser.self, in: context)
-        XCTAssertTrue(withNulls[0]["company"] is NSNull)
-
-        var options = ExportOptions()
-        options.includeNulls = false
-        let withoutNulls = try SwiftSync.export(as: ExportUser.self, in: context, using: options)
-        XCTAssertNil(withoutNulls[0]["company"])
+        let rows = try SwiftSync.export(as: ExportUser.self, in: context)
+        XCTAssertTrue(rows[0]["company"] is NSNull, "Nil to-one relationship must always emit NSNull")
     }
 
     @MainActor
-    func testExportIncludeNullsBehavior() throws {
+    func testExportNilOptionalsAlwaysEmitNSNull() throws {
         let context = try makeContext(for: ExportTask.self)
         context.insert(ExportTask(id: 3, completed: false, createdAt: Date(timeIntervalSince1970: 0), nickname: nil))
         try context.save()
 
-        let withNulls = try SwiftSync.export(as: ExportTask.self, in: context)
-        XCTAssertTrue(withNulls[0]["nickname"] is NSNull)
+        let rows = try SwiftSync.export(as: ExportTask.self, in: context)
+        XCTAssertTrue(rows[0]["nickname"] is NSNull, "Nil optional scalar must always emit NSNull")
+    }
 
-        var withoutNullsOptions = ExportOptions()
-        withoutNullsOptions.includeNulls = false
-        let withoutNulls = try SwiftSync.export(as: ExportTask.self, in: context, using: withoutNullsOptions)
-        XCTAssertNil(withoutNulls[0]["nickname"])
+    /// Scenario A — PATCH with explicit null to clear a field.
+    /// exportObject always emits NSNull for nil optionals. Callers can then overwrite specific
+    /// fields with NSNull() to signal "clear this field", or overwrite with a new value.
+    /// Both result in the key being present in the body — the intended behavior for partial-update APIs.
+    @MainActor
+    func testExportNilFieldCanBeExplicitlyClearedAfterExport() throws {
+        let schema = Schema([ExportTask.self])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let modelContainer = try ModelContainer(for: schema, configurations: config)
+        let syncContainer = SyncContainer(modelContainer)
+        let context = syncContainer.mainContext
+
+        // A task with nickname already nil in the model
+        context.insert(ExportTask(id: 10, completed: false, createdAt: Date(timeIntervalSince1970: 0), nickname: nil))
+        try context.save()
+        let task = try context.fetch(FetchDescriptor<ExportTask>()).first!
+
+        // Export produces NSNull for nickname automatically — no manual NSNull() needed
+        let body = task.exportObject(for: syncContainer, relationshipMode: .none)
+        XCTAssertTrue(body["nickname"] is NSNull,
+                      "Nil optional must appear as NSNull in body so server clears the field")
+
+        // Caller can still override any key after export (e.g. to set a new value)
+        var mutableBody = body
+        mutableBody["nickname"] = "new-name"
+        XCTAssertEqual(mutableBody["nickname"] as? String, "new-name")
     }
 
     @MainActor
@@ -405,7 +416,7 @@ final class ExportTests: XCTestCase {
         let model = ExportMappedFields(id: 42, userType: "editor", email: "update@example.com", localOnly: "ignored")
         context.insert(model)
 
-        let options = ExportOptions(relationshipMode: .none, includeNulls: false)
+        let options = ExportOptions(relationshipMode: .none)
         let body = model.exportObject(using: options)
 
         // @RemoteKey("type") must appear as "type", not "user_type"
@@ -442,7 +453,7 @@ final class ExportTests: XCTestCase {
         )
         context.insert(model)
 
-        let options = ExportOptions(relationshipMode: .none, includeNulls: false)
+        let options = ExportOptions(relationshipMode: .none)
         let body = model.exportObject(using: options)
 
         // descriptionText → @RemoteKey("description") → must appear as "description"
@@ -477,7 +488,7 @@ final class ExportTests: XCTestCase {
         try context.save()
 
         let task = try context.fetch(FetchDescriptor<ExportTask>()).first!
-        let body = task.exportObject(for: syncContainer, relationshipMode: .none, includeNulls: false)
+        let body = task.exportObject(for: syncContainer, relationshipMode: .none)
 
         // camelCase keyStyle from container: createdAt, not created_at
         XCTAssertNotNil(body["createdAt"], "Expected camelCase key from container.keyStyle")
@@ -501,7 +512,7 @@ final class ExportTests: XCTestCase {
         try context.save()
 
         let task = try context.fetch(FetchDescriptor<ExportTask>()).first!
-        let body = task.exportObject(for: syncContainer, relationshipMode: .none, includeNulls: false)
+        let body = task.exportObject(for: syncContainer, relationshipMode: .none)
 
         XCTAssertEqual(body["created_at"] as? String, "1970/01/01",
                        "Expected date formatted using container.dateFormatter")

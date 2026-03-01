@@ -78,7 +78,7 @@ struct TaskDetailView: View {
                 ForEach(taskStateOptions, id: \.id) { option in
                     Button {
                         guard let taskModel else { return }
-                        var body = taskModel.exportObject(for: syncContainer, relationshipMode: .none, includeNulls: false)
+                        var body = taskModel.exportObject(for: syncContainer, relationshipMode: .none)
                         body["state"] = ["id": option.id] as [String: Any]
                         let projectID = taskModel.projectID
                         _Concurrency.Task {
@@ -237,7 +237,7 @@ private struct EditTaskDescriptionSheet: View {
                         guard let taskModel else { return }
                         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !trimmed.isEmpty else { return }
-                        var body = taskModel.exportObject(for: syncContainer, relationshipMode: .none, includeNulls: false)
+                        var body = taskModel.exportObject(for: syncContainer, relationshipMode: .none)
                         body["description"] = trimmed
                         let projectID = taskModel.projectID
                         isSaving = true
@@ -351,7 +351,7 @@ private struct AssigneePickerSheet: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: {
                         guard let taskModel else { return }
-                        var body = taskModel.exportObject(for: syncContainer, relationshipMode: .none, includeNulls: false)
+                        var body = taskModel.exportObject(for: syncContainer, relationshipMode: .none)
                         body["assignee_id"] = pendingAssigneeID ?? NSNull()
                         let projectID = taskModel.projectID
                         isSaving = true

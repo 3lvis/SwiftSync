@@ -452,7 +452,7 @@ public struct SyncableMacro: ExtensionMacro {
                     case .none:
                         break
                     }
-                } else if options.includeNulls {
+                } else {
                     switch options.relationshipMode {
                     case .array:
                         exportSetValue(NSNull(), for: baseKey, into: &result)
@@ -471,10 +471,10 @@ public struct SyncableMacro: ExtensionMacro {
             if let value = self.\(property.name) {
                 if let encoded = exportEncodeValue(value, options: options) {
                     exportSetValue(encoded, for: \(keyExpr), into: &result)
-                } else if options.includeNulls {
+                } else {
                     exportSetValue(NSNull(), for: \(keyExpr), into: &result)
                 }
-            } else if options.includeNulls {
+            } else {
                 exportSetValue(NSNull(), for: \(keyExpr), into: &result)
             }
             """
@@ -483,7 +483,7 @@ public struct SyncableMacro: ExtensionMacro {
         return """
         if let encoded = exportEncodeValue(self.\(property.name), options: options) {
             exportSetValue(encoded, for: \(keyExpr), into: &result)
-        } else if options.includeNulls {
+        } else {
             exportSetValue(NSNull(), for: \(keyExpr), into: &result)
         }
         """
