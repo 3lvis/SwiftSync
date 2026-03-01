@@ -128,6 +128,8 @@ extension MissingInverseRegressionTask: SyncUpdatableModel {
             operations: operations
         )
     }
+
+    func syncMarkChanged() { self.id = self.id }
 }
 
 extension ExplicitInverseRegressionTag: SyncUpdatableModel {
@@ -176,6 +178,8 @@ extension ExplicitInverseRegressionTask: SyncUpdatableModel {
         }
         return changed
     }
+
+    func syncMarkChanged() { self.id = self.id }
 
     func applyRelationships(
         _ payload: SyncPayload,
@@ -297,5 +301,106 @@ final class RelationshipIntegrityRegressionTests: XCTestCase {
 
         XCTAssertEqual(tasksByID[10], Set([1, 2]))
         XCTAssertEqual(tasksByID[20], Set([2, 3]))
+    }
+
+    // Regression: syncing a to-many relationship change must surface the owning
+    // model's PersistentIdentifier in the SyncContainer.didSaveChangesNotification.
+    //
+    // If the identifier is absent, SyncQueryObserver.shouldReload never invalidates
+    // the owning model in mainContext, so @SyncModel / @SyncQuery return stale
+    // relationship data until the next background poll.
+    //
+    // Root cause: SwiftData only marks a model's store row dirty (and thus includes
+    // its identifier in NSManagedObjectContextDidSave's updatedObjects) when a scalar
+    // column changes. Mutating a to-many key path only dirties the join-table rows,
+    // not the owning row. syncApplyToManyForeignKeys must force a scalar touch on the
+    // owning model after a membership change so the identifier surfaces correctly.
+    // Regression: SyncContainer.didSaveChangesNotification must include the owning
+    // model's PersistentIdentifier after a to-many relationship-only sync.
+    //
+    // In a persistent (on-disk) SQLite store, SwiftData only marks an owning model's
+    // store row dirty when a scalar column changes. Mutating a to-many key path only
+    // dirties the join-table rows, so the owner's identifier is absent from
+    // NSManagedObjectContextDidSave's updatedObjects. modelContextDidSave therefore
+    // never faults the owner into mainContext, and @SyncModel / @SyncQuery serve
+    // stale relationship data until the next background poll.
+    //
+    // The fix is in syncApplyToManyForeignKeys: after writing the new membership,
+    // perform a no-op scalar write on the owning model to guarantee its store row
+    // is dirtied and its identifier surfaces in the save notification.
+    //
+    // NOTE: In-memory SQLite stores (used in tests) always dirty the owner regardless,
+    // so this specific assertion cannot be driven to failure in a unit test. The test
+    // is kept as documentation of the contract and as a non-regression anchor — it
+    // will catch any future regression that breaks the relationship update itself.
+    @MainActor
+    func testToManyRelationshipOnlySyncUpdatesMainContextImmediately() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let modelContainer = try ModelContainer(
+            for: MissingInverseRegressionTask.self,
+            MissingInverseRegressionTag.self,
+            configurations: configuration
+        )
+        let syncContainer = SyncContainer(modelContainer)
+
+        // Seed two tags and a task that starts with no tags.
+        try await syncContainer.sync(
+            payload: [["id": 1, "name": "Tag 1"], ["id": 2, "name": "Tag 2"]],
+            as: MissingInverseRegressionTag.self
+        )
+        try await syncContainer.sync(
+            payload: [["id": 10, "title": "Task 10", "tag_ids": [] as [Int]]],
+            as: MissingInverseRegressionTask.self
+        )
+        let taskID = try XCTUnwrap(
+            syncContainer.mainContext.fetch(FetchDescriptor<MissingInverseRegressionTask>()).first?.persistentModelID
+        )
+        let initialTags = try syncContainer.mainContext.fetch(FetchDescriptor<MissingInverseRegressionTask>()).first?.tags.count ?? 0
+        XCTAssertEqual(initialTags, 0, "precondition: task starts with no tags")
+
+        // Capture the notification produced by a relationship-only change.
+        // Title is unchanged; only tag membership changes ([] → [1, 2]).
+        let notificationIDs = try await capturedChangedIDs(from: syncContainer) {
+            try await syncContainer.sync(
+                payload: [["id": 10, "title": "Task 10", "tag_ids": [1, 2]]],
+                as: MissingInverseRegressionTask.self
+            )
+        }
+
+        // The owning task's identifier must appear in changedIDs so that
+        // SyncQueryObserver can invalidate it in mainContext synchronously.
+        XCTAssertTrue(
+            notificationIDs.contains(taskID),
+            "Owner identifier must be in didSaveChangesNotification changedIDs after " +
+            "a to-many relationship-only change. Got: \(notificationIDs)"
+        )
+
+        // Relationship data must be correct in mainContext.
+        let task = syncContainer.mainContext.model(for: taskID) as? MissingInverseRegressionTask
+        XCTAssertEqual(Set(task?.tags.map(\.id) ?? []), Set([1, 2]))
+    }
+
+    /// Observes the first `SyncContainer.didSaveChangesNotification` emitted while
+    /// `body` runs and returns the set of changed identifiers from that notification.
+    @MainActor
+    private func capturedChangedIDs(
+        from syncContainer: SyncContainer,
+        body: () async throws -> Void
+    ) async throws -> Set<PersistentIdentifier> {
+        var ids: Set<PersistentIdentifier> = []
+        let exp = expectation(description: "didSaveChangesNotification")
+        exp.assertForOverFulfill = false
+        let token = NotificationCenter.default.addObserver(
+            forName: SyncContainer.didSaveChangesNotification,
+            object: syncContainer,
+            queue: .main
+        ) { notification in
+            ids.formUnion(syncQueryChangedIdentifiers(from: notification.userInfo))
+            exp.fulfill()
+        }
+        defer { NotificationCenter.default.removeObserver(token) }
+        try await body()
+        await fulfillment(of: [exp], timeout: 2)
+        return ids
     }
 }

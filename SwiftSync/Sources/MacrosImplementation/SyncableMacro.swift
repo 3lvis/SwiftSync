@@ -152,6 +152,10 @@ public struct SyncableMacro: ExtensionMacro {
                         \(raw: exportBody)
                         return result
                     }
+
+                    func syncMarkChanged() {
+                        self.\(raw: identityProperty.name) = self.\(raw: identityProperty.name)
+                    }
                 }
                 """
             )
