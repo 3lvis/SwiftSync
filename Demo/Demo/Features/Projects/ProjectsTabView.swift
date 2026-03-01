@@ -182,23 +182,21 @@ private struct TaskDeletePrompt: Equatable {
 
 private struct CreateTaskSheet: View {
     let projectID: String
+    let syncContainer: SyncContainer
     let syncEngine: DemoSyncEngine
 
     @Environment(\.dismiss) private var dismiss
     @SyncQuery private var users: [User]
     @SyncQuery private var taskStateOptions: [TaskStateOption]
 
-    @State private var title = ""
-    @State private var descriptionText = ""
-    @State private var stateID: String?
-    @State private var assigneeID: String? = nil
-    @State private var authorID: String? = nil
+    @State private var draft: Task
     @State private var isLoadingTaskStates = false
     @State private var isSaving = false
     @State private var saveErrorMessage: String?
 
     init(projectID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.projectID = projectID
+        self.syncContainer = syncContainer
         self.syncEngine = syncEngine
         _users = SyncQuery(
             User.self,
@@ -212,13 +210,28 @@ private struct CreateTaskSheet: View {
             sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.id)],
             animation: .snappy(duration: 0.22)
         )
+        let now = Date()
+        let task = Task(
+            id: UUID().uuidString,
+            projectID: projectID,
+            assigneeID: nil,
+            authorID: "",
+            title: "",
+            descriptionText: "",
+            state: "",
+            stateLabel: "",
+            createdAt: now,
+            updatedAt: now
+        )
+        syncContainer.mainContext.insert(task)
+        _draft = State(initialValue: task)
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Task") {
-                    TextField("Title", text: $title)
+                    TextField("Title", text: $draft.title)
 
                     if taskStateOptions.isEmpty {
                         LabeledContent("State") {
@@ -234,29 +247,29 @@ private struct CreateTaskSheet: View {
                             Button("Retry Loading States") { loadTaskStates() }
                         }
                     } else {
-                        Picker("State", selection: $stateID) {
+                        Picker("State", selection: $draft.state) {
                             ForEach(taskStateOptions, id: \.id) { option in
-                                Text(option.label).tag(Optional(option.id))
+                                Text(option.label).tag(option.id)
                             }
                         }
                     }
 
-                    Picker("Assignee", selection: $assigneeID) {
+                    Picker("Assignee", selection: $draft.assigneeID) {
                         Text("Unassigned").tag(String?.none)
                         ForEach(users, id: \.id) { user in
                             Text(user.displayName).tag(Optional(user.id))
                         }
                     }
 
-                    Picker("Author", selection: $authorID) {
+                    Picker("Author", selection: $draft.authorID) {
                         ForEach(users, id: \.id) { user in
-                            Text(user.displayName).tag(Optional(user.id))
+                            Text(user.displayName).tag(user.id)
                         }
                     }
                 }
 
                 Section("Description") {
-                    TextEditor(text: $descriptionText)
+                    TextEditor(text: $draft.descriptionText)
                         .frame(minHeight: 140)
                 }
             }
@@ -264,7 +277,7 @@ private struct CreateTaskSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") { cancelAndDiscard() }
                         .disabled(isSaving)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -276,23 +289,23 @@ private struct CreateTaskSheet: View {
                     }
                     .disabled(
                         isSaving ||
-                        title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                        stateID == nil ||
-                        authorID == nil
+                        draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                        draft.state.isEmpty ||
+                        draft.authorID.isEmpty
                     )
                 }
             }
         }
         .task { loadTaskStates() }
         .task(id: taskStateOptions.map(\.id)) {
-            if let stateID, taskStateOptions.contains(where: { $0.id == stateID }) { return }
-            self.stateID = taskStateOptions.first?.id
+            guard !taskStateOptions.isEmpty, draft.state.isEmpty || !taskStateOptions.contains(where: { $0.id == draft.state }) else { return }
+            draft.state = taskStateOptions.first?.id ?? ""
         }
         .task(id: users.map(\.id)) {
-            if let authorID, users.contains(where: { $0.id == authorID }) { return }
-            authorID = assigneeID.flatMap { id in
+            guard !users.isEmpty, draft.authorID.isEmpty || !users.contains(where: { $0.id == draft.authorID }) else { return }
+            draft.authorID = draft.assigneeID.flatMap { id in
                 users.contains(where: { $0.id == id }) ? id : nil
-            } ?? users.first?.id
+            } ?? users.first?.id ?? ""
         }
         .alert(
             "Save Failed",
@@ -308,6 +321,12 @@ private struct CreateTaskSheet: View {
         .presentationDetents([.medium, .large])
     }
 
+    private func cancelAndDiscard() {
+        syncContainer.mainContext.delete(draft)
+        syncContainer.mainContext.rollback()
+        dismiss()
+    }
+
     private func loadTaskStates() {
         guard !isLoadingTaskStates else { return }
         isLoadingTaskStates = true
@@ -318,23 +337,23 @@ private struct CreateTaskSheet: View {
     }
 
     private func save() {
-        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedDescription = descriptionText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedTitle.isEmpty, let stateID, let authorID else { return }
+        draft.title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if draft.descriptionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            draft.descriptionText = "No description yet."
+        }
+        draft.updatedAt = Date()
         isSaving = true
         saveErrorMessage = nil
+        var exportState = ExportState()
+        let options = ExportOptions(relationshipMode: .none, includeNulls: false)
+        let body = draft.exportObject(using: options, state: &exportState)
         _Concurrency.Task {
             do {
-                try await syncEngine.createTask(
-                    projectID: projectID,
-                    title: trimmedTitle,
-                    descriptionText: trimmedDescription.isEmpty ? "No description yet." : trimmedDescription,
-                    state: stateID,
-                    assigneeID: assigneeID,
-                    authorID: authorID
-                )
+                try await syncEngine.createTask(body: body, projectID: projectID)
                 await MainActor.run { isSaving = false; dismiss() }
             } catch {
+                syncContainer.mainContext.delete(draft)
+                syncContainer.mainContext.rollback()
                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                 await MainActor.run { isSaving = false; saveErrorMessage = message }
             }

@@ -77,12 +77,14 @@ struct TaskDetailView: View {
             Menu("Change State") {
                 ForEach(taskStateOptions, id: \.id) { option in
                     Button {
+                        guard let taskModel else { return }
+                        var exportState = ExportState()
+                        let exportOptions = ExportOptions(relationshipMode: .none, includeNulls: false)
+                        var body = taskModel.exportObject(using: exportOptions, state: &exportState)
+                        body["state"] = ["id": option.id] as [String: Any]
+                        let projectID = taskModel.projectID
                         _Concurrency.Task {
-                            try? await syncEngine.updateTaskState(
-                                taskID: taskID,
-                                projectID: taskModel?.projectID,
-                                state: option.id
-                            )
+                            try? await syncEngine.updateTask(taskID: taskID, projectID: projectID, body: body)
                         }
                     } label: {
                         if taskModel?.state == option.id {
@@ -232,20 +234,20 @@ private struct EditTaskDescriptionSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: {
+                        guard let taskModel else { return }
                         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !trimmed.isEmpty else { return }
+                        var exportState = ExportState()
+                        let options = ExportOptions(relationshipMode: .none, includeNulls: false)
+                        var body = taskModel.exportObject(using: options, state: &exportState)
+                        body["description"] = trimmed
+                        let projectID = taskModel.projectID
                         isSaving = true
                         saveErrorMessage = nil
                         _Concurrency.Task {
                             do {
-                                try await syncEngine.updateTaskDescription(
-                                    taskID: taskID,
-                                    projectID: taskModel?.projectID,
-                                    descriptionText: trimmed
-                                )
-                                await MainActor.run {
-                                    dismiss()
-                                }
+                                try await syncEngine.updateTask(taskID: taskID, projectID: projectID, body: body)
+                                await MainActor.run { dismiss() }
                             } catch {
                                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                                 await MainActor.run {
@@ -256,10 +258,7 @@ private struct EditTaskDescriptionSheet: View {
                         }
                     }) {
                         HStack(spacing: 6) {
-                            if isSaving {
-                                ProgressView()
-                                    .controlSize(.small)
-                            }
+                            if isSaving { ProgressView().controlSize(.small) }
                             Text("Save")
                         }
                     }
@@ -276,9 +275,7 @@ private struct EditTaskDescriptionSheet: View {
             "Save Failed",
             isPresented: Binding(
                 get: { saveErrorMessage != nil },
-                set: { isPresented in
-                    if !isPresented { saveErrorMessage = nil }
-                }
+                set: { if !$0 { saveErrorMessage = nil } }
             )
         ) {
             Button("OK", role: .cancel) {}
@@ -322,11 +319,11 @@ private struct AssigneePickerSheet: View {
                     HStack {
                         Text("Unassigned")
                         Spacer()
-                            if pendingAssigneeID == nil {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(Color.accentColor)
-                            }
+                        if pendingAssigneeID == nil {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(Color.accentColor)
                         }
+                    }
                 }
 
                 ForEach(users, id: \.id) { user in
@@ -353,20 +350,18 @@ private struct AssigneePickerSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: {
-                        let selection = pendingAssigneeID
-                        let projectID = taskModel?.projectID
+                        guard let taskModel else { return }
+                        var exportState = ExportState()
+                        let options = ExportOptions(relationshipMode: .none, includeNulls: false)
+                        var body = taskModel.exportObject(using: options, state: &exportState)
+                        body["assignee_id"] = pendingAssigneeID ?? NSNull()
+                        let projectID = taskModel.projectID
                         isSaving = true
                         saveErrorMessage = nil
                         _Concurrency.Task {
                             do {
-                                try await syncEngine.updateTaskAssignee(
-                                    taskID: taskID,
-                                    projectID: projectID,
-                                    assigneeID: selection
-                                )
-                                await MainActor.run {
-                                    dismiss()
-                                }
+                                try await syncEngine.updateTask(taskID: taskID, projectID: projectID, body: body)
+                                await MainActor.run { dismiss() }
                             } catch {
                                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
                                 await MainActor.run {
@@ -377,10 +372,7 @@ private struct AssigneePickerSheet: View {
                         }
                     }) {
                         HStack(spacing: 6) {
-                            if isSaving {
-                                ProgressView()
-                                    .controlSize(.small)
-                            }
+                            if isSaving { ProgressView().controlSize(.small) }
                             Text("Save")
                         }
                     }
@@ -397,9 +389,7 @@ private struct AssigneePickerSheet: View {
             "Save Failed",
             isPresented: Binding(
                 get: { saveErrorMessage != nil },
-                set: { isPresented in
-                    if !isPresented { saveErrorMessage = nil }
-                }
+                set: { if !$0 { saveErrorMessage = nil } }
             )
         ) {
             Button("OK", role: .cancel) {}
