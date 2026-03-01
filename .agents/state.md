@@ -14,7 +14,7 @@
 - [ ] Build Demo and verify it compiles
 
 ## Last known state
-untested — branch created, state.md being written
+tests green, Demo builds clean
 
 ## Decisions (don't revisit)
 - No @Syncable draft() method yet — that is deferred to a follow-up task. Draft is constructed manually at EditTaskSheet init: `Task(id: taskModel.id, projectID: ..., ...)`.
