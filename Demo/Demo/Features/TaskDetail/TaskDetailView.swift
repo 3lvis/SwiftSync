@@ -115,36 +115,30 @@ struct TaskDetailView: View {
     @ViewBuilder
     private var peopleSection: some View {
         if let taskModel {
-            Section("People") {
-                LabeledContent("Assignee") {
-                    Text(taskModel.assignee?.displayName ?? "Unassigned")
-                        .foregroundStyle(.secondary)
-                }
+            Section("Assignee") {
+                Text(taskModel.assignee?.displayName ?? "Unassigned")
+                    .foregroundStyle(taskModel.assignee == nil ? .secondary : .primary)
+            }
 
+            Section("Reviewers") {
                 if taskModel.reviewers.isEmpty {
-                    LabeledContent("Reviewers") {
-                        Text("None").foregroundStyle(.secondary)
-                    }
+                    Text("None").foregroundStyle(.secondary)
                 } else {
                     ForEach(taskModel.reviewers.sorted { $0.displayName < $1.displayName }, id: \.id) { reviewer in
-                        LabeledContent("Reviewer") {
-                            Text(reviewer.displayName).foregroundStyle(.secondary)
-                        }
+                        Text(reviewer.displayName)
                     }
                 }
+            }
 
+            Section("Watchers") {
                 if taskModel.watchers.isEmpty {
-                    LabeledContent("Watchers") {
-                        Text("None").foregroundStyle(.secondary)
-                    }
+                    Text("None").foregroundStyle(.secondary)
                 } else {
                     ForEach(
                         taskModel.watchers.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending },
                         id: \.id
                     ) { watcher in
-                        LabeledContent("Watcher") {
-                            Text(watcher.displayName).foregroundStyle(.secondary)
-                        }
+                        Text(watcher.displayName)
                     }
                 }
             }
@@ -261,7 +255,8 @@ private struct EditTaskSheet: View {
 
     private var titleSection: some View {
         Section("Title") {
-            TextField("Title", text: $draftTitle)
+            TextEditor(text: $draftTitle)
+                .frame(minHeight: 60)
         }
     }
 
