@@ -104,13 +104,16 @@ final class DemoSyncEngine: ObservableObject {
         try await syncOperationThrowing("replaceTaskReviewers-\(taskID)") {
             debugLog.debug("[ENGINE] replaceTaskReviewers → apiClient.replaceTaskReviewers t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
             _ = try await self.apiClient.replaceTaskReviewers(taskID: taskID, reviewerIDs: reviewerIDs)
-            debugLog.debug("[ENGINE] replaceTaskReviewers ← apiClient done, calling syncTaskDetailInternal t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
-            try await self.syncTaskDetailInternal(taskID: taskID)
-            debugLog.debug("[ENGINE] replaceTaskReviewers ← syncTaskDetailInternal done t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
             if let projectID {
+                debugLog.debug("[ENGINE] replaceTaskReviewers → syncProjectTasksInternal t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
                 try await self.syncProjectTasksInternal(projectID: projectID)
                 debugLog.debug("[ENGINE] replaceTaskReviewers ← syncProjectTasksInternal done t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
             }
+            // syncTaskDetailInternal runs last so its authoritative relationship payload
+            // always wins over the stale snapshot in the project list response.
+            debugLog.debug("[ENGINE] replaceTaskReviewers → syncTaskDetailInternal t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
+            try await self.syncTaskDetailInternal(taskID: taskID)
+            debugLog.debug("[ENGINE] replaceTaskReviewers ← syncTaskDetailInternal done t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
         }
         debugLog.debug("[ENGINE] replaceTaskReviewers ■ exit t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
     }
@@ -121,13 +124,16 @@ final class DemoSyncEngine: ObservableObject {
         try await syncOperationThrowing("replaceTaskWatchers-\(taskID)") {
             debugLog.debug("[ENGINE] replaceTaskWatchers → apiClient.replaceTaskWatchers t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
             _ = try await self.apiClient.replaceTaskWatchers(taskID: taskID, watcherIDs: watcherIDs)
-            debugLog.debug("[ENGINE] replaceTaskWatchers ← apiClient done, calling syncTaskDetailInternal t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
-            try await self.syncTaskDetailInternal(taskID: taskID)
-            debugLog.debug("[ENGINE] replaceTaskWatchers ← syncTaskDetailInternal done t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
             if let projectID {
+                debugLog.debug("[ENGINE] replaceTaskWatchers → syncProjectTasksInternal t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
                 try await self.syncProjectTasksInternal(projectID: projectID)
                 debugLog.debug("[ENGINE] replaceTaskWatchers ← syncProjectTasksInternal done t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
             }
+            // syncTaskDetailInternal runs last so its authoritative relationship payload
+            // always wins over the stale snapshot in the project list response.
+            debugLog.debug("[ENGINE] replaceTaskWatchers → syncTaskDetailInternal t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
+            try await self.syncTaskDetailInternal(taskID: taskID)
+            debugLog.debug("[ENGINE] replaceTaskWatchers ← syncTaskDetailInternal done t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
         }
         debugLog.debug("[ENGINE] replaceTaskWatchers ■ exit t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
     }
