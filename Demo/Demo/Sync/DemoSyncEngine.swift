@@ -1,10 +1,7 @@
 import Combine
 import Foundation
-import OSLog
 import SwiftData
 import SwiftSync
-
-private let debugLog = Logger(subsystem: "com.swiftsync.demo", category: "BugDebug")
 
 @MainActor
 final class DemoSyncEngine: ObservableObject {
@@ -99,43 +96,27 @@ final class DemoSyncEngine: ObservableObject {
     }
 
     func replaceTaskReviewers(taskID: String, projectID: String?, reviewerIDs: [String]) async throws {
-        // DEBUG
-        debugLog.debug("[ENGINE] replaceTaskReviewers ▶ entry taskID=\(taskID, privacy: .public) ids=\(reviewerIDs.joined(separator: ","), privacy: .public) t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
         try await syncOperationThrowing("replaceTaskReviewers-\(taskID)") {
-            debugLog.debug("[ENGINE] replaceTaskReviewers → apiClient.replaceTaskReviewers t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
             _ = try await self.apiClient.replaceTaskReviewers(taskID: taskID, reviewerIDs: reviewerIDs)
             if let projectID {
-                debugLog.debug("[ENGINE] replaceTaskReviewers → syncProjectTasksInternal t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
                 try await self.syncProjectTasksInternal(projectID: projectID)
-                debugLog.debug("[ENGINE] replaceTaskReviewers ← syncProjectTasksInternal done t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
             }
             // syncTaskDetailInternal runs last so its authoritative relationship payload
             // always wins over the stale snapshot in the project list response.
-            debugLog.debug("[ENGINE] replaceTaskReviewers → syncTaskDetailInternal t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
             try await self.syncTaskDetailInternal(taskID: taskID)
-            debugLog.debug("[ENGINE] replaceTaskReviewers ← syncTaskDetailInternal done t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
         }
-        debugLog.debug("[ENGINE] replaceTaskReviewers ■ exit t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
     }
 
     func replaceTaskWatchers(taskID: String, projectID: String?, watcherIDs: [String]) async throws {
-        // DEBUG
-        debugLog.debug("[ENGINE] replaceTaskWatchers ▶ entry taskID=\(taskID, privacy: .public) ids=\(watcherIDs.joined(separator: ","), privacy: .public) t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
         try await syncOperationThrowing("replaceTaskWatchers-\(taskID)") {
-            debugLog.debug("[ENGINE] replaceTaskWatchers → apiClient.replaceTaskWatchers t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
             _ = try await self.apiClient.replaceTaskWatchers(taskID: taskID, watcherIDs: watcherIDs)
             if let projectID {
-                debugLog.debug("[ENGINE] replaceTaskWatchers → syncProjectTasksInternal t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
                 try await self.syncProjectTasksInternal(projectID: projectID)
-                debugLog.debug("[ENGINE] replaceTaskWatchers ← syncProjectTasksInternal done t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
             }
             // syncTaskDetailInternal runs last so its authoritative relationship payload
             // always wins over the stale snapshot in the project list response.
-            debugLog.debug("[ENGINE] replaceTaskWatchers → syncTaskDetailInternal t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
             try await self.syncTaskDetailInternal(taskID: taskID)
-            debugLog.debug("[ENGINE] replaceTaskWatchers ← syncTaskDetailInternal done t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
         }
-        debugLog.debug("[ENGINE] replaceTaskWatchers ■ exit t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
     }
 
     private func syncProjectsInternal() async throws {

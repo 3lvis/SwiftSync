@@ -1,9 +1,6 @@
-import OSLog
 import SwiftData
 import SwiftSync
 import SwiftUI
-
-private let debugLog = Logger(subsystem: "com.swiftsync.demo", category: "BugDebug")
 
 struct TaskDetailView: View {
     let taskID: String
@@ -118,11 +115,6 @@ struct TaskDetailView: View {
     @ViewBuilder
     private var peopleSection: some View {
         if let taskModel {
-            // DEBUG: log every render of peopleSection so we can see when (if ever)
-            // the view re-renders after the edit sheet dismisses.
-            let _ = debugLog.debug(
-                "[RENDER] peopleSection — reviewers: \(taskModel.reviewers.map(\.displayName).sorted().joined(separator: ", "), privacy: .public) | watchers: \(taskModel.watchers.map(\.displayName).sorted().joined(separator: ", "), privacy: .public) | t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)"
-            )
             Section("Assignee") {
                 Text(taskModel.assignee?.displayName ?? "Unassigned")
                     .foregroundStyle(taskModel.assignee == nil ? .secondary : .primary)
@@ -395,52 +387,29 @@ private struct EditTaskSheet: View {
         let capturedReviewerIDs = reviewerIDs.sorted()
         let capturedWatcherIDs = watcherIDs.sorted()
 
-        // DEBUG
-        let saveStart = Date().timeIntervalSince1970
-        debugLog.debug(
-            "[SAVE] ▶ start — taskID=\(taskID, privacy: .public) reviewersChanged=\(reviewersChanged, privacy: .public) watchersChanged=\(watchersChanged, privacy: .public) t=\(saveStart, format: .fixed(precision: 3), privacy: .public)"
-        )
-
         _Concurrency.Task {
             do {
-                // DEBUG
-                debugLog.debug("[SAVE] → calling updateTask (scalars) t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
                 try await syncEngine.updateTask(taskID: taskID, projectID: projectID, body: body)
-                debugLog.debug("[SAVE] ← updateTask complete t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
 
                 if reviewersChanged {
-                    // DEBUG
-                    debugLog.debug("[SAVE] → calling replaceTaskReviewers ids=\(capturedReviewerIDs.joined(separator: ","), privacy: .public) t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
                     try await syncEngine.replaceTaskReviewers(
                         taskID: taskID,
                         projectID: projectID,
                         reviewerIDs: capturedReviewerIDs
                     )
-                    debugLog.debug("[SAVE] ← replaceTaskReviewers complete t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
-                } else {
-                    debugLog.debug("[SAVE] — reviewers unchanged, skipping replaceTaskReviewers")
                 }
 
                 if watchersChanged {
-                    // DEBUG
-                    debugLog.debug("[SAVE] → calling replaceTaskWatchers ids=\(capturedWatcherIDs.joined(separator: ","), privacy: .public) t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
                     try await syncEngine.replaceTaskWatchers(
                         taskID: taskID,
                         projectID: projectID,
                         watcherIDs: capturedWatcherIDs
                     )
-                    debugLog.debug("[SAVE] ← replaceTaskWatchers complete t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
-                } else {
-                    debugLog.debug("[SAVE] — watchers unchanged, skipping replaceTaskWatchers")
                 }
 
-                // DEBUG
-                let elapsed = Date().timeIntervalSince1970 - saveStart
-                debugLog.debug("[SAVE] ■ all network done, calling dismiss() elapsed=\(elapsed, format: .fixed(precision: 3), privacy: .public)s t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
                 await MainActor.run { dismiss() }
             } catch {
                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                debugLog.error("[SAVE] ✗ error: \(message, privacy: .public) t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
                 await MainActor.run {
                     isSaving = false
                     saveErrorMessage = message

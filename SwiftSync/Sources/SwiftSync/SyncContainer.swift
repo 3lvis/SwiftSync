@@ -1,9 +1,6 @@
 import Foundation
-import OSLog
 import SwiftData
 import ObjCExceptionCatcher
-
-private let debugLog = Logger(subsystem: "com.swiftsync.demo", category: "BugDebug")
 
 public final class SyncContainer: NSObject, @unchecked Sendable {
     public struct SchemaValidationError: LocalizedError, Sendable {
@@ -305,23 +302,10 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         guard sourceContext != mainContext else { return }
 
         let changedIDs = changedIdentifiers(from: notification.userInfo)
-
-        // DEBUG: log every didSave event so we can see exactly which model IDs arrive here
-        // and — critically — whether a Task ID ever arrives after a relationship-only save.
-        debugLog.debug(
-            "[CONTAINER] modelContextDidSave: \(changedIDs.count, privacy: .public) changedIDs t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)"
-        )
-
         for identifier in changedIDs {
             _ = mainContext.model(for: identifier)
         }
         let changedModelTypeNames = changedModelTypeNames(for: changedIDs)
-
-        // DEBUG: log the type names so we can see "Task" is present/absent after each save
-        debugLog.debug(
-            "[CONTAINER] modelContextDidSave: changedTypeNames=[\(changedModelTypeNames.sorted().joined(separator: ", "), privacy: .public)] posting didSaveChangesNotification t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)"
-        )
-
         mainContext.processPendingChanges()
         NotificationCenter.default.post(
             name: Self.didSaveChangesNotification,

@@ -1,10 +1,7 @@
 import Combine
 import Foundation
-import OSLog
 import SwiftData
 import SwiftUI
-
-private let debugLog = Logger(subsystem: "com.swiftsync.demo", category: "BugDebug")
 
 private final class SyncQueryObserver<Model: PersistentModel>: ObservableObject, @unchecked Sendable {
     @Published var rows: [Model] = []
@@ -429,22 +426,7 @@ private final class SyncModelObserver<Model: PersistentModel & SyncModelable>: O
             object: syncContainer,
             queue: .main
         ) { [weak self] notification in
-            guard let self else {
-                // DEBUG: self was deallocated — observer fired but SyncModelObserver is gone
-                debugLog.warning("[OBSERVER] SyncModelObserver<\(String(reflecting: Model.self), privacy: .public)> notification received but self=nil (deallocated) t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
-                return
-            }
-            // DEBUG: log every notification received by this observer
-            let changedTypeNames = syncQueryChangedModelTypeNames(from: notification.userInfo)
-            let changedIDs = syncQueryChangedIdentifiers(from: notification.userInfo)
-            debugLog.debug(
-                "[OBSERVER] SyncModelObserver<\(String(reflecting: Model.self), privacy: .public)> id=\(String(describing: self.id), privacy: .public) notification received: changedTypes=[\(changedTypeNames.sorted().joined(separator: ", "), privacy: .public)] changedIDCount=\(changedIDs.count, privacy: .public) observed=[\(self.observedModelTypeNames.sorted().joined(separator: ", "), privacy: .public)] t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)"
-            )
-            guard self.shouldReload(for: notification) else {
-                debugLog.debug("[OBSERVER] SyncModelObserver<\(String(reflecting: Model.self), privacy: .public)> id=\(String(describing: self.id), privacy: .public) → shouldReload=false SKIPPING reload t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
-                return
-            }
-            debugLog.debug("[OBSERVER] SyncModelObserver<\(String(reflecting: Model.self), privacy: .public)> id=\(String(describing: self.id), privacy: .public) → shouldReload=true RELOADING t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
+            guard let self, self.shouldReload(for: notification) else { return }
             self.reload()
         }
     }
@@ -452,40 +434,21 @@ private final class SyncModelObserver<Model: PersistentModel & SyncModelable>: O
     private func shouldReload(for notification: Notification) -> Bool {
         let changedTypeNames = syncQueryChangedModelTypeNames(from: notification.userInfo)
         if changedTypeNames.isEmpty {
-            // DEBUG: empty changedTypeNames — always reload
-            debugLog.debug("[OBSERVER] shouldReload: changedTypeNames empty → returning true (always reload)")
             return true
         }
         if !observedModelTypeNames.isDisjoint(with: changedTypeNames) {
-            // DEBUG: our observed type is in changedTypeNames — reload
-            debugLog.debug("[OBSERVER] shouldReload: observedTypeNames ∩ changedTypeNames non-empty → returning true")
             return true
         }
 
-        guard let loadedModel = model else {
-            // DEBUG: no loaded model and type name not matched — skip
-            debugLog.debug("[OBSERVER] shouldReload: no type match, model=nil → returning false")
-            return false
-        }
+        guard let loadedModel = model else { return false }
         let changedIDs = syncQueryChangedIdentifiers(from: notification.userInfo)
-        let containsID = changedIDs.contains(loadedModel.persistentModelID)
-        // DEBUG: fall-through — checking if our specific model ID is in changedIDs
-        debugLog.debug(
-            "[OBSERVER] shouldReload: no type match, checking ID match: changedIDs contains model ID? \(containsID, privacy: .public)"
-        )
-        return containsID
+        return changedIDs.contains(loadedModel.persistentModelID)
     }
 
     private func reload() {
-        // DEBUG
-        debugLog.debug("[OBSERVER] reload() called for SyncModelObserver<\(String(reflecting: Model.self), privacy: .public)> id=\(String(describing: self.id), privacy: .public) t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
         do {
             let rows = try syncContainer.mainContext.fetch(FetchDescriptor<Model>())
             let matched = rows.first { $0[keyPath: Model.syncIdentity] == id }
-            // DEBUG: log what was found
-            debugLog.debug(
-                "[OBSERVER] reload() found model=\(matched != nil ? "YES" : "nil", privacy: .public) for id=\(String(describing: self.id), privacy: .public) t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)"
-            )
             if let animation {
                 withAnimation(animation) {
                     model = matched
@@ -494,7 +457,6 @@ private final class SyncModelObserver<Model: PersistentModel & SyncModelable>: O
                 model = matched
             }
         } catch {
-            debugLog.error("[OBSERVER] reload() fetch error: \(error.localizedDescription, privacy: .public)")
             model = nil
         }
     }
