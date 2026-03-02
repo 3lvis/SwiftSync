@@ -1,7 +1,10 @@
 import Combine
 import Foundation
+import OSLog
 import SwiftData
 import SwiftSync
+
+private let debugLog = Logger(subsystem: "com.swiftsync.demo", category: "BugDebug")
 
 @MainActor
 final class DemoSyncEngine: ObservableObject {
@@ -96,23 +99,37 @@ final class DemoSyncEngine: ObservableObject {
     }
 
     func replaceTaskReviewers(taskID: String, projectID: String?, reviewerIDs: [String]) async throws {
+        // DEBUG
+        debugLog.debug("[ENGINE] replaceTaskReviewers ▶ entry taskID=\(taskID, privacy: .public) ids=\(reviewerIDs.joined(separator: ","), privacy: .public) t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
         try await syncOperationThrowing("replaceTaskReviewers-\(taskID)") {
-            _ = try await apiClient.replaceTaskReviewers(taskID: taskID, reviewerIDs: reviewerIDs)
-            try await syncTaskDetailInternal(taskID: taskID)
+            debugLog.debug("[ENGINE] replaceTaskReviewers → apiClient.replaceTaskReviewers t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
+            _ = try await self.apiClient.replaceTaskReviewers(taskID: taskID, reviewerIDs: reviewerIDs)
+            debugLog.debug("[ENGINE] replaceTaskReviewers ← apiClient done, calling syncTaskDetailInternal t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
+            try await self.syncTaskDetailInternal(taskID: taskID)
+            debugLog.debug("[ENGINE] replaceTaskReviewers ← syncTaskDetailInternal done t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
             if let projectID {
-                try await syncProjectTasksInternal(projectID: projectID)
+                try await self.syncProjectTasksInternal(projectID: projectID)
+                debugLog.debug("[ENGINE] replaceTaskReviewers ← syncProjectTasksInternal done t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
             }
         }
+        debugLog.debug("[ENGINE] replaceTaskReviewers ■ exit t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
     }
 
     func replaceTaskWatchers(taskID: String, projectID: String?, watcherIDs: [String]) async throws {
+        // DEBUG
+        debugLog.debug("[ENGINE] replaceTaskWatchers ▶ entry taskID=\(taskID, privacy: .public) ids=\(watcherIDs.joined(separator: ","), privacy: .public) t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
         try await syncOperationThrowing("replaceTaskWatchers-\(taskID)") {
-            _ = try await apiClient.replaceTaskWatchers(taskID: taskID, watcherIDs: watcherIDs)
-            try await syncTaskDetailInternal(taskID: taskID)
+            debugLog.debug("[ENGINE] replaceTaskWatchers → apiClient.replaceTaskWatchers t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
+            _ = try await self.apiClient.replaceTaskWatchers(taskID: taskID, watcherIDs: watcherIDs)
+            debugLog.debug("[ENGINE] replaceTaskWatchers ← apiClient done, calling syncTaskDetailInternal t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
+            try await self.syncTaskDetailInternal(taskID: taskID)
+            debugLog.debug("[ENGINE] replaceTaskWatchers ← syncTaskDetailInternal done t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
             if let projectID {
-                try await syncProjectTasksInternal(projectID: projectID)
+                try await self.syncProjectTasksInternal(projectID: projectID)
+                debugLog.debug("[ENGINE] replaceTaskWatchers ← syncProjectTasksInternal done t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
             }
         }
+        debugLog.debug("[ENGINE] replaceTaskWatchers ■ exit t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)")
     }
 
     private func syncProjectsInternal() async throws {

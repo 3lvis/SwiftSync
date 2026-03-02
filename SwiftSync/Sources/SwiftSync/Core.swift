@@ -1,5 +1,8 @@
 import Foundation
+import OSLog
 import SwiftData
+
+private let debugLog = Logger(subsystem: "com.swiftsync.demo", category: "BugDebug")
 
 // MARK: - Shared String Case Conversion Utilities
 
@@ -352,8 +355,20 @@ public func syncApplyToManyForeignKeys<Owner, Related: SyncModelable>(
     )
     if modelIDSet(current) != modelIDSet(next) {
         owner[keyPath: relationship] = next
+        // DEBUG: membership changed — log that we are NOT calling syncMarkChanged here.
+        // The owner's store row will NOT be dirtied by this write alone.
+        // SwiftData only marks the owning row dirty on scalar column changes, NOT on join-table changes.
+        // This means the owner's PersistentIdentifier will be ABSENT from ModelContext.didSave
+        // updatedIdentifiers — and SyncModelObserver will never be notified.
+        debugLog.warning(
+            "[CORE] syncApplyToManyForeignKeys: membership changed on \(String(reflecting: type(of: owner)), privacy: .public) — owner row NOT dirtied (syncMarkChanged absent). Notification to SyncModelObserver will NOT fire for owner. t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)"
+        )
         return true
     }
+    // DEBUG: no membership change
+    debugLog.debug(
+        "[CORE] syncApplyToManyForeignKeys: no membership change on \(String(reflecting: type(of: owner)), privacy: .public) — returning false t=\(Date().timeIntervalSince1970, format: .fixed(precision: 3), privacy: .public)"
+    )
     return false
 }
 

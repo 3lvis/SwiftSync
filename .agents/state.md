@@ -1,29 +1,31 @@
 # State Capsule
 
 ## Plan
-- [~] Write .agents/state.md (this file)
-- [ ] Delete TaskDetailSheet enum, actionMenu, all 4 sheets (EditTaskDescriptionSheet, AssigneePickerSheet, EditTaskReviewersSheet, EditTaskWatchersSheet), and `activeSheet` state from TaskDetailView.swift
-- [ ] Add `@State var showingEditSheet: Bool = false` and replace toolbar with single Edit button
-- [ ] Implement `EditTaskSheet` private struct inside TaskDetailView.swift:
-  - Uninserted draft Task (constructed from live taskModel at init time — no @Syncable draft() yet)
-  - Local `reviewerIDs: Set<String>` and `watcherIDs: Set<String>`
-  - Form with sections: Title (TextField), Description (TextEditor), State (checkmark rows), Assignee (checkmark rows), Reviewers (multi-select checkmarks), Watchers (multi-select checkmarks)
-  - Toolbar: Cancel (leading) + Save (trailing, with ProgressView while saving)
-  - Save: exportObject on draft → updateTask; if reviewers changed → replaceTaskReviewers; if watchers changed → replaceTaskWatchers
-  - Cancel: dismiss, draft discarded — no rollback needed (live model never mutated)
-- [ ] Build Demo and verify it compiles
+
+### Debugging: reviewer/watcher stale-UI bug (branch: debug/reviewer-watcher-stale-ui)
+- [x] Create branch from 85b7fa0 and write this state.md
+- [x] Instrument `save()` in `EditTaskSheet` — timestamps at start, after `updateTask`, after `replaceTaskReviewers`, after `replaceTaskWatchers`, just before `dismiss()`
+- [x] Instrument `DemoSyncEngine.replaceTaskReviewers` / `replaceTaskWatchers` — log entry/exit with timestamps
+- [x] Instrument `syncApplyToManyForeignKeys` (Core.swift) — log when membership changes, and explicitly flag that no dirty-mark is performed on the owner
+- [x] Instrument `SyncContainer.modelContextDidSave` — log `changedIDs` count and `changedModelTypeNames` per save notification
+- [x] Instrument `SyncModelObserver.shouldReload` / `reload` — log every notification received, whether reload fires or skips, and which model ID is being watched
+- [x] Instrument `TaskDetailView.peopleSection` — log each render with reviewer/watcher counts
+- [ ] Commit all instrumentation
 
 ## Last known state
-untested — branch created, state.md being written
+All instrumentation written. Not yet committed.
 
 ## Decisions (don't revisit)
-- No @Syncable draft() method yet — that is deferred to a follow-up task. Draft is constructed manually at EditTaskSheet init: `Task(id: taskModel.id, projectID: ..., ...)`.
-- includeNulls skipped — nil optionals always emit NSNull (correct semantics).
-- Reviewers and Watchers use dedicated engine methods (replaceTaskReviewers / replaceTaskWatchers), not updateTask.
-- Error handling: show alert on any save failure; partial saves (scalar OK but reviewers fail) are acceptable.
-- The old ellipsis action menu is removed entirely — no "keep menu + add Edit item" hybrid.
-- Detail view remains read-only; all mutations via Edit modal only.
+- Branch point is 85b7fa0 (BEFORE the syncMarkChanged fix at 346f048) — this is the exact state that exhibits the bug
+- `syncMarkChanged` does NOT exist on this branch; that is the missing piece instrumentation should prove
+- Root hypothesis: `syncApplyToManyForeignKeys` writes join-table rows but does NOT dirty the owning Task row → Task's PersistentIdentifier never appears in `modelContextDidSave` updatedIdentifiers → `SyncModelObserver` is never notified → UI stays stale until the 14s background poll
+- Scalar changes work because writing any scalar column on the Task model automatically dirties the SwiftData store row
+- Using `os_log` via `OSLog` / `Logger` for all instrumentation so output is visible in Console.app and Xcode's debug console with timestamps
 
 ## Files touched
 - .agents/state.md
 - Demo/Demo/Features/TaskDetail/TaskDetailView.swift
+- Demo/Demo/Sync/DemoSyncEngine.swift
+- SwiftSync/Sources/SwiftSync/Core.swift
+- SwiftSync/Sources/SwiftSync/SyncContainer.swift
+- SwiftSync/Sources/SwiftSync/ReactiveQuery.swift
