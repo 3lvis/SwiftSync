@@ -117,6 +117,27 @@ public protocol SyncUpdatableModel: SyncModelable {
         operations: SyncRelationshipOperations
     ) async throws -> Bool
     func exportObject(using options: ExportOptions) -> [String: Any]
+
+    /// Forces a no-op scalar write so that SwiftData marks this model's persistent store
+    /// row dirty after a to-many relationship change.
+    ///
+    /// ## Why this exists
+    ///
+    /// On iOS, SwiftData only marks a model's own store row dirty when a *scalar* property
+    /// changes. Mutating a to-many relationship only dirties the join-table rows. As a result,
+    /// the owner's `PersistentIdentifier` is absent from `ModelContext.didSave`'s
+    /// `updatedIdentifiers`, causing `SyncContainer.modelContextDidSave` to never propagate
+    /// the change — leaving `@SyncModel` / `@SyncQuery` views stale until the next poll.
+    ///
+    /// `@Syncable` generates a real implementation (`self.id = self.id`). Hand-written
+    /// `SyncUpdatableModel` conformances receive a default no-op — document this clearly if
+    /// your model has to-many relationships.
+    func syncMarkChanged()
+}
+
+public extension SyncUpdatableModel {
+    /// Default no-op. `@Syncable`-generated conformances override this with a real scalar write.
+    func syncMarkChanged() {}
 }
 
 public extension SyncUpdatableModel {
@@ -307,7 +328,7 @@ public func syncApplyToManyForeignKeys<Owner, Related: PersistentModel>(
 }
 
 @discardableResult
-public func syncApplyToManyForeignKeys<Owner, Related: SyncModelable>(
+public func syncApplyToManyForeignKeys<Owner: SyncUpdatableModel, Related: SyncModelable>(
     _ owner: Owner,
     relationship: ReferenceWritableKeyPath<Owner, [Related]>,
     payload: SyncPayload,
@@ -323,6 +344,9 @@ public func syncApplyToManyForeignKeys<Owner, Related: SyncModelable>(
         guard canDelete else { return false }
         if !owner[keyPath: relationship].isEmpty {
             owner[keyPath: relationship] = []
+            // Force a scalar dirty-mark on the owning row so iOS CoreData surfaces this
+            // model's PersistentIdentifier in the ModelContext.didSave notification.
+            owner.syncMarkChanged()
             return true
         }
         return false
@@ -352,6 +376,9 @@ public func syncApplyToManyForeignKeys<Owner, Related: SyncModelable>(
     )
     if modelIDSet(current) != modelIDSet(next) {
         owner[keyPath: relationship] = next
+        // Force a scalar dirty-mark on the owning row so iOS CoreData surfaces this
+        // model's PersistentIdentifier in the ModelContext.didSave notification.
+        owner.syncMarkChanged()
         return true
     }
     return false

