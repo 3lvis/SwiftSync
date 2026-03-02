@@ -117,6 +117,22 @@ public protocol SyncUpdatableModel: SyncModelable {
         operations: SyncRelationshipOperations
     ) async throws -> Bool
     func exportObject(using options: ExportOptions) -> [String: Any]
+
+    /// Forces a no-op write on a scalar property so SwiftData marks the model's
+    /// persistent store row as dirty. This guarantees the model's PersistentIdentifier
+    /// surfaces in ModelContext.didSave's updatedObjects after a to-many relationship
+    /// change — necessary because SwiftData only dirties the owning row when a scalar
+    /// column changes, not when only join-table rows change (e.g., models with no
+    /// explicit @Relationship inverse anchor).
+    ///
+    /// @Syncable generates a real implementation: `self.<identity> = self.<identity>`.
+    /// The default implementation is a no-op for hand-written conformances that do not
+    /// need this behavior.
+    func syncMarkChanged()
+}
+
+public extension SyncUpdatableModel {
+    func syncMarkChanged() {}
 }
 
 public extension SyncUpdatableModel {
@@ -274,7 +290,7 @@ public func syncApplyToOneForeignKey<Owner, Related: SyncModelable>(
 }
 
 @discardableResult
-public func syncApplyToManyForeignKeys<Owner, Related: PersistentModel>(
+public func syncApplyToManyForeignKeys<Owner: SyncUpdatableModel, Related: PersistentModel>(
     _ owner: Owner,
     relationship: ReferenceWritableKeyPath<Owner, [Related]>,
     payload: SyncPayload,
@@ -290,6 +306,7 @@ public func syncApplyToManyForeignKeys<Owner, Related: PersistentModel>(
         guard canClear else { return false }
         if !owner[keyPath: relationship].isEmpty {
             owner[keyPath: relationship] = []
+            owner.syncMarkChanged()
             return true
         }
         return false
@@ -299,6 +316,7 @@ public func syncApplyToManyForeignKeys<Owner, Related: PersistentModel>(
         guard canClear else { return false }
         if !owner[keyPath: relationship].isEmpty {
             owner[keyPath: relationship] = []
+            owner.syncMarkChanged()
             return true
         }
     }
@@ -307,7 +325,7 @@ public func syncApplyToManyForeignKeys<Owner, Related: PersistentModel>(
 }
 
 @discardableResult
-public func syncApplyToManyForeignKeys<Owner, Related: SyncModelable>(
+public func syncApplyToManyForeignKeys<Owner: SyncUpdatableModel, Related: SyncModelable>(
     _ owner: Owner,
     relationship: ReferenceWritableKeyPath<Owner, [Related]>,
     payload: SyncPayload,
@@ -352,6 +370,7 @@ public func syncApplyToManyForeignKeys<Owner, Related: SyncModelable>(
     )
     if modelIDSet(current) != modelIDSet(next) {
         owner[keyPath: relationship] = next
+        owner.syncMarkChanged()
         return true
     }
     return false
