@@ -10,10 +10,10 @@
 - [x] Instrument `SyncContainer.modelContextDidSave` — log `changedIDs` count and `changedModelTypeNames` per save notification
 - [x] Instrument `SyncModelObserver.shouldReload` / `reload` — log every notification received, whether reload fires or skips, and which model ID is being watched
 - [x] Instrument `TaskDetailView.peopleSection` — log each render with reviewer/watcher counts
-- [ ] Commit all instrumentation
+- [x] Commit all instrumentation (fbe0125)
 
 ## Last known state
-All instrumentation written. Not yet committed.
+All instrumentation committed. Branch ready to run in Xcode.
 
 ## Decisions (don't revisit)
 - Branch point is 85b7fa0 (BEFORE the syncMarkChanged fix at 346f048) — this is the exact state that exhibits the bug
