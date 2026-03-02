@@ -43,8 +43,7 @@ The UI stays stale until the next background poll (14s in the Demo).
 In-memory SQLite stores behave differently — SwiftData always surfaces the owning row's identifier in the save notification regardless of whether a scalar changed. This is why:
 
 - The unit tests (`testToManyRelationshipOnlySyncUpdatesMainContextImmediately`) pass even without the fix — the assertion `notificationIDs.contains(taskID)` is always true in-memory
-- The debug instrumentation logs from the `debug/reviewer-watcher-stale-ui` investigation showed `Demo.Task` in `changedTypeNames` after every relationship save — because the Demo uses `ModelConfiguration(isStoredInMemoryOnly: true)`
-- The bug would manifest immediately on a device or on a Simulator run with a file-backed store
+- The bug manifests on device and on the Simulator, both of which use the Demo's persistent on-disk store (`ApplicationSupport/SwiftSyncDemo/client-cache.store`)
 
 ### Affected relationship pattern
 
@@ -126,11 +125,13 @@ The `SyncModelable` overload of `syncApplyToManyForeignKeys` was constrained fro
 
 ## Investigation history
 
-This issue was originally identified during investigation of a different bug: reviewers/watchers not updating instantly in the Demo's edit modal after saving. The instrumentation added on branch `debug/reviewer-watcher-stale-ui` was designed to confirm this as the root cause, but the logs disproved it — the Demo uses an in-memory store, so `Demo.Task` appeared in `changedTypeNames` after every relationship save and `SyncModelObserver` reloaded correctly every time.
+This issue was originally identified during investigation of a different bug: reviewers/watchers not updating instantly in the Demo's edit modal after saving. The instrumentation was added on branch `debug/reviewer-watcher-stale-ui`, branching from commit `85b7fa0` — which is before the `syncMarkChanged` fix (`346f048`) landed on `main`.
 
-The actual root cause of that visible bug was a different ordering issue in `DemoSyncEngine`: `syncProjectTasksInternal` was running *after* `syncTaskDetailInternal`, writing a stale project-list snapshot (which contained the pre-save relationship membership) on top of the correct data that `syncTaskDetailInternal` had just written. Fixed by swapping the order so `syncTaskDetailInternal` always runs last (commit `3519db9` on `debug/reviewer-watcher-stale-ui`).
+Despite `syncMarkChanged` being absent on that branch, the logs showed `Demo.Task` in `changedTypeNames` after every relationship save and `SyncModelObserver` reloading correctly every time. This is unexplained: the Demo uses a persistent on-disk SQLite store (`ApplicationSupport/SwiftSyncDemo/client-cache.store`), so the dirty-tracking gap should have manifested. The most likely explanations are (a) a Simulator-specific SQLite behavior that always surfaces the owning row, or (b) an incidental scalar write elsewhere in the sync path that happened to touch the Task row. It was not investigated further because the gap was already fixed on `main`.
 
-The `syncMarkChanged` fix (`346f048`) is nonetheless correct and necessary — it just addresses a separate latent bug that would only manifest on a persistent store.
+The actual root cause of the visible bug turned out to be a different ordering issue in `DemoSyncEngine`: `syncProjectTasksInternal` was running *after* `syncTaskDetailInternal`, writing a stale project-list snapshot (which contained the pre-save relationship membership) on top of the correct data that `syncTaskDetailInternal` had just written. Fixed by swapping the order so `syncTaskDetailInternal` always runs last (commit `3519db9` on `debug/reviewer-watcher-stale-ui`).
+
+The `syncMarkChanged` fix (`346f048`) is correct and necessary regardless — it guards against a real SwiftData behavior that the investigation happened not to trigger during that session.
 
 ---
 
@@ -173,6 +174,8 @@ Overload 1 is used when `Related` is a plain `PersistentModel` (not `SyncModelab
 - Add a note in Overload 1's doc comment warning that `syncMarkChanged` is not called
 - Remove Overload 1 if it has no real callers
 
-### 4. Verify behavior on a real device before considering this fully closed
+### 4. Confirm the dirty-tracking gap is reproducible without the fix
 
-All validation so far has been on the Simulator with an in-memory store. A run on a real device (or Simulator with a file-backed store) with the `debug/reviewer-watcher-stale-ui` instrumentation would definitively confirm the fix works in the persistent store case.
+The Demo uses a persistent on-disk store, so the gap should be reproducible on device and Simulator. However, during the `debug/reviewer-watcher-stale-ui` investigation, the gap was not observed even though `syncMarkChanged` was absent on that branch. The reason is unknown.
+
+A focused test would be: temporarily revert `syncMarkChanged` from `syncApplyToManyForeignKeys` on a local branch, run the Demo on device with the `BugDebug` instrumentation re-enabled, and confirm `Demo.Task` is absent from `changedTypeNames` after a relationship-only save. This would close the question of whether the fix is actively necessary or merely defensive.
