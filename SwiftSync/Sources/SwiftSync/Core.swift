@@ -117,22 +117,6 @@ public protocol SyncUpdatableModel: SyncModelable {
         operations: SyncRelationshipOperations
     ) async throws -> Bool
     func exportObject(using options: ExportOptions) -> [String: Any]
-
-    /// Forces a no-op write on a scalar property so SwiftData marks the model's
-    /// persistent store row as dirty. This guarantees the model's PersistentIdentifier
-    /// surfaces in ModelContext.didSave's updatedObjects after a to-many relationship
-    /// change — necessary because SwiftData only dirties the owning row when a scalar
-    /// column changes, not when only join-table rows change (e.g., models with no
-    /// explicit @Relationship inverse anchor).
-    ///
-    /// @Syncable generates a real implementation: `self.<identity> = self.<identity>`.
-    /// The default implementation is a no-op for hand-written conformances that do not
-    /// need this behavior.
-    func syncMarkChanged()
-}
-
-public extension SyncUpdatableModel {
-    func syncMarkChanged() {}
 }
 
 public extension SyncUpdatableModel {
@@ -323,7 +307,7 @@ public func syncApplyToManyForeignKeys<Owner, Related: PersistentModel>(
 }
 
 @discardableResult
-public func syncApplyToManyForeignKeys<Owner: SyncUpdatableModel, Related: SyncModelable>(
+public func syncApplyToManyForeignKeys<Owner, Related: SyncModelable>(
     _ owner: Owner,
     relationship: ReferenceWritableKeyPath<Owner, [Related]>,
     payload: SyncPayload,
@@ -339,11 +323,6 @@ public func syncApplyToManyForeignKeys<Owner: SyncUpdatableModel, Related: SyncM
         guard canDelete else { return false }
         if !owner[keyPath: relationship].isEmpty {
             owner[keyPath: relationship] = []
-            // Force a scalar write so SwiftData marks the owner's store row dirty.
-            // Without this, the owner's PersistentIdentifier is absent from
-            // ModelContext.didSave's updatedObjects on models with no explicit inverse,
-            // causing @SyncModel / @SyncQuery to serve stale relationship data.
-            owner.syncMarkChanged()
             return true
         }
         return false
@@ -373,11 +352,6 @@ public func syncApplyToManyForeignKeys<Owner: SyncUpdatableModel, Related: SyncM
     )
     if modelIDSet(current) != modelIDSet(next) {
         owner[keyPath: relationship] = next
-        // Force a scalar write so SwiftData marks the owner's store row dirty.
-        // Without this, the owner's PersistentIdentifier is absent from
-        // ModelContext.didSave's updatedObjects on models with no explicit inverse,
-        // causing @SyncModel / @SyncQuery to serve stale relationship data.
-        owner.syncMarkChanged()
         return true
     }
     return false
