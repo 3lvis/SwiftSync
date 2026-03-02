@@ -132,10 +132,14 @@ final class DirtyTrackingGapTests: XCTestCase {
             queue: nil
         ) { notification in
             if let ui = notification.userInfo {
-                if let ids = ui[ModelContext.NotificationKey.updatedIdentifiers] as? [PersistentIdentifier] {
+                // Note: ModelContext.didSave userInfo uses plain string keys ("updated",
+                // "inserted", "deleted"), NOT ModelContext.NotificationKey constants
+                // ("updatedIdentifiers", "insertedIdentifiers"). The NotificationKey
+                // constants do not match the actual keys in the userInfo dictionary.
+                if let ids = ui["updated"] as? [PersistentIdentifier] {
                     updatedIDs = Set(ids)
                 }
-                if let ids = ui[ModelContext.NotificationKey.insertedIdentifiers] as? [PersistentIdentifier] {
+                if let ids = ui["inserted"] as? [PersistentIdentifier] {
                     insertedIDs = Set(ids)
                 }
             }
