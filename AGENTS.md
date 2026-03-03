@@ -170,3 +170,36 @@ No special procedure needed. If the plan was kept current during work, `state.md
 ### Why not gitignore it?
 
 Gitignoring `.agents/` defeats the "switch machines" goal. The files must be committed to survive machine switches. The tradeoff is: commit freely on feature branches, CI cleans up on merge.
+
+---
+
+## iOS Test Policy
+
+### Default: never run iOS tests during normal work
+
+- Run `swift test` (macOS/SPM) for all fast feedback during development.
+- Do **not** run `xcodebuild` iOS Simulator tests unless explicitly instructed.
+- iOS tests are slow (~2 min cold build + simulator boot) and reserved for CI.
+
+### When iOS tests run
+
+| Trigger | Who runs them |
+|---|---|
+| PR merged into `main` | CI automatically (`ios-regression.yml`) |
+| Explicitly asked by the user | Agent, on demand only |
+
+### What the iOS workflow covers
+
+- **File:** `.github/workflows/ios-regression.yml`
+- **Trigger:** `pull_request` closed + merged into `main` — no manual dispatch
+- **Tests:** `DemoTests/DirtyTrackingGapTests` only (the iOS dirty-tracking regression suite)
+- **Runner:** `macos-15`, Xcode 26.2, iPhone 16 Pro simulator
+
+### As an agent
+
+- Do not add `xcodebuild` iOS test steps to your plan unless the user asks.
+- Do not run iOS tests to verify a fix — the post-merge CI job is the gate.
+- If a task touches `SwiftSync/Sources/SwiftSync/Core.swift`,
+  `SwiftSync/Sources/MacrosImplementation/`, or
+  `SwiftSync/Sources/SwiftSync/SyncableMacro.swift`,
+  note in your plan that the iOS regression will run automatically on merge.
