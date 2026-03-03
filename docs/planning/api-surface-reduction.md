@@ -38,17 +38,4 @@ that is deferred until there is a clean solution.
 
 ## Open work queue
 
-Run the full test suite after each item before proceeding.
-
-- [x] **1. Remove `protocol SyncRelationshipSchemaIntrospectable`**  
-  Dead protocol — no conformances, no callers, requirement already on `SyncModelable`. Deleted.
-
-- [ ] **2. Decide: keep or remove `ExportRelationshipMode.nested`**  
-  File: `SwiftSync/Sources/SwiftSync/Core.swift`  
-  Full analysis in `docs/planning/export-nested-mode.md`. Two options:  
-  - **Keep** — add a `Comment` model to the demo (see the doc for the full scenario). Gives
-    `.nested` real end-to-end coverage and justifies its place in the API surface.  
-  - **Remove** — no current consumer, demo or otherwise. TDD order: delete the `.nested`
-    assertions from `testExportRelationshipModesArrayNestedNone` in `SyncExportTests.swift`
-    first, then remove the case from `ExportRelationshipMode` in `Core.swift` and the
-    `case .nested:` branches from `MacrosImplementation/SyncableMacro.swift`.
+No remaining items. See `docs/planning/export-nested-mode.md` for the `.nested` decision.
