@@ -7,10 +7,6 @@ on:
     types: [closed]
     branches: [main]
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 env:
   DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
 
@@ -25,9 +21,6 @@ jobs:
 
       - name: Xcode Version
         run: xcodebuild -version && swift --version
-
-      - name: Show available iOS simulators
-        run: xcrun simctl list devices available | grep -E "^--|iPhone"
 
       - name: Test — DirtyTrackingGapTests (iOS Simulator)
         run: |
