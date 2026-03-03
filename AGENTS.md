@@ -55,6 +55,7 @@
 
 ## Pre-Commit Checkpoint
 
+- **Do not commit unless the user explicitly asks.**
 - Before every commit:
   - run `git status --short`
   - confirm only intended files are staged
