@@ -125,6 +125,34 @@ final class SyncQueryPublisherTests: XCTestCase {
         XCTAssertEqual(publisher.rows.first?.title, "New Title")
     }
 
+    // MARK: - Predicate filtering
+
+    @MainActor
+    func testPublisherWithPredicateFiltersRows() async throws {
+        let syncContainer = try makeContainer(modelTypes: PubTask.self, PubUser.self)
+
+        try await syncContainer.sync(
+            payload: [
+                ["id": "t1", "title": "Alpha", "assignee_id": "u1"],
+                ["id": "t2", "title": "Beta",  "assignee_id": NSNull()],
+                ["id": "t3", "title": "Gamma", "assignee_id": "u1"],
+            ],
+            as: PubTask.self
+        )
+
+        let predicate = #Predicate<PubTask> { $0.assigneeID == "u1" }
+        let publisher = SyncQueryPublisher(
+            PubTask.self,
+            predicate: predicate,
+            in: syncContainer,
+            sortBy: [SortDescriptor(\PubTask.title)]
+        )
+
+        await Task.yield()
+
+        XCTAssertEqual(publisher.rows.map(\.id).sorted(), ["t1", "t3"])
+    }
+
     // MARK: - No spurious reload for unrelated types
 
     @MainActor
@@ -157,6 +185,78 @@ final class SyncQueryPublisherTests: XCTestCase {
         await Task.yield()
 
         XCTAssertEqual(reloadCount, 0)
+    }
+
+    // MARK: - postFetchFilter (relatedTo)
+
+    @MainActor
+    func testPublisherWithToOneRelatedIDFilter() async throws {
+        let syncContainer = try makeContainer(modelTypes: PubTask.self, PubUser.self)
+
+        try await syncContainer.sync(
+            payload: [
+                ["id": "u1", "display_name": "Alice", "role": ["id": "eng", "label": "Engineer"]],
+                ["id": "u2", "display_name": "Bob",   "role": ["id": "eng", "label": "Engineer"]],
+            ],
+            as: PubUser.self
+        )
+
+        try await syncContainer.sync(
+            payload: [
+                ["id": "t1", "title": "Alice Task 1", "assignee_id": "u1"],
+                ["id": "t2", "title": "Alice Task 2", "assignee_id": "u1"],
+                ["id": "t3", "title": "Bob Task",     "assignee_id": "u2"],
+            ],
+            as: PubTask.self
+        )
+
+        let publisher = SyncQueryPublisher(
+            PubTask.self,
+            relatedTo: PubUser.self,
+            relatedID: "u1",
+            through: \PubTask.assignee,
+            in: syncContainer,
+            sortBy: [SortDescriptor(\PubTask.title)]
+        )
+
+        await Task.yield()
+
+        XCTAssertEqual(publisher.rows.map(\.id).sorted(), ["t1", "t2"])
+    }
+
+    @MainActor
+    func testPublisherReloadsWhenLoadedRowIDAppears() async throws {
+        let syncContainer = try makeContainer(modelTypes: PubTask.self, PubUser.self)
+
+        try await syncContainer.sync(
+            payload: [["id": "u1", "display_name": "Alice", "role": ["id": "eng", "label": "Engineer"]]],
+            as: PubUser.self
+        )
+        try await syncContainer.sync(
+            payload: [["id": "t1", "title": "Original", "assignee_id": "u1"]],
+            as: PubTask.self
+        )
+
+        let publisher = SyncQueryPublisher(
+            PubTask.self,
+            relatedTo: PubUser.self,
+            relatedID: "u1",
+            through: \PubTask.assignee,
+            in: syncContainer,
+            sortBy: [SortDescriptor(\PubTask.title)]
+        )
+
+        await Task.yield()
+        XCTAssertEqual(publisher.rows.first?.title, "Original")
+
+        try await syncContainer.sync(
+            payload: [["id": "t1", "title": "Updated", "assignee_id": "u1"]],
+            as: PubTask.self
+        )
+
+        await Task.yield()
+
+        XCTAssertEqual(publisher.rows.first?.title, "Updated")
     }
 
     // MARK: - Combine publisher surface
