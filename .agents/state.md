@@ -4,9 +4,9 @@
 
 ### Track 1 — API Surface Reduction (`docs/planning/api-surface-reduction.md`)
 
-- [ ] Remove `SyncQueryPublisher` predicate and `relatedTo:through:` inits
-  - Delete tests in `SyncQueryPublisherTests.swift` first, then remove the 3 inits
-  - `init(_:predicate:in:sortBy:)`, `init(_:relatedTo:relatedID:through:in:sortBy:)` ×2
+- [x] Remove `SyncQueryPublisher` predicate and `relatedTo:through:` inits — **REVERTED, decided: keep**
+  - Removal was done then reverted: parity with `@SyncQuery` query shapes is the design contract
+  - Decision recorded in `docs/planning/api-surface-reduction.md` Decisions table — do not revisit
 
 ### Track 2 — Draft Model Pattern (`docs/planning/demo-draft-model-export.md`)
 
@@ -23,6 +23,7 @@ All tests green. XCTest: 112 passed. Swift Testing: 30 passed.
 - `required` on `SyncPayload` must stay public — macro-generated conformances call it.
 - `syncApplyToX` family must stay public — macro expansion calls them in client module scope.
 - `package` access level: deferred — no SPM solution yet.
+- `SyncQueryPublisher` predicate + `relatedTo:through:` inits: keep — parity with `@SyncQuery` is the contract, not demo coverage.
 
 ## Files touched (open work)
 - `SwiftSync/Sources/SwiftSync/SyncQueryPublisher.swift`

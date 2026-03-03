@@ -1,27 +1,28 @@
 # API Surface Reduction
 
-**Status:** In progress
-
 ---
 
-## Constraints: macro-expansion visibility
+## Macro-expansion visibility constraint
 
-Several symbols are `public` because `@Syncable`-generated code expands into client module scope
-and calls them by name. `@testable import` only applies to test targets — it does not help for
-production app modules. The right long-term fix is SPM `package` access level, but that is deferred.
+Several symbols must remain `public` because `@Syncable`-generated code expands at the call
+site (outside the library module) and calls them by name. `@testable import` does not help
+here — it only applies to test targets. The right long-term fix is SPM `package` access, but
+that is deferred until there is a clean solution.
 
-**Do not attempt to make these internal without a `package`-level solution first:**
+**Do not make these internal without a `package`-level solution:**
 
 | Symbol | Why it must stay public |
 |---|---|
 | `exportEncodeValue(_:options:)` | Macro-generated `exportObject` calls it in client modules |
 | `exportSetValue(_:for:into:)` | Same |
 | `ExportState.enter(_:)` / `ExportState.leave(_:)` | Same |
-| `syncApplyToOneForeignKey` (all overloads) | Macro-generated `syncApplyGeneratedRelationships` calls them |
+| `SyncRelationshipSchemaDescriptor` | Macro-generated `syncRelationshipSchemaDescriptors` constructs it in client modules |
+| `syncApplyToOneForeignKey` (all overloads) | Macro-generated `applyRelationships` calls them |
 | `syncApplyToManyForeignKeys` (all overloads) | Same |
 | `syncApplyToOneNestedObject` (all overloads) | Same |
 | `syncApplyToManyNestedObjects` (all overloads) | Same |
-| `SyncPayload.required(_:for:)` | Macro-generated `make(from:)` and `apply(_:)` call it; also a reasonable hand-written conformance primitive |
+| `SyncPayload.required(_:for:)` | Macro-generated `make(from:)` and `apply(_:)` call it |
+| `KeyStyle.transform(_:)` | Macro-generated `exportObject` calls it to derive the output key |
 
 ---
 
@@ -29,10 +30,9 @@ production app modules. The right long-term fix is SPM `package` access level, b
 
 | Topic | Decision |
 |---|---|
-| `SyncRelationshipOperations` | **Keep as-is.** The OptionSet is tested, not complex, and removing it is not zero risk. |
-| Export module extraction (`SwiftSyncExport`) | **Defer.** |
-| `SyncModelable` protocol extension methods audit | **Defer.** Needs more analysis before touching. |
-| `package` access for macro helpers | **Defer.** Revisit when there's a clean SPM solution. |
+| `SyncQueryPublisher` predicate + `relatedTo:through:` inits | **Keep.** Parity with `@SyncQuery` query shapes is the design contract. Demo coverage is not the API contract. |
+| `SyncRelationshipOperations` | **Keep.** User-configurable bitmask; tested; part of the documented `sync(...)` API. |
+| `package` access for macro helpers | **Defer.** Revisit when there is a clean SPM solution. |
 
 ---
 
@@ -40,30 +40,17 @@ production app modules. The right long-term fix is SPM `package` access level, b
 
 Run the full test suite after each item before proceeding.
 
-- [ ] **1. Remove `SyncQueryPublisher` predicate and `relatedTo:through:` inits**  
-  File: `SwiftSync/Sources/SwiftSync/SyncQueryPublisher.swift`  
-  The demo uses only `SyncQueryPublisher(_:in:sortBy:)`. The other three inits have no demo
-  usage and no strong external justification.  
-  TDD order: delete the corresponding tests from `SyncQueryPublisherTests.swift` first, then
-  remove the inits.  
-  Inits to remove:
-  - `init(_:predicate:in:sortBy:)`
-  - `init(_:relatedTo:relatedID:through:in:sortBy:)` — to-one variant
-  - `init(_:relatedTo:relatedID:through:in:sortBy:)` — to-many variant
+- [ ] **1. Remove `protocol SyncRelationshipSchemaIntrospectable`**  
+  File: `SwiftSync/Sources/SwiftSync/Core.swift`  
+  This protocol declares one requirement — `syncRelationshipSchemaDescriptors` — that already
+  exists on `SyncModelable`. It has no conformances anywhere in the codebase (not in tests, the
+  Demo, or macro-generated code). It is not documented. Removing it is a safe deletion.  
+  TDD order: grep for any reference first to confirm zero usage, then delete the protocol.
 
----
-
-## What to keep
-
-| Symbol | Reason |
-|---|---|
-| `SyncRelationshipOperations` | Decided: keep |
-| `SyncContainer(_:ModelContainer, keyStyle:)` | Useful escape hatch |
-| `@PrimaryKey`, `@RemotePath`, `@NotExport` | Intentional advanced features |
-| `SyncPayload` (the struct) | Required by `SyncUpdatableModel` protocol surface |
-| `SyncPayload.value(for:as:)` | Required by protocol surface |
-| `SyncPayload.required(_:for:)` | Required — macro-generated and hand-written conformances call it |
-| `ExportOptions` | Cannot be internal — macro-generated `exportObject(using:ExportOptions)` references it in client modules |
-| `ExportState` | Cannot be internal — macro-generated `exportObject` calls `ExportState.enter/leave` in client modules |
-| `exportEncodeValue`, `exportSetValue` | Cannot be internal — same macro constraint |
-| `syncApplyToX` family | Cannot be internal — same macro constraint |
+- [ ] **2. Audit `ExportRelationshipMode.nested`**  
+  File: `SwiftSync/Sources/SwiftSync/Core.swift`  
+  The `.nested` case (Rails-style `_attributes` export) has test coverage but no Demo usage and
+  no known real-world consumer. Determine whether to keep it as a documented feature or remove
+  it to reduce surface area.  
+  TDD order: if removing — delete the test cases first, then the case and its handling in
+  `exportEncodeValue` / macro-generated output.
