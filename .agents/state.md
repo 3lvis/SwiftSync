@@ -7,6 +7,9 @@
 - [x] Remove `SyncQueryPublisher` predicate and `relatedTo:through:` inits — **REVERTED, decided: keep**
   - Removal was done then reverted: parity with `@SyncQuery` query shapes is the design contract
   - Decision recorded in `docs/planning/api-surface-reduction.md` Decisions table — do not revisit
+- [x] Remove `protocol SyncRelationshipSchemaIntrospectable` from `Core.swift`
+  - Dead protocol — no conformances, no callers, requirement already on `SyncModelable`
+  - 7 lines deleted; all 112 XCTest + 30 Swift Testing tests green
 
 ### Track 2 — Draft Model Pattern (`docs/planning/demo-draft-model-export.md`)
 
@@ -17,7 +20,7 @@
 - [ ] Run full build and test suite
 
 ## Last known state
-All tests green. XCTest: 112 passed. Swift Testing: 30 passed.
+All tests green. XCTest: 112 passed. Swift Testing: 30 passed. Branch: remove-sqp-predicate-relatedto-inits.
 
 ## Decisions
 - `required` on `SyncPayload` must stay public — macro-generated conformances call it.
