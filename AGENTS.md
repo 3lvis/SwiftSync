@@ -188,13 +188,6 @@ Gitignoring `.agents/` defeats the "switch machines" goal. The files must be com
 | PR merged into `main` | CI automatically (`ios-regression.yml`) |
 | Explicitly asked by the user | Agent, on demand only |
 
-### What the iOS workflow covers
-
-- **File:** `.github/workflows/ios-regression.yml`
-- **Trigger:** `pull_request` closed + merged into `main` — no manual dispatch
-- **Tests:** `DemoTests/DirtyTrackingGapTests` only (the iOS dirty-tracking regression suite)
-- **Runner:** `macos-15`, Xcode 26.2, iPhone 16 Pro simulator
-
 ### As an agent
 
 - Do not add `xcodebuild` iOS test steps to your plan unless the user asks.
