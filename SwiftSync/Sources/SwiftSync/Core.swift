@@ -99,14 +99,6 @@ public struct SyncRelationshipSchemaDescriptor: Sendable {
     }
 }
 
-public protocol SyncRelationshipSchemaIntrospectable {
-    static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] { get }
-}
-
-public extension SyncRelationshipSchemaIntrospectable {
-    static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] { [] }
-}
-
 public protocol SyncUpdatableModel: SyncModelable {
     static func make(from payload: SyncPayload) throws -> Self
     func apply(_ payload: SyncPayload) throws -> Bool
