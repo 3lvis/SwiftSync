@@ -117,9 +117,16 @@ public protocol SyncUpdatableModel: SyncModelable {
         operations: SyncRelationshipOperations
     ) async throws -> Bool
     func exportObject(using options: ExportOptions) -> [String: Any]
+
+    /// Forces a scalar write so iOS CoreData marks the owning row dirty after a to-many change.
+    /// `@Syncable` generates `self.id = self.id`. Hand-written conformances get a no-op default
+    /// — override if your model has to-many relationships. See docs/project/ios-dirty-tracking-gap.md.
+    func syncMarkChanged()
 }
 
 public extension SyncUpdatableModel {
+    func syncMarkChanged() {}
+
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         false
     }
@@ -307,7 +314,7 @@ public func syncApplyToManyForeignKeys<Owner, Related: PersistentModel>(
 }
 
 @discardableResult
-public func syncApplyToManyForeignKeys<Owner, Related: SyncModelable>(
+public func syncApplyToManyForeignKeys<Owner: SyncUpdatableModel, Related: SyncModelable>(
     _ owner: Owner,
     relationship: ReferenceWritableKeyPath<Owner, [Related]>,
     payload: SyncPayload,
@@ -323,6 +330,7 @@ public func syncApplyToManyForeignKeys<Owner, Related: SyncModelable>(
         guard canDelete else { return false }
         if !owner[keyPath: relationship].isEmpty {
             owner[keyPath: relationship] = []
+            owner.syncMarkChanged()
             return true
         }
         return false
@@ -352,6 +360,7 @@ public func syncApplyToManyForeignKeys<Owner, Related: SyncModelable>(
     )
     if modelIDSet(current) != modelIDSet(next) {
         owner[keyPath: relationship] = next
+        owner.syncMarkChanged()
         return true
     }
     return false

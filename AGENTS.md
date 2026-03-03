@@ -55,6 +55,7 @@
 
 ## Pre-Commit Checkpoint
 
+- **Do not commit unless the user explicitly asks.**
 - Before every commit:
   - run `git status --short`
   - confirm only intended files are staged
@@ -170,3 +171,12 @@ No special procedure needed. If the plan was kept current during work, `state.md
 ### Why not gitignore it?
 
 Gitignoring `.agents/` defeats the "switch machines" goal. The files must be committed to survive machine switches. The tradeoff is: commit freely on feature branches, CI cleans up on merge.
+
+---
+
+## iOS Test Policy
+
+- Default: run `swift test` (macOS/SPM) only. Never run `xcodebuild` unless explicitly asked.
+- iOS regression runs automatically post-merge via `ios-regression.yml` — that is the gate.
+- If a task touches `Core.swift`, `MacrosImplementation/`, or `SyncableMacro.swift`, note in
+  the plan that the iOS regression will run on merge.
