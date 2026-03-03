@@ -175,24 +175,7 @@ Gitignoring `.agents/` defeats the "switch machines" goal. The files must be com
 
 ## iOS Test Policy
 
-### Default: never run iOS tests during normal work
-
-- Run `swift test` (macOS/SPM) for all fast feedback during development.
-- Do **not** run `xcodebuild` iOS Simulator tests unless explicitly instructed.
-- iOS tests are slow (~2 min cold build + simulator boot) and reserved for CI.
-
-### When iOS tests run
-
-| Trigger | Who runs them |
-|---|---|
-| PR merged into `main` | CI automatically (`ios-regression.yml`) |
-| Explicitly asked by the user | Agent, on demand only |
-
-### As an agent
-
-- Do not add `xcodebuild` iOS test steps to your plan unless the user asks.
-- Do not run iOS tests to verify a fix — the post-merge CI job is the gate.
-- If a task touches `SwiftSync/Sources/SwiftSync/Core.swift`,
-  `SwiftSync/Sources/MacrosImplementation/`, or
-  `SwiftSync/Sources/SwiftSync/SyncableMacro.swift`,
-  note in your plan that the iOS regression will run automatically on merge.
+- Default: run `swift test` (macOS/SPM) only. Never run `xcodebuild` unless explicitly asked.
+- iOS regression runs automatically post-merge via `ios-regression.yml` — that is the gate.
+- If a task touches `Core.swift`, `MacrosImplementation/`, or `SyncableMacro.swift`, note in
+  the plan that the iOS regression will run on merge.

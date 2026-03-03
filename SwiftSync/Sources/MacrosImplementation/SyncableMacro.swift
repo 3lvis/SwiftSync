@@ -153,9 +153,6 @@ public struct SyncableMacro: ExtensionMacro {
                         return result
                     }
 
-                    /// Forces Core Data to mark this model's persistent store row dirty.
-                    /// Called by syncApplyToManyForeignKeys after any membership change so
-                    /// the owner's PersistentIdentifier appears in ModelContext.didSave on iOS.
                     func syncMarkChanged() {
                         self.\(raw: identityProperty.name) = self.\(raw: identityProperty.name)
                     }
