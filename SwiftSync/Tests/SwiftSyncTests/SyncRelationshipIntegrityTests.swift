@@ -296,9 +296,6 @@ extension OneSidedTask: SyncUpdatableModel {
         )
     }
 
-    // The real fix will make @Syncable generate `self.id = self.id` here.
-    // The spy implementation lets tests verify this method is called without
-    // depending on CoreData's platform-specific notification behavior.
     func syncMarkChanged() {
         OneSidedTask.syncMarkChangedCallCount += 1
     }
@@ -306,26 +303,8 @@ extension OneSidedTask: SyncUpdatableModel {
 
 // MARK: - syncMarkChanged call-site tests
 
-/// Tests that verify syncApplyToManyForeignKeys calls syncMarkChanged() at the right times.
-///
-/// ## Why these tests matter
-///
-/// On iOS with a persistent SQLite store, SwiftData only marks an owning model's store row
-/// dirty when a *scalar* column changes. Mutating a to-many relationship key path only dirties
-/// the join-table rows. As a result, the owner's PersistentIdentifier is absent from
-/// NSManagedObjectContextDidSave's updatedObjects, causing SyncContainer.modelContextDidSave
-/// to never fault the owner into mainContext. @SyncModel and @SyncQuery then serve stale
-/// relationship data until the next background poll.
-///
-/// The fix is for syncApplyToManyForeignKeys to call owner.syncMarkChanged() after any real
-/// membership change, forcing a no-op scalar write that marks the Core Data row dirty.
-///
-/// ## Why spy-based, not notification-based
-///
-/// macOS CoreData/SwiftData always surfaces the owner in NSManagedObjectContextDidSave even
-/// without a scalar write, so notification-based tests cannot be driven red on the macOS
-/// SPM test host. Spy-based tests verify the behavioral contract (the call site) directly,
-/// independently of platform-specific notification semantics.
+/// Verifies syncApplyToManyForeignKeys calls syncMarkChanged() at the right times.
+/// Spy-based so the contract is testable on macOS (notification behavior differs per platform).
 final class SyncMarkChangedCallSiteTests: XCTestCase {
     override func setUp() {
         super.setUp()

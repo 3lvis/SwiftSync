@@ -126,9 +126,7 @@ public protocol SyncUpdatableModel: SyncModelable {
 
 public extension SyncUpdatableModel {
     func syncMarkChanged() {}
-}
 
-public extension SyncUpdatableModel {
     func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
         false
     }
