@@ -11,15 +11,15 @@ The demo's update flow currently defeats the export system's purpose. After inve
 
 ```swift
 // Current workaround — state change
-var body = taskModel.exportObject(using: options, state: &exportState)
+var body = taskModel.exportObject(for: syncContainer, relationshipMode: .none)
 body["state"] = ["id": option.id] as [String: Any]   // ← manual dict surgery
 
 // Current workaround — description
-var body = taskModel.exportObject(using: options, state: &exportState)
+var body = taskModel.exportObject(for: syncContainer, relationshipMode: .none)
 body["description"] = trimmed                          // ← manual dict surgery
 
 // Current workaround — assignee
-var body = taskModel.exportObject(using: options, state: &exportState)
+var body = taskModel.exportObject(for: syncContainer, relationshipMode: .none)
 body["assignee_id"] = pendingAssigneeID ?? NSNull()    // ← manual dict surgery
 ```
 
@@ -46,12 +46,6 @@ This means a draft can be constructed from `Task(...)`, mutated, and exported wi
 ---
 
 ## The draft pattern
-
-### For create (`CreateTaskSheet`)
-
-`CreateTaskSheet` already does this correctly — it constructs a `Task`, inserts it into `mainContext`, and exports it at save time. The insertion into `mainContext` is intentional here: if the API call succeeds, the object should persist. If it fails, `delete(draft)` + `rollback()`.
-
-**No change needed for create.**
 
 ### For update (all edit sheets and inline actions)
 
@@ -145,24 +139,14 @@ This is the goal: the UI works with real model objects, mutates them naturally, 
 
 ---
 
-## Dependencies
-
-This plan depends on `export-simplification.md` steps 1–5 being completed first:
-- `ExportState` must be internal before `exportObject` can be called cleanly
-- `keyStyle` and `dateFormatter` must be on `SyncContainer` before `exportObject(for:)` works
-- The `exportObject(for:relationshipMode:includeNulls:)` overload must exist
-
----
-
 ## Execution checklist
 
 - [ ] 1. Verify `exportObject` is safe on an uninserted `@Model` with a targeted test (construct `Task`, do NOT insert, call `exportObject`, assert output)
-- [ ] 2. Complete `export-simplification.md` steps 1–5 (prerequisite)
-- [ ] 3. Add `draft()` method generation to `@Syncable` macro — copies all scalar non-relationship fields into a new uninserted instance
-- [ ] 4. Add `draft()` to `SyncUpdatableModel` protocol (or as a macro-only generated method)
-- [ ] 5. Refactor `TaskDetailView` state change action — use `taskModel.draft()`, set override, `exportObject(for:)`
-- [ ] 6. Refactor `EditTaskDescriptionSheet` — use `taskModel.draft()`, set override, `exportObject(for:)`, remove manual `body["description"]` injection
-- [ ] 7. Refactor `AssigneePickerSheet` — use `taskModel.draft()`, set override, `exportObject(for:)`, remove manual `body["assignee_id"]` injection
-- [ ] 8. Remove manual dict surgery (`body["state"]`, `body["description"]`, `body["assignee_id"]`) from all update call sites
-- [ ] 9. Remove rollback calls from update sheets (no live object mutation means no rollback needed)
-- [ ] 10. Run full build and test suite
+- [ ] 2. Add `draft()` method generation to `@Syncable` macro — copies all scalar non-relationship fields into a new uninserted instance
+- [ ] 3. Add `draft()` to `SyncUpdatableModel` protocol (or as a macro-only generated method)
+- [ ] 4. Refactor `TaskDetailView` state change action — use `taskModel.draft()`, set override, `exportObject(for:)`
+- [ ] 5. Refactor `EditTaskDescriptionSheet` — use `taskModel.draft()`, set override, `exportObject(for:)`, remove manual `body["description"]` injection
+- [ ] 6. Refactor `AssigneePickerSheet` — use `taskModel.draft()`, set override, `exportObject(for:)`, remove manual `body["assignee_id"]` injection
+- [ ] 7. Remove manual dict surgery (`body["state"]`, `body["description"]`, `body["assignee_id"]`) from all update call sites
+- [ ] 8. Remove rollback calls from update sheets (no live object mutation means no rollback needed)
+- [ ] 9. Run full build and test suite

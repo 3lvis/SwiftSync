@@ -1,299 +1,76 @@
 # Demo Coverage Gap — Complexity Reduction Candidates
 
-**Purpose:** Map the delta between SwiftSync's current public API surface and what the demo
-actually exercises. Every gap is a candidate for reduction — either remove, make internal, or
-explicitly defer to an advanced tier. Work through Section 5 top-to-bottom, one checkbox at a time.
+**Superseded by:** `api-surface-reduction.md` for active work queue.  
+**Purpose:** Reference for open reduction candidates not yet scheduled.
 
 ---
 
-## 1. Baseline: what the demo actually uses
+## Unused surface — open candidates
 
-The demo is the reference implementation of the intended happy path. If it isn't needed here,
-it needs a strong justification to stay public.
+### Export system (bulk paths)
 
-| API | Where used in demo |
-|---|---|
-| `@Syncable` | All 5 model classes |
-| `@RemoteKey` | `Task.descriptionText`, `Task.state`, `Task.stateLabel`, `User.role`, `User.roleLabel` |
-| `SyncContainer(for:recoverOnFailure:configurations:)` | `DemoRuntime` |
-| `SyncContainer.modelContainer` | `DemoApp` (scene modifier) |
-| `SyncContainer.mainContext` | `DemoSyncEngine` (direct fetch) |
-| `syncContainer.sync(payload:as:)` | Projects, Users, TaskStateOptions, UserRoleOptions |
-| `syncContainer.sync(payload:as:parent:)` | Tasks scoped to a Project |
-| `syncContainer.sync(item:as:)` | Single-task detail re-sync (`syncTaskDetailInternal`) |
-| `@SyncQuery(_:in:sortBy:[SortDescriptor])` | Users, TaskStateOptions, Projects |
-| `@SyncQuery(_:relatedTo:relatedID:in:sortBy:refreshOn:animation:)` | Tasks for a Project |
-| `@SyncModel(_:id:in:animation:)` | Project and Task lookup |
-| `SyncQueryPublisher(_:in:sortBy:)` | `ProjectsViewController` (UIKit table) |
-| `exportObject(using:state:)` | UI call sites — `CreateTaskSheet.save()`, state/description/assignee update actions in `TaskDetailView` — each calls `exportObject` directly on the live or draft `Task` to produce the request body before passing it to the engine |
-| `ExportOptions` | All UI export call sites — `ExportOptions(relationshipMode: .none, includeNulls: false)` |
-| `SyncContainer.SchemaValidationError` | thrown by `SyncContainer.init` on unanchored many-to-many |
-| `SyncContainer.ObjectiveCInitializationExceptionError` | thrown by `SyncContainer.init` on NSException from ModelContainer |
+The core `exportObject` path is exercised by the demo. These remain uncovered:
 
-Everything not in this table is unused by the demo.
-
----
-
-## 2. Unused surface by subsystem
-
-Ordered by estimated reduction impact (largest first).
-
----
-
-### 2.1 Export system
-
-The export subsystem is exercised by the demo for both task creation and updates. UI call sites — `CreateTaskSheet.save()` and the description, assignee, and state update actions in `TaskDetailView` — call `exportObject(using:state:)` directly on the live or draft `Task` to produce the request body. `DemoSyncEngine` no longer builds or owns the body; it is a thin pass-through that receives `[String: Any]` and forwards it to the API client.
-
-Items now covered by the demo:
-
-- [x] `ExportOptions` struct — `ExportOptions(relationshipMode: .none, includeNulls: false)` used in `buildCreateTaskBody`
-- [x] `enum ExportRelationshipMode` — `.none` used explicitly
-- [x] `exportObject(using:state:)` protocol requirement on `SyncUpdatableModel` — called by `DemoSyncEngine`
-
-Items still not directly exercised by the demo:
-
-- [ ] `ExportOptions` static presets (`.camelCase`, `.excludedRelationships`, `.nested`), `defaultDateFormatter()`
-- [ ] `ExportState` struct (`enter(_:)`, `leave(_:)`)
 - [ ] `enum ExportRelationshipMode` — `.array`, `.nested` variants
-- [ ] `enum ExportKeyStyle` (`.snakeCase`, `.camelCase`, `transform(_:)`)
 - [ ] `exportEncodeValue(_:options:)` free function
 - [ ] `exportSetValue(_:for:into:)` free function
 - [ ] `SwiftSync.export(as:in:using:)` static method (bulk export)
 - [ ] `SwiftSync.export(as:in:parent:using:)` static method
 - [ ] `@NotExport` macro
 
-**Recommendation:** The core `exportObject` path is now exercised. The bulk `SwiftSync.export()` entry point and mode variants (`.array`, `.nested`) remain uncovered. Consider whether a full round-trip export demo scenario (e.g. export tasks to a share sheet) would cover the remaining surface before moving to module extraction.
+**Note:** Bulk export entry point and mode variants are uncovered. Consider a round-trip export demo scenario (e.g. export tasks to a share sheet) before extracting to a separate module.
 
 ---
 
-### 2.2 Low-level context API (`SwiftSync.sync` / `SwiftSync.export` on `ModelContext` directly)
+### Manual relationship helper free functions
 
-These static methods let callers bypass `SyncContainer` entirely and drive sync against a raw
-`ModelContext`. The demo never calls them — it always goes through `SyncContainer`.
+Generated and called by `@Syncable`-expanded code. `public` because macro expansion happens in client module scope. Not intended to be called by hand.
 
-- [ ] `SwiftSync.sync(payload:as:in:inputKeyStyle:relationshipOperations:)` — global
-- [ ] `SwiftSync.sync(item:as:in:inputKeyStyle:relationshipOperations:)` — global single-item
-- [ ] `SwiftSync.sync(payload:as:in:parent:inputKeyStyle:relationshipOperations:)` — ParentScopedModel
-- [ ] `SwiftSync.sync(payload:as:in:parent:inputKeyStyle:relationshipOperations:)` — inferred parent
-- [ ] `SwiftSync.sync(item:as:in:parent:inputKeyStyle:relationshipOperations:)` — inferred parent single-item
-- [ ] `SwiftSync.export(as:in:using:)` — (also listed under 2.1; listed here for completeness)
-- [ ] `SwiftSync.export(as:in:parent:using:)` — (same)
+- [ ] `syncApplyToOneForeignKey` (all overloads)
+- [ ] `syncApplyToManyForeignKeys`
+- [ ] `syncApplyToOneNestedObject`
+- [ ] `syncApplyToManyNestedObjects`
 
-**Recommendation:** Make `internal`. `SyncContainer` is the intended public entry point. The raw
-context overloads exist for internal plumbing and testing — they should not be on the public API.
+**Blocked by:** `package` access level — cannot make internal without an SPM solution. Deferred.
 
 ---
 
-### 2.3 Manual relationship helper free functions
+### `SyncRelationshipOperations` granularity
 
-These five functions are generated and called by `@Syncable`-expanded code. They are `public`
-so the macro-expanded code can reference them, but they are not intended to be called by hand.
-The demo never calls them directly.
+Demo passes `.all` everywhere. Individual bit values are tested but represent a level of control no common use case requires.
 
-- [ ] `syncApplyToOneForeignKey(_:relationship:payload:keys:in:operations:)` — optional `Related?` variant
-- [ ] `syncApplyToOneForeignKey(_:relationship:payload:keys:in:operations:)` — non-optional `Related` variant
-- [ ] `syncApplyToManyForeignKeys(_:relationship:payload:keys:in:operations:)`
-- [ ] `syncApplyToOneNestedObject(_:relationship:payload:keys:in:operations:)`
-- [ ] `syncApplyToManyNestedObjects(_:relationship:payload:keys:in:operations:)`
-
-**Note:** The `PersistentModel`-constrained stub overloads (no-op returns) are only needed to
-satisfy generic resolution — they could be `package` or `internal` if the macro and library
-targets are merged.
-
-**Recommendation:** Make `internal` (or `package`-scoped if macros expand into the same package).
-Document that these are implementation details of `@Syncable`, not public primitives.
+- [ ] Evaluate replacing the OptionSet with a simpler `Bool` (`applyRelationships:`) or removing the parameter entirely
+- [ ] Decided: keep as-is for now (see `api-surface-reduction.md` decisions)
 
 ---
 
-### 2.4 `SyncPayload` direct API
+### `SyncQueryPublisher` unused init variants
 
-`SyncPayload` is constructed and consumed entirely inside the library. Users never create one
-manually — the library creates it during sync from the raw `[Any]` payload. The demo never
-references `SyncPayload` at all.
-
-- [ ] `SyncPayload` struct itself (public visibility)
-- [ ] `SyncPayload.strictValue(for:as:)` — non-coercive accessor
-- [ ] `SyncPayload.required(_:for:)throws` — throwing required accessor
-- [ ] `SyncPayload.strictRequired(_:for:)throws` — strict throwing required accessor
-
-**Note:** `SyncPayload` appears in the `SyncUpdatableModel` protocol requirements (`make(from:)`,
-`apply(_:)`), so its type must be visible to conforming code. The struct itself may need to stay
-public, but the additional accessor variants can likely be internal.
-
-**Recommendation:** Keep `SyncPayload` and `value(for:)` public (required by protocol surface).
-Make `strictValue`, `required`, `strictRequired` internal — they are library-internal resolution
-strategies, not user-facing accessors.
+**Scheduled in `api-surface-reduction.md` item 1.**
 
 ---
 
-### 2.5 `SyncDateParser`, `DateType`, `String.dateType()`
+### `TestingKit` target
 
-These are purely internal date-parsing utilities. They are `public` but never referenced outside
-the library. The demo never imports or calls them.
+`TestingKit` exports `SwiftSyncFixtures` (`usersPayload`, `emptyPayload`). Not imported by the demo. Not referenced in integration tests.
 
-- [ ] `enum SyncDateParser` — all four static methods
-- [ ] `enum DateType` (`.iso8601`, `.unixTimestamp`)
-- [ ] `String.dateType()` extension method
-
-**Recommendation:** Make `internal`. No user-facing use case exists. These are implementation
-details of `apply(_:)` and `make(from:)` codegen.
+- [ ] Evaluate removing — absorb fixtures into test helpers or delete the target
 
 ---
 
-### 2.6 `SwiftSync.inferToOneRelationship` / `inferToManyRelationship`
+### `@PrimaryKey`, `@RemotePath`, `@NotExport` macros
 
-These static methods infer relationship key paths from a model type. They are called internally
-during parent-scoped sync to resolve the correct key path. They are `public` but have no
-user-facing use case — the inference happens transparently when calling `sync(payload:as:parent:)`.
-
-- [ ] `SwiftSync.inferToOneRelationship(for:parent:)throws`
-- [ ] `SwiftSync.inferToManyRelationship(for:related:)throws`
-
-**Recommendation:** Make `internal`. Callers never need to invoke inference explicitly.
-
----
-
-### 2.7 `SyncRelationshipOperations` granularity
-
-The demo passes the default `.all` everywhere (by not passing `relationshipOperations:` at all).
-The individual bit values (`.insert`, `.update`, `.delete`) are tested in
-`RelationshipOperationsTests.swift` but represent a level of control no common use case requires.
-
-- [ ] `SyncRelationshipOperations.insert` (bit value)
-- [ ] `SyncRelationshipOperations.update` (bit value)
-- [ ] `SyncRelationshipOperations.delete` (bit value)
-- [ ] The `relationshipOperations:` parameter on all public `sync` overloads
-
-**Recommendation:** Evaluate replacing the OptionSet with a simpler `Bool` (`applyRelationships:`)
-or removing the parameter entirely and always applying all operations. The OptionSet adds four
-public symbols and non-trivial mental overhead for a feature no demo path exercises.
-
----
-
-### 2.9 `SyncQueryPublisher` unused init variants
-
-The demo uses only the plain `SyncQueryPublisher(_:in:sortBy:)` init (in `ProjectsViewController`).
-The predicate and `relatedTo:through:` inits are untouched.
-
-- [ ] `SyncQueryPublisher(_:predicate:in:sortBy:)`
-- [ ] `SyncQueryPublisher(_:relatedTo:relatedID:through:in:sortBy:)` — to-one explicit
-- [ ] `SyncQueryPublisher(_:relatedTo:relatedID:through:in:sortBy:)` — to-many explicit
-
-**Note:** `SyncQueryPublisher` is itself an underdiscovered class. If `@SyncQuery` covers SwiftUI
-and `SyncQueryPublisher` covers UIKit, the publisher's API surface should mirror the query's.
-But if the UIKit story is being narrowed, consider whether three extra inits are justified.
-
-**Recommendation:** Evaluate removing the predicate and `relatedTo:through:` inits from
-`SyncQueryPublisher`, or unshipping the class until the UIKit story is more developed.
-
----
-
-### 2.10 `SyncContainer(modelContainer:inputKeyStyle:)` alternate init
-
-This init wraps an existing `ModelContainer` (e.g. one created by app startup code) instead of
-constructing one from model types. It's an escape hatch for advanced integration. The demo uses
-the variadic-model init exclusively.
-
-- [ ] `SyncContainer.init(_:ModelContainer, inputKeyStyle:)`
-
-**Recommendation:** Keep — the escape hatch is low-cost and legitimately useful. But consider
-whether it needs to be in the primary docs or can be left as a discoverable secondary entry point.
-
----
-
-### 2.11 `TestingKit` target and `SwiftSyncFixtures`
-
-`TestingKit` is a separate library target that exports `SwiftSyncFixtures` — two canned payloads
-(`usersPayload`, `emptyPayload`). It is not imported by the demo and not referenced in the
-integration tests (which build their own inline fixtures).
-
-- [ ] `TestingKit` target itself
-- [ ] `SwiftSyncFixtures.usersPayload`
-- [ ] `SwiftSyncFixtures.emptyPayload`
-
-**Recommendation:** Evaluate removing the target. If fixture sharing is needed across test
-targets, the fixtures can live directly in the test helpers. A public `TestingKit` product
-signals an intentional testing SDK — which may not be a commitment worth making yet.
-
----
-
-### 2.12 `@PrimaryKey`, `@RemotePath`, `@NotExport` macros
-
-These macros are not used in demo models but are tested and represent real use cases:
-
-- `@PrimaryKey` — models whose identity field isn't named `id` / `remoteID`
-- `@RemotePath` — deep path imports (e.g. `"state.id"` nested in JSON), also used indirectly in
-  demo via `@RemoteKey("state.id")` (which is a flat-key variant, not a path variant)
-- `@NotExport` — opt-out from export serialization
+Not used in demo models. Intentional advanced features — keep, but ensure clearly marked as advanced in docs.
 
 - [ ] Review whether `@RemotePath` is the right boundary vs `@RemoteKey` with dot notation
-      (demo uses `@RemoteKey("state.id")` which already traverses a dot path)
-- [ ] Confirm `@PrimaryKey` and `@NotExport` are intentionally public-and-documented as advanced features
-
-**Recommendation:** Keep all three. They are intentional advanced features. Ensure they are
-clearly marked as advanced in docs rather than being hidden or removed.
+- [ ] Confirm `@PrimaryKey` and `@NotExport` are documented as advanced features
 
 ---
 
-## 3. Summary reduction table
+### `SyncModelable` protocol extension surface
 
-| Subsystem | Approx. symbols | Demo usage | Action |
-|---|---|---|---|
-| Export system | ~10 | Partial (`exportObject` used in create and update bodies from UI; bulk export unused) | Cover remaining via round-trip demo or extract to separate module |
-| Low-level context API | 5 overloads | None | Make `internal` |
-| Manual relationship helpers | 5 free functions | None (macro-generated) | Make `internal` or `package` |
-| `SyncPayload` accessors | 3 methods | None | Make `internal` |
-| `SyncDateParser` / `DateType` | 6 | None | Make `internal` |
-| Inference functions | 2 | None (internal) | Make `internal` |
-| Notification constants | 3 statics | None (internal) | ✅ Made `internal` |
-| `SyncRelationshipOperations` bits | 4 | `.all` default only | Evaluate simplification |
-| `SyncQueryPublisher` extra inits | 3 | None | Evaluate removal |
-| `SyncContainer` alternate init | 1 | None | Keep |
-| `TestingKit` target | 1 target, 2 symbols | None | Evaluate removal |
-| `@PrimaryKey`, `@RemotePath`, `@NotExport` | 3 macros | None in demo | Keep, mark as advanced |
+Internal coordination APIs between macro output and query layer. Not called directly by the demo.
 
----
+- [ ] Audit for `internal` candidacy: `syncDefaultRefreshModelTypeNames`, `syncRefreshModelTypes(for:)`, `syncRefreshModelTypeNames(for:)`, `syncRelatedModelType(for:)`, `syncRelationshipSchemaDescriptors`, `SyncRelationshipSchemaDescriptor`, `SyncRelationshipSchemaIntrospectable`
 
-## 4. `SyncModelable` protocol extension surface
-
-Several extension methods on `SyncModelable` are also not called directly by the demo. They are
-generated by `@Syncable` or used internally by `SyncQuery`. Mark as internal noise rather than
-removal candidates (they power the reactive layer), but they should be audited for public necessity:
-
-- [ ] `syncDefaultRefreshModelTypeNames` (computed var)
-- [ ] `syncRefreshModelTypes(for:)` static func
-- [ ] `syncRefreshModelTypeNames(for:)` static func
-- [ ] `syncRelatedModelType(for:)` static func
-- [ ] `syncRelationshipSchemaDescriptors` static var
-- [ ] `SyncRelationshipSchemaDescriptor` struct
-- [ ] `SyncRelationshipSchemaIntrospectable` protocol (separate from `SyncModelable`)
-
-**Recommendation:** These are internal coordination APIs between the macro output and the query
-layer. Evaluate making them `internal` if the macro expansion and query targets can be merged or
-if `@testable import` covers test access needs.
-
----
-
-## 5. Execution checklist
-
-Work through these in order. Each item is a discrete, independently executable task. Run tests
-after each item before proceeding.
-
-**Safest / purely visibility changes (no behavior risk):**
-
-- [ ] 1. Make `SyncDateParser`, `DateType`, and `String.dateType()` `internal`
-- [ ] 2. Make `SwiftSync.inferToOneRelationship` and `inferToManyRelationship` `internal`
-- [ ] 3. Make `SyncPayload.strictValue`, `SyncPayload.required`, `SyncPayload.strictRequired` `internal`
-- [ ] 4. Make `syncApplyToOneForeignKey`, `syncApplyToManyForeignKeys`, `syncApplyToOneNestedObject`, `syncApplyToManyNestedObjects` `internal` (or `package`)
-
-**Evaluate and decide (may affect external callers):**
-
-- [ ] 5. Remove `SwiftSync.sync(payload:as:in:…)` public static overloads — make `internal` and route all public entry points through `SyncContainer`
-- [ ] 6. Remove or reduce `SyncQueryPublisher` init variants not used by the demo (predicate, `relatedTo:through:`)
-- [ ] 7. Evaluate removing `TestingKit` target — absorb fixtures into test helpers or delete
-- [ ] 8. Evaluate `SyncRelationshipOperations` simplification — replace OptionSet with a plain `Bool` or remove the parameter and always apply `.all`
-
-**Structural (highest effort, highest payoff):**
-
-- [ ] 9. Extract the export subsystem (`ExportOptions`, `ExportState`, `ExportRelationshipMode`, `ExportKeyStyle`, `exportEncodeValue`, `exportSetValue`, `export()` overloads, `exportObject` protocol requirement, `@NotExport`) into a separate `SwiftSyncExport` module or guard behind a compiler flag — do not ship as part of the core `SwiftSync` import
-- [ ] 10. Audit `SyncModelable` protocol extension methods for `internal` candidacy once the macro and query targets' module boundaries are settled
+**Deferred** — needs module boundary analysis first.
