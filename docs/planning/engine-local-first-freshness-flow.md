@@ -110,13 +110,13 @@ enum SyncPhase {
 ## Work plan
 
 ### 1) Move from default polling to on-demand Earthquake Mode (first priority)
-- [ ] Remove recurring polling loops from normal screen lifecycle (`ProjectDetailView`, `TaskDetailView`).
-- [ ] Keep existing normal behavior: initial `.task` sync + pull-to-refresh.
-- [ ] Add DEBUG-only shake trigger on active screen.
-- [ ] On shake, show confirmation prompt: "Stress test this screen?"
-- [ ] If confirmed, run finite stress session (adds/edits/deletes + refresh overlap) scoped to that screen.
-- [ ] Add clear in-app indicator while stress session is running.
-- [ ] Ensure stress mode is opt-in and defaults OFF every launch.
+- [x] Remove recurring polling loops from normal screen lifecycle (`ProjectDetailView`, `TaskDetailView`).
+- [x] Keep existing normal behavior: initial `.task` sync + pull-to-refresh.
+- [x] Add DEBUG-only shake trigger on active screen.
+- [x] On shake, show confirmation prompt: "Stress test this screen?"
+- [x] If confirmed, run finite stress session (adds/edits/deletes + refresh overlap) scoped to that screen.
+- [x] Add clear in-app indicator while stress session is running.
+- [x] Ensure stress mode is opt-in and defaults OFF every launch.
 
 Checks:
 - [ ] With no shake action, there is no periodic background polling.

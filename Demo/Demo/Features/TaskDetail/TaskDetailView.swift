@@ -11,6 +11,9 @@ struct TaskDetailView: View {
     @SyncQuery private var taskStateOptions: [TaskStateOption]
     @State private var hasTriggeredInitialSync = false
     @State private var showingEditSheet = false
+#if DEBUG
+    @State private var showingStressPrompt = false
+#endif
 
     init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.taskID = taskID
@@ -51,14 +54,6 @@ struct TaskDetailView: View {
             await syncEngine.syncTaskStates()
             await syncEngine.syncTaskDetail(taskID: taskID)
         }
-        .task(id: taskID) {
-            while !_Concurrency.Task.isCancelled {
-                try? await _Concurrency.Task.sleep(nanoseconds: 14_000_000_000)
-                guard !_Concurrency.Task.isCancelled else { break }
-                guard !showingEditSheet else { continue }
-                await syncEngine.syncTaskDetail(taskID: taskID)
-            }
-        }
         .sheet(isPresented: $showingEditSheet) {
             if let taskModel {
                 TaskFormSheet(
@@ -68,6 +63,47 @@ struct TaskDetailView: View {
                 )
             }
         }
+#if DEBUG
+        .overlay(alignment: .bottom) {
+            if syncEngine.isEarthquakeModeRunning,
+               let status = syncEngine.earthquakeStatusText {
+                HStack(spacing: 8) {
+                    Image(systemName: "waveform.path.ecg")
+                    Text(status)
+                        .font(.caption)
+                        .lineLimit(2)
+                    Spacer(minLength: 8)
+                    Button("Stop") {
+                        syncEngine.stopEarthquakeMode()
+                    }
+                    .font(.caption)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .shadow(radius: 6)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 18)
+            }
+        }
+        .alert("Stress test this screen?", isPresented: $showingStressPrompt) {
+            Button("Start Stress", role: .destructive) {
+                syncEngine.startEarthquakeMode(for: .taskDetail(taskID: taskID))
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Debug-only Earthquake Mode runs finite add/edit/delete overlap for this task screen.")
+        }
+        .background(
+            ShakeDetector {
+                guard !syncEngine.isEarthquakeModeRunning else { return }
+                guard !showingEditSheet else { return }
+                showingStressPrompt = true
+            }
+            .allowsHitTesting(false)
+        )
+#endif
     }
 
     private var taskSection: some View {
@@ -144,4 +180,3 @@ struct TaskDetailView: View {
         }
     }
 }
-
