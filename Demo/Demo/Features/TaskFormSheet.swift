@@ -301,7 +301,15 @@ struct TaskFormSheet: View {
         )
         users = (try? editContext.fetch(userDescriptor)) ?? []
 
-        loadTaskStates()
+        let stateDescriptor = FetchDescriptor<TaskStateOption>(
+            sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.id)]
+        )
+        let cached = (try? editContext.fetch(stateDescriptor)) ?? []
+        if !cached.isEmpty {
+            taskStateOptions = cached
+        } else {
+            loadTaskStates()
+        }
     }
 
     private func loadTaskStates() {
