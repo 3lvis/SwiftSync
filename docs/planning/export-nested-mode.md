@@ -125,19 +125,11 @@ create endpoint that handles it, no changes to the existing task or user models.
 
 ---
 
-## Recommendation
+## Resolution
 
-Two honest options:
+**Option B chosen (2026-03-04):** `.nested` removed from the API surface.
 
-**A. Build the Comment scenario above.**
-Demonstrates `.nested` with real end-to-end coverage in the demo. Comments are a natural
-feature of a task-management app. Justifies keeping the mode in the API surface with more
-than just unit test coverage.
-
-**B. Remove `.nested` from the API surface.**
-No current consumer — demo or otherwise. The `.array` mode (inline child objects, no
-`_attributes` suffix) covers non-Rails backends. Users who need Rails-style nested writes
-can construct the payload manually. TDD removal order: delete the `.nested` assertions
-from `testExportRelationshipModesArrayNestedNone` in `SyncExportTests.swift` first, then
-remove the case from `ExportRelationshipMode` in `Core.swift` and the `case .nested:`
-branches from the macro-generated export blocks in `MacrosImplementation/SyncableMacro.swift`.
+`ExportRelationshipMode.nested` was speculative — no concrete consumer existed in the demo
+or in any known app. `.array` covers non-Rails backends. The Rails-specific `_attributes`
+wire format is not a general REST convention, and SwiftSync does not target Rails backends
+exclusively. Removed in branch `remove-nested-export-mode`.

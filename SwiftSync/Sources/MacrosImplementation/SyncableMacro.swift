@@ -420,51 +420,26 @@ public struct SyncableMacro: ExtensionMacro {
         if property.isRelationship {
             if property.isToManyRelationship {
                 return """
-                if options.relationshipMode != .none {
+                if options.relationshipMode == .array {
                     let baseKey = \(keyExpr)
                     let exportedChildren: [[String: Any]] = self.\(property.name).compactMap { child in
                         let anyChild: Any = child
                         guard let exportable = anyChild as? any SyncUpdatableModel else { return nil }
                         return exportable.exportObject(using: options)
                     }
-                    switch options.relationshipMode {
-                    case .array:
-                        exportSetValue(exportedChildren, for: baseKey, into: &result)
-                    case .nested:
-                        var nested: [String: Any] = [:]
-                        for (index, child) in exportedChildren.enumerated() {
-                            nested[String(index)] = child
-                        }
-                        exportSetValue(nested, for: "\\(baseKey)_attributes", into: &result)
-                    case .none:
-                        break
-                    }
+                    exportSetValue(exportedChildren, for: baseKey, into: &result)
                 }
                 """
             }
             return """
-            if options.relationshipMode != .none {
+            if options.relationshipMode == .array {
                 let baseKey = \(keyExpr)
                 let anyChild: Any? = self.\(property.name)
                 if let exportable = anyChild as? any SyncUpdatableModel {
                     let child = exportable.exportObject(using: options)
-                    switch options.relationshipMode {
-                    case .array:
-                        exportSetValue(child, for: baseKey, into: &result)
-                    case .nested:
-                        exportSetValue(child, for: "\\(baseKey)_attributes", into: &result)
-                    case .none:
-                        break
-                    }
+                    exportSetValue(child, for: baseKey, into: &result)
                 } else {
-                    switch options.relationshipMode {
-                    case .array:
-                        exportSetValue(NSNull(), for: baseKey, into: &result)
-                    case .nested:
-                        exportSetValue(NSNull(), for: "\\(baseKey)_attributes", into: &result)
-                    case .none:
-                        break
-                    }
+                    exportSetValue(NSNull(), for: baseKey, into: &result)
                 }
             }
             """

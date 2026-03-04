@@ -329,7 +329,6 @@ SwiftSync.export(as: Task.self, in: context, using: options)
 
 **`ExportRelationshipMode`:**
 - `.array` → `"tags": [{...}, {...}]`
-- `.nested` → `"tags_attributes": {"0": {...}, "1": {...}}` (Rails-style)
 - `.none` → key omitted entirely
 
 ---
@@ -367,8 +366,6 @@ Areas with the most surface area relative to usage:
 
 1. **Four relationship application globals** — each exists in two overloads (stub + real). The stubs return `false` unconditionally. If all related types were required to be `SyncModelable`, the stubs could disappear (8 functions → 4).
 
-2. **`ExportRelationshipMode.nested`** — the `.nested` / `_attributes` output mode (Rails-style). If unused in your app, the branch can be deleted from the macro's generated export code.
-
-3. **`SyncInputKeyStyle.camelCase`** — if all your payloads are snake_case, the camelCase branch in `candidateKeys` is dead weight.
+2. **`SyncInputKeyStyle.camelCase`** — if all your payloads are snake_case, the camelCase branch in `candidateKeys` is dead weight.
 
 4. **Date parser breadth** — handles 15+ ISO8601 variants + Unix timestamps. If your server only emits one format, most branches are never hit.

@@ -667,14 +667,6 @@ let rows = try SwiftSync.export(as: User.self, in: context, using: .camelCase)
 let rows = try SwiftSync.export(as: User.self, in: context, using: .excludedRelationships)
 ```
 
-### Nested relationship export (`*_attributes`)
-
-```swift
-var options = ExportOptions()
-options.relationshipMode = .nested
-let rows = try SwiftSync.export(as: User.self, in: context, using: options)
-```
-
 ### Parent-scoped export
 
 ```swift

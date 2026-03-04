@@ -626,7 +626,6 @@ public struct SyncRelationshipOperations: OptionSet, Sendable {
 
 public enum ExportRelationshipMode: Sendable {
     case array
-    case nested
     case none
 }
 

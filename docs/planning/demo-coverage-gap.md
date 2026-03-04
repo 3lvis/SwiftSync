@@ -11,7 +11,7 @@
 
 The core `exportObject` path is exercised by the demo. These remain uncovered:
 
-- [ ] `enum ExportRelationshipMode` — `.array`, `.nested` variants
+- [ ] `enum ExportRelationshipMode` — `.array` variant (`.nested` removed)
 - [ ] `exportEncodeValue(_:options:)` free function
 - [ ] `exportSetValue(_:for:into:)` free function
 - [ ] `SwiftSync.export(as:in:using:)` static method (bulk export)

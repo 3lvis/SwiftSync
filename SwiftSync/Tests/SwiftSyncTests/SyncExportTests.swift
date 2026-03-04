@@ -243,7 +243,7 @@ final class ExportTests: XCTestCase {
     }
 
     @MainActor
-    func testExportRelationshipModesArrayNestedNone() throws {
+    func testExportRelationshipModesArrayNone() throws {
         let context = try makeContext(for: ExportUser.self, ExportCompany.self, ExportNote.self)
         let company = ExportCompany(id: 7, name: "Acme")
         let note0 = ExportNote(id: 10, text: "n0")
@@ -258,16 +258,6 @@ final class ExportTests: XCTestCase {
         let arrayRow = arrayRows[0]
         XCTAssertEqual((arrayRow["company"] as? [String: Any])?["id"] as? Int, 7)
         XCTAssertEqual((arrayRow["notes"] as? [[String: Any]])?.count, 2)
-
-        var nestedOptions = ExportOptions()
-        nestedOptions.relationshipMode = .nested
-        let nestedRows = try SwiftSync.export(as: ExportUser.self, in: context, using: nestedOptions)
-        let nestedRow = nestedRows[0]
-        XCTAssertEqual((nestedRow["company_attributes"] as? [String: Any])?["id"] as? Int, 7)
-        let notesAttributes = nestedRow["notes_attributes"] as? [String: [String: Any]]
-        XCTAssertEqual(notesAttributes?.count, 2)
-        let nestedIDs = Set((notesAttributes ?? [:]).values.compactMap { $0["id"] as? Int })
-        XCTAssertEqual(nestedIDs, Set([10, 11]))
 
         let noneRows = try SwiftSync.export(as: ExportUser.self, in: context, using: .excludedRelationships)
         XCTAssertNil(noneRows[0]["company"])

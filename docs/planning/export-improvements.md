@@ -71,12 +71,12 @@ but undocumented.
 
 ## 5. Missing test coverage
 
-### 5a. `exportObject(for:container:)` with `.array` and `.nested`
+### 5a. `exportObject(for:container:)` with `.array`
 
 The instance convenience `exportObject(for:container:relationshipMode:)` is only tested
-with `relationshipMode: .none`. The `.array` and `.nested` modes are tested via the bulk
-`SwiftSync.export()` path, not the instance convenience. Add tests that call the
-convenience directly with all three modes.
+with `relationshipMode: .none`. The `.array` mode is tested via the bulk
+`SwiftSync.export()` path, not the instance convenience. Add a test that calls the
+convenience directly with `.array`.
 
 ### 5b. `Data` and `Decimal` encode paths in `exportEncodeValue`
 
@@ -89,9 +89,3 @@ and assert the encoded values.
 `@PrimaryKey` with no `remote:` argument falls through to `keyStyle.transform(propertyName)`
 for the export key. `@PrimaryKey(remote: "ext_id")` uses the literal. Only the latter is
 tested. Add a test for the bare `@PrimaryKey` case.
-
-### 5d. Empty to-many in `.nested` mode
-
-An empty `[Model]` in `.nested` mode currently produces `"tags_attributes": {}` (empty
-dict). Add a test that pins this behaviour and documents whether `{}` or omission is
-intended.
