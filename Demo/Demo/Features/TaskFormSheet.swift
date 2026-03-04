@@ -18,20 +18,20 @@ struct TaskFormSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    @SyncQuery private var users: [User]
-    @SyncQuery private var taskStateOptions: [TaskStateOption]
+    // Throwaway context — autosave disabled. Never saved to the store.
+    // On cancel it is simply released; on save we export the values and call the API.
+    private let editContext: ModelContext
 
-    // Single uninserted draft Task — mutated freely, exported at save time.
-    // For create: initialised with blank values.
-    // For edit: initialised as a scalar copy of the existing task.
+    // The draft lives in editContext. For create it is a freshly-inserted Task.
+    // For edit it is the same row fetched into this isolated context.
+    // Relationship arrays (reviewers, watchers) are real [User] objects from editContext,
+    // so the pickers can assign them directly without cross-context crashes.
     @State private var draft: Task
 
-    // Relationship membership — tracked separately because Task.reviewers / Task.watchers
-    // are [User] relationship arrays that require a ModelContext to be meaningful.
-    @State private var reviewerIDs: Set<String>
-    @State private var watcherIDs: Set<String>
-    private let originalReviewerIDs: Set<String>
-    private let originalWatcherIDs: Set<String>
+    // Loaded once from editContext when the sheet appears. Not kept live — form sheets
+    // are short-lived and a stale list for one session is acceptable.
+    @State private var users: [User] = []
+    @State private var taskStateOptions: [TaskStateOption] = []
 
     @State private var isLoadingTaskStates = false
     @State private var isSaving = false
@@ -42,58 +42,24 @@ struct TaskFormSheet: View {
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
 
-        _users = SyncQuery(
-            User.self,
-            in: syncContainer,
-            sortBy: [SortDescriptor(\.displayName), SortDescriptor(\.id)],
-            animation: .snappy(duration: 0.22)
-        )
-        _taskStateOptions = SyncQuery(
-            TaskStateOption.self,
-            in: syncContainer,
-            sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.id)],
-            animation: .snappy(duration: 0.22)
-        )
+        let ctx = ModelContext(syncContainer.modelContainer)
+        ctx.autosaveEnabled = false
+        self.editContext = ctx
 
         switch mode {
         case .create(let projectID):
-            let now = Date()
-            _draft = State(initialValue: Task(
-                id: UUID().uuidString,
-                projectID: projectID,
-                assigneeID: nil,
-                authorID: "",
-                title: "",
-                descriptionText: "",
-                state: "",
-                stateLabel: "",
-                createdAt: now,
-                updatedAt: now
-            ))
-            _reviewerIDs = State(initialValue: [])
-            _watcherIDs = State(initialValue: [])
-            originalReviewerIDs = []
-            originalWatcherIDs = []
+            let task = Task(projectID: projectID)
+            ctx.insert(task)
+            _draft = State(initialValue: task)
 
         case .edit(let task):
-            _draft = State(initialValue: Task(
-                id: task.id,
-                projectID: task.projectID,
-                assigneeID: task.assigneeID,
-                authorID: task.authorID,
-                title: task.title,
-                descriptionText: task.descriptionText,
-                state: task.state,
-                stateLabel: task.stateLabel,
-                createdAt: task.createdAt,
-                updatedAt: task.updatedAt
-            ))
-            let initialReviewerIDs = Set(task.reviewers.map(\.id))
-            let initialWatcherIDs = Set(task.watchers.map(\.id))
-            _reviewerIDs = State(initialValue: initialReviewerIDs)
-            _watcherIDs = State(initialValue: initialWatcherIDs)
-            originalReviewerIDs = initialReviewerIDs
-            originalWatcherIDs = initialWatcherIDs
+            let taskID = task.id
+            let descriptor = FetchDescriptor<Task>(predicate: #Predicate { $0.id == taskID })
+            let fetched = (try? ctx.fetch(descriptor))?.first
+            // Fallback should never be reached in practice — the row is always in the store.
+            // If it somehow is, we fall back to the passed object (which lives in mainContext,
+            // so edits won't reach the store either, preserving the no-save guarantee).
+            _draft = State(initialValue: fetched ?? task)
         }
     }
 
@@ -107,7 +73,8 @@ struct TaskFormSheet: View {
                 stateSection
                 assigneeSection
                 if case .create = mode { authorSection }
-                if case .edit = mode { reviewersSection; watchersSection }
+                reviewersSection
+                watchersSection
             }
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -127,7 +94,7 @@ struct TaskFormSheet: View {
                 }
             }
         }
-        .task { loadTaskStates() }
+        .task { loadData() }
         // Auto-select first valid state when options load (safe for edit — guard prevents override)
         .task(id: taskStateOptions.map(\.id)) {
             guard !taskStateOptions.isEmpty,
@@ -260,16 +227,16 @@ struct TaskFormSheet: View {
         Section("Reviewers") {
             ForEach(users, id: \.id) { user in
                 Button {
-                    if reviewerIDs.contains(user.id) {
-                        reviewerIDs.remove(user.id)
+                    if draft.reviewers.contains(where: { $0.id == user.id }) {
+                        draft.reviewers.removeAll(where: { $0.id == user.id })
                     } else {
-                        reviewerIDs.insert(user.id)
+                        draft.reviewers.append(user)
                     }
                 } label: {
                     HStack {
                         Text(user.displayName).foregroundStyle(.primary)
                         Spacer()
-                        if reviewerIDs.contains(user.id) {
+                        if draft.reviewers.contains(where: { $0.id == user.id }) {
                             Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
                         }
                     }
@@ -282,16 +249,16 @@ struct TaskFormSheet: View {
         Section("Watchers") {
             ForEach(users, id: \.id) { user in
                 Button {
-                    if watcherIDs.contains(user.id) {
-                        watcherIDs.remove(user.id)
+                    if draft.watchers.contains(where: { $0.id == user.id }) {
+                        draft.watchers.removeAll(where: { $0.id == user.id })
                     } else {
-                        watcherIDs.insert(user.id)
+                        draft.watchers.append(user)
                     }
                 } label: {
                     HStack {
                         Text(user.displayName).foregroundStyle(.primary)
                         Spacer()
-                        if watcherIDs.contains(user.id) {
+                        if draft.watchers.contains(where: { $0.id == user.id }) {
                             Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
                         }
                     }
@@ -328,12 +295,28 @@ struct TaskFormSheet: View {
 
     // MARK: Actions
 
+    private func loadData() {
+        let userDescriptor = FetchDescriptor<User>(
+            sortBy: [SortDescriptor(\.displayName), SortDescriptor(\.id)]
+        )
+        users = (try? editContext.fetch(userDescriptor)) ?? []
+
+        loadTaskStates()
+    }
+
     private func loadTaskStates() {
         guard !isLoadingTaskStates else { return }
         isLoadingTaskStates = true
         _Concurrency.Task {
             await syncEngine.syncTaskStates()
-            await MainActor.run { isLoadingTaskStates = false }
+            let descriptor = FetchDescriptor<TaskStateOption>(
+                sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.id)]
+            )
+            let options = (try? editContext.fetch(descriptor)) ?? []
+            await MainActor.run {
+                taskStateOptions = options
+                isLoadingTaskStates = false
+            }
         }
     }
 
@@ -347,25 +330,53 @@ struct TaskFormSheet: View {
         saveErrorMessage = nil
 
         let body = draft.exportObject(for: syncContainer, relationshipMode: .none)
-        let capturedReviewerIDs = reviewerIDs.sorted()
-        let capturedWatcherIDs = watcherIDs.sorted()
+
+        // Derive original relationship membership from the mode enum — no stored state needed.
+        // We still dirty-check to avoid unnecessary PUT /reviewers and PUT /watchers calls,
+        // which are costly (mutation latency + flaky-network failure risk).
+        let capturedReviewerIDs = draft.reviewers.map(\.id).sorted()
+        let capturedWatcherIDs = draft.watchers.map(\.id).sorted()
+
+        var reviewersChanged = false
+        var watchersChanged = false
+        if case .edit(let originalTask) = mode {
+            let originalReviewerIDs = Set(originalTask.reviewers.map(\.id))
+            let originalWatcherIDs = Set(originalTask.watchers.map(\.id))
+            reviewersChanged = Set(capturedReviewerIDs) != originalReviewerIDs
+            watchersChanged = Set(capturedWatcherIDs) != originalWatcherIDs
+        }
 
         _Concurrency.Task {
             do {
                 switch mode {
                 case .create(let projectID):
                     try await syncEngine.createTask(body: body, projectID: projectID)
+                    // On create, always send if non-empty — there is no prior state to diff against.
+                    if !capturedReviewerIDs.isEmpty {
+                        try await syncEngine.replaceTaskReviewers(
+                            taskID: draft.id,
+                            projectID: projectID,
+                            reviewerIDs: capturedReviewerIDs
+                        )
+                    }
+                    if !capturedWatcherIDs.isEmpty {
+                        try await syncEngine.replaceTaskWatchers(
+                            taskID: draft.id,
+                            projectID: projectID,
+                            watcherIDs: capturedWatcherIDs
+                        )
+                    }
 
                 case .edit(let task):
                     try await syncEngine.updateTask(taskID: task.id, projectID: task.projectID, body: body)
-                    if reviewerIDs != originalReviewerIDs {
+                    if reviewersChanged {
                         try await syncEngine.replaceTaskReviewers(
                             taskID: task.id,
                             projectID: task.projectID,
                             reviewerIDs: capturedReviewerIDs
                         )
                     }
-                    if watcherIDs != originalWatcherIDs {
+                    if watchersChanged {
                         try await syncEngine.replaceTaskWatchers(
                             taskID: task.id,
                             projectID: task.projectID,
