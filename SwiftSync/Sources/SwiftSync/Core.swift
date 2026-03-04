@@ -135,13 +135,9 @@ public extension SyncUpdatableModel {
         [:]
     }
 
-    func exportObject(
-        for container: SyncContainer,
-        relationshipMode: ExportRelationshipMode = .none
-    ) -> [String: Any] {
+    func exportObject(for container: SyncContainer) -> [String: Any] {
         let options = ExportOptions(
             keyStyle: container.keyStyle,
-            relationshipMode: relationshipMode,
             dateFormatter: container.dateFormatter
         )
         return exportObject(using: options)
@@ -624,11 +620,6 @@ public struct SyncRelationshipOperations: OptionSet, Sendable {
     public static let all: SyncRelationshipOperations = [.insert, .update, .delete]
 }
 
-public enum ExportRelationshipMode: Sendable {
-    case array
-    case none
-}
-
 public enum KeyStyle: Sendable {
     case snakeCase
     case camelCase
@@ -649,28 +640,19 @@ public enum KeyStyle: Sendable {
 
 public struct ExportOptions: Sendable {
     public var keyStyle: KeyStyle
-    public var relationshipMode: ExportRelationshipMode
     public var dateFormatter: DateFormatter
 
     public init(
         keyStyle: KeyStyle = .snakeCase,
-        relationshipMode: ExportRelationshipMode = .array,
         dateFormatter: DateFormatter? = nil
     ) {
         self.keyStyle = keyStyle
-        self.relationshipMode = relationshipMode
         self.dateFormatter = dateFormatter ?? ExportOptions.defaultDateFormatter()
     }
 
     public static var camelCase: ExportOptions {
         var options = ExportOptions()
         options.keyStyle = .camelCase
-        return options
-    }
-
-    public static var excludedRelationships: ExportOptions {
-        var options = ExportOptions()
-        options.relationshipMode = .none
         return options
     }
 

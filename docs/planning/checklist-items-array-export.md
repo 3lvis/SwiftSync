@@ -1,14 +1,15 @@
-# Checklist Items — ExportRelationshipMode.array Demo
+# Checklist Items — Inline Relationship Export Demo
 
 ## Goal
 
-Add a `ChecklistItem` model to the demo that demonstrates `ExportRelationshipMode.array`
+Add a `ChecklistItem` model to the demo that demonstrates inline relationship export
 in a genuine, useful way: checklist items are sent inline with the task body on both
 create and update, in one atomic request. No separate follow-up endpoint.
 
-This is the first honest end-to-end use of `.array` in the demo. It replaces the
-current `relationshipMode: .none` call in `TaskFormSheet.save()` and shows the feature
-working at a real call site.
+This is the first honest end-to-end use of relationship export in the demo. It replaces
+the current bare `exportObject(for:)` call in `TaskFormSheet.save()` — which previously
+used `relationshipMode: .none` (now removed) — and shows relationships being sent inline
+at a real call site.
 
 ---
 
@@ -34,11 +35,13 @@ One call site uses `exportObject` in the entire demo:
 
 ```swift
 // TaskFormSheet.swift:340
-let body = draft.exportObject(for: syncContainer, relationshipMode: .none)
+let body = draft.exportObject(for: syncContainer)
 ```
 
-`.none` omits all relationships from the body. Reviewers and watchers go via separate
-calls after the task write. Checklist items do not exist.
+Relationships on `Task` (`reviewers`, `watchers`, `project`, `author`, `assignee`) will
+be exported inline as child objects unless marked `@NotExport`. Currently they are not
+marked, so they would appear in the body — but the server ignores them (it reads only
+scalar FKs). Checklist items do not exist yet.
 
 The server (`DemoServerSimulator`) has no `checklist_items` table and no concept of
 inline child objects in any endpoint body.
@@ -73,9 +76,9 @@ inline child objects in any endpoint body.
 
 ## Wire Format
 
-### What `.array` produces for `checklistItems`
+### What inline export produces for `checklistItems`
 
-`@Syncable` generates an export block for every relationship. With `relationshipMode: .array`,
+`@Syncable` generates an export block for every relationship not marked `@NotExport`.
 `Task.checklistItems` exports as:
 
 ```json
@@ -299,20 +302,17 @@ accuracy after a detail visit is sufficient.
 
 ## Export Call Site Change (`TaskFormSheet.swift`)
 
-The single change that exercises `.array`:
+`exportObject(for:)` now always includes relationships unless `@NotExport` is applied.
+The call site already uses the right form:
 
 ```swift
-// Before (line 340):
-let body = draft.exportObject(for: syncContainer, relationshipMode: .none)
-
-// After:
-let body = draft.exportObject(for: syncContainer, relationshipMode: .array)
+let body = draft.exportObject(for: syncContainer)
 ```
 
-With `.array`, the generated export code for `Task.checklistItems` emits the full
-`checklist_items: [{...}]` array inline. Reviewers and watchers are also relationships
-— they will now appear in the body as `reviewers: [{id, display_name, ...}]` and
-`watchers: [{...}]`.
+With `checklistItems` added to `Task` (and not marked `@NotExport`), the generated
+export code emits `checklist_items: [{...}]` inline. Reviewers and watchers are also
+relationships — they will appear in the body as `reviewers: [{id, display_name, ...}]`
+and `watchers: [{...}]`.
 
 **This is a problem.** The server's `createTask` and `updateTask` do not read `reviewers`
 or `watchers` from the body (they use dedicated endpoints). Sending them inline is
@@ -381,7 +381,7 @@ func toggleChecklistItem(_ item: ChecklistItem, task: Task) {
     item.done.toggle()
     item.updatedAt = Date()
     task.updatedAt = Date()
-    let body = task.exportObject(for: syncContainer, relationshipMode: .array)
+    let body = task.exportObject(for: syncContainer)
     _Concurrency.Task {
         try? await syncEngine.updateTask(taskID: task.id, projectID: task.projectID, body: body)
     }
@@ -494,7 +494,7 @@ skip list-level item sync and only sync on detail. Revisit if the badge is stale
 | `Demo/Demo/Models/DemoModels.swift` | New `ChecklistItem` model; extend `Task` with `checklistItems` relationship and `@NotExport` on `reviewers`, `watchers`, `project`, `author`, `assignee` |
 | `Demo/Demo/App/DemoRuntime.swift` | Register `ChecklistItem.self` in the schema |
 | `Demo/Demo/Sync/DemoSyncEngine.swift` | Extend `syncTaskDetailInternal` to sync embedded items |
-| `Demo/Demo/Features/TaskFormSheet.swift` | Checklist section UI; change `relationshipMode: .none` → `.array` |
+| `Demo/Demo/Features/TaskFormSheet.swift` | Checklist section UI; `exportObject(for:)` already correct — `@NotExport` on unwanted relationships |
 | `Demo/Demo/Features/TaskDetail/TaskDetailView.swift` | Checklist section with toggle; `toggleChecklistItem` helper |
 | `Demo/Demo/Features/Projects/ProjectsTabView.swift` | Count badge on task rows; add `\.checklistItems` to `refreshOn` |
 

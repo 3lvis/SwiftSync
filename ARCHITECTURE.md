@@ -327,9 +327,9 @@ SwiftSync.export(as: Task.self, in: context, using: options)
    - `exportSetValue(value, for: keyPath, into: &result)` — supports nested dot-path keys
    - `state.leave(self)`
 
-**`ExportRelationshipMode`:**
-- `.array` → `"tags": [{...}, {...}]`
-- `.none` → key omitted entirely
+**Relationship export:**
+- Relationships are included by default as inline arrays/objects.
+- Apply `@NotExport` to a relationship property to exclude it from all exports.
 
 ---
 

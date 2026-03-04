@@ -337,7 +337,7 @@ struct TaskFormSheet: View {
         isSaving = true
         saveErrorMessage = nil
 
-        let body = draft.exportObject(for: syncContainer, relationshipMode: .none)
+        let body = draft.exportObject(for: syncContainer)
 
         // Derive original relationship membership from the mode enum — no stored state needed.
         // We still dirty-check to avoid unnecessary PUT /reviewers and PUT /watchers calls,

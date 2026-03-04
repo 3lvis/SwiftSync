@@ -651,20 +651,17 @@ let rows = try SwiftSync.export(as: User.self, in: context)
 
 Defaults:
 - snake_case keys
-- relationships included in array mode
+- relationships included as inline arrays/objects
 - ISO-style UTC dates
 - nils exported as `null`
+
+To exclude a specific relationship from all exports, apply `@NotExport` to the property
+in your model.
 
 ### Camel case
 
 ```swift
 let rows = try SwiftSync.export(as: User.self, in: context, using: .camelCase)
-```
-
-### Exclude relationships
-
-```swift
-let rows = try SwiftSync.export(as: User.self, in: context, using: .excludedRelationships)
 ```
 
 ### Parent-scoped export

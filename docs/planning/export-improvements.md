@@ -52,31 +52,25 @@ relationship property. `@RemotePath` is only valid for scalar fields.
 
 ---
 
-## 4. Undocumented asymmetry: `.none` mode omits keys vs. scalar nil emits `NSNull`
+## 4. Undocumented behaviour: `exportObject` and `ExportOptions`
 
-`exportObject(for:container:)` defaults `relationshipMode` to `.none`, which omits
-relationship keys entirely. `ExportOptions()` defaults `relationshipMode` to `.array`,
-which includes relationship keys. Neither call site has a doc comment explaining this.
+`ExportOptions`, `KeyStyle`, and `exportObject(for:container:)` have no doc comments.
+Add doc comments explaining:
 
-Separately: nil scalars always emit `NSNull` (PATCH semantics — explicit null clears the
-field). Relationship keys under `.none` are simply absent. This asymmetry is intentional
-but undocumented.
-
-**Fix:** Add doc comments to:
-- `exportObject(for:container:relationshipMode:)` in `Core.swift` explaining that `.none`
-  omits relationship keys entirely and is the default for this convenience
-- `ExportRelationshipMode.none` case explaining the omission-vs-null distinction
+- `ExportOptions` — what it controls, when to use a custom instance vs. the defaults
+- `KeyStyle` — what `.snakeCase` and `.camelCase` produce, with examples
+- `exportObject(for:container:)` — that it inherits `keyStyle` and `dateFormatter` from
+  the container; relationships are included unless `@NotExport` is applied to the property
 
 ---
 
 ## 5. Missing test coverage
 
-### 5a. `exportObject(for:container:)` with `.array`
+### 5a. `exportObject(for:container:)` — relationships included by default
 
-The instance convenience `exportObject(for:container:relationshipMode:)` is only tested
-with `relationshipMode: .none`. The `.array` mode is tested via the bulk
-`SwiftSync.export()` path, not the instance convenience. Add a test that calls the
-convenience directly with `.array`.
+The instance convenience `exportObject(for:container:)` is tested only for scalar
+key/date derivation from the container. Add a test that verifies relationship properties
+are included in the output when not marked `@NotExport`.
 
 ### 5b. `Data` and `Decimal` encode paths in `exportEncodeValue`
 

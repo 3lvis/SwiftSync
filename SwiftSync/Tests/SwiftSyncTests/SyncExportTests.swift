@@ -243,7 +243,7 @@ final class ExportTests: XCTestCase {
     }
 
     @MainActor
-    func testExportRelationshipModesArrayNone() throws {
+    func testExportRelationshipModesArray() throws {
         let context = try makeContext(for: ExportUser.self, ExportCompany.self, ExportNote.self)
         let company = ExportCompany(id: 7, name: "Acme")
         let note0 = ExportNote(id: 10, text: "n0")
@@ -254,14 +254,10 @@ final class ExportTests: XCTestCase {
         context.insert(ExportUser(id: 1, name: "U", company: company, notes: [note0, note1]))
         try context.save()
 
-        let arrayRows = try SwiftSync.export(as: ExportUser.self, in: context)
-        let arrayRow = arrayRows[0]
-        XCTAssertEqual((arrayRow["company"] as? [String: Any])?["id"] as? Int, 7)
-        XCTAssertEqual((arrayRow["notes"] as? [[String: Any]])?.count, 2)
-
-        let noneRows = try SwiftSync.export(as: ExportUser.self, in: context, using: .excludedRelationships)
-        XCTAssertNil(noneRows[0]["company"])
-        XCTAssertNil(noneRows[0]["notes"])
+        let rows = try SwiftSync.export(as: ExportUser.self, in: context)
+        let row = rows[0]
+        XCTAssertEqual((row["company"] as? [String: Any])?["id"] as? Int, 7)
+        XCTAssertEqual((row["notes"] as? [[String: Any]])?.count, 2)
     }
 
     @MainActor
@@ -328,7 +324,7 @@ final class ExportTests: XCTestCase {
         let task = try context.fetch(FetchDescriptor<ExportTask>()).first!
 
         // Export produces NSNull for nickname automatically — no manual NSNull() needed
-        let body = task.exportObject(for: syncContainer, relationshipMode: .none)
+        let body = task.exportObject(for: syncContainer)
         XCTAssertTrue(body["nickname"] is NSNull,
                       "Nil optional must appear as NSNull in body so server clears the field")
 
@@ -406,7 +402,7 @@ final class ExportTests: XCTestCase {
         let model = ExportMappedFields(id: 42, userType: "editor", email: "update@example.com", localOnly: "ignored")
         context.insert(model)
 
-        let options = ExportOptions(relationshipMode: .none)
+        let options = ExportOptions()
         let body = model.exportObject(using: options)
 
         // @RemoteKey("type") must appear as "type", not "user_type"
@@ -443,7 +439,7 @@ final class ExportTests: XCTestCase {
         )
         context.insert(model)
 
-        let options = ExportOptions(relationshipMode: .none)
+        let options = ExportOptions()
         let body = model.exportObject(using: options)
 
         // descriptionText → @RemoteKey("description") → must appear as "description"
@@ -478,7 +474,7 @@ final class ExportTests: XCTestCase {
         try context.save()
 
         let task = try context.fetch(FetchDescriptor<ExportTask>()).first!
-        let body = task.exportObject(for: syncContainer, relationshipMode: .none)
+        let body = task.exportObject(for: syncContainer)
 
         // camelCase keyStyle from container: createdAt, not created_at
         XCTAssertNotNil(body["createdAt"], "Expected camelCase key from container.keyStyle")
@@ -502,7 +498,7 @@ final class ExportTests: XCTestCase {
         try context.save()
 
         let task = try context.fetch(FetchDescriptor<ExportTask>()).first!
-        let body = task.exportObject(for: syncContainer, relationshipMode: .none)
+        let body = task.exportObject(for: syncContainer)
 
         XCTAssertEqual(body["created_at"] as? String, "1970/01/01",
                        "Expected date formatted using container.dateFormatter")

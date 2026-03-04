@@ -420,7 +420,7 @@ public struct SyncableMacro: ExtensionMacro {
         if property.isRelationship {
             if property.isToManyRelationship {
                 return """
-                if options.relationshipMode == .array {
+                do {
                     let baseKey = \(keyExpr)
                     let exportedChildren: [[String: Any]] = self.\(property.name).compactMap { child in
                         let anyChild: Any = child
@@ -432,7 +432,7 @@ public struct SyncableMacro: ExtensionMacro {
                 """
             }
             return """
-            if options.relationshipMode == .array {
+            do {
                 let baseKey = \(keyExpr)
                 let anyChild: Any? = self.\(property.name)
                 if let exportable = anyChild as? any SyncUpdatableModel {
