@@ -81,10 +81,12 @@ final class DemoSyncEngine: ObservableObject {
     func updateTask(taskID: String, projectID: String?, body: [String: Any]) async throws {
         try await syncOperationThrowing("updateTask-\(taskID)") {
             _ = try await apiClient.updateTask(taskID: taskID, body: body)
-            try await syncTaskDetailInternal(taskID: taskID)
             if let projectID {
                 try await syncProjectTasksInternal(projectID: projectID)
             }
+            // syncTaskDetailInternal runs last so its authoritative relationship payload
+            // always wins over the stale snapshot in the project list response.
+            try await syncTaskDetailInternal(taskID: taskID)
         }
     }
 
