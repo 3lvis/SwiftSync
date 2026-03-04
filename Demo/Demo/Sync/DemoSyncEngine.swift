@@ -81,10 +81,7 @@ final class DemoSyncEngine: ObservableObject {
     func updateTask(taskID: String, projectID: String?, body: [String: Any]) async throws {
         try await syncOperationThrowing("updateTask-\(taskID)") {
             _ = try await apiClient.updateTask(taskID: taskID, body: body)
-            try await syncTaskDetailInternal(taskID: taskID)
-            if let projectID {
-                try await syncProjectTasksInternal(projectID: projectID)
-            }
+            try await syncTaskAfterMutation(taskID: taskID, projectID: projectID)
         }
     }
 
@@ -98,24 +95,14 @@ final class DemoSyncEngine: ObservableObject {
     func replaceTaskReviewers(taskID: String, projectID: String?, reviewerIDs: [String]) async throws {
         try await syncOperationThrowing("replaceTaskReviewers-\(taskID)") {
             _ = try await self.apiClient.replaceTaskReviewers(taskID: taskID, reviewerIDs: reviewerIDs)
-            if let projectID {
-                try await self.syncProjectTasksInternal(projectID: projectID)
-            }
-            // syncTaskDetailInternal runs last so its authoritative relationship payload
-            // always wins over the stale snapshot in the project list response.
-            try await self.syncTaskDetailInternal(taskID: taskID)
+            try await self.syncTaskAfterMutation(taskID: taskID, projectID: projectID)
         }
     }
 
     func replaceTaskWatchers(taskID: String, projectID: String?, watcherIDs: [String]) async throws {
         try await syncOperationThrowing("replaceTaskWatchers-\(taskID)") {
             _ = try await self.apiClient.replaceTaskWatchers(taskID: taskID, watcherIDs: watcherIDs)
-            if let projectID {
-                try await self.syncProjectTasksInternal(projectID: projectID)
-            }
-            // syncTaskDetailInternal runs last so its authoritative relationship payload
-            // always wins over the stale snapshot in the project list response.
-            try await self.syncTaskDetailInternal(taskID: taskID)
+            try await self.syncTaskAfterMutation(taskID: taskID, projectID: projectID)
         }
     }
 
@@ -155,6 +142,16 @@ final class DemoSyncEngine: ObservableObject {
     private func syncTaskDetailInternal(taskID: String) async throws {
         guard let payload = try await apiClient.getTaskDetail(taskID: taskID) else { return }
         try await syncContainer.sync(item: payload, as: Task.self)
+    }
+
+    /// Canonical post-mutation sync sequence for a single task.
+    /// Project list syncs first (broad refresh), task detail syncs last so its
+    /// authoritative relationship payload always wins over any stale list snapshot.
+    private func syncTaskAfterMutation(taskID: String, projectID: String?) async throws {
+        if let projectID {
+            try await syncProjectTasksInternal(projectID: projectID)
+        }
+        try await syncTaskDetailInternal(taskID: taskID)
     }
 
     private func syncOperation(_ key: String, _ operation: () async throws -> Void) async {
