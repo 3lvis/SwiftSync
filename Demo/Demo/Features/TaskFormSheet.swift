@@ -159,23 +159,7 @@ struct TaskFormSheet: View {
                 }
             }
         }
-        .task {
-            let snapshot = Self.metadataSnapshot(from: editContext)
-            users = snapshot.users
-            taskStateOptions = snapshot.taskStateOptions
-
-            guard !isLoadingTaskStates else { return }
-            isLoadingTaskStates = true
-            _Concurrency.Task {
-                await syncEngine.loadTaskFormScreen()
-                await MainActor.run {
-                    let refreshed = Self.metadataSnapshot(from: editContext)
-                    users = refreshed.users
-                    taskStateOptions = refreshed.taskStateOptions
-                    isLoadingTaskStates = false
-                }
-            }
-        }
+        .task { await reloadMetadata() }
         // Auto-select first valid state when options load (safe for edit — guard prevents override)
         .task(id: taskStateOptions.map(\.id)) {
             guard !taskStateOptions.isEmpty,
@@ -237,17 +221,7 @@ struct TaskFormSheet: View {
                 }
                 if !isLoadingTaskStates {
                     Button("Retry Loading States") {
-                        guard !isLoadingTaskStates else { return }
-                        isLoadingTaskStates = true
-                        _Concurrency.Task {
-                            await syncEngine.loadTaskFormScreen()
-                            await MainActor.run {
-                                let refreshed = Self.metadataSnapshot(from: editContext)
-                                users = refreshed.users
-                                taskStateOptions = refreshed.taskStateOptions
-                                isLoadingTaskStates = false
-                            }
-                        }
+                        _Concurrency.Task { await reloadMetadata() }
                     }
                 }
             } else {
@@ -398,5 +372,22 @@ struct TaskFormSheet: View {
         let taskStateOptions = (try? context.fetch(stateDescriptor)) ?? []
 
         return (users, taskStateOptions)
+    }
+
+    @MainActor
+    private func reloadMetadata() async {
+        let local = Self.metadataSnapshot(from: editContext)
+        users = local.users
+        taskStateOptions = local.taskStateOptions
+
+        guard !isLoadingTaskStates else { return }
+        isLoadingTaskStates = true
+        defer { isLoadingTaskStates = false }
+
+        await syncEngine.loadTaskFormScreen()
+
+        let refreshed = Self.metadataSnapshot(from: editContext)
+        users = refreshed.users
+        taskStateOptions = refreshed.taskStateOptions
     }
 }
