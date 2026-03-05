@@ -270,14 +270,7 @@ final class DemoSyncEngine: ObservableObject {
 
     func loadProjectsScreen() async {
         let key = DataKey(namespace: DemoDataNamespace.projects)
-        await runScreenLoad(statusKey: key, dataKeys: [key], forceNetworkRefresh: false) {
-            await self.syncProjects()
-        }
-    }
-
-    func refreshProjectsScreen() async {
-        let key = DataKey(namespace: DemoDataNamespace.projects)
-        await runScreenLoad(statusKey: key, dataKeys: [key], forceNetworkRefresh: true) {
+        await runScreenLoad(statusKey: key, dataKeys: [key]) {
             await self.syncProjects()
         }
     }
@@ -308,14 +301,7 @@ final class DemoSyncEngine: ObservableObject {
 
     func loadProjectDetailScreen(projectID: String) async {
         let key = DataKey(namespace: DemoDataNamespace.projectTasks, id: projectID)
-        await runScreenLoad(statusKey: key, dataKeys: [key], forceNetworkRefresh: false) {
-            await self.syncProjectTasks(projectID: projectID)
-        }
-    }
-
-    func refreshProjectDetailScreen(projectID: String) async {
-        let key = DataKey(namespace: DemoDataNamespace.projectTasks, id: projectID)
-        await runScreenLoad(statusKey: key, dataKeys: [key], forceNetworkRefresh: true) {
+        await runScreenLoad(statusKey: key, dataKeys: [key]) {
             await self.syncProjectTasks(projectID: projectID)
         }
     }
@@ -329,15 +315,7 @@ final class DemoSyncEngine: ObservableObject {
     func loadTaskDetailScreen(taskID: String) async {
         let key = DataKey(namespace: DemoDataNamespace.taskDetailScreen, id: taskID)
         let detailKey = DataKey(namespace: DemoDataNamespace.taskDetail, id: taskID)
-        await runScreenLoad(statusKey: key, dataKeys: [detailKey], forceNetworkRefresh: false) {
-            await self.syncTaskDetail(taskID: taskID)
-        }
-    }
-
-    func refreshTaskDetailScreen(taskID: String) async {
-        let key = DataKey(namespace: DemoDataNamespace.taskDetailScreen, id: taskID)
-        let detailKey = DataKey(namespace: DemoDataNamespace.taskDetail, id: taskID)
-        await runScreenLoad(statusKey: key, dataKeys: [detailKey], forceNetworkRefresh: true) {
+        await runScreenLoad(statusKey: key, dataKeys: [detailKey]) {
             await self.syncTaskDetail(taskID: taskID)
         }
     }
@@ -346,17 +324,7 @@ final class DemoSyncEngine: ObservableObject {
         let key = DataKey(namespace: DemoDataNamespace.taskFormMetadata)
         let usersKey = DataKey(namespace: DemoDataNamespace.users)
         let statesKey = DataKey(namespace: DemoDataNamespace.taskStates)
-        await runScreenLoad(statusKey: key, dataKeys: [usersKey, statesKey], forceNetworkRefresh: false) {
-            await self.syncUsers()
-            await self.syncTaskStates()
-        }
-    }
-
-    func refreshTaskFormScreen() async {
-        let key = DataKey(namespace: DemoDataNamespace.taskFormMetadata)
-        let usersKey = DataKey(namespace: DemoDataNamespace.users)
-        let statesKey = DataKey(namespace: DemoDataNamespace.taskStates)
-        await runScreenLoad(statusKey: key, dataKeys: [usersKey, statesKey], forceNetworkRefresh: true) {
+        await runScreenLoad(statusKey: key, dataKeys: [usersKey, statesKey]) {
             await self.syncUsers()
             await self.syncTaskStates()
         }
@@ -364,18 +332,6 @@ final class DemoSyncEngine: ObservableObject {
 
     func status(for key: DataKey) -> ScopeSyncStatus? {
         scopeStatus[key]
-    }
-
-    func localUsers() -> [User] {
-        (try? syncContainer.mainContext.fetch(
-            FetchDescriptor<User>(sortBy: [SortDescriptor(\.displayName), SortDescriptor(\.id)])
-        )) ?? []
-    }
-
-    func localTaskStates() -> [TaskStateOption] {
-        (try? syncContainer.mainContext.fetch(
-            FetchDescriptor<TaskStateOption>(sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.id)])
-        )) ?? []
     }
 
     func createTask(body: [String: Any], projectID: String) async throws {
@@ -508,13 +464,12 @@ final class DemoSyncEngine: ObservableObject {
     private func runScreenLoad(
         statusKey: DataKey,
         dataKeys: [DataKey],
-        forceNetworkRefresh: Bool,
         networkFetch: @escaping @MainActor () async -> Void
     ) async {
         let decisions = dataKeys.map { key in
             decisionForData(key: key, hasLocalData: hasLocalData(for: key))
         }
-        let path = ScreenLoadPlanner.path(decisions: decisions, forceNetworkRefresh: forceNetworkRefresh)
+        let path = ScreenLoadPlanner.path(decisions: decisions)
 
         scopeStatus[statusKey] = ScopeSyncStatusReducer.start(path: path)
 

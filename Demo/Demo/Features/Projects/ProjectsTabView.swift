@@ -134,9 +134,6 @@ private struct ProjectDetailView: View {
                 }
             }
         }
-        .refreshable {
-            await syncEngine.refreshProjectDetailScreen(projectID: projectID)
-        }
         .task {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
@@ -177,7 +174,7 @@ private struct ProjectDetailView: View {
                     if status.phase == .failed {
                         Button("Retry") {
                             _Concurrency.Task {
-                                await syncEngine.refreshProjectDetailScreen(projectID: projectID)
+                                await syncEngine.loadProjectDetailScreen(projectID: projectID)
                             }
                         }
                         .font(.caption)

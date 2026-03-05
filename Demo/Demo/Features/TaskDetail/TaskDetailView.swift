@@ -37,9 +37,6 @@ struct TaskDetailView: View {
                 .disabled(taskModel == nil)
             }
         }
-        .refreshable {
-            await syncEngine.refreshTaskDetailScreen(taskID: taskID)
-        }
         .task {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
@@ -64,7 +61,7 @@ struct TaskDetailView: View {
                     if status.phase == .failed {
                         Button("Retry") {
                             _Concurrency.Task {
-                                await syncEngine.refreshTaskDetailScreen(taskID: taskID)
+                                await syncEngine.loadTaskDetailScreen(taskID: taskID)
                             }
                         }
                         .font(.caption)

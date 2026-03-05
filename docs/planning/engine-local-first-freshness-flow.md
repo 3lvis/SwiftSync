@@ -26,7 +26,7 @@ For each screen entry point, engine decides and executes:
 - local-first refresh when local is fresh,
 - reactive store updates when backend returns changed rows.
 
-User pull-to-refresh is the only explicit force-refresh path and always hits backend.
+There is no pull-to-refresh path in demo screens.
 
 ## Remaining work
 
@@ -39,7 +39,7 @@ User pull-to-refresh is the only explicit force-refresh path and always hits bac
 Checks:
 
 - [x] Screen lifecycle path uses one engine call.
-- [x] Pull-to-refresh path still works and remains explicit backend refresh.
+- [x] Pull-to-refresh logic removed from all demo screens.
 
 ### 2) Keep status useful but source-agnostic to UI
 
@@ -55,7 +55,7 @@ Checks:
 ### 3) Remove completed/obsolete surface
 
 - [x] Delete obsolete orchestration methods that conflict with single-call-per-screen direction.
-- [x] Keep explicit network primitives only where needed for mutation follow-up and pull-to-refresh.
+- [x] Keep explicit network primitives only where needed for mutation follow-up.
 
 Checks:
 

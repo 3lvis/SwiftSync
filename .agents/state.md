@@ -24,9 +24,14 @@
 - [x] Align planning docs to single-call-per-screen direction (no caller reason, no compatibility surface)
 - [x] Refactor engine/view API to enforce one public load call per screen flow
 - [x] Remove obsolete split orchestration methods and update verification
+- [x] Enforce strict single-call screen API (remove separate refresh methods)
+- [x] Remove planner force-refresh input and keep path selection fully freshness-driven
+- [x] Update screens so task/refresh/retry all call the same `load*Screen` API
+- [x] Re-run tests/build and sync docs/state
+- [x] Remove pull-to-refresh from all demo screens and drop internal "already loaded => network-only" shortcut
 
 ## Last known state
-Single-call-per-screen refactor shipped (`load*Screen` + `refresh*Screen`), no public load reason hints. `swift test --filter ScreenLoadPlannerTests`, full `swift test`, and `xcodebuild -workspace SwiftSync.xcworkspace -scheme Demo -destination 'generic/platform=iOS Simulator' build` are green.
+Single-call screen API is enforced and pull-to-refresh has been removed from demo screens. Engine now always evaluates freshness per load call (no internal loaded-screen override). `swift test --filter ScreenLoadPlannerTests`, full `swift test`, and Demo iOS build are green.
 
 ## Decisions (don't revisit)
 - Scope Earthquake Mode to active detail screens (`ProjectDetailView` and `TaskDetailView`) to keep blast radius explicit.
@@ -35,7 +40,8 @@ Single-call-per-screen refactor shipped (`load*Screen` + `refresh*Screen`), no p
 - Keep freshness orchestration complexity in `DemoSyncEngine`; expose only lightweight reusable primitives from SwiftSync.
 - Keep explicit network `sync*` APIs intact; add local-first `load*` orchestration APIs beside them.
 - Public orchestration must not expose load-path hints (no public `reason` parameter).
-- Pull-to-refresh remains explicit and always uses backend refresh.
+- Pull-to-refresh is removed from demo UX; retry remains the explicit recovery affordance.
+- Engine must not contain "already loaded screen" shortcuts that bypass freshness evaluation.
 
 ## Files touched
 - `.agents/state.md`
@@ -51,6 +57,7 @@ Single-call-per-screen refactor shipped (`load*Screen` + `refresh*Screen`), no p
 - `SwiftSync/Tests/SwiftSyncTests/DataFreshnessTests.swift`
 - `SwiftSync/Tests/SwiftSyncTests/ScopeSyncStatusReducerTests.swift`
 - `SwiftSync/Tests/SwiftSyncTests/ScreenLoadPlannerTests.swift`
+- `SwiftSync/Sources/SwiftSync/ScreenLoadPlanner.swift`
 - `Demo/Demo/Features/Projects/ProjectsViewController.swift`
 - `Demo/Demo/Features/TaskFormSheet.swift`
 - `docs/planning/engine-local-first-freshness-flow.md`

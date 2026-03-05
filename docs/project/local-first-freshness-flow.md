@@ -8,12 +8,13 @@ This demo now teaches a local-first sync pattern with explicit freshness policy.
 - Engine evaluates freshness per dataset key (`DataKey`).
 - If local data is fresh, the engine runs a background network refresh (`local-first refresh`).
 - If local data is empty or stale, the engine runs a blocking network fetch (`network-first load`).
-- Pull-to-refresh and Retry always force network-only behavior.
+- There is no pull-to-refresh in demo screens.
+- Retry uses the same screen load call and re-evaluates freshness policy.
 
 ## Engine boundaries
 
 - One public `load*Screen` call exists per screen flow in `DemoSyncEngine`.
-- Pull-to-refresh uses `refresh*Screen` and always forces backend fetch.
+- All screen interactions use the same `load*Screen` method (initial load + retry).
 - `sync*` methods remain explicit network primitives.
 - Views do not pass load hints/reasons; engine chooses the path internally.
 
@@ -44,6 +45,6 @@ The detail screens show this stream and expose Retry when failed.
 ## Troubleshooting
 
 - **UI shows old data briefly**: expected in local-first mode; check status path (`localFirstRefresh`) and wait for refresh completion.
-- **UI remains stale**: verify scope status is not `failed`; use Retry (network-only).
+- **UI remains stale**: verify scope status is not `failed`; use Retry.
 - **Unexpected network fetches**: verify TTL for that namespace and last-success timestamp updates.
-- **Form metadata looks stale**: Retry in form state section forces network-only refresh.
+- **Form metadata looks stale**: retry metadata load in the form.

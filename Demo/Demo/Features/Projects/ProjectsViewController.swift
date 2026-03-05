@@ -57,10 +57,6 @@ final class ProjectsViewController: UITableViewController {
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "ProjectCell")
         tableView.dataSource = diffableDataSource
 
-        let refresh = UIRefreshControl()
-        refresh.addTarget(self, action: #selector(handleRefresh), for: .valueChanged)
-        tableView.refreshControl = refresh
-
         publisher.$rows
             .receive(on: DispatchQueue.main)
             .sink { [weak self] rows in
@@ -84,12 +80,4 @@ final class ProjectsViewController: UITableViewController {
         onSelect(projectID)
     }
 
-    // MARK: - Actions
-
-    @objc private func handleRefresh() {
-        _Concurrency.Task {
-            await syncEngine.refreshProjectsScreen()
-            await MainActor.run { self.tableView.refreshControl?.endRefreshing() }
-        }
-    }
 }
