@@ -300,8 +300,7 @@ struct TaskFormSheet: View {
         taskStateOptions = syncEngine.localTaskStates()
 
         _Concurrency.Task {
-            await syncEngine.loadUsers()
-            await syncEngine.loadTaskStates()
+            await syncEngine.loadTaskFormScreen()
             await MainActor.run {
                 users = syncEngine.localUsers()
                 taskStateOptions = syncEngine.localTaskStates()
@@ -313,7 +312,7 @@ struct TaskFormSheet: View {
         guard !isLoadingTaskStates else { return }
         isLoadingTaskStates = true
         _Concurrency.Task {
-            await syncEngine.loadTaskStates(reason: .retry)
+            await syncEngine.refreshTaskFormScreen()
             let descriptor = FetchDescriptor<TaskStateOption>(
                 sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.id)]
             )

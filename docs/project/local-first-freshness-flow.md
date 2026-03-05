@@ -12,9 +12,10 @@ This demo now teaches a local-first sync pattern with explicit freshness policy.
 
 ## Engine boundaries
 
-- `load*` methods in `DemoSyncEngine` are orchestration entry points (local-first + freshness + status).
+- One public `load*Screen` call exists per screen flow in `DemoSyncEngine`.
+- Pull-to-refresh uses `refresh*Screen` and always forces backend fetch.
 - `sync*` methods remain explicit network primitives.
-- Views should call `load*` for screen lifecycle and use `sync*` only for explicit mutation-followup primitives.
+- Views do not pass load hints/reasons; engine chooses the path internally.
 
 ## Scope status stream
 

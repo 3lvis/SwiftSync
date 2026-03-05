@@ -10,12 +10,6 @@ final class DemoSyncEngine: ObservableObject {
     @Published private(set) var lastSyncDate: Date?
     @Published private(set) var scopeStatus: [DataKey: ScopeSyncStatus] = [:]
 
-    enum LoadReason {
-        case screenLoad
-        case pullToRefresh
-        case retry
-    }
-
 #if DEBUG
     @Published private(set) var isEarthquakeModeRunning = false
     @Published private(set) var earthquakeStatusText: String?
@@ -274,9 +268,16 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    func loadProjects(reason: LoadReason = .screenLoad) async {
+    func loadProjectsScreen() async {
         let key = DataKey(namespace: DemoDataNamespace.projects)
-        await loadData(key: key, hasLocalData: hasLocalProjects(), reason: reason) {
+        await runScreenLoad(statusKey: key, dataKeys: [key], forceNetworkRefresh: false) {
+            await self.syncProjects()
+        }
+    }
+
+    func refreshProjectsScreen() async {
+        let key = DataKey(namespace: DemoDataNamespace.projects)
+        await runScreenLoad(statusKey: key, dataKeys: [key], forceNetworkRefresh: true) {
             await self.syncProjects()
         }
     }
@@ -287,23 +288,9 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    func loadUsers(reason: LoadReason = .screenLoad) async {
-        let key = DataKey(namespace: DemoDataNamespace.users)
-        await loadData(key: key, hasLocalData: hasLocalUsers(), reason: reason) {
-            await self.syncUsers()
-        }
-    }
-
     func syncTaskStates() async {
         await syncOperation("taskStates") {
             try await syncTaskStatesInternal()
-        }
-    }
-
-    func loadTaskStates(reason: LoadReason = .screenLoad) async {
-        let key = DataKey(namespace: DemoDataNamespace.taskStates)
-        await loadData(key: key, hasLocalData: hasLocalTaskStates(), reason: reason) {
-            await self.syncTaskStates()
         }
     }
 
@@ -313,22 +300,22 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    func loadUserRoles(reason: LoadReason = .screenLoad) async {
-        let key = DataKey(namespace: DemoDataNamespace.userRoles)
-        await loadData(key: key, hasLocalData: hasLocalUserRoles(), reason: reason) {
-            await self.syncUserRoles()
-        }
-    }
-
     func syncProjectTasks(projectID: String) async {
         await syncOperation("projectTasks-\(projectID)") {
             try await syncProjectTasksInternal(projectID: projectID)
         }
     }
 
-    func loadProjectTasks(projectID: String, reason: LoadReason = .screenLoad) async {
+    func loadProjectDetailScreen(projectID: String) async {
         let key = DataKey(namespace: DemoDataNamespace.projectTasks, id: projectID)
-        await loadData(key: key, hasLocalData: hasLocalProjectTasks(projectID: projectID), reason: reason) {
+        await runScreenLoad(statusKey: key, dataKeys: [key], forceNetworkRefresh: false) {
+            await self.syncProjectTasks(projectID: projectID)
+        }
+    }
+
+    func refreshProjectDetailScreen(projectID: String) async {
+        let key = DataKey(namespace: DemoDataNamespace.projectTasks, id: projectID)
+        await runScreenLoad(statusKey: key, dataKeys: [key], forceNetworkRefresh: true) {
             await self.syncProjectTasks(projectID: projectID)
         }
     }
@@ -339,10 +326,39 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    func loadTaskDetail(taskID: String, reason: LoadReason = .screenLoad) async {
-        let key = DataKey(namespace: DemoDataNamespace.taskDetail, id: taskID)
-        await loadData(key: key, hasLocalData: hasLocalTaskDetail(taskID: taskID), reason: reason) {
+    func loadTaskDetailScreen(taskID: String) async {
+        let key = DataKey(namespace: DemoDataNamespace.taskDetailScreen, id: taskID)
+        let detailKey = DataKey(namespace: DemoDataNamespace.taskDetail, id: taskID)
+        await runScreenLoad(statusKey: key, dataKeys: [detailKey], forceNetworkRefresh: false) {
             await self.syncTaskDetail(taskID: taskID)
+        }
+    }
+
+    func refreshTaskDetailScreen(taskID: String) async {
+        let key = DataKey(namespace: DemoDataNamespace.taskDetailScreen, id: taskID)
+        let detailKey = DataKey(namespace: DemoDataNamespace.taskDetail, id: taskID)
+        await runScreenLoad(statusKey: key, dataKeys: [detailKey], forceNetworkRefresh: true) {
+            await self.syncTaskDetail(taskID: taskID)
+        }
+    }
+
+    func loadTaskFormScreen() async {
+        let key = DataKey(namespace: DemoDataNamespace.taskFormMetadata)
+        let usersKey = DataKey(namespace: DemoDataNamespace.users)
+        let statesKey = DataKey(namespace: DemoDataNamespace.taskStates)
+        await runScreenLoad(statusKey: key, dataKeys: [usersKey, statesKey], forceNetworkRefresh: false) {
+            await self.syncUsers()
+            await self.syncTaskStates()
+        }
+    }
+
+    func refreshTaskFormScreen() async {
+        let key = DataKey(namespace: DemoDataNamespace.taskFormMetadata)
+        let usersKey = DataKey(namespace: DemoDataNamespace.users)
+        let statesKey = DataKey(namespace: DemoDataNamespace.taskStates)
+        await runScreenLoad(statusKey: key, dataKeys: [usersKey, statesKey], forceNetworkRefresh: true) {
+            await self.syncUsers()
+            await self.syncTaskStates()
         }
     }
 
@@ -360,54 +376,6 @@ final class DemoSyncEngine: ObservableObject {
         (try? syncContainer.mainContext.fetch(
             FetchDescriptor<TaskStateOption>(sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.id)])
         )) ?? []
-    }
-
-    func loadDecisionForProjects(now: Date = Date()) -> LoadDecision {
-        decisionForData(
-            key: DataKey(namespace: DemoDataNamespace.projects),
-            hasLocalData: hasLocalProjects(),
-            now: now
-        )
-    }
-
-    func loadDecisionForUsers(now: Date = Date()) -> LoadDecision {
-        decisionForData(
-            key: DataKey(namespace: DemoDataNamespace.users),
-            hasLocalData: hasLocalUsers(),
-            now: now
-        )
-    }
-
-    func loadDecisionForTaskStates(now: Date = Date()) -> LoadDecision {
-        decisionForData(
-            key: DataKey(namespace: DemoDataNamespace.taskStates),
-            hasLocalData: hasLocalTaskStates(),
-            now: now
-        )
-    }
-
-    func loadDecisionForUserRoles(now: Date = Date()) -> LoadDecision {
-        decisionForData(
-            key: DataKey(namespace: DemoDataNamespace.userRoles),
-            hasLocalData: hasLocalUserRoles(),
-            now: now
-        )
-    }
-
-    func loadDecisionForProjectTasks(projectID: String, now: Date = Date()) -> LoadDecision {
-        decisionForData(
-            key: DataKey(namespace: DemoDataNamespace.projectTasks, id: projectID),
-            hasLocalData: hasLocalProjectTasks(projectID: projectID),
-            now: now
-        )
-    }
-
-    func loadDecisionForTaskDetail(taskID: String, now: Date = Date()) -> LoadDecision {
-        decisionForData(
-            key: DataKey(namespace: DemoDataNamespace.taskDetail, id: taskID),
-            hasLocalData: hasLocalTaskDetail(taskID: taskID),
-            now: now
-        )
     }
 
     func createTask(body: [String: Any], projectID: String) async throws {
@@ -537,34 +505,29 @@ final class DemoSyncEngine: ObservableObject {
         lastSuccessfulSyncByDataKey[key] = date
     }
 
-    private func loadData(
-        key: DataKey,
-        hasLocalData: Bool,
-        reason: LoadReason,
+    private func runScreenLoad(
+        statusKey: DataKey,
+        dataKeys: [DataKey],
+        forceNetworkRefresh: Bool,
         networkFetch: @escaping @MainActor () async -> Void
     ) async {
-        let path: ScopeLoadPath
-
-        switch reason {
-        case .retry, .pullToRefresh:
-            path = .networkOnly
-        case .screenLoad:
-            let decision = decisionForData(key: key, hasLocalData: hasLocalData)
-            path = decision == .fresh ? .localFirstRefresh : .networkFirst
+        let decisions = dataKeys.map { key in
+            decisionForData(key: key, hasLocalData: hasLocalData(for: key))
         }
+        let path = ScreenLoadPlanner.path(decisions: decisions, forceNetworkRefresh: forceNetworkRefresh)
 
-        scopeStatus[key] = ScopeSyncStatusReducer.start(path: path)
+        scopeStatus[statusKey] = ScopeSyncStatusReducer.start(path: path)
 
         if path == .localFirstRefresh {
             _Concurrency.Task { @MainActor in
                 await networkFetch()
-                self.finalizeScopeStatus(key: key)
+                self.finalizeScopeStatus(key: statusKey)
             }
             return
         }
 
         await networkFetch()
-        finalizeScopeStatus(key: key)
+        finalizeScopeStatus(key: statusKey)
     }
 
     private func finalizeScopeStatus(key: DataKey) {
@@ -612,6 +575,27 @@ final class DemoSyncEngine: ObservableObject {
         let descriptor = FetchDescriptor<Task>(predicate: #Predicate { $0.id == taskID })
         return (try? syncContainer.mainContext.fetch(descriptor).isEmpty == false) ?? false
     }
+
+    private func hasLocalData(for key: DataKey) -> Bool {
+        switch key.namespace {
+        case DemoDataNamespace.projects:
+            return hasLocalProjects()
+        case DemoDataNamespace.users:
+            return hasLocalUsers()
+        case DemoDataNamespace.taskStates:
+            return hasLocalTaskStates()
+        case DemoDataNamespace.userRoles:
+            return hasLocalUserRoles()
+        case DemoDataNamespace.projectTasks:
+            guard let projectID = key.id else { return false }
+            return hasLocalProjectTasks(projectID: projectID)
+        case DemoDataNamespace.taskDetail:
+            guard let taskID = key.id else { return false }
+            return hasLocalTaskDetail(taskID: taskID)
+        default:
+            return false
+        }
+    }
 }
 
 private enum DemoDataNamespace {
@@ -621,6 +605,8 @@ private enum DemoDataNamespace {
     static let userRoles = "userRoles"
     static let projectTasks = "projectTasks"
     static let taskDetail = "taskDetail"
+    static let taskDetailScreen = "taskDetailScreen"
+    static let taskFormMetadata = "taskFormMetadata"
 }
 
 #if DEBUG

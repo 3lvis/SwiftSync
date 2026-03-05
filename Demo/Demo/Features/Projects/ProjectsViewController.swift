@@ -73,7 +73,7 @@ final class ProjectsViewController: UITableViewController {
             }
             .store(in: &cancellables)
 
-        _Concurrency.Task { await syncEngine.loadProjects() }
+        _Concurrency.Task { await syncEngine.loadProjectsScreen() }
     }
 
     // MARK: - UITableViewDelegate
@@ -88,7 +88,7 @@ final class ProjectsViewController: UITableViewController {
 
     @objc private func handleRefresh() {
         _Concurrency.Task {
-            await syncEngine.loadProjects(reason: .pullToRefresh)
+            await syncEngine.refreshProjectsScreen()
             await MainActor.run { self.tableView.refreshControl?.endRefreshing() }
         }
     }

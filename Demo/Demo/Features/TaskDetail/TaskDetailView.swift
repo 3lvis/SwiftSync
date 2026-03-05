@@ -8,7 +8,6 @@ struct TaskDetailView: View {
     @ObservedObject var syncEngine: DemoSyncEngine
 
     @SyncModel private var taskModel: Task?
-    @SyncQuery private var taskStateOptions: [TaskStateOption]
     @State private var hasTriggeredInitialSync = false
     @State private var showingEditSheet = false
 #if DEBUG
@@ -21,12 +20,6 @@ struct TaskDetailView: View {
         self.syncEngine = syncEngine
 
         _taskModel = SyncModel(Task.self, id: taskID, in: syncContainer, animation: .snappy(duration: 0.22))
-        _taskStateOptions = SyncQuery(
-            TaskStateOption.self,
-            in: syncContainer,
-            sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.id)],
-            animation: .snappy(duration: 0.22)
-        )
     }
 
     var body: some View {
@@ -45,14 +38,12 @@ struct TaskDetailView: View {
             }
         }
         .refreshable {
-            await syncEngine.loadTaskStates(reason: .pullToRefresh)
-            await syncEngine.loadTaskDetail(taskID: taskID, reason: .pullToRefresh)
+            await syncEngine.refreshTaskDetailScreen(taskID: taskID)
         }
         .task {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
-            await syncEngine.loadTaskStates()
-            await syncEngine.loadTaskDetail(taskID: taskID)
+            await syncEngine.loadTaskDetailScreen(taskID: taskID)
         }
         .sheet(isPresented: $showingEditSheet) {
             if let taskModel {
@@ -73,7 +64,7 @@ struct TaskDetailView: View {
                     if status.phase == .failed {
                         Button("Retry") {
                             _Concurrency.Task {
-                                await syncEngine.loadTaskDetail(taskID: taskID, reason: .retry)
+                                await syncEngine.refreshTaskDetailScreen(taskID: taskID)
                             }
                         }
                         .font(.caption)
@@ -128,7 +119,7 @@ struct TaskDetailView: View {
     }
 
     private var statusKey: DataKey {
-        DataKey(namespace: "taskDetail", id: taskID)
+        DataKey(namespace: "taskDetailScreen", id: taskID)
     }
 
     private func statusSummary(_ status: ScopeSyncStatus) -> String {

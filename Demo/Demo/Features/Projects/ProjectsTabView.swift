@@ -135,12 +135,12 @@ private struct ProjectDetailView: View {
             }
         }
         .refreshable {
-            await syncEngine.loadProjectTasks(projectID: projectID, reason: .pullToRefresh)
+            await syncEngine.refreshProjectDetailScreen(projectID: projectID)
         }
         .task {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
-            await syncEngine.loadProjectTasks(projectID: projectID)
+            await syncEngine.loadProjectDetailScreen(projectID: projectID)
         }
         .sheet(isPresented: $isShowingCreateTaskSheet) {
             TaskFormSheet(
@@ -177,7 +177,7 @@ private struct ProjectDetailView: View {
                     if status.phase == .failed {
                         Button("Retry") {
                             _Concurrency.Task {
-                                await syncEngine.loadProjectTasks(projectID: projectID, reason: .retry)
+                                await syncEngine.refreshProjectDetailScreen(projectID: projectID)
                             }
                         }
                         .font(.caption)

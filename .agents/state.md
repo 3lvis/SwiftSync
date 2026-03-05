@@ -22,11 +22,11 @@
 - [x] Implement Step 5 docs pass: local-first flow, Earthquake boundaries, what-this-teaches, troubleshooting
 - [x] Run full verification (`swift test`, Demo build) and finalize planning checklist
 - [x] Align planning docs to single-call-per-screen direction (no caller reason, no compatibility surface)
-- [ ] Refactor engine/view API to enforce one public load call per screen flow
-- [ ] Remove obsolete split orchestration methods and update verification
+- [x] Refactor engine/view API to enforce one public load call per screen flow
+- [x] Remove obsolete split orchestration methods and update verification
 
 ## Last known state
-Planning doc has been rewritten to current direction; implementation still needs single-call-per-screen cleanup.
+Single-call-per-screen refactor shipped (`load*Screen` + `refresh*Screen`), no public load reason hints. `swift test --filter ScreenLoadPlannerTests`, full `swift test`, and `xcodebuild -workspace SwiftSync.xcworkspace -scheme Demo -destination 'generic/platform=iOS Simulator' build` are green.
 
 ## Decisions (don't revisit)
 - Scope Earthquake Mode to active detail screens (`ProjectDetailView` and `TaskDetailView`) to keep blast radius explicit.
@@ -35,6 +35,7 @@ Planning doc has been rewritten to current direction; implementation still needs
 - Keep freshness orchestration complexity in `DemoSyncEngine`; expose only lightweight reusable primitives from SwiftSync.
 - Keep explicit network `sync*` APIs intact; add local-first `load*` orchestration APIs beside them.
 - Public orchestration must not expose load-path hints (no public `reason` parameter).
+- Pull-to-refresh remains explicit and always uses backend refresh.
 
 ## Files touched
 - `.agents/state.md`
@@ -46,8 +47,10 @@ Planning doc has been rewritten to current direction; implementation still needs
 - `Demo/Demo/Features/Debug/ShakeDetector.swift`
 - `SwiftSync/Sources/SwiftSync/DataFreshnessPolicy.swift`
 - `SwiftSync/Sources/SwiftSync/ScopeSyncStatus.swift`
+- `SwiftSync/Sources/SwiftSync/ScreenLoadPlanner.swift`
 - `SwiftSync/Tests/SwiftSyncTests/DataFreshnessTests.swift`
 - `SwiftSync/Tests/SwiftSyncTests/ScopeSyncStatusReducerTests.swift`
+- `SwiftSync/Tests/SwiftSyncTests/ScreenLoadPlannerTests.swift`
 - `Demo/Demo/Features/Projects/ProjectsViewController.swift`
 - `Demo/Demo/Features/TaskFormSheet.swift`
 - `docs/planning/engine-local-first-freshness-flow.md`
