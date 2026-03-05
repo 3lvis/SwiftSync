@@ -29,9 +29,15 @@
 - [x] Update screens so task/refresh/retry all call the same `load*Screen` API
 - [x] Re-run tests/build and sync docs/state
 - [x] Remove pull-to-refresh from all demo screens and drop internal "already loaded => network-only" shortcut
+- [x] Add root-level floating engine status overlay activated by shake and showing all scope statuses
+- [x] Remove per-screen sync status insets and centralize status UI in root overlay
+- [x] Move Earthquake runtime controls into the root engine overlay
+- [x] Build Demo app and verify overlay behavior compiles cleanly
+- [x] Replace status filters with chronological engine event history (first call to latest)
+- [x] Remove per-screen shake Earthquake prompts to avoid overlay collisions
 
 ## Last known state
-Single-call screen API is enforced and pull-to-refresh has been removed from demo screens. Engine now always evaluates freshness per load call (no internal loaded-screen override). `swift test --filter ScreenLoadPlannerTests`, full `swift test`, and Demo iOS build are green.
+Root-level engine status overlay is active on branch `feature/global-engine-status-overlay`, toggled by shake only. It now includes chronological sync event history and in-overlay Earthquake toggle. Demo build via `xcodebuild -workspace SwiftSync.xcworkspace -scheme Demo -destination 'generic/platform=iOS Simulator' build` is green.
 
 ## Decisions (don't revisit)
 - Scope Earthquake Mode to active detail screens (`ProjectDetailView` and `TaskDetailView`) to keep blast radius explicit.
@@ -42,6 +48,8 @@ Single-call screen API is enforced and pull-to-refresh has been removed from dem
 - Public orchestration must not expose load-path hints (no public `reason` parameter).
 - Pull-to-refresh is removed from demo UX; retry remains the explicit recovery affordance.
 - Engine must not contain "already loaded screen" shortcuts that bypass freshness evaluation.
+- Engine status UI should be global (root-level) and not duplicated per screen.
+- Shake interaction is reserved for global overlay toggle; Earthquake start/stop lives inside that overlay.
 
 ## Files touched
 - `.agents/state.md`
@@ -62,3 +70,6 @@ Single-call screen API is enforced and pull-to-refresh has been removed from dem
 - `Demo/Demo/Features/TaskFormSheet.swift`
 - `docs/planning/engine-local-first-freshness-flow.md`
 - `docs/project/local-first-freshness-flow.md`
+- `Demo/Demo/App/DemoRootView.swift`
+- `Demo/Demo/Features/Debug/EngineStatusOverlayView.swift`
+- `Demo/Demo/Features/Debug/ShakeDetector.swift`
