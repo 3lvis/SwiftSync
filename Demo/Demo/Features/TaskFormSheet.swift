@@ -296,19 +296,16 @@ struct TaskFormSheet: View {
     // MARK: Actions
 
     private func loadData() {
-        let userDescriptor = FetchDescriptor<User>(
-            sortBy: [SortDescriptor(\.displayName), SortDescriptor(\.id)]
-        )
-        users = (try? editContext.fetch(userDescriptor)) ?? []
+        users = syncEngine.localUsers()
+        taskStateOptions = syncEngine.localTaskStates()
 
-        let stateDescriptor = FetchDescriptor<TaskStateOption>(
-            sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.id)]
-        )
-        let cached = (try? editContext.fetch(stateDescriptor)) ?? []
-        if !cached.isEmpty {
-            taskStateOptions = cached
-        } else {
-            loadTaskStates()
+        _Concurrency.Task {
+            await syncEngine.loadUsers()
+            await syncEngine.loadTaskStates()
+            await MainActor.run {
+                users = syncEngine.localUsers()
+                taskStateOptions = syncEngine.localTaskStates()
+            }
         }
     }
 
@@ -316,7 +313,7 @@ struct TaskFormSheet: View {
         guard !isLoadingTaskStates else { return }
         isLoadingTaskStates = true
         _Concurrency.Task {
-            await syncEngine.syncTaskStates()
+            await syncEngine.loadTaskStates(reason: .retry)
             let descriptor = FetchDescriptor<TaskStateOption>(
                 sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.id)]
             )

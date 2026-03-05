@@ -8,6 +8,13 @@ final class DemoSyncEngine: ObservableObject {
     @Published private(set) var isSyncing = false
     @Published private(set) var lastErrorMessage: String?
     @Published private(set) var lastSyncDate: Date?
+    @Published private(set) var scopeStatus: [DataKey: ScopeSyncStatus] = [:]
+
+    enum LoadReason {
+        case screenLoad
+        case pullToRefresh
+        case retry
+    }
 
 #if DEBUG
     @Published private(set) var isEarthquakeModeRunning = false
@@ -21,9 +28,21 @@ final class DemoSyncEngine: ObservableObject {
 
     private(set) var hasBootstrapped = false
     private var inFlightOperations: Set<String> = []
+    private var lastSuccessfulSyncByDataKey: [DataKey: Date] = [:]
 
     private let syncContainer: SyncContainer
     private let apiClient: FakeDemoAPIClient
+    private let freshnessPolicy = DataFreshnessPolicy(
+        defaultTTL: 120,
+        ttlByNamespace: [
+            DemoDataNamespace.projects: 300,
+            DemoDataNamespace.users: 300,
+            DemoDataNamespace.taskStates: 600,
+            DemoDataNamespace.userRoles: 600,
+            DemoDataNamespace.projectTasks: 20,
+            DemoDataNamespace.taskDetail: 20
+        ]
+    )
 
 #if DEBUG
     private var earthquakeRunner: FiniteAsyncRunner?
@@ -255,9 +274,23 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
+    func loadProjects(reason: LoadReason = .screenLoad) async {
+        let key = DataKey(namespace: DemoDataNamespace.projects)
+        await loadData(key: key, hasLocalData: hasLocalProjects(), reason: reason) {
+            await self.syncProjects()
+        }
+    }
+
     func syncUsers() async {
         await syncOperation("users") {
             try await syncUsersInternal()
+        }
+    }
+
+    func loadUsers(reason: LoadReason = .screenLoad) async {
+        let key = DataKey(namespace: DemoDataNamespace.users)
+        await loadData(key: key, hasLocalData: hasLocalUsers(), reason: reason) {
+            await self.syncUsers()
         }
     }
 
@@ -267,9 +300,23 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
+    func loadTaskStates(reason: LoadReason = .screenLoad) async {
+        let key = DataKey(namespace: DemoDataNamespace.taskStates)
+        await loadData(key: key, hasLocalData: hasLocalTaskStates(), reason: reason) {
+            await self.syncTaskStates()
+        }
+    }
+
     func syncUserRoles() async {
         await syncOperation("userRoles") {
             try await syncUserRolesInternal()
+        }
+    }
+
+    func loadUserRoles(reason: LoadReason = .screenLoad) async {
+        let key = DataKey(namespace: DemoDataNamespace.userRoles)
+        await loadData(key: key, hasLocalData: hasLocalUserRoles(), reason: reason) {
+            await self.syncUserRoles()
         }
     }
 
@@ -279,10 +326,88 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
+    func loadProjectTasks(projectID: String, reason: LoadReason = .screenLoad) async {
+        let key = DataKey(namespace: DemoDataNamespace.projectTasks, id: projectID)
+        await loadData(key: key, hasLocalData: hasLocalProjectTasks(projectID: projectID), reason: reason) {
+            await self.syncProjectTasks(projectID: projectID)
+        }
+    }
+
     func syncTaskDetail(taskID: String) async {
         await syncOperation("taskDetail-\(taskID)") {
             try await syncTaskDetailInternal(taskID: taskID)
         }
+    }
+
+    func loadTaskDetail(taskID: String, reason: LoadReason = .screenLoad) async {
+        let key = DataKey(namespace: DemoDataNamespace.taskDetail, id: taskID)
+        await loadData(key: key, hasLocalData: hasLocalTaskDetail(taskID: taskID), reason: reason) {
+            await self.syncTaskDetail(taskID: taskID)
+        }
+    }
+
+    func status(for key: DataKey) -> ScopeSyncStatus? {
+        scopeStatus[key]
+    }
+
+    func localUsers() -> [User] {
+        (try? syncContainer.mainContext.fetch(
+            FetchDescriptor<User>(sortBy: [SortDescriptor(\.displayName), SortDescriptor(\.id)])
+        )) ?? []
+    }
+
+    func localTaskStates() -> [TaskStateOption] {
+        (try? syncContainer.mainContext.fetch(
+            FetchDescriptor<TaskStateOption>(sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.id)])
+        )) ?? []
+    }
+
+    func loadDecisionForProjects(now: Date = Date()) -> LoadDecision {
+        decisionForData(
+            key: DataKey(namespace: DemoDataNamespace.projects),
+            hasLocalData: hasLocalProjects(),
+            now: now
+        )
+    }
+
+    func loadDecisionForUsers(now: Date = Date()) -> LoadDecision {
+        decisionForData(
+            key: DataKey(namespace: DemoDataNamespace.users),
+            hasLocalData: hasLocalUsers(),
+            now: now
+        )
+    }
+
+    func loadDecisionForTaskStates(now: Date = Date()) -> LoadDecision {
+        decisionForData(
+            key: DataKey(namespace: DemoDataNamespace.taskStates),
+            hasLocalData: hasLocalTaskStates(),
+            now: now
+        )
+    }
+
+    func loadDecisionForUserRoles(now: Date = Date()) -> LoadDecision {
+        decisionForData(
+            key: DataKey(namespace: DemoDataNamespace.userRoles),
+            hasLocalData: hasLocalUserRoles(),
+            now: now
+        )
+    }
+
+    func loadDecisionForProjectTasks(projectID: String, now: Date = Date()) -> LoadDecision {
+        decisionForData(
+            key: DataKey(namespace: DemoDataNamespace.projectTasks, id: projectID),
+            hasLocalData: hasLocalProjectTasks(projectID: projectID),
+            now: now
+        )
+    }
+
+    func loadDecisionForTaskDetail(taskID: String, now: Date = Date()) -> LoadDecision {
+        decisionForData(
+            key: DataKey(namespace: DemoDataNamespace.taskDetail, id: taskID),
+            hasLocalData: hasLocalTaskDetail(taskID: taskID),
+            now: now
+        )
     }
 
     func createTask(body: [String: Any], projectID: String) async throws {
@@ -323,21 +448,25 @@ final class DemoSyncEngine: ObservableObject {
     private func syncProjectsInternal() async throws {
         let payload = try await apiClient.getProjects()
         try await syncContainer.sync(payload: payload, as: Project.self)
+        markDataSynced(DataKey(namespace: DemoDataNamespace.projects))
     }
 
     private func syncUsersInternal() async throws {
         let payload = try await apiClient.getUsers()
         try await syncContainer.sync(payload: payload, as: User.self)
+        markDataSynced(DataKey(namespace: DemoDataNamespace.users))
     }
 
     private func syncTaskStatesInternal() async throws {
         let payload = try await apiClient.getTaskStateOptions()
         try await syncContainer.sync(payload: payload, as: TaskStateOption.self)
+        markDataSynced(DataKey(namespace: DemoDataNamespace.taskStates))
     }
 
     private func syncUserRolesInternal() async throws {
         let payload = try await apiClient.getUserRoleOptions()
         try await syncContainer.sync(payload: payload, as: UserRoleOption.self)
+        markDataSynced(DataKey(namespace: DemoDataNamespace.userRoles))
     }
 
     private func syncProjectTasksInternal(projectID: String) async throws {
@@ -350,12 +479,14 @@ final class DemoSyncEngine: ObservableObject {
 
         guard let project = try project(withID: projectID) else { return }
         try await syncContainer.sync(payload: payload, as: Task.self, parent: project)
+        markDataSynced(DataKey(namespace: DemoDataNamespace.projectTasks, id: projectID))
         try await syncProjectsInternal()
     }
 
     private func syncTaskDetailInternal(taskID: String) async throws {
         guard let payload = try await apiClient.getTaskDetail(taskID: taskID) else { return }
         try await syncContainer.sync(item: payload, as: Task.self)
+        markDataSynced(DataKey(namespace: DemoDataNamespace.taskDetail, id: taskID))
     }
 
     /// Canonical post-mutation sync sequence for a single task.
@@ -401,6 +532,95 @@ final class DemoSyncEngine: ObservableObject {
     private func project(withID projectID: String) throws -> Project? {
         try syncContainer.mainContext.fetch(FetchDescriptor<Project>()).first { $0.id == projectID }
     }
+
+    private func markDataSynced(_ key: DataKey, at date: Date = Date()) {
+        lastSuccessfulSyncByDataKey[key] = date
+    }
+
+    private func loadData(
+        key: DataKey,
+        hasLocalData: Bool,
+        reason: LoadReason,
+        networkFetch: @escaping @MainActor () async -> Void
+    ) async {
+        let path: ScopeLoadPath
+
+        switch reason {
+        case .retry, .pullToRefresh:
+            path = .networkOnly
+        case .screenLoad:
+            let decision = decisionForData(key: key, hasLocalData: hasLocalData)
+            path = decision == .fresh ? .localFirstRefresh : .networkFirst
+        }
+
+        scopeStatus[key] = ScopeSyncStatusReducer.start(path: path)
+
+        if path == .localFirstRefresh {
+            _Concurrency.Task { @MainActor in
+                await networkFetch()
+                self.finalizeScopeStatus(key: key)
+            }
+            return
+        }
+
+        await networkFetch()
+        finalizeScopeStatus(key: key)
+    }
+
+    private func finalizeScopeStatus(key: DataKey) {
+        guard let previous = scopeStatus[key] else { return }
+
+        if let message = lastErrorMessage {
+            scopeStatus[key] = ScopeSyncStatusReducer.fail(previous: previous, errorMessage: message)
+            return
+        }
+
+        scopeStatus[key] = ScopeSyncStatusReducer.succeed(previous: previous)
+    }
+
+    private func decisionForData(key: DataKey, hasLocalData: Bool, now: Date = Date()) -> LoadDecision {
+        freshnessPolicy.decision(
+            for: key,
+            hasLocalData: hasLocalData,
+            lastSuccessfulSync: lastSuccessfulSyncByDataKey[key],
+            now: now
+        )
+    }
+
+    private func hasLocalProjects() -> Bool {
+        (try? syncContainer.mainContext.fetch(FetchDescriptor<Project>()).isEmpty == false) ?? false
+    }
+
+    private func hasLocalUsers() -> Bool {
+        (try? syncContainer.mainContext.fetch(FetchDescriptor<User>()).isEmpty == false) ?? false
+    }
+
+    private func hasLocalTaskStates() -> Bool {
+        (try? syncContainer.mainContext.fetch(FetchDescriptor<TaskStateOption>()).isEmpty == false) ?? false
+    }
+
+    private func hasLocalUserRoles() -> Bool {
+        (try? syncContainer.mainContext.fetch(FetchDescriptor<UserRoleOption>()).isEmpty == false) ?? false
+    }
+
+    private func hasLocalProjectTasks(projectID: String) -> Bool {
+        let descriptor = FetchDescriptor<Task>(predicate: #Predicate { $0.projectID == projectID })
+        return (try? syncContainer.mainContext.fetch(descriptor).isEmpty == false) ?? false
+    }
+
+    private func hasLocalTaskDetail(taskID: String) -> Bool {
+        let descriptor = FetchDescriptor<Task>(predicate: #Predicate { $0.id == taskID })
+        return (try? syncContainer.mainContext.fetch(descriptor).isEmpty == false) ?? false
+    }
+}
+
+private enum DemoDataNamespace {
+    static let projects = "projects"
+    static let users = "users"
+    static let taskStates = "taskStates"
+    static let userRoles = "userRoles"
+    static let projectTasks = "projectTasks"
+    static let taskDetail = "taskDetail"
 }
 
 #if DEBUG

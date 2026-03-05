@@ -45,14 +45,14 @@ struct TaskDetailView: View {
             }
         }
         .refreshable {
-            await syncEngine.syncTaskStates()
-            await syncEngine.syncTaskDetail(taskID: taskID)
+            await syncEngine.loadTaskStates(reason: .pullToRefresh)
+            await syncEngine.loadTaskDetail(taskID: taskID, reason: .pullToRefresh)
         }
         .task {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
-            await syncEngine.syncTaskStates()
-            await syncEngine.syncTaskDetail(taskID: taskID)
+            await syncEngine.loadTaskStates()
+            await syncEngine.loadTaskDetail(taskID: taskID)
         }
         .sheet(isPresented: $showingEditSheet) {
             if let taskModel {
@@ -61,6 +61,27 @@ struct TaskDetailView: View {
                     syncContainer: syncContainer,
                     syncEngine: syncEngine
                 )
+            }
+        }
+        .safeAreaInset(edge: .top) {
+            if let status = syncEngine.status(for: statusKey) {
+                HStack(spacing: 8) {
+                    Text(statusSummary(status))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if status.phase == .failed {
+                        Button("Retry") {
+                            _Concurrency.Task {
+                                await syncEngine.loadTaskDetail(taskID: taskID, reason: .retry)
+                            }
+                        }
+                        .font(.caption)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+                .background(.thinMaterial)
             }
         }
 #if DEBUG
@@ -104,6 +125,23 @@ struct TaskDetailView: View {
             .allowsHitTesting(false)
         )
 #endif
+    }
+
+    private var statusKey: DataKey {
+        DataKey(namespace: "taskDetail", id: taskID)
+    }
+
+    private func statusSummary(_ status: ScopeSyncStatus) -> String {
+        switch status.phase {
+        case .loading:
+            return status.path == .networkFirst ? "Network-first loading..." : "Loading..."
+        case .refreshing:
+            return "Local-first refresh in progress..."
+        case .failed:
+            return status.errorMessage ?? "Sync failed"
+        case .idle:
+            return status.path == .networkFirst ? "Loaded from network" : "Using local cache + refresh"
+        }
     }
 
     private var taskSection: some View {
