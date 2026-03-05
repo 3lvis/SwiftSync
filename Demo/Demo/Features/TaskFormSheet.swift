@@ -2,14 +2,56 @@ import SwiftData
 import SwiftSync
 import SwiftUI
 
-// MARK: - Mode
-
 enum TaskFormMode {
     case create(projectID: String)
     case edit(task: Task)
 }
 
-// MARK: - Sheet
+private struct TaskDraft {
+    var id: String
+    var projectID: String
+    var title: String
+    var descriptionText: String
+    var state: String
+    var stateLabel: String
+    var assigneeID: String?
+    var authorID: String
+    var reviewerIDs: Set<String>
+    var watcherIDs: Set<String>
+    var createdAt: Date
+    var updatedAt: Date
+
+    init(projectID: String) {
+        let now = Date()
+        id = UUID().uuidString
+        self.projectID = projectID
+        title = ""
+        descriptionText = ""
+        state = ""
+        stateLabel = ""
+        assigneeID = nil
+        authorID = ""
+        reviewerIDs = []
+        watcherIDs = []
+        createdAt = now
+        updatedAt = now
+    }
+
+    init(task: Task) {
+        id = task.id
+        projectID = task.projectID
+        title = task.title
+        descriptionText = task.descriptionText
+        state = task.state
+        stateLabel = task.stateLabel
+        assigneeID = task.assigneeID
+        authorID = task.authorID
+        reviewerIDs = Set(task.reviewers.map(\.id))
+        watcherIDs = Set(task.watchers.map(\.id))
+        createdAt = task.createdAt
+        updatedAt = task.updatedAt
+    }
+}
 
 struct TaskFormSheet: View {
     let mode: TaskFormMode
@@ -18,18 +60,7 @@ struct TaskFormSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    // Throwaway context — autosave disabled. Never saved to the store.
-    // On cancel it is simply released; on save we export the values and call the API.
-    private let editContext: ModelContext
-
-    // The draft lives in editContext. For create it is a freshly-inserted Task.
-    // For edit it is the same row fetched into this isolated context.
-    // Relationship arrays (reviewers, watchers) are real [User] objects from editContext,
-    // so the pickers can assign them directly without cross-context crashes.
-    @State private var draft: Task
-
-    // Loaded once from editContext when the sheet appears. Not kept live — form sheets
-    // are short-lived and a stale list for one session is acceptable.
+    @State private var draft: TaskDraft
     @State private var users: [User] = []
     @State private var taskStateOptions: [TaskStateOption] = []
 
@@ -42,28 +73,13 @@ struct TaskFormSheet: View {
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
 
-        let ctx = ModelContext(syncContainer.modelContainer)
-        ctx.autosaveEnabled = false
-        self.editContext = ctx
-
         switch mode {
         case .create(let projectID):
-            let task = Task(projectID: projectID)
-            ctx.insert(task)
-            _draft = State(initialValue: task)
-
+            _draft = State(initialValue: TaskDraft(projectID: projectID))
         case .edit(let task):
-            let taskID = task.id
-            let descriptor = FetchDescriptor<Task>(predicate: #Predicate { $0.id == taskID })
-            let fetched = (try? ctx.fetch(descriptor))?.first
-            // Fallback should never be reached in practice — the row is always in the store.
-            // If it somehow is, we fall back to the passed object (which lives in mainContext,
-            // so edits won't reach the store either, preserving the no-save guarantee).
-            _draft = State(initialValue: fetched ?? task)
+            _draft = State(initialValue: TaskDraft(task: task))
         }
     }
-
-    // MARK: Body
 
     var body: some View {
         NavigationStack {
@@ -85,70 +101,7 @@ struct TaskFormSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        draft.title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if draft.descriptionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            draft.descriptionText = "No description yet."
-                        }
-                        draft.updatedAt = Date()
-                        isSaving = true
-                        saveErrorMessage = nil
-
-                        let body = draft.exportObject(for: syncContainer, relationshipMode: .none)
-                        let capturedReviewerIDs = draft.reviewers.map(\.id).sorted()
-                        let capturedWatcherIDs = draft.watchers.map(\.id).sorted()
-
-                        var reviewersChanged = false
-                        var watchersChanged = false
-                        if case .edit(let originalTask) = mode {
-                            let originalReviewerIDs = Set(originalTask.reviewers.map(\.id))
-                            let originalWatcherIDs = Set(originalTask.watchers.map(\.id))
-                            reviewersChanged = Set(capturedReviewerIDs) != originalReviewerIDs
-                            watchersChanged = Set(capturedWatcherIDs) != originalWatcherIDs
-                        }
-
-                        _Concurrency.Task {
-                            do {
-                                switch mode {
-                                case .create(let projectID):
-                                    try await syncEngine.createTask(body: body, projectID: projectID)
-                                    if !capturedReviewerIDs.isEmpty {
-                                        try await syncEngine.replaceTaskReviewers(
-                                            taskID: draft.id,
-                                            projectID: projectID,
-                                            reviewerIDs: capturedReviewerIDs
-                                        )
-                                    }
-                                    if !capturedWatcherIDs.isEmpty {
-                                        try await syncEngine.replaceTaskWatchers(
-                                            taskID: draft.id,
-                                            projectID: projectID,
-                                            watcherIDs: capturedWatcherIDs
-                                        )
-                                    }
-
-                                case .edit(let task):
-                                    try await syncEngine.updateTask(taskID: task.id, projectID: task.projectID, body: body)
-                                    if reviewersChanged {
-                                        try await syncEngine.replaceTaskReviewers(
-                                            taskID: task.id,
-                                            projectID: task.projectID,
-                                            reviewerIDs: capturedReviewerIDs
-                                        )
-                                    }
-                                    if watchersChanged {
-                                        try await syncEngine.replaceTaskWatchers(
-                                            taskID: task.id,
-                                            projectID: task.projectID,
-                                            watcherIDs: capturedWatcherIDs
-                                        )
-                                    }
-                                }
-                                await MainActor.run { isSaving = false; dismiss() }
-                            } catch {
-                                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                                await MainActor.run { isSaving = false; saveErrorMessage = message }
-                            }
-                        }
+                        save()
                     } label: {
                         HStack(spacing: 6) {
                             if isSaving { ProgressView().controlSize(.small) }
@@ -159,24 +112,7 @@ struct TaskFormSheet: View {
                 }
             }
         }
-        .task {
-            let snapshot = Self.metadataSnapshot(from: editContext)
-            users = snapshot.users
-            taskStateOptions = snapshot.taskStateOptions
-
-            guard !isLoadingTaskStates else { return }
-            isLoadingTaskStates = true
-            _Concurrency.Task {
-                await syncEngine.loadTaskFormScreen()
-                await MainActor.run {
-                    let refreshed = Self.metadataSnapshot(from: editContext)
-                    users = refreshed.users
-                    taskStateOptions = refreshed.taskStateOptions
-                    isLoadingTaskStates = false
-                }
-            }
-        }
-        // Auto-select first valid state when options load (safe for edit — guard prevents override)
+        .task { await reloadMetadata() }
         .task(id: taskStateOptions.map(\.id)) {
             guard !taskStateOptions.isEmpty,
                   draft.state.isEmpty || !taskStateOptions.contains(where: { $0.id == draft.state })
@@ -186,7 +122,6 @@ struct TaskFormSheet: View {
                 draft.stateLabel = first.label
             }
         }
-        // Auto-select author when users load (create only in practice — guard prevents override)
         .task(id: users.map(\.id)) {
             guard !users.isEmpty,
                   draft.authorID.isEmpty || !users.contains(where: { $0.id == draft.authorID })
@@ -208,8 +143,6 @@ struct TaskFormSheet: View {
         }
         .presentationDetents([.large])
     }
-
-    // MARK: Sections
 
     private var titleSection: some View {
         Section("Title") {
@@ -237,17 +170,7 @@ struct TaskFormSheet: View {
                 }
                 if !isLoadingTaskStates {
                     Button("Retry Loading States") {
-                        guard !isLoadingTaskStates else { return }
-                        isLoadingTaskStates = true
-                        _Concurrency.Task {
-                            await syncEngine.loadTaskFormScreen()
-                            await MainActor.run {
-                                let refreshed = Self.metadataSnapshot(from: editContext)
-                                users = refreshed.users
-                                taskStateOptions = refreshed.taskStateOptions
-                                isLoadingTaskStates = false
-                            }
-                        }
+                        _Concurrency.Task { await reloadMetadata() }
                     }
                 }
             } else {
@@ -320,16 +243,16 @@ struct TaskFormSheet: View {
         Section("Reviewers") {
             ForEach(users, id: \.id) { user in
                 Button {
-                    if draft.reviewers.contains(where: { $0.id == user.id }) {
-                        draft.reviewers.removeAll(where: { $0.id == user.id })
+                    if draft.reviewerIDs.contains(user.id) {
+                        draft.reviewerIDs.remove(user.id)
                     } else {
-                        draft.reviewers.append(user)
+                        draft.reviewerIDs.insert(user.id)
                     }
                 } label: {
                     HStack {
                         Text(user.displayName).foregroundStyle(.primary)
                         Spacer()
-                        if draft.reviewers.contains(where: { $0.id == user.id }) {
+                        if draft.reviewerIDs.contains(user.id) {
                             Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
                         }
                     }
@@ -342,16 +265,16 @@ struct TaskFormSheet: View {
         Section("Watchers") {
             ForEach(users, id: \.id) { user in
                 Button {
-                    if draft.watchers.contains(where: { $0.id == user.id }) {
-                        draft.watchers.removeAll(where: { $0.id == user.id })
+                    if draft.watcherIDs.contains(user.id) {
+                        draft.watcherIDs.remove(user.id)
                     } else {
-                        draft.watchers.append(user)
+                        draft.watcherIDs.insert(user.id)
                     }
                 } label: {
                     HStack {
                         Text(user.displayName).foregroundStyle(.primary)
                         Spacer()
-                        if draft.watchers.contains(where: { $0.id == user.id }) {
+                        if draft.watcherIDs.contains(user.id) {
                             Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
                         }
                     }
@@ -359,8 +282,6 @@ struct TaskFormSheet: View {
             }
         }
     }
-
-    // MARK: Helpers
 
     private var navigationTitle: String {
         switch mode {
@@ -386,17 +307,107 @@ struct TaskFormSheet: View {
         return false
     }
 
-    private static func metadataSnapshot(from context: ModelContext) -> (users: [User], taskStateOptions: [TaskStateOption]) {
-        let userDescriptor = FetchDescriptor<User>(
-            sortBy: [SortDescriptor(\.displayName), SortDescriptor(\.id)]
-        )
-        let users = (try? context.fetch(userDescriptor)) ?? []
+    @MainActor
+    private func reloadMetadata() async {
+        let local = Self.metadataSnapshot(context: syncContainer.mainContext)
+        users = local.users
+        taskStateOptions = local.taskStateOptions
 
-        let stateDescriptor = FetchDescriptor<TaskStateOption>(
-            sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.id)]
-        )
-        let taskStateOptions = (try? context.fetch(stateDescriptor)) ?? []
+        guard !isLoadingTaskStates else { return }
+        isLoadingTaskStates = true
+        defer { isLoadingTaskStates = false }
 
+        await syncEngine.loadTaskFormScreen()
+
+        let refreshed = Self.metadataSnapshot(context: syncContainer.mainContext)
+        users = refreshed.users
+        taskStateOptions = refreshed.taskStateOptions
+    }
+
+    @MainActor
+    private func save() {
+        draft.title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if draft.descriptionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            draft.descriptionText = "No description yet."
+        }
+        draft.updatedAt = Date()
+        isSaving = true
+        saveErrorMessage = nil
+
+        let reviewerIDs = draft.reviewerIDs.sorted()
+        let watcherIDs = draft.watcherIDs.sorted()
+
+        let originalReviewerIDs: Set<String>
+        let originalWatcherIDs: Set<String>
+        if case .edit(let task) = mode {
+            originalReviewerIDs = Set(task.reviewers.map(\.id))
+            originalWatcherIDs = Set(task.watchers.map(\.id))
+        } else {
+            originalReviewerIDs = []
+            originalWatcherIDs = []
+        }
+
+        let reviewersChanged = Set(reviewerIDs) != originalReviewerIDs
+        let watchersChanged = Set(watcherIDs) != originalWatcherIDs
+
+        let body = makeTaskPayload(draft: draft)
+
+        _Concurrency.Task {
+            do {
+                switch mode {
+                case .create(let projectID):
+                    try await syncEngine.createTask(body: body, projectID: projectID)
+                    if !reviewerIDs.isEmpty {
+                        try await syncEngine.replaceTaskReviewers(taskID: draft.id, projectID: projectID, reviewerIDs: reviewerIDs)
+                    }
+                    if !watcherIDs.isEmpty {
+                        try await syncEngine.replaceTaskWatchers(taskID: draft.id, projectID: projectID, watcherIDs: watcherIDs)
+                    }
+
+                case .edit(let task):
+                    try await syncEngine.updateTask(taskID: task.id, projectID: task.projectID, body: body)
+                    if reviewersChanged {
+                        try await syncEngine.replaceTaskReviewers(taskID: task.id, projectID: task.projectID, reviewerIDs: reviewerIDs)
+                    }
+                    if watchersChanged {
+                        try await syncEngine.replaceTaskWatchers(taskID: task.id, projectID: task.projectID, watcherIDs: watcherIDs)
+                    }
+                }
+
+                await MainActor.run {
+                    isSaving = false
+                    dismiss()
+                }
+            } catch {
+                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                await MainActor.run {
+                    isSaving = false
+                    saveErrorMessage = message
+                }
+            }
+        }
+    }
+
+    private func makeTaskPayload(draft: TaskDraft) -> [String: Any] {
+        let stateLabel = taskStateOptions.first(where: { $0.id == draft.state })?.label ?? draft.stateLabel
+        let formatter = ISO8601DateFormatter()
+
+        return [
+            "id": draft.id,
+            "project_id": draft.projectID,
+            "assignee_id": draft.assigneeID ?? NSNull(),
+            "author_id": draft.authorID,
+            "title": draft.title,
+            "description": draft.descriptionText,
+            "state": ["id": draft.state, "label": stateLabel],
+            "created_at": formatter.string(from: draft.createdAt),
+            "updated_at": formatter.string(from: draft.updatedAt)
+        ]
+    }
+
+    private static func metadataSnapshot(context: ModelContext) -> (users: [User], taskStateOptions: [TaskStateOption]) {
+        let users = (try? context.fetch(FetchDescriptor<User>(sortBy: [SortDescriptor(\.displayName), SortDescriptor(\.id)]))) ?? []
+        let taskStateOptions = (try? context.fetch(FetchDescriptor<TaskStateOption>(sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.id)]))) ?? []
         return (users, taskStateOptions)
     }
 }
