@@ -3,6 +3,11 @@ import Testing
 @testable import SwiftSync
 
 struct ScopeSyncStatusReducerTests {
+    @Test("load path surface has only local-first and network-first")
+    func loadPathSurfaceIsMinimal() {
+        #expect(ScopeLoadPath.allCases == [.localFirstRefresh, .networkFirst])
+    }
+
     @Test("network-first start enters loading")
     func networkFirstStartPhase() {
         let now = Date(timeIntervalSince1970: 10)
@@ -22,11 +27,11 @@ struct ScopeSyncStatusReducerTests {
 
     @Test("success settles to idle and clears errors")
     func successTransition() {
-        let started = ScopeSyncStatus(phase: .failed, path: .networkOnly, errorMessage: "boom", updatedAt: Date(timeIntervalSince1970: 12))
+        let started = ScopeSyncStatus(phase: .failed, path: .networkFirst, errorMessage: "boom", updatedAt: Date(timeIntervalSince1970: 12))
         let done = ScopeSyncStatusReducer.succeed(previous: started, now: Date(timeIntervalSince1970: 13))
 
         #expect(done.phase == .idle)
-        #expect(done.path == .networkOnly)
+        #expect(done.path == .networkFirst)
         #expect(done.errorMessage == nil)
         #expect(done.updatedAt == Date(timeIntervalSince1970: 13))
     }

@@ -1,9 +1,8 @@
 import Foundation
 
-public enum ScopeLoadPath: Sendable, Equatable {
+public enum ScopeLoadPath: Sendable, Equatable, CaseIterable {
     case localFirstRefresh
     case networkFirst
-    case networkOnly
 }
 
 public enum ScopeSyncPhase: Sendable, Equatable {
