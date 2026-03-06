@@ -164,27 +164,6 @@ private struct ProjectDetailView: View {
         } message: { prompt in
             Text("Delete \"\(prompt.title)\" from this project?")
         }
-        .safeAreaInset(edge: .top) {
-            if let status = syncEngine.status(for: statusKey) {
-                HStack(spacing: 8) {
-                    Text(statusSummary(status))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    if status.phase == .failed {
-                        Button("Retry") {
-                            _Concurrency.Task {
-                                await syncEngine.loadProjectDetailScreen(projectID: projectID)
-                            }
-                        }
-                        .font(.caption)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 6)
-                .background(.thinMaterial)
-            }
-        }
 #if DEBUG
         .overlay(alignment: .bottom) {
             if syncEngine.isEarthquakeModeRunning,
@@ -225,23 +204,6 @@ private struct ProjectDetailView: View {
             .allowsHitTesting(false)
         )
 #endif
-    }
-
-    private var statusKey: DataKey {
-        DataKey(namespace: "projectTasks", id: projectID)
-    }
-
-    private func statusSummary(_ status: ScopeSyncStatus) -> String {
-        switch status.phase {
-        case .loading:
-            return status.path == .networkFirst ? "Network-first loading..." : "Loading..."
-        case .refreshing:
-            return "Local-first refresh in progress..."
-        case .failed:
-            return status.errorMessage ?? "Sync failed"
-        case .idle:
-            return status.path == .networkFirst ? "Loaded from network" : "Using local cache + refresh"
-        }
     }
 }
 
