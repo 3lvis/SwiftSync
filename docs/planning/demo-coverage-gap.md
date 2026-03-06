@@ -1,10 +1,10 @@
 # Demo Coverage Gap — Complexity Reduction Candidates
 
-**Purpose:** Reference for open reduction candidates not yet scheduled.
+**Purpose:** Reference for open reduction candidates not yet started.
 
 ---
 
-## Unused surface — open candidates
+## Open items
 
 ### Export system (bulk paths)
 

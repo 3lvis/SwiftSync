@@ -27,6 +27,18 @@
 - Avoid inferring behavior from implementation details in tests; test expected contract.
 - Keep diagnostics explicit and actionable when behavior cannot be resolved safely.
 
+## docs/planning Rules
+
+1. Cleanup on new task start
+- Before adding new work, remove completed or stale items.
+- Remove: `[x]`, `[~]`, `completed`, `done`, `superseded`, `scheduled`.
+- Keep only active items.
+
+2. Required todo format
+- Every planning file must include `## Open items`.
+- Open items must use unchecked checkboxes only: `- [ ] <task>`.
+- Items must be short, actionable, and implementation-focused.
+
 ## Git Command Safety
 
 - Default all Git commands to sequential execution.
