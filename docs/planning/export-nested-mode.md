@@ -1,12 +1,19 @@
-# ExportRelationshipMode.nested — Demo Integration Analysis
+# ExportRelationshipMode.nested — Historical Analysis (Removed)
 
 ## Open items
 
-- [ ] Decide direction: implement a real `.nested` demo scenario, or remove `.nested` from API surface.
-- [ ] If keeping `.nested`, build the minimal Comment-based end-to-end path described below.
-- [ ] If removing `.nested`, apply the TDD removal order described below.
+- [ ] Sweep remaining docs/examples to ensure `.nested` snippets are clearly labeled historical.
+- [ ] Decide whether to move this file to an archive/history location once no follow-up work remains.
 
-## What `.nested` does
+## Current state
+
+`.nested` has been removed from the public API surface.
+
+This document is retained as historical analysis for why the mode was removed.
+
+---
+
+## What `.nested` did
 
 `ExportRelationshipMode.nested` produces Rails `accepts_nested_attributes_for`-style payloads.
 
@@ -43,9 +50,9 @@ compatible with `_attributes`-style bodies:
 | `Task.reviewers` (to-many) | `"reviewer_ids": ["u1", "u2"]` | `"reviewers_attributes": { "0": { ... }, ... }` |
 | `Task.watchers` (to-many) | `"watcher_ids": ["u1", "u2"]` | `"watchers_attributes": { "0": { ... }, ... }` |
 
-The demo's `DemoServerSimulator` has no endpoints that accept `_attributes`-style bodies.
-Calling `exportObject(for: syncContainer, relationshipMode: .nested)` on a `Task` would
-produce a payload the backend would silently ignore or reject on every field above.
+The demo's `DemoServerSimulator` had no endpoints that accepted `_attributes`-style bodies.
+Calling `.nested` export on a `Task` would have produced a payload the backend would
+silently ignore or reject on every field above.
 
 ---
 
@@ -58,10 +65,10 @@ produce a payload the backend would silently ignore or reject on every field abo
 2. The use case is **create-or-update-with-children-in-one-request** — inserting a parent
    record that simultaneously creates or updates its children atomically.
 
-The demo's fake server is not a Rails app and has no `_attributes` routes. Bolting `.nested`
-onto an existing `Task` relationship would require rewriting `DemoServerSimulator`'s SQL and
-the `FakeDemoAPIClient` contract, which changes the demo's purpose from illustrating SwiftSync
-to illustrating Rails interop.
+The demo's fake server is not a Rails app and had no `_attributes` routes. Bolting `.nested`
+onto an existing `Task` relationship would have required rewriting `DemoServerSimulator`'s SQL
+and the `FakeDemoAPIClient` contract, which changes the demo's purpose from illustrating
+SwiftSync to illustrating Rails interop.
 
 ---
 
@@ -104,7 +111,7 @@ Add to `Task`:
 ### Create flow in `CreateTaskSheet`
 
 When the user writes an initial comment, insert a `Comment` into the context and attach it
-to the draft `Task`. Then export with `.nested`:
+to the draft `Task`. Historical API call (before removal):
 
 ```swift
 let body = draft.exportObject(for: syncContainer, relationshipMode: .nested)

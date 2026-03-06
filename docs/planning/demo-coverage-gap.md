@@ -17,7 +17,7 @@ The core `exportObject` path is exercised by the demo. These remain uncovered:
 - [ ] `SwiftSync.export(as:in:parent:using:)` static method
 - [ ] `@NotExport` macro
 
-**Note:** Bulk export entry point and mode variants are uncovered. Consider a round-trip export demo scenario (e.g. export tasks to a share sheet) before extracting to a separate module.
+**Note:** Bulk export entry points remain uncovered in demo flows. Consider a round-trip export demo scenario (e.g. export tasks to a share sheet) before extracting export paths to a separate module.
 
 ---
 

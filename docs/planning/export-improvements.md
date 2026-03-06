@@ -5,9 +5,8 @@
 ## Open items
 
 - [ ] Add a guardrail for unsupported export property types (`exportEncodeValue` fallthrough to `NSNull`).
-- [ ] Add a macro diagnostic for `@RemotePath` used on relationship properties.
-- [ ] Document export-mode asymmetry (`.none` omits relationship keys; nil scalars emit `NSNull`).
-- [ ] Fill export test coverage gaps (convenience mode coverage, `Data`/`Decimal`, bare `@PrimaryKey`, empty to-many `.nested`).
+- [ ] Add doc comments for export configuration APIs (`ExportOptions`, `KeyStyle`, `exportObject(for:container:)`).
+- [ ] Fill export test coverage gaps (convenience relationship coverage, `Data`/`Decimal`, bare `@PrimaryKey`).
 
 ---
 
@@ -32,20 +31,7 @@ lower-effort mitigation now.
 
 ---
 
-## 2) `@RemotePath` on a relationship property produces a broken key in `.nested` mode
-
-If someone writes `@RemotePath("foo.bar") var child: RelatedModel?`, the export in
-`.nested` mode calls `exportSetValue(child, for: "foo.bar_attributes", into: &result)`.
-`exportSetValue` splits on `.` — so it writes into `result["foo"]["bar_attributes"]`
-instead of the presumably intended `result["foo.bar_attributes"]`. Almost certainly
-unintended, and untested.
-
-**Fix:** Guard in the macro: emit a diagnostic error if `@RemotePath` is applied to a
-relationship property. `@RemotePath` is only valid for scalar fields.
-
----
-
-## 3) Undocumented asymmetry: `.none` mode omits keys vs. scalar nil emits `NSNull`
+## 2) Undocumented behavior: export configuration APIs
 
 `ExportOptions`, `KeyStyle`, and `exportObject(for:container:)` have no doc comments.
 Add doc comments explaining:
@@ -57,27 +43,22 @@ Add doc comments explaining:
 
 ---
 
-## 4) Missing test coverage
+## 3) Missing test coverage
 
-### 4a) `exportObject(for:container:)` with `.array` and `.nested`
+### 3a) `exportObject(for:container:)` relationship coverage
 
 The instance convenience `exportObject(for:container:)` is tested only for scalar
 key/date derivation from the container. Add a test that verifies relationship properties
 are included in the output when not marked `@NotExport`.
 
-### 4b) `Data` and `Decimal` encode paths in `exportEncodeValue`
+### 3b) `Data` and `Decimal` encode paths in `exportEncodeValue`
 
 `Core.swift` handles `Data` (→ base64 string) and `Decimal` (→ `NSDecimalNumber`).
 Neither type appears in any test model. Add a model with `Data` and `Decimal` fields
 and assert the encoded values.
 
-### 4c) Bare `@PrimaryKey` export key
+### 3c) Bare `@PrimaryKey` export key
 
 `@PrimaryKey` with no `remote:` argument falls through to `keyStyle.transform(propertyName)`
 for the export key. `@PrimaryKey(remote: "ext_id")` uses the literal. Only the latter is
 tested. Add a test for the bare `@PrimaryKey` case.
-### 4d) Empty to-many in `.nested` mode
-
-An empty `[Model]` in `.nested` mode currently produces `"tags_attributes": {}` (empty
-dict). Add a test that pins this behaviour and documents whether `{}` or omission is
-intended.

@@ -1,5 +1,10 @@
 # ExportOptions Evaluation
 
+## Open items
+
+- [ ] Add doc comments for `ExportOptions`, `KeyStyle`, and `exportObject(for:container:)`.
+- [ ] Re-evaluate `ExportOptions` shape after the next export API simplification pass.
+
 ## Context
 
 After removing `ExportRelationshipMode.nested` and then `ExportRelationshipMode` entirely

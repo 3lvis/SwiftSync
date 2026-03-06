@@ -1,5 +1,10 @@
 # Checklist Items — Inline Relationship Export Demo
 
+## Open items
+
+- [ ] Validate the end-to-end wire contract for `checklist_items` inline export in demo backend/client.
+- [ ] Implement checklist-item model + export path and add regression coverage for create and update flows.
+
 ## Goal
 
 Add a `ChecklistItem` model to the demo that demonstrates inline relationship export
