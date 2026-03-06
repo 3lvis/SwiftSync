@@ -1,5 +1,11 @@
 # ExportRelationshipMode.nested — Demo Integration Analysis
 
+## Open items
+
+- [ ] Decide direction: implement a real `.nested` demo scenario, or remove `.nested` from API surface.
+- [ ] If keeping `.nested`, build the minimal Comment-based end-to-end path described below.
+- [ ] If removing `.nested`, apply the TDD removal order described below.
+
 ## What `.nested` does
 
 `ExportRelationshipMode.nested` produces Rails `accepts_nested_attributes_for`-style payloads.

@@ -28,9 +28,9 @@ For each screen entry point, engine decides and executes:
 
 There is no pull-to-refresh path in demo screens.
 
-## Open item
+## Open items
 
-- Manual pass: confirm each screen only calls one engine load method.
+- [ ] Manual pass: confirm each screen only calls one engine load method.
 
 ## Non-goals
 
