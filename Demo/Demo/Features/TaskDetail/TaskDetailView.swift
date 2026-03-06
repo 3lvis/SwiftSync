@@ -10,6 +10,9 @@ struct TaskDetailView: View {
     @SyncModel private var taskModel: Task?
     @State private var hasTriggeredInitialSync = false
     @State private var showingEditSheet = false
+#if DEBUG
+    @State private var showingStressPrompt = false
+#endif
 
     init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.taskID = taskID
@@ -39,16 +42,6 @@ struct TaskDetailView: View {
             hasTriggeredInitialSync = true
             await syncEngine.loadTaskDetailScreen(taskID: taskID)
         }
-        .onAppear {
-#if DEBUG
-            syncEngine.setActiveEarthquakeScope(.taskDetail(taskID: taskID))
-#endif
-        }
-        .onDisappear {
-#if DEBUG
-            syncEngine.setActiveEarthquakeScope(nil)
-#endif
-        }
         .sheet(isPresented: $showingEditSheet) {
             if let taskModel {
                 TaskFormSheet(
@@ -57,6 +50,85 @@ struct TaskDetailView: View {
                     syncEngine: syncEngine
                 )
             }
+        }
+        .safeAreaInset(edge: .top) {
+            if let status = syncEngine.status(for: statusKey) {
+                HStack(spacing: 8) {
+                    Text(statusSummary(status))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if status.phase == .failed {
+                        Button("Retry") {
+                            _Concurrency.Task {
+                                await syncEngine.loadTaskDetailScreen(taskID: taskID)
+                            }
+                        }
+                        .font(.caption)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+                .background(.thinMaterial)
+            }
+        }
+#if DEBUG
+        .overlay(alignment: .bottom) {
+            if syncEngine.isEarthquakeModeRunning,
+               let status = syncEngine.earthquakeStatusText {
+                HStack(spacing: 8) {
+                    Image(systemName: "waveform.path.ecg")
+                    Text(status)
+                        .font(.caption)
+                        .lineLimit(2)
+                    Spacer(minLength: 8)
+                    Button("Stop") {
+                        syncEngine.stopEarthquakeMode()
+                    }
+                    .font(.caption)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .shadow(radius: 6)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 18)
+            }
+        }
+        .alert("Stress test this screen?", isPresented: $showingStressPrompt) {
+            Button("Start Stress", role: .destructive) {
+                syncEngine.startEarthquakeMode(for: .taskDetail(taskID: taskID))
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Debug-only Earthquake Mode runs finite add/edit/delete overlap for this task screen.")
+        }
+        .background(
+            ShakeDetector {
+                guard !syncEngine.isEarthquakeModeRunning else { return }
+                guard !showingEditSheet else { return }
+                showingStressPrompt = true
+            }
+            .allowsHitTesting(false)
+        )
+#endif
+    }
+
+    private var statusKey: DataKey {
+        DataKey(namespace: "taskDetailScreen", id: taskID)
+    }
+
+    private func statusSummary(_ status: ScopeSyncStatus) -> String {
+        switch status.phase {
+        case .loading:
+            return status.path == .networkFirst ? "Network-first loading..." : "Loading..."
+        case .refreshing:
+            return "Local-first refresh in progress..."
+        case .failed:
+            return status.errorMessage ?? "Sync failed"
+        case .idle:
+            return status.path == .networkFirst ? "Loaded from network" : "Using local cache + refresh"
         }
     }
 

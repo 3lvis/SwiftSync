@@ -48,6 +48,9 @@ private struct ProjectDetailView: View {
     @State private var hasTriggeredInitialSync = false
     @State private var isShowingCreateTaskSheet = false
     @State private var taskPendingDelete: TaskDeletePrompt?
+#if DEBUG
+    @State private var showingStressPrompt = false
+#endif
 
     init(projectID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.projectID = projectID
@@ -136,16 +139,6 @@ private struct ProjectDetailView: View {
             hasTriggeredInitialSync = true
             await syncEngine.loadProjectDetailScreen(projectID: projectID)
         }
-        .onAppear {
-#if DEBUG
-            syncEngine.setActiveEarthquakeScope(.projectDetail(projectID: projectID))
-#endif
-        }
-        .onDisappear {
-#if DEBUG
-            syncEngine.setActiveEarthquakeScope(nil)
-#endif
-        }
         .sheet(isPresented: $isShowingCreateTaskSheet) {
             TaskFormSheet(
                 mode: .create(projectID: projectID),
@@ -170,6 +163,84 @@ private struct ProjectDetailView: View {
             Button("Cancel", role: .cancel) { taskPendingDelete = nil }
         } message: { prompt in
             Text("Delete \"\(prompt.title)\" from this project?")
+        }
+        .safeAreaInset(edge: .top) {
+            if let status = syncEngine.status(for: statusKey) {
+                HStack(spacing: 8) {
+                    Text(statusSummary(status))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if status.phase == .failed {
+                        Button("Retry") {
+                            _Concurrency.Task {
+                                await syncEngine.loadProjectDetailScreen(projectID: projectID)
+                            }
+                        }
+                        .font(.caption)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+                .background(.thinMaterial)
+            }
+        }
+#if DEBUG
+        .overlay(alignment: .bottom) {
+            if syncEngine.isEarthquakeModeRunning,
+               let status = syncEngine.earthquakeStatusText {
+                HStack(spacing: 8) {
+                    Image(systemName: "waveform.path.ecg")
+                    Text(status)
+                        .font(.caption)
+                        .lineLimit(2)
+                    Spacer(minLength: 8)
+                    Button("Stop") {
+                        syncEngine.stopEarthquakeMode()
+                    }
+                    .font(.caption)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .shadow(radius: 6)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 18)
+            }
+        }
+        .alert("Stress test this screen?", isPresented: $showingStressPrompt) {
+            Button("Start Stress", role: .destructive) {
+                syncEngine.startEarthquakeMode(for: .projectDetail(projectID: projectID))
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Debug-only Earthquake Mode runs finite add/edit/delete overlap for this project screen.")
+        }
+        .background(
+            ShakeDetector {
+                guard !syncEngine.isEarthquakeModeRunning else { return }
+                showingStressPrompt = true
+            }
+            .allowsHitTesting(false)
+        )
+#endif
+    }
+
+    private var statusKey: DataKey {
+        DataKey(namespace: "projectTasks", id: projectID)
+    }
+
+    private func statusSummary(_ status: ScopeSyncStatus) -> String {
+        switch status.phase {
+        case .loading:
+            return status.path == .networkFirst ? "Network-first loading..." : "Loading..."
+        case .refreshing:
+            return "Local-first refresh in progress..."
+        case .failed:
+            return status.errorMessage ?? "Sync failed"
+        case .idle:
+            return status.path == .networkFirst ? "Loaded from network" : "Using local cache + refresh"
         }
     }
 }

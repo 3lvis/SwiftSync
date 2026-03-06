@@ -9,12 +9,10 @@ final class DemoSyncEngine: ObservableObject {
     @Published private(set) var lastErrorMessage: String?
     @Published private(set) var lastSyncDate: Date?
     @Published private(set) var scopeStatus: [DataKey: ScopeSyncStatus] = [:]
-    @Published private(set) var historyEvents: [HistoryEvent] = []
 
 #if DEBUG
     @Published private(set) var isEarthquakeModeRunning = false
     @Published private(set) var earthquakeStatusText: String?
-    @Published private(set) var activeEarthquakeScope: EarthquakeScope?
 
     enum EarthquakeScope: Equatable {
         case projectDetail(projectID: String)
@@ -22,21 +20,12 @@ final class DemoSyncEngine: ObservableObject {
     }
 #endif
 
-    struct HistoryEvent: Identifiable {
-        let id = UUID()
-        let timestamp: Date
-        let scope: String
-        let message: String
-        let detail: String?
-    }
-
     private(set) var hasBootstrapped = false
     private var inFlightOperations: Set<String> = []
     private var lastSuccessfulSyncByDataKey: [DataKey: Date] = [:]
 
     private let syncContainer: SyncContainer
     private let apiClient: FakeDemoAPIClient
-    private let stressDateFormatter = ISO8601DateFormatter()
     private let freshnessPolicy = DataFreshnessPolicy(
         defaultTTL: 120,
         ttlByNamespace: [
@@ -59,20 +48,6 @@ final class DemoSyncEngine: ObservableObject {
     }
 
 #if DEBUG
-    func setActiveEarthquakeScope(_ scope: EarthquakeScope?) {
-        activeEarthquakeScope = scope
-    }
-
-    func toggleEarthquakeMode() {
-        if isEarthquakeModeRunning {
-            stopEarthquakeMode()
-            return
-        }
-
-        guard let scope = activeEarthquakeScope else { return }
-        startEarthquakeMode(for: scope)
-    }
-
     func startEarthquakeMode(for scope: EarthquakeScope) {
         guard !isEarthquakeModeRunning else { return }
 
@@ -97,7 +72,6 @@ final class DemoSyncEngine: ObservableObject {
         earthquakeRunner = runner
         isEarthquakeModeRunning = true
         earthquakeStatusText = scope.label
-        appendHistory(scopeKey: nil, message: "earthquake started", detail: scope.label)
         runner.start(maxIterations: 20, intervalNanoseconds: 2_250_000_000)
     }
 
@@ -106,7 +80,6 @@ final class DemoSyncEngine: ObservableObject {
         earthquakeRunner = nil
         isEarthquakeModeRunning = false
         earthquakeStatusText = nil
-        appendHistory(scopeKey: nil, message: "earthquake stopped", detail: nil)
     }
 
     private func runEarthquakeIteration(scope: EarthquakeScope, iteration: Int) async {
@@ -137,14 +110,13 @@ final class DemoSyncEngine: ObservableObject {
     private func runProjectStressMutation(projectID: String, iteration: Int) async {
         guard let body = try? makeStressTaskBody(projectID: projectID, iteration: iteration) else { return }
         do {
-            guard let normalizedBody = normalizeStressCreateBody(body) else { return }
-            let created = try await apiClient.createTask(body: normalizedBody)
+            let created = try await apiClient.createTask(body: body)
             guard let createdID = created["id"] as? String else {
                 try await syncProjectTasksInternal(projectID: projectID)
                 return
             }
 
-            var updated = normalizedBody
+            var updated = body
             updated["id"] = createdID
             updated["title"] = "[EQ] Updated \(iteration)"
             updated["description"] = "Earthquake update iteration \(iteration)."
@@ -184,9 +156,8 @@ final class DemoSyncEngine: ObservableObject {
                 _ = try await apiClient.replaceTaskWatchers(taskID: taskID, watcherIDs: watcherIDs)
             }
 
-            if let createdBody = try makeStressTaskBody(projectID: projectID, iteration: iteration + 1000),
-               let normalizedCreateBody = normalizeStressCreateBody(createdBody) {
-                let created = try await apiClient.createTask(body: normalizedCreateBody)
+            if let createdBody = try makeStressTaskBody(projectID: projectID, iteration: iteration + 1000) as [String: Any]? {
+                let created = try await apiClient.createTask(body: createdBody)
                 if let createdID = created["id"] as? String {
                     try await apiClient.deleteTask(taskID: createdID)
                 }
@@ -205,6 +176,7 @@ final class DemoSyncEngine: ObservableObject {
         else { return nil }
 
         let now = Date()
+        let formatter = ISO8601DateFormatter()
         let taskID = UUID().uuidString
 
         return [
@@ -215,43 +187,9 @@ final class DemoSyncEngine: ObservableObject {
             "title": "[EQ] Temp \(iteration)",
             "description": "Earthquake temp task for iteration \(iteration).",
             "state": ["id": state.id, "label": state.label],
-            "created_at": stressDateFormatter.string(from: now),
-            "updated_at": stressDateFormatter.string(from: now)
+            "created_at": formatter.string(from: now),
+            "updated_at": formatter.string(from: now)
         ]
-    }
-
-    private func normalizeStressCreateBody(_ body: [String: Any]) -> [String: Any]? {
-        guard body["id"] is String,
-              body["project_id"] is String,
-              body["author_id"] is String,
-              body["title"] is String,
-              body["description"] is String,
-              body["state"] is [String: Any]
-        else {
-            appendHistory(scopeKey: nil, message: "earthquake payload skipped", detail: "missing required task fields")
-            return nil
-        }
-
-        var normalized = body
-        let nowString = stressDateFormatter.string(from: Date())
-
-        if let createdAt = normalized["created_at"] as? String,
-           stressDateFormatter.date(from: createdAt) != nil {
-            // keep value
-        } else {
-            normalized["created_at"] = nowString
-            appendHistory(scopeKey: nil, message: "earthquake payload normalized", detail: "created_at repaired")
-        }
-
-        if let updatedAt = normalized["updated_at"] as? String,
-           stressDateFormatter.date(from: updatedAt) != nil {
-            // keep value
-        } else {
-            normalized["updated_at"] = nowString
-            appendHistory(scopeKey: nil, message: "earthquake payload normalized", detail: "updated_at repaired")
-        }
-
-        return normalized
     }
 
     private func taskPayload(for task: Task) throws -> [String: Any]? {
@@ -392,45 +330,9 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    struct ScopeStatusRow: Identifiable {
-        let key: DataKey
-        let status: ScopeSyncStatus
-
-        var id: String {
-            if let id = key.id {
-                return "\(key.namespace):\(id)"
-            }
-            return key.namespace
-        }
-
-        var title: String {
-            if let id = key.id {
-                return "\(key.namespace) (\(id))"
-            }
-            return key.namespace
-        }
+    func status(for key: DataKey) -> ScopeSyncStatus? {
+        scopeStatus[key]
     }
-
-    var allScopeStatusRows: [ScopeStatusRow] {
-        scopeStatus
-            .map { ScopeStatusRow(key: $0.key, status: $0.value) }
-            .sorted { lhs, rhs in
-                if lhs.status.updatedAt == rhs.status.updatedAt {
-                    return lhs.id < rhs.id
-                }
-                return lhs.status.updatedAt > rhs.status.updatedAt
-            }
-    }
-
-#if DEBUG
-    var earthquakeActiveScopeLabel: String {
-        activeEarthquakeScope?.label ?? "No active detail screen"
-    }
-
-    var canStartEarthquakeMode: Bool {
-        activeEarthquakeScope != nil
-    }
-#endif
 
     func createTask(body: [String: Any], projectID: String) async throws {
         try await syncOperationThrowing("createTask-\(projectID)") {
@@ -564,18 +466,14 @@ final class DemoSyncEngine: ObservableObject {
         dataKeys: [DataKey],
         networkFetch: @escaping @MainActor () async -> Void
     ) async {
-        appendHistory(scopeKey: statusKey, message: "load requested", detail: nil)
-
         let decisions = dataKeys.map { key in
             decisionForData(key: key, hasLocalData: hasLocalData(for: key))
         }
         let path = ScreenLoadPlanner.path(decisions: decisions)
-        appendHistory(scopeKey: statusKey, message: pathHistoryMessage(path), detail: nil)
 
         scopeStatus[statusKey] = ScopeSyncStatusReducer.start(path: path)
 
         if path == .localFirstRefresh {
-            appendHistory(scopeKey: statusKey, message: "network refresh started", detail: nil)
             _Concurrency.Task { @MainActor in
                 await networkFetch()
                 self.finalizeScopeStatus(key: statusKey)
@@ -583,7 +481,6 @@ final class DemoSyncEngine: ObservableObject {
             return
         }
 
-        appendHistory(scopeKey: statusKey, message: "network load started", detail: nil)
         await networkFetch()
         finalizeScopeStatus(key: statusKey)
     }
@@ -593,69 +490,10 @@ final class DemoSyncEngine: ObservableObject {
 
         if let message = lastErrorMessage {
             scopeStatus[key] = ScopeSyncStatusReducer.fail(previous: previous, errorMessage: message)
-            appendHistory(scopeKey: key, message: "network failed", detail: message)
             return
         }
 
         scopeStatus[key] = ScopeSyncStatusReducer.succeed(previous: previous)
-        appendHistory(scopeKey: key, message: "network succeeded", detail: nil)
-    }
-
-    private func pathHistoryMessage(_ path: ScopeLoadPath) -> String {
-        switch path {
-        case .localFirstRefresh:
-            return "local-first visible"
-        case .networkFirst:
-            return "network-first load"
-        case .networkOnly:
-            return "network-only load"
-        }
-    }
-
-    private func appendHistory(scopeKey: DataKey?, message: String, detail: String?) {
-        let scopeLabel = scopeKey.map(scopeLabel(for:)) ?? "engine"
-        historyEvents.append(
-            HistoryEvent(
-                timestamp: Date(),
-                scope: scopeLabel,
-                message: message,
-                detail: detail
-            )
-        )
-
-        if historyEvents.count > 300 {
-            historyEvents.removeFirst(historyEvents.count - 300)
-        }
-    }
-
-    private func scopeLabel(for key: DataKey) -> String {
-        let namespace: String
-        switch key.namespace {
-        case DemoDataNamespace.projects:
-            namespace = "Projects"
-        case DemoDataNamespace.projectTasks:
-            namespace = "Project Tasks"
-        case DemoDataNamespace.taskDetail:
-            namespace = "Task Detail"
-        case DemoDataNamespace.taskDetailScreen:
-            namespace = "Task Detail Screen"
-        case DemoDataNamespace.users:
-            namespace = "Users"
-        case DemoDataNamespace.taskStates:
-            namespace = "Task States"
-        case DemoDataNamespace.userRoles:
-            namespace = "User Roles"
-        case DemoDataNamespace.taskFormMetadata:
-            namespace = "Task Form Metadata"
-        default:
-            namespace = key.namespace
-        }
-
-        guard let id = key.id, !id.isEmpty else { return namespace }
-        if id.count > 10 {
-            return "\(namespace) · \(id.prefix(6))…\(id.suffix(4))"
-        }
-        return "\(namespace) · \(id)"
     }
 
     private func decisionForData(key: DataKey, hasLocalData: Bool, now: Date = Date()) -> LoadDecision {

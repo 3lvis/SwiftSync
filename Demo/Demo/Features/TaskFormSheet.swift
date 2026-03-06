@@ -2,10 +2,14 @@ import SwiftData
 import SwiftSync
 import SwiftUI
 
+// MARK: - Mode
+
 enum TaskFormMode {
     case create(projectID: String)
     case edit(task: Task)
 }
+
+// MARK: - Sheet
 
 struct TaskFormSheet: View {
     let mode: TaskFormMode
@@ -14,10 +18,18 @@ struct TaskFormSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
+    // Throwaway context — autosave disabled. Never saved to the store.
+    // On cancel it is simply released; on save we export the values and call the API.
     private let editContext: ModelContext
 
+    // The draft lives in editContext. For create it is a freshly-inserted Task.
+    // For edit it is the same row fetched into this isolated context.
+    // Relationship arrays (reviewers, watchers) are real [User] objects from editContext,
+    // so the pickers can assign them directly without cross-context crashes.
     @State private var draft: Task
 
+    // Loaded once from editContext when the sheet appears. Not kept live — form sheets
+    // are short-lived and a stale list for one session is acceptable.
     @State private var users: [User] = []
     @State private var taskStateOptions: [TaskStateOption] = []
 
@@ -44,9 +56,14 @@ struct TaskFormSheet: View {
             let taskID = task.id
             let descriptor = FetchDescriptor<Task>(predicate: #Predicate { $0.id == taskID })
             let fetched = (try? ctx.fetch(descriptor))?.first
+            // Fallback should never be reached in practice — the row is always in the store.
+            // If it somehow is, we fall back to the passed object (which lives in mainContext,
+            // so edits won't reach the store either, preserving the no-save guarantee).
             _draft = State(initialValue: fetched ?? task)
         }
     }
+
+    // MARK: Body
 
     var body: some View {
         NavigationStack {
@@ -143,6 +160,7 @@ struct TaskFormSheet: View {
             }
         }
         .task { await reloadMetadata() }
+        // Auto-select first valid state when options load (safe for edit — guard prevents override)
         .task(id: taskStateOptions.map(\.id)) {
             guard !taskStateOptions.isEmpty,
                   draft.state.isEmpty || !taskStateOptions.contains(where: { $0.id == draft.state })
@@ -152,6 +170,7 @@ struct TaskFormSheet: View {
                 draft.stateLabel = first.label
             }
         }
+        // Auto-select author when users load (create only in practice — guard prevents override)
         .task(id: users.map(\.id)) {
             guard !users.isEmpty,
                   draft.authorID.isEmpty || !users.contains(where: { $0.id == draft.authorID })
@@ -173,6 +192,8 @@ struct TaskFormSheet: View {
         }
         .presentationDetents([.large])
     }
+
+    // MARK: Sections
 
     private var titleSection: some View {
         Section("Title") {
@@ -312,6 +333,8 @@ struct TaskFormSheet: View {
             }
         }
     }
+
+    // MARK: Helpers
 
     private var navigationTitle: String {
         switch mode {
