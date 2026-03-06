@@ -48,6 +48,9 @@ private struct ProjectDetailView: View {
     @State private var hasTriggeredInitialSync = false
     @State private var isShowingCreateTaskSheet = false
     @State private var taskPendingDelete: TaskDeletePrompt?
+#if DEBUG
+    @State private var showingStressPrompt = false
+#endif
 
     init(projectID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.projectID = projectID
@@ -131,20 +134,10 @@ private struct ProjectDetailView: View {
                 }
             }
         }
-        .refreshable {
-            await syncEngine.syncProjectTasks(projectID: projectID)
-        }
         .task {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
-            await syncEngine.syncProjectTasks(projectID: projectID)
-        }
-        .task(id: projectID) {
-            while !_Concurrency.Task.isCancelled {
-                try? await _Concurrency.Task.sleep(nanoseconds: 10_000_000_000)
-                guard !_Concurrency.Task.isCancelled else { break }
-                await syncEngine.syncProjectTasks(projectID: projectID)
-            }
+            await syncEngine.loadProjectDetailScreen(projectID: projectID)
         }
         .sheet(isPresented: $isShowingCreateTaskSheet) {
             TaskFormSheet(
@@ -171,6 +164,46 @@ private struct ProjectDetailView: View {
         } message: { prompt in
             Text("Delete \"\(prompt.title)\" from this project?")
         }
+#if DEBUG
+        .overlay(alignment: .bottom) {
+            if syncEngine.isEarthquakeModeRunning,
+               let status = syncEngine.earthquakeStatusText {
+                HStack(spacing: 8) {
+                    Image(systemName: "waveform.path.ecg")
+                    Text(status)
+                        .font(.caption)
+                        .lineLimit(2)
+                    Spacer(minLength: 8)
+                    Button("Stop") {
+                        syncEngine.stopEarthquakeMode()
+                    }
+                    .font(.caption)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .shadow(radius: 6)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 18)
+            }
+        }
+        .alert("Stress test this screen?", isPresented: $showingStressPrompt) {
+            Button("Start Stress", role: .destructive) {
+                syncEngine.startEarthquakeMode(for: .projectDetail(projectID: projectID))
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Debug-only Earthquake Mode runs finite add/edit/delete overlap for this project screen.")
+        }
+        .background(
+            ShakeDetector {
+                guard !syncEngine.isEarthquakeModeRunning else { return }
+                showingStressPrompt = true
+            }
+            .allowsHitTesting(false)
+        )
+#endif
     }
 }
 
@@ -178,4 +211,3 @@ private struct TaskDeletePrompt: Equatable {
     let id: String
     let title: String
 }
-

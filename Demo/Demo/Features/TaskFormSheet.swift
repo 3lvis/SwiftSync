@@ -84,7 +84,72 @@ struct TaskFormSheet: View {
                         .disabled(isSaving)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: save) {
+                    Button {
+                        draft.title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if draft.descriptionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            draft.descriptionText = "No description yet."
+                        }
+                        draft.updatedAt = Date()
+                        isSaving = true
+                        saveErrorMessage = nil
+
+                        let body = draft.exportObject(for: syncContainer, relationshipMode: .none)
+                        let capturedReviewerIDs = draft.reviewers.map(\.id).sorted()
+                        let capturedWatcherIDs = draft.watchers.map(\.id).sorted()
+
+                        var reviewersChanged = false
+                        var watchersChanged = false
+                        if case .edit(let originalTask) = mode {
+                            let originalReviewerIDs = Set(originalTask.reviewers.map(\.id))
+                            let originalWatcherIDs = Set(originalTask.watchers.map(\.id))
+                            reviewersChanged = Set(capturedReviewerIDs) != originalReviewerIDs
+                            watchersChanged = Set(capturedWatcherIDs) != originalWatcherIDs
+                        }
+
+                        _Concurrency.Task {
+                            do {
+                                switch mode {
+                                case .create(let projectID):
+                                    try await syncEngine.createTask(body: body, projectID: projectID)
+                                    if !capturedReviewerIDs.isEmpty {
+                                        try await syncEngine.replaceTaskReviewers(
+                                            taskID: draft.id,
+                                            projectID: projectID,
+                                            reviewerIDs: capturedReviewerIDs
+                                        )
+                                    }
+                                    if !capturedWatcherIDs.isEmpty {
+                                        try await syncEngine.replaceTaskWatchers(
+                                            taskID: draft.id,
+                                            projectID: projectID,
+                                            watcherIDs: capturedWatcherIDs
+                                        )
+                                    }
+
+                                case .edit(let task):
+                                    try await syncEngine.updateTask(taskID: task.id, projectID: task.projectID, body: body)
+                                    if reviewersChanged {
+                                        try await syncEngine.replaceTaskReviewers(
+                                            taskID: task.id,
+                                            projectID: task.projectID,
+                                            reviewerIDs: capturedReviewerIDs
+                                        )
+                                    }
+                                    if watchersChanged {
+                                        try await syncEngine.replaceTaskWatchers(
+                                            taskID: task.id,
+                                            projectID: task.projectID,
+                                            watcherIDs: capturedWatcherIDs
+                                        )
+                                    }
+                                }
+                                await MainActor.run { isSaving = false; dismiss() }
+                            } catch {
+                                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                                await MainActor.run { isSaving = false; saveErrorMessage = message }
+                            }
+                        }
+                    } label: {
                         HStack(spacing: 6) {
                             if isSaving { ProgressView().controlSize(.small) }
                             Text(confirmLabel)
@@ -94,7 +159,7 @@ struct TaskFormSheet: View {
                 }
             }
         }
-        .task { loadData() }
+        .task { await reloadMetadata() }
         // Auto-select first valid state when options load (safe for edit — guard prevents override)
         .task(id: taskStateOptions.map(\.id)) {
             guard !taskStateOptions.isEmpty,
@@ -155,7 +220,9 @@ struct TaskFormSheet: View {
                     }
                 }
                 if !isLoadingTaskStates {
-                    Button("Retry Loading States") { loadTaskStates() }
+                    Button("Retry Loading States") {
+                        _Concurrency.Task { await reloadMetadata() }
+                    }
                 }
             } else {
                 ForEach(taskStateOptions, id: \.id) { option in
@@ -293,110 +360,34 @@ struct TaskFormSheet: View {
         return false
     }
 
-    // MARK: Actions
-
-    private func loadData() {
+    private static func metadataSnapshot(from context: ModelContext) -> (users: [User], taskStateOptions: [TaskStateOption]) {
         let userDescriptor = FetchDescriptor<User>(
             sortBy: [SortDescriptor(\.displayName), SortDescriptor(\.id)]
         )
-        users = (try? editContext.fetch(userDescriptor)) ?? []
+        let users = (try? context.fetch(userDescriptor)) ?? []
 
         let stateDescriptor = FetchDescriptor<TaskStateOption>(
             sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.id)]
         )
-        let cached = (try? editContext.fetch(stateDescriptor)) ?? []
-        if !cached.isEmpty {
-            taskStateOptions = cached
-        } else {
-            loadTaskStates()
-        }
+        let taskStateOptions = (try? context.fetch(stateDescriptor)) ?? []
+
+        return (users, taskStateOptions)
     }
 
-    private func loadTaskStates() {
+    @MainActor
+    private func reloadMetadata() async {
+        let local = Self.metadataSnapshot(from: editContext)
+        users = local.users
+        taskStateOptions = local.taskStateOptions
+
         guard !isLoadingTaskStates else { return }
         isLoadingTaskStates = true
-        _Concurrency.Task {
-            await syncEngine.syncTaskStates()
-            let descriptor = FetchDescriptor<TaskStateOption>(
-                sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.id)]
-            )
-            let options = (try? editContext.fetch(descriptor)) ?? []
-            await MainActor.run {
-                taskStateOptions = options
-                isLoadingTaskStates = false
-            }
-        }
-    }
+        defer { isLoadingTaskStates = false }
 
-    private func save() {
-        draft.title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if draft.descriptionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            draft.descriptionText = "No description yet."
-        }
-        draft.updatedAt = Date()
-        isSaving = true
-        saveErrorMessage = nil
+        await syncEngine.loadTaskFormScreen()
 
-        let body = draft.exportObject(for: syncContainer)
-
-        // Derive original relationship membership from the mode enum — no stored state needed.
-        // We still dirty-check to avoid unnecessary PUT /reviewers and PUT /watchers calls,
-        // which are costly (mutation latency + flaky-network failure risk).
-        let capturedReviewerIDs = draft.reviewers.map(\.id).sorted()
-        let capturedWatcherIDs = draft.watchers.map(\.id).sorted()
-
-        var reviewersChanged = false
-        var watchersChanged = false
-        if case .edit(let originalTask) = mode {
-            let originalReviewerIDs = Set(originalTask.reviewers.map(\.id))
-            let originalWatcherIDs = Set(originalTask.watchers.map(\.id))
-            reviewersChanged = Set(capturedReviewerIDs) != originalReviewerIDs
-            watchersChanged = Set(capturedWatcherIDs) != originalWatcherIDs
-        }
-
-        _Concurrency.Task {
-            do {
-                switch mode {
-                case .create(let projectID):
-                    try await syncEngine.createTask(body: body, projectID: projectID)
-                    // On create, always send if non-empty — there is no prior state to diff against.
-                    if !capturedReviewerIDs.isEmpty {
-                        try await syncEngine.replaceTaskReviewers(
-                            taskID: draft.id,
-                            projectID: projectID,
-                            reviewerIDs: capturedReviewerIDs
-                        )
-                    }
-                    if !capturedWatcherIDs.isEmpty {
-                        try await syncEngine.replaceTaskWatchers(
-                            taskID: draft.id,
-                            projectID: projectID,
-                            watcherIDs: capturedWatcherIDs
-                        )
-                    }
-
-                case .edit(let task):
-                    try await syncEngine.updateTask(taskID: task.id, projectID: task.projectID, body: body)
-                    if reviewersChanged {
-                        try await syncEngine.replaceTaskReviewers(
-                            taskID: task.id,
-                            projectID: task.projectID,
-                            reviewerIDs: capturedReviewerIDs
-                        )
-                    }
-                    if watchersChanged {
-                        try await syncEngine.replaceTaskWatchers(
-                            taskID: task.id,
-                            projectID: task.projectID,
-                            watcherIDs: capturedWatcherIDs
-                        )
-                    }
-                }
-                await MainActor.run { isSaving = false; dismiss() }
-            } catch {
-                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                await MainActor.run { isSaving = false; saveErrorMessage = message }
-            }
-        }
+        let refreshed = Self.metadataSnapshot(from: editContext)
+        users = refreshed.users
+        taskStateOptions = refreshed.taskStateOptions
     }
 }

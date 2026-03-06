@@ -548,7 +548,7 @@ let rows = try SwiftSync.export(as: User.self, in: context)
 
 `@Syncable` generates:
 - `SyncUpdatableModel` conformance (make/apply + relationship sync)
-- `ExportModel` conformance
+- export support via `exportObject(using:state:)`
 Built-in relationship sync behavior:
 - to-one by `*_id` (strict typed FK lookup)
 - to-many by `*_ids` (unordered membership updates)
@@ -729,13 +729,13 @@ public extension SwiftSync {
     relationshipOperations: SyncRelationshipOperations = .all
   ) async throws
 
-  static func export<Model: ExportModel>(
+  static func export<Model: SyncUpdatableModel>(
     as model: Model.Type,
     in context: ModelContext,
     using options: ExportOptions = ExportOptions()
   ) throws -> [[String: Any]]
 
-  static func export<Model: ExportModel & ParentScopedModel>(
+  static func export<Model: SyncUpdatableModel & ParentScopedModel>(
     as model: Model.Type,
     in context: ModelContext,
     parent: Model.SyncParent,

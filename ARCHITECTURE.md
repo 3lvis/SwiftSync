@@ -43,13 +43,10 @@ PersistentModel (SwiftData)
     └─ SyncUpdatableModel       make(from:), apply(_:) → Bool,
           │                     applyRelationships(_:in:operations:) → Bool (default no-op)
           └─ ParentScopedModel  parentRelationship keypath
-
-SyncModelable
-  └─ ExportModel             exportObject(using:state:) → [String: Any]
 ```
 
 **@Syncable makes a class conform to all of:**
-`SyncUpdatableModel`, `ExportModel`
+`SyncUpdatableModel`
 
 ---
 
@@ -131,7 +128,7 @@ final class Task {
 }
 ```
 
-The macro emits an `extension Task: SyncUpdatableModel, ExportModel, ...` containing:
+The macro emits an `extension Task: SyncUpdatableModel, ...` containing:
 
 **`typealias SyncID = String`**
 **`static var syncIdentity: KeyPath<Task, String> { \.id }`**
@@ -321,7 +318,7 @@ SwiftSync.export(as: Task.self, in: context, using: options)
    - `state.enter(self)` — guard against cycles
    - For each non-`@NotExport` property:
      - Scalar: `exportEncodeValue(value, options)` → encode
-     - Optional scalar: encode or NSNull if nil + `includeNulls`
+     - Optional scalar: encode or NSNull if nil
      - Relationship: recurse via `exportObject` on children
    - Key from `@RemoteKey`/`@RemotePath` or `options.keyStyle.transform(propertyName)`
    - `exportSetValue(value, for: keyPath, into: &result)` — supports nested dot-path keys
