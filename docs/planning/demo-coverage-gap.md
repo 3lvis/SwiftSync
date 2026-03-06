@@ -1,6 +1,5 @@
 # Demo Coverage Gap — Complexity Reduction Candidates
 
-**Superseded by:** `api-surface-reduction.md` for active work queue.  
 **Purpose:** Reference for open reduction candidates not yet scheduled.
 
 ---
@@ -40,13 +39,6 @@ Generated and called by `@Syncable`-expanded code. `public` because macro expans
 Demo passes `.all` everywhere. Individual bit values are tested but represent a level of control no common use case requires.
 
 - [ ] Evaluate replacing the OptionSet with a simpler `Bool` (`applyRelationships:`) or removing the parameter entirely
-- [ ] Decided: keep as-is for now (see `api-surface-reduction.md` decisions)
-
----
-
-### `SyncQueryPublisher` unused init variants
-
-**Scheduled in `api-surface-reduction.md` item 1.**
 
 ---
 

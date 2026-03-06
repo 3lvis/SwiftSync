@@ -37,23 +37,14 @@ Adds one associated type (`SyncParent`) and one property (`parentRelationship`).
 
 **Used by:** a dedicated `sync(payload:as:parent:)` overload that constrains `Model: ParentScopedModel`.
 
-### `ExportModel` — serialization
-
-Adds one method: `exportObject(using:state:)`. Converts a model instance to `[String: Any]` for export.
-
-**Used by:** `SwiftSync.export()`. The constraint ensures only exportable types can be exported.
-
----
-
 ## The Real Cost
 
 The protocols serve one purpose: **making the generic entry points type-safe**. The constraint `Model: SyncUpdatableModel` means the compiler verifies at the call site that `Note.self` (or whatever you pass) actually knows how to sync.
 
-The current shape is 5 public protocols:
+The current shape is 4 public protocol/enum surface points:
 - `SyncModelable`
 - `SyncUpdatableModel`
 - `ParentScopedModel`
-- `ExportModel`
 - `SyncInputKeyStyle` (enum, not protocol)
 
 ---
@@ -63,5 +54,3 @@ The current shape is 5 public protocols:
 **Remaining simplification opportunities (low risk):**
 
 - **Replace `ParentScopedModel` with a static property** (e.g. `static var syncParentRelationship: AnyKeyPath?`) — you'd lose the typed `SyncParent` associated type, meaning the `sync(parent:)` overload becomes `sync<Parent: PersistentModel>(parent: Parent)` with the relationship resolved at runtime. The downside is that ambiguous relationships would be a runtime error instead of a compile-time one.
-
-- **Delete `ExportModel`** as a separate protocol and fold it into `SyncUpdatableModel` — you'd lose the ability to `sync` without `export`, but in practice all `@Syncable` models already conform to both, so this doesn't restrict real usage.
