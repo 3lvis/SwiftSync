@@ -79,7 +79,7 @@ private struct ExportUnsupportedScalarValue {
 final class ExportMappedFields {
     @Attribute(.unique) var id: Int
     @RemoteKey("type") var userType: String
-    @RemotePath("profile.contact.email") var email: String?
+    @RemoteKey("profile.contact.email") var email: String?
     @NotExport var localOnly: String
 
     init(id: Int, userType: String, email: String?, localOnly: String) {
@@ -294,7 +294,7 @@ final class ExportTests: XCTestCase {
     }
 
     @MainActor
-    func testExportNotExportRemoteKeyAndRemotePath() throws {
+    func testExportNotExportAndNestedRemoteKey() throws {
         let context = try makeContext(for: ExportMappedFields.self)
         context.insert(ExportMappedFields(id: 2, userType: "admin", email: "a@b.com", localOnly: "secret"))
         try context.save()
@@ -329,7 +329,7 @@ final class ExportTests: XCTestCase {
     }
 
     @MainActor
-    func testExportNilRemotePathAlwaysEmitsNSNull() throws {
+    func testExportNilNestedRemoteKeyAlwaysEmitsNSNull() throws {
         let context = try makeContext(for: ExportMappedFields.self)
         context.insert(ExportMappedFields(id: 3, userType: "member", email: nil, localOnly: "secret"))
         try context.save()
@@ -337,7 +337,7 @@ final class ExportTests: XCTestCase {
         let rows = try SwiftSync.export(as: ExportMappedFields.self, in: context)
         let profile = rows[0]["profile"] as? [String: Any]
         let contact = profile?["contact"] as? [String: Any]
-        XCTAssertTrue(contact?["email"] is NSNull, "Nil optional under @RemotePath must always emit NSNull")
+        XCTAssertTrue(contact?["email"] is NSNull, "Nil optional under @RemoteKey nested path must always emit NSNull")
     }
 
     @MainActor
@@ -455,12 +455,12 @@ final class ExportTests: XCTestCase {
 
     // MARK: - Update body via export
 
-    /// Regression: buildUpdateBody must use @RemoteKey and @RemotePath mappings,
+    /// Regression: buildUpdateBody must use @RemoteKey mappings,
     /// not raw Swift property names. This mirrors the pattern used in DemoSyncEngine
     /// for createTask and must apply equally to updateTask.
     @MainActor
     func testBuildUpdateBodyUsesRemoteKeyMappings() throws {
-        // ExportMappedFields has @RemoteKey("type") on userType and @RemotePath("profile.contact.email") on email.
+        // ExportMappedFields has @RemoteKey("type") on userType and @RemoteKey("profile.contact.email") on email.
         // Simulate the buildUpdateBody pattern: transient model → exportObject → inspect keys.
         let schema = Schema([ExportMappedFields.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
@@ -477,12 +477,12 @@ final class ExportTests: XCTestCase {
         XCTAssertEqual(body["type"] as? String, "editor", "Expected @RemoteKey(\"type\") to map userType → \"type\"")
         XCTAssertNil(body["user_type"], "Raw snake_case key must not appear when @RemoteKey overrides it")
 
-        // @RemotePath("profile.contact.email") must appear nested
+        // @RemoteKey("profile.contact.email") must appear nested
         let profile = body["profile"] as? [String: Any]
         let contact = profile?["contact"] as? [String: Any]
         XCTAssertEqual(contact?["email"] as? String, "update@example.com",
-                       "Expected @RemotePath(\"profile.contact.email\") to produce nested structure")
-        XCTAssertNil(body["email"], "Flat key must not appear when @RemotePath overrides it")
+                       "Expected @RemoteKey(\"profile.contact.email\") to produce nested structure")
+        XCTAssertNil(body["email"], "Flat key must not appear when nested @RemoteKey overrides it")
 
         // @NotExport field must be absent
         XCTAssertNil(body["local_only"], "@NotExport field must be excluded from update body")

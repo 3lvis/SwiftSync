@@ -1098,9 +1098,9 @@ final class KeyStyleRecord {
 
 @Syncable
 @Model
-final class RemotePathContactRecord {
+final class RemoteKeyPathContactRecord {
     @Attribute(.unique) var id: Int
-    @RemotePath("profile.contact.email") var email: String?
+    @RemoteKey("profile.contact.email") var email: String?
 
     init(id: Int, email: String?) {
         self.id = id
@@ -1110,9 +1110,9 @@ final class RemotePathContactRecord {
 
 @Syncable
 @Model
-final class RemotePathCamelRecord {
+final class RemoteKeyPathCamelRecord {
     @Attribute(.unique) var id: Int
-    @RemotePath("profile.contact_email") var contactEmail: String?
+    @RemoteKey("profile.contact_email") var contactEmail: String?
 
     init(id: Int, contactEmail: String?) {
         self.id = id
@@ -1122,7 +1122,7 @@ final class RemotePathCamelRecord {
 
 @Syncable
 @Model
-final class RemotePathOwner {
+final class RemoteKeyOwner {
     @Attribute(.unique) var id: Int
     var fullName: String
 
@@ -1134,12 +1134,12 @@ final class RemotePathOwner {
 
 @Syncable
 @Model
-final class RemotePathIssue {
+final class RemoteKeyIssue {
     @Attribute(.unique) var id: Int
     var title: String
-    @RemotePath("relationships.owner") var owner: RemotePathOwner?
+    @RemoteKey("relationships.owner") var owner: RemoteKeyOwner?
 
-    init(id: Int, title: String, owner: RemotePathOwner? = nil) {
+    init(id: Int, title: String, owner: RemoteKeyOwner? = nil) {
         self.id = id
         self.title = title
         self.owner = owner
@@ -2995,9 +2995,9 @@ final class SyncTests: XCTestCase {
     }
 
     @MainActor
-    func testSyncRemotePathScalarImportsDeepValueWithMissingAndNullSemantics() async throws {
+    func testSyncNestedRemoteKeyScalarImportsDeepValueWithMissingAndNullSemantics() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let syncContainer = try SyncContainer(for: RemotePathContactRecord.self, configurations: configuration)
+        let syncContainer = try SyncContainer(for: RemoteKeyPathContactRecord.self, configurations: configuration)
 
         try await syncContainer.sync(
             payload: [[
@@ -3008,19 +3008,19 @@ final class SyncTests: XCTestCase {
                     ]
                 ]
             ]],
-            as: RemotePathContactRecord.self
+            as: RemoteKeyPathContactRecord.self
         )
 
-        var rows = try syncContainer.mainContext.fetch(FetchDescriptor<RemotePathContactRecord>())
+        var rows = try syncContainer.mainContext.fetch(FetchDescriptor<RemoteKeyPathContactRecord>())
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows[0].email, "first@example.com")
 
         try await syncContainer.sync(
             payload: [["id": 1]],
-            as: RemotePathContactRecord.self
+            as: RemoteKeyPathContactRecord.self
         )
 
-        rows = try syncContainer.mainContext.fetch(FetchDescriptor<RemotePathContactRecord>())
+        rows = try syncContainer.mainContext.fetch(FetchDescriptor<RemoteKeyPathContactRecord>())
         XCTAssertEqual(rows[0].email, "first@example.com")
 
         try await syncContainer.sync(
@@ -3032,18 +3032,18 @@ final class SyncTests: XCTestCase {
                     ]
                 ]
             ]],
-            as: RemotePathContactRecord.self
+            as: RemoteKeyPathContactRecord.self
         )
 
-        rows = try syncContainer.mainContext.fetch(FetchDescriptor<RemotePathContactRecord>())
+        rows = try syncContainer.mainContext.fetch(FetchDescriptor<RemoteKeyPathContactRecord>())
         XCTAssertNil(rows[0].email)
     }
 
     @MainActor
-    func testSyncRemotePathScalarRespectsContainerCamelCaseMode() async throws {
+    func testSyncNestedRemoteKeyScalarRespectsContainerCamelCaseMode() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let syncContainer = try SyncContainer(
-            for: RemotePathCamelRecord.self,
+            for: RemoteKeyPathCamelRecord.self,
             keyStyle: .camelCase,
             configurations: configuration
         )
@@ -3055,20 +3055,20 @@ final class SyncTests: XCTestCase {
                     "contactEmail": "camel@example.com"
                 ]
             ]],
-            as: RemotePathCamelRecord.self
+            as: RemoteKeyPathCamelRecord.self
         )
 
-        let rows = try syncContainer.mainContext.fetch(FetchDescriptor<RemotePathCamelRecord>())
+        let rows = try syncContainer.mainContext.fetch(FetchDescriptor<RemoteKeyPathCamelRecord>())
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows[0].contactEmail, "camel@example.com")
     }
 
     @MainActor
-    func testSyncRemotePathToOneNestedRelationshipImportsAndClearsFromDeepPath() async throws {
+    func testSyncNestedRemoteKeyToOneRelationshipImportsAndClears() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let syncContainer = try SyncContainer(
-            for: RemotePathIssue.self,
-            RemotePathOwner.self,
+            for: RemoteKeyIssue.self,
+            RemoteKeyOwner.self,
             configurations: configuration
         )
 
@@ -3083,20 +3083,20 @@ final class SyncTests: XCTestCase {
                     ]
                 ]
             ]],
-            as: RemotePathIssue.self
+            as: RemoteKeyIssue.self
         )
 
-        var issues = try syncContainer.mainContext.fetch(FetchDescriptor<RemotePathIssue>())
+        var issues = try syncContainer.mainContext.fetch(FetchDescriptor<RemoteKeyIssue>())
         XCTAssertEqual(issues.count, 1)
         XCTAssertEqual(issues[0].owner?.id, 10)
         XCTAssertEqual(issues[0].owner?.fullName, "Alice")
 
         try await syncContainer.sync(
             payload: [["id": 1, "title": "Issue 1 updated"]],
-            as: RemotePathIssue.self
+            as: RemoteKeyIssue.self
         )
 
-        issues = try syncContainer.mainContext.fetch(FetchDescriptor<RemotePathIssue>())
+        issues = try syncContainer.mainContext.fetch(FetchDescriptor<RemoteKeyIssue>())
         XCTAssertEqual(issues[0].owner?.id, 10)
 
         try await syncContainer.sync(
@@ -3107,14 +3107,14 @@ final class SyncTests: XCTestCase {
                     "owner": NSNull()
                 ]
             ]],
-            as: RemotePathIssue.self
+            as: RemoteKeyIssue.self
         )
 
-        issues = try syncContainer.mainContext.fetch(FetchDescriptor<RemotePathIssue>())
+        issues = try syncContainer.mainContext.fetch(FetchDescriptor<RemoteKeyIssue>())
         XCTAssertNil(issues[0].owner)
     }
 
-    func testSyncableMakeUsesRemotePathForScalarProperty() throws {
+    func testSyncableMakeUsesNestedRemoteKeyForScalarProperty() throws {
         let payload = SyncPayload(
             values: [
                 "id": 1,
@@ -3126,14 +3126,14 @@ final class SyncTests: XCTestCase {
             ]
         )
 
-        let row = try RemotePathContactRecord.make(from: payload)
+        let row = try RemoteKeyPathContactRecord.make(from: payload)
         XCTAssertEqual(row.email, "from-make@example.com")
     }
 
     @MainActor
-    func testSyncRemotePathScalarWithDirectContext() async throws {
+    func testSyncNestedRemoteKeyScalarWithDirectContext() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RemotePathContactRecord.self, configurations: configuration)
+        let container = try ModelContainer(for: RemoteKeyPathContactRecord.self, configurations: configuration)
         let context = ModelContext(container)
 
         try await SwiftSync.sync(
@@ -3145,11 +3145,11 @@ final class SyncTests: XCTestCase {
                     ]
                 ]
             ]],
-            as: RemotePathContactRecord.self,
+            as: RemoteKeyPathContactRecord.self,
             in: context
         )
 
-        let rows = try context.fetch(FetchDescriptor<RemotePathContactRecord>())
+        let rows = try context.fetch(FetchDescriptor<RemoteKeyPathContactRecord>())
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows[0].email, "direct@example.com")
     }

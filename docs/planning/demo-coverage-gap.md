@@ -6,11 +6,6 @@
 
 ## Open items
 
-### Public macros not exercised in demo models
-
-- [ ] Exercise `@PrimaryKey(remote:)` in a demo model.
-- [ ] Exercise `@RemotePath(_:)` in a demo model.
-
 ### Public `SyncContainer` members not exercised by demo runtime
 
 - [ ] Exercise `SyncContainer.init(_ modelContainer:keyStyle:dateFormatter:)`.

@@ -12,7 +12,6 @@ private struct SyncedProperty {
     let isPrimaryKey: Bool
     let primaryKeyRemoteKey: String?
     let remoteKey: String?
-    let remotePath: String?
     let isNotExport: Bool
     let isRelationship: Bool
     let isToManyRelationship: Bool
@@ -212,7 +211,6 @@ public struct SyncableMacro: ExtensionMacro {
             let primaryKeyRemoteKey = primaryKeyRemoteKeyIfPresent(variable)
             let isPrimaryKey = primaryKeyRemoteKey != nil
             let remoteKey = remoteKeyIfPresent(variable)
-            let remotePath = remotePathIfPresent(variable)
             let isNotExport = isNotExportPresent(variable)
             let relationshipInfo = relationshipInfo(from: typeSource)
 
@@ -223,7 +221,6 @@ public struct SyncableMacro: ExtensionMacro {
                 isPrimaryKey: isPrimaryKey,
                 primaryKeyRemoteKey: primaryKeyRemoteKey,
                 remoteKey: remoteKey,
-                remotePath: remotePath,
                 isNotExport: isNotExport,
                 isRelationship: relationshipInfo.isRelationship,
                 isToManyRelationship: relationshipInfo.isToMany,
@@ -277,10 +274,6 @@ public struct SyncableMacro: ExtensionMacro {
 
     private static func remoteKeyIfPresent(_ variable: VariableDeclSyntax) -> String? {
         literalArgument(for: "RemoteKey", in: variable)
-    }
-
-    private static func remotePathIfPresent(_ variable: VariableDeclSyntax) -> String? {
-        literalArgument(for: "RemotePath", in: variable)
     }
 
     private static func literalArgument(for attributeName: String, in variable: VariableDeclSyntax) -> String? {
@@ -469,9 +462,6 @@ public struct SyncableMacro: ExtensionMacro {
     }
 
     private static func exportKeyLiteral(for property: SyncedProperty) -> String? {
-        if let remotePath = property.remotePath, !remotePath.isEmpty {
-            return remotePath
-        }
         if let remoteKey = property.remoteKey, !remoteKey.isEmpty {
             return remoteKey
         }
@@ -593,6 +583,9 @@ public struct SyncableMacro: ExtensionMacro {
 
     private static func relationshipForeignKeyInputKeys(for property: SyncedProperty) -> [String] {
         if let remoteKey = property.remoteKey, !remoteKey.isEmpty {
+            if remoteKey.contains(".") {
+                return []
+            }
             return [remoteKey]
         }
 
@@ -607,8 +600,8 @@ public struct SyncableMacro: ExtensionMacro {
 
     private static func relationshipNestedInputKeys(for property: SyncedProperty) -> [String] {
         var keys: [String] = [property.name]
-        if let remotePath = property.remotePath, !remotePath.isEmpty {
-            keys.append(remotePath)
+        if let remoteKey = property.remoteKey, !remoteKey.isEmpty {
+            keys.append(remoteKey)
         }
         return Array(Set(keys)).sorted()
     }
@@ -637,9 +630,6 @@ public struct SyncableMacro: ExtensionMacro {
     private static func syncInputKey(for property: SyncedProperty) -> String {
         if let primaryKeyRemoteKey = property.primaryKeyRemoteKey, !primaryKeyRemoteKey.isEmpty {
             return primaryKeyRemoteKey
-        }
-        if let remotePath = property.remotePath, !remotePath.isEmpty {
-            return remotePath
         }
         if let remoteKey = property.remoteKey, !remoteKey.isEmpty {
             return remoteKey
@@ -672,21 +662,12 @@ public struct RemoteKeyMacro: PeerMacro {
     ) throws -> [DeclSyntax] { [] }
 }
 
-public struct RemotePathMacro: PeerMacro {
-    public static func expansion(
-        of _: AttributeSyntax,
-        providingPeersOf _: some DeclSyntaxProtocol,
-        in _: some MacroExpansionContext
-    ) throws -> [DeclSyntax] { [] }
-}
-
 @main
 struct MacroPlugin: CompilerPlugin {
     let providingMacros: [Macro.Type] = [
         SyncableMacro.self,
         PrimaryKeyMacro.self,
         NotExportMacro.self,
-        RemoteKeyMacro.self,
-        RemotePathMacro.self
+        RemoteKeyMacro.self
     ]
 }
