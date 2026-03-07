@@ -1,12 +1,12 @@
 # State Capsule
 
 ## Plan
-- [x] Add/update regression tests to lock in checklist behavior without check/uncheck semantics.
-- [x] Remove checklist done/undone interactions from demo UI (form + detail + project list badge logic).
-- [x] Run relevant test suites and confirm all passing.
+- [x] Add failing backend regression tests for dropping checklist `done` input/storage.
+- [x] Remove checklist `done` column/handling from backend schema and inserts.
+- [x] Run DemoBackend and root package tests to confirm green.
 
 ## Last known state
-`swift test` passed in `DemoBackend` and repository root package after adding checklist seeding and earthquake checklist payload coverage.
+`swift test` passed in `DemoBackend` and repository root package after removing checklist `done` storage.
 
 ## Decisions (don't revisit)
 - Start with backend-only scope first and defer demo app/model changes until later.
@@ -14,6 +14,7 @@
 - Keep backend data model compatible for now; remove check/uncheck behavior from demo UX first.
 - Trimmed checklist payload contract: no `done` field in responses; checklist is now list-only semantics.
 - Seed data and earthquake mutation payloads should always include checklist items so demos consistently exercise nested checklist sync.
+- Checklist items are list-only; backend no longer stores a `done` column.
 
 ## Files touched
 - .agents/state.md

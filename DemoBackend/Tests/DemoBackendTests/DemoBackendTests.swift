@@ -329,8 +329,8 @@ final class DemoBackendTests: XCTestCase {
             "created_at": now,
             "updated_at": now,
             "checklist_items": [
-                ["id": "item-2", "title": "Second", "done": true, "position": 1],
-                ["id": "item-1", "title": "First", "done": false, "position": 0]
+                ["id": "item-2", "title": "Second", "position": 1],
+                ["id": "item-1", "title": "First", "position": 0]
             ]
         ]
 
@@ -367,7 +367,7 @@ final class DemoBackendTests: XCTestCase {
             "created_at": now,
             "updated_at": now,
             "checklist_items": [
-                ["id": "initial-item", "title": "Initial", "done": false, "position": 0]
+                ["id": "initial-item", "title": "Initial", "position": 0]
             ]
         ])
 
@@ -377,8 +377,8 @@ final class DemoBackendTests: XCTestCase {
             "description": "Updated",
             "state": ["id": "inProgress"],
             "checklist_items": [
-                ["id": "item-a", "title": "A", "done": true, "position": 2],
-                ["id": "item-b", "title": "B", "done": false, "position": 1]
+                ["id": "item-a", "title": "A", "position": 2],
+                ["id": "item-b", "title": "B", "position": 1]
             ]
         ])
 
@@ -407,7 +407,7 @@ final class DemoBackendTests: XCTestCase {
             "created_at": now,
             "updated_at": now,
             "checklist_items": [
-                ["id": "keep-item", "title": "Keep", "done": false, "position": 0]
+                ["id": "keep-item", "title": "Keep", "position": 0]
             ]
         ])
 

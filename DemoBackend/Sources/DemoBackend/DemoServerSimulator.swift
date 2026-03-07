@@ -846,17 +846,16 @@ public final class DemoServerSimulator {
         for item in checklistItems {
             try self.sqlite.execute(
                 """
-                INSERT INTO checklist_items (id, task_id, title, done, position, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO checklist_items (id, task_id, title, position, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 bind: { stmt in
                     self.sqlite.bind(text: item.id, at: 1, in: stmt)
                     self.sqlite.bind(text: taskID, at: 2, in: stmt)
                     self.sqlite.bind(text: item.title, at: 3, in: stmt)
-                    sqlite3_bind_int64(stmt, 4, 0)
-                    sqlite3_bind_int64(stmt, 5, Int64(item.position))
-                    self.sqlite.bind(double: item.createdAt.timeIntervalSince1970, at: 6, in: stmt)
-                    self.sqlite.bind(double: item.updatedAt.timeIntervalSince1970, at: 7, in: stmt)
+                    sqlite3_bind_int64(stmt, 4, Int64(item.position))
+                    self.sqlite.bind(double: item.createdAt.timeIntervalSince1970, at: 5, in: stmt)
+                    self.sqlite.bind(double: item.updatedAt.timeIntervalSince1970, at: 6, in: stmt)
                 }
             )
         }
@@ -986,7 +985,6 @@ public final class DemoServerSimulator {
                 id TEXT PRIMARY KEY,
                 task_id TEXT NOT NULL,
                 title TEXT NOT NULL,
-                done INTEGER NOT NULL DEFAULT 0,
                 position INTEGER NOT NULL DEFAULT 0,
                 created_at REAL NOT NULL,
                 updated_at REAL NOT NULL,
@@ -1084,8 +1082,8 @@ public final class DemoServerSimulator {
             for item in seedData.checklistItems {
                 try sqlite.execute(
                     """
-                    INSERT INTO checklist_items (id, task_id, title, done, position, created_at, updated_at)
-                    VALUES (?, ?, ?, 0, ?, ?, ?)
+                    INSERT INTO checklist_items (id, task_id, title, position, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     bind: { stmt in
                         sqlite.bind(text: item.id, at: 1, in: stmt)
