@@ -67,7 +67,7 @@ private struct ProjectDetailView: View {
                 SortDescriptor(\Task.updatedAt, order: .reverse),
                 SortDescriptor(\Task.id)
             ],
-            refreshOn: [\.assignee, \.checklistItems],
+            refreshOn: [\.assignee, \.items],
             animation: .snappy(duration: 0.24)
         )
     }
@@ -110,8 +110,8 @@ private struct ProjectDetailView: View {
                                         .lineLimit(1)
                                 }
 
-                                if !task.checklistItems.isEmpty {
-                                    Text("\(task.checklistItems.count) items")
+                                if !task.items.isEmpty {
+                                    Text("\(task.items.count) items")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }

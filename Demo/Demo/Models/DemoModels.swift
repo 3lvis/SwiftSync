@@ -125,8 +125,8 @@ final class Task {
     @NotExport
     @Relationship
     var watchers: [User]
-    @Relationship(deleteRule: .cascade, inverse: \ChecklistItem.task)
-    var checklistItems: [ChecklistItem]
+    @Relationship(deleteRule: .cascade, inverse: \Item.task)
+    var items: [Item]
 
     init(
         id: String = UUID().uuidString,
@@ -144,7 +144,7 @@ final class Task {
         assignee: User? = nil,
         reviewers: [User] = [],
         watchers: [User] = [],
-        checklistItems: [ChecklistItem] = []
+        items: [Item] = []
     ) {
         self.id = id
         self.projectID = projectID
@@ -161,13 +161,13 @@ final class Task {
         self.assignee = assignee
         self.reviewers = reviewers
         self.watchers = watchers
-        self.checklistItems = checklistItems
+        self.items = items
     }
 }
 
 @Syncable
 @Model
-final class ChecklistItem {
+final class Item {
     @Attribute(.unique) var id: String
     var title: String
     var position: Int

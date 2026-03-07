@@ -25,7 +25,7 @@ public enum DemoBackendError: LocalizedError {
 }
 
 public final class DemoServerSimulator {
-    private struct ChecklistItemInput {
+    private struct ItemInput {
         let id: String
         let title: String
         let position: Int
@@ -381,14 +381,14 @@ public final class DemoServerSimulator {
             throw DemoBackendError.validation(message: "updated_at is required (ISO 8601)")
         }
         let assigneeID = body["assignee_id"] as? String
-        let checklistItems: [ChecklistItemInput]
-        if body.keys.contains("checklist_items") {
-            guard let rawChecklistItems = body["checklist_items"] as? [[String: Any]] else {
-                throw DemoBackendError.validation(message: "checklist_items must be an array of objects")
+        let items: [ItemInput]
+        if body.keys.contains("items") {
+            guard let rawItems = body["items"] as? [[String: Any]] else {
+                throw DemoBackendError.validation(message: "items must be an array of objects")
             }
-            checklistItems = try parseChecklistItems(rawChecklistItems)
+            items = try parseItems(rawItems)
         } else {
-            checklistItems = []
+            items = []
         }
 
         return try createTaskInternal(
@@ -401,7 +401,7 @@ public final class DemoServerSimulator {
             authorID: authorID,
             createdAt: createdAt,
             updatedAt: updatedAt,
-            checklistItems: checklistItems
+            items: items
         )
     }
 
@@ -415,7 +415,7 @@ public final class DemoServerSimulator {
         authorID: String,
         createdAt: Date,
         updatedAt: Date,
-        checklistItems: [ChecklistItemInput] = []
+        items: [ItemInput] = []
     ) throws -> [String: Any] {
         if try exists(in: "tasks", id: id) {
             throw DemoBackendError.validation(message: "task with id \(id) already exists")
@@ -455,7 +455,7 @@ public final class DemoServerSimulator {
                 }
             )
 
-            try insertChecklistItems(checklistItems, forTaskID: id)
+            try insertItems(items, forTaskID: id)
             try self.sqlite.execute("COMMIT;")
         } catch {
             try? self.sqlite.execute("ROLLBACK;")
@@ -497,14 +497,14 @@ public final class DemoServerSimulator {
         let normalizedTitle = try validatedNonEmpty(title, field: "title")
         let normalizedDescription = try validatedNonEmpty(description, field: "description")
         let normalizedState = try validatedTaskState(stateID)
-        let checklistItemsToReplace: [ChecklistItemInput]?
-        if body.keys.contains("checklist_items") {
-            guard let rawChecklistItems = body["checklist_items"] as? [[String: Any]] else {
-                throw DemoBackendError.validation(message: "checklist_items must be an array of objects")
+        let itemsToReplace: [ItemInput]?
+        if body.keys.contains("items") {
+            guard let rawItems = body["items"] as? [[String: Any]] else {
+                throw DemoBackendError.validation(message: "items must be an array of objects")
             }
-            checklistItemsToReplace = try parseChecklistItems(rawChecklistItems)
+            itemsToReplace = try parseItems(rawItems)
         } else {
-            checklistItemsToReplace = nil
+            itemsToReplace = nil
         }
 
         // assignee_id: present key means update (NSNull clears, String sets)
@@ -542,14 +542,14 @@ public final class DemoServerSimulator {
                 }
             )
 
-            if let checklistItemsToReplace {
+            if let itemsToReplace {
                 try self.sqlite.execute(
-                    "DELETE FROM checklist_items WHERE task_id = ?",
+                    "DELETE FROM items WHERE task_id = ?",
                     bind: { stmt in
                         self.sqlite.bind(text: taskID, at: 1, in: stmt)
                     }
                 )
-                try insertChecklistItems(checklistItemsToReplace, forTaskID: taskID)
+                try insertItems(itemsToReplace, forTaskID: taskID)
             }
 
             try self.sqlite.execute("COMMIT;")
@@ -700,17 +700,17 @@ public final class DemoServerSimulator {
             "description": row.string("description"),
             "state": labeledValuePayload(id: stateID, label: taskStateLabel(id: stateID)),
             "watcher_ids": try watcherIDs(forTaskID: taskID),
-            "checklist_items": try checklistItemsPayload(taskID: taskID),
+            "items": try itemsPayload(taskID: taskID),
             "created_at": iso8601(row.double("created_at")),
             "updated_at": iso8601(row.double("updated_at"))
         ]
     }
 
-    private func checklistItemsPayload(taskID: String) throws -> [[String: Any]] {
+    private func itemsPayload(taskID: String) throws -> [[String: Any]] {
         let rows = try self.sqlite.query(
             """
             SELECT id, task_id, title, position, created_at, updated_at
-            FROM checklist_items
+            FROM items
             WHERE task_id = ?
             ORDER BY position ASC, id ASC
             """,
@@ -790,20 +790,20 @@ public final class DemoServerSimulator {
         return rows.map { $0.string("user_id") }
     }
 
-    private func parseChecklistItems(_ rawChecklistItems: [[String: Any]]) throws -> [ChecklistItemInput] {
-        try rawChecklistItems.enumerated().map { index, item in
+    private func parseItems(_ rawItems: [[String: Any]]) throws -> [ItemInput] {
+        try rawItems.enumerated().map { index, item in
             guard let id = item["id"] as? String, !id.isEmpty else {
-                throw DemoBackendError.validation(message: "checklist_items[\(index)].id is required")
+                throw DemoBackendError.validation(message: "items[\(index)].id is required")
             }
             guard let rawTitle = item["title"] as? String else {
-                throw DemoBackendError.validation(message: "checklist_items[\(index)].title is required")
+                throw DemoBackendError.validation(message: "items[\(index)].title is required")
             }
-            let title = try validatedNonEmpty(rawTitle, field: "checklist_items[\(index)].title")
+            let title = try validatedNonEmpty(rawTitle, field: "items[\(index)].title")
 
             let position: Int
             if let positionValue = item["position"] {
                 guard let parsedPosition = positionValue as? Int else {
-                    throw DemoBackendError.validation(message: "checklist_items[\(index)].position must be an Int")
+                    throw DemoBackendError.validation(message: "items[\(index)].position must be an Int")
                 }
                 position = parsedPosition
             } else {
@@ -814,7 +814,7 @@ public final class DemoServerSimulator {
             if let createdAtValue = item["created_at"] {
                 guard let createdAtString = createdAtValue as? String,
                       let parsedCreatedAt = parseISO8601String(createdAtString) else {
-                    throw DemoBackendError.validation(message: "checklist_items[\(index)].created_at must be ISO 8601")
+                    throw DemoBackendError.validation(message: "items[\(index)].created_at must be ISO 8601")
                 }
                 createdAt = parsedCreatedAt
             } else {
@@ -825,14 +825,14 @@ public final class DemoServerSimulator {
             if let updatedAtValue = item["updated_at"] {
                 guard let updatedAtString = updatedAtValue as? String,
                       let parsedUpdatedAt = parseISO8601String(updatedAtString) else {
-                    throw DemoBackendError.validation(message: "checklist_items[\(index)].updated_at must be ISO 8601")
+                    throw DemoBackendError.validation(message: "items[\(index)].updated_at must be ISO 8601")
                 }
                 updatedAt = parsedUpdatedAt
             } else {
                 updatedAt = Date()
             }
 
-            return ChecklistItemInput(
+            return ItemInput(
                 id: id,
                 title: title,
                 position: position,
@@ -842,11 +842,11 @@ public final class DemoServerSimulator {
         }
     }
 
-    private func insertChecklistItems(_ checklistItems: [ChecklistItemInput], forTaskID taskID: String) throws {
-        for item in checklistItems {
+    private func insertItems(_ items: [ItemInput], forTaskID taskID: String) throws {
+        for item in items {
             try self.sqlite.execute(
                 """
-                INSERT INTO checklist_items (id, task_id, title, position, created_at, updated_at)
+                INSERT INTO items (id, task_id, title, position, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 bind: { stmt in
@@ -981,7 +981,7 @@ public final class DemoServerSimulator {
                 FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
             );
 
-            CREATE TABLE IF NOT EXISTS checklist_items (
+            CREATE TABLE IF NOT EXISTS items (
                 id TEXT PRIMARY KEY,
                 task_id TEXT NOT NULL,
                 title TEXT NOT NULL,
@@ -1079,10 +1079,10 @@ public final class DemoServerSimulator {
                 }
             }
 
-            for item in seedData.checklistItems {
+            for item in seedData.items {
                 try sqlite.execute(
                     """
-                    INSERT INTO checklist_items (id, task_id, title, position, created_at, updated_at)
+                    INSERT INTO items (id, task_id, title, position, created_at, updated_at)
                     VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     bind: { stmt in

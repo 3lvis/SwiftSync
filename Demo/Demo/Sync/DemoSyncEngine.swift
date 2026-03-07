@@ -138,7 +138,7 @@ final class DemoSyncEngine: ObservableObject {
             var edited = baseBody
             edited["title"] = "\(existing.title) [EQ \(iteration)]"
             edited["description"] = "\(existing.descriptionText)\n\nEarthquake touch #\(iteration)"
-            edited["checklist_items"] = stressChecklistPayload(taskID: taskID, iteration: iteration)
+            edited["items"] = stressItemPayload(taskID: taskID, iteration: iteration)
             let users = try allUsers()
             if !users.isEmpty {
                 if iteration.isMultiple(of: 3) {
@@ -188,13 +188,13 @@ final class DemoSyncEngine: ObservableObject {
             "title": "[EQ] Temp \(iteration)",
             "description": "Earthquake temp task for iteration \(iteration).",
             "state": ["id": state.id, "label": state.label],
-            "checklist_items": stressChecklistPayload(taskID: taskID, iteration: iteration),
+            "items": stressItemPayload(taskID: taskID, iteration: iteration),
             "created_at": formatter.string(from: now),
             "updated_at": formatter.string(from: now)
         ]
     }
 
-    private func stressChecklistPayload(taskID: String, iteration: Int) -> [[String: Any]] {
+    private func stressItemPayload(taskID: String, iteration: Int) -> [[String: Any]] {
         [
             [
                 "id": "\(taskID)-eq-\(iteration)-0",
@@ -430,7 +430,7 @@ final class DemoSyncEngine: ObservableObject {
     private func syncTaskDetailInternal(taskID: String) async throws {
         guard let payload = try await apiClient.getTaskDetail(taskID: taskID) else { return }
         try await syncContainer.sync(item: payload, as: Task.self)
-        try await syncChecklistItemsIfPresent(in: payload, taskID: taskID)
+        try await syncItemsIfPresent(in: payload, taskID: taskID)
         markDataSynced(DataKey(namespace: DemoDataNamespace.taskDetail, id: taskID))
     }
 
@@ -483,10 +483,10 @@ final class DemoSyncEngine: ObservableObject {
         return try syncContainer.mainContext.fetch(descriptor).first
     }
 
-    private func syncChecklistItemsIfPresent(in payload: [String: Any], taskID: String) async throws {
-        guard let checklistPayload = payload["checklist_items"] as? [[String: Any]] else { return }
+    private func syncItemsIfPresent(in payload: [String: Any], taskID: String) async throws {
+        guard let itemPayload = payload["items"] as? [[String: Any]] else { return }
         guard let task = try taskForSync(withID: taskID) else { return }
-        try await syncContainer.sync(payload: checklistPayload, as: ChecklistItem.self, parent: task)
+        try await syncContainer.sync(payload: itemPayload, as: Item.self, parent: task)
     }
 
     private func markDataSynced(_ key: DataKey, at date: Date = Date()) {

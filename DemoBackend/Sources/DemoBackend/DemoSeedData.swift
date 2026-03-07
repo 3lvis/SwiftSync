@@ -71,7 +71,7 @@ public struct DemoSeedData {
         }
     }
 
-    public struct SeedChecklistItem: Sendable {
+    public struct SeedItem: Sendable {
         public let id: String
         public let taskID: String
         public let title: String
@@ -99,18 +99,18 @@ public struct DemoSeedData {
     public let projects: [SeedProject]
     public let users: [SeedUser]
     public let tasks: [SeedTask]
-    public let checklistItems: [SeedChecklistItem]
+    public let items: [SeedItem]
 
     public init(
         projects: [SeedProject],
         users: [SeedUser],
         tasks: [SeedTask],
-        checklistItems: [SeedChecklistItem] = []
+        items: [SeedItem] = []
     ) {
         self.projects = projects
         self.users = users
         self.tasks = tasks
-        self.checklistItems = checklistItems
+        self.items = items
     }
 
     // Stable UUID constants for the canonical seed dataset.
@@ -143,7 +143,7 @@ public struct DemoSeedData {
             public static let inboxFilterKeys     = "C3E7A1B2-3001-0000-0000-000000000011"
             public static let regressionChecks    = "C3E7A1B2-3001-0000-0000-000000000012"
         }
-        public enum ChecklistItems {
+        public enum Items {
             public static let sessionRequirements = "C3E7A1B2-4001-0000-0000-000000000001"
             public static let sessionDraftPlan    = "C3E7A1B2-4001-0000-0000-000000000002"
             public static let qaLaunchFlow        = "C3E7A1B2-4001-0000-0000-000000000003"
@@ -162,7 +162,7 @@ public struct DemoSeedData {
         let p = SeedIDs.Projects.self
         let u = SeedIDs.Users.self
         let t = SeedIDs.Tasks.self
-        let c = SeedIDs.ChecklistItems.self
+        let c = SeedIDs.Items.self
 
         let projects: [SeedProject] = [
             .init(id: p.accountSecurity,          name: "Account Security Controls",      createdAt: at(540), updatedAt: at(540)),
@@ -334,7 +334,7 @@ public struct DemoSeedData {
             )
         ]
 
-        let checklistItems: [SeedChecklistItem] = [
+        let items: [SeedItem] = [
             .init(
                 id: c.sessionRequirements,
                 taskID: t.sessionTimeout,
@@ -389,7 +389,7 @@ public struct DemoSeedData {
             projects: projects,
             users: users,
             tasks: tasks,
-            checklistItems: checklistItems
+            items: items
         )
     }
 }
