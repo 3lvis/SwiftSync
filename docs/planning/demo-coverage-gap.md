@@ -1,67 +1,42 @@
-# Demo Coverage Gap — Complexity Reduction Candidates
+# Demo Coverage Gap — Public SwiftSync API Not Covered by Demo
 
-**Purpose:** Reference for open reduction candidates not yet started.
+**Purpose:** Track only public SwiftSync API surface that is not exercised by Demo runtime code.
 
----
+**Scope rule:** Coverage here is based on call sites/usages in `Demo/Demo/**` runtime code. `DemoTests` and `SwiftSync` test targets are excluded.
 
 ## Open items
 
-### Export system (bulk paths)
+### Public macros not exercised in demo models
 
-The core `exportObject` path is exercised by the demo, including relationship properties via the task `items` flow. These remain uncovered:
+- [ ] Exercise `@PrimaryKey(remote:)` in a demo model.
+- [ ] Exercise `@RemotePath(_:)` in a demo model.
 
-- [ ] `exportEncodeValue(_:options:)` free function
-- [ ] `exportSetValue(_:for:into:)` free function
-- [ ] `SwiftSync.export(as:in:using:)` static method (bulk export)
-- [ ] `SwiftSync.export(as:in:parent:using:)` static method
-- [ ] `@NotExport` macro
+### Public `SyncContainer` members not exercised by demo runtime
 
-**Note:** Bulk export entry points remain uncovered in demo flows. Consider a round-trip export demo scenario (e.g. export tasks to a share sheet) before extracting export paths to a separate module.
+- [ ] Exercise `SyncContainer.init(_ modelContainer:keyStyle:dateFormatter:)`.
+- [ ] Exercise `SyncContainer.makeBackgroundContext()`.
+- [ ] Exercise `SyncContainer.sync(item:as:parent:relationshipOperations:)`.
 
----
+### Public reactive query API overloads not exercised by demo runtime
 
-### Manual relationship helper free functions
+- [ ] Exercise `SyncQuery.init(_:in:sortBy:animation:)` (no `relatedTo`, no `predicate`).
+- [ ] Exercise `SyncQuery.init(_:predicate:in:sortBy:animation:)`.
+- [ ] Exercise `SyncQuery.init(_:relatedTo:relatedID:through:in:sortBy:animation:)` (to-one explicit path).
+- [ ] Exercise `SyncQuery.init(_:relatedTo:relatedID:through:in:sortBy:animation:)` (to-many explicit path).
 
-Generated and called by `@Syncable`-expanded code. `public` because macro expansion happens in client module scope. Not intended to be called by hand.
+### Public `SyncQueryPublisher` API not exercised by demo runtime
 
-- [ ] `syncApplyToOneForeignKey` (all overloads)
-- [ ] `syncApplyToManyForeignKeys`
-- [ ] `syncApplyToOneNestedObject`
-- [ ] `syncApplyToManyNestedObjects`
+- [ ] Exercise `SyncQueryPublisher.rowsPublisher`.
+- [ ] Exercise `SyncQueryPublisher.init(_:predicate:in:sortBy:)`.
+- [ ] Exercise `SyncQueryPublisher.init(_:relatedTo:relatedID:through:in:sortBy:)` (to-one explicit path).
+- [ ] Exercise `SyncQueryPublisher.init(_:relatedTo:relatedID:through:in:sortBy:)` (to-many explicit path).
 
-**Blocked by:** `package` access level — cannot make internal without an SPM solution. Deferred.
+### Public export configuration API not exercised explicitly by demo runtime
 
----
+- [ ] Exercise non-default `KeyStyle` (`.camelCase`) through demo runtime.
+- [ ] Exercise non-default `ExportOptions` date formatter through demo runtime.
 
-### `SyncRelationshipOperations` granularity
+### Public protocol-level API not exercised directly by demo runtime call sites
 
-Demo passes `.all` everywhere. Individual bit values are tested but represent a level of control no common use case requires.
-
-- [ ] Evaluate replacing the OptionSet with a simpler `Bool` (`applyRelationships:`) or removing the parameter entirely
-
----
-
-### `TestingKit` target
-
-`TestingKit` exports `SwiftSyncFixtures` (`usersPayload`, `emptyPayload`). Not imported by the demo. Not referenced in integration tests.
-
-- [ ] Evaluate removing — absorb fixtures into test helpers or delete the target
-
----
-
-### `@PrimaryKey`, `@RemotePath`, `@NotExport` macros
-
-Not used in demo models. Intentional advanced features — keep, but ensure clearly marked as advanced in docs.
-
-- [ ] Review whether `@RemotePath` is the right boundary vs `@RemoteKey` with dot notation
-- [ ] Confirm `@PrimaryKey` and `@NotExport` are documented as advanced features
-
----
-
-### `SyncModelable` protocol extension surface
-
-Internal coordination APIs between macro output and query layer. Not called directly by the demo.
-
-- [ ] Audit for `internal` candidacy: `syncDefaultRefreshModelTypeNames`, `syncRefreshModelTypes(for:)`, `syncRefreshModelTypeNames(for:)`, `syncRelatedModelType(for:)`, `syncRelationshipSchemaDescriptors`, `SyncRelationshipSchemaDescriptor`, `SyncRelationshipSchemaIntrospectable`
-
-**Deferred** — needs module boundary analysis first.
+- [ ] Exercise direct `SyncPayload` API usage (`contains`, `value`, `required`) from demo runtime code.
+- [ ] Exercise direct `SyncError` handling from demo runtime code.
