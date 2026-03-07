@@ -8,6 +8,7 @@ struct TaskDetailView: View {
     @ObservedObject var syncEngine: DemoSyncEngine
 
     @SyncModel private var taskModel: Task?
+    @SyncQuery private var taskItems: [Item]
     @State private var hasTriggeredInitialSync = false
     @State private var showingEditSheet = false
 #if DEBUG
@@ -20,6 +21,17 @@ struct TaskDetailView: View {
         self.syncEngine = syncEngine
 
         _taskModel = SyncModel(Task.self, id: taskID, in: syncContainer, animation: .snappy(duration: 0.22))
+        _taskItems = SyncQuery(
+            Item.self,
+            relatedTo: Task.self,
+            relatedID: taskID,
+            in: syncContainer,
+            sortBy: [
+                SortDescriptor(\Item.position, order: .forward),
+                SortDescriptor(\Item.id, order: .forward)
+            ],
+            animation: .snappy(duration: 0.22)
+        )
     }
 
     var body: some View {
@@ -138,13 +150,13 @@ struct TaskDetailView: View {
 
     @ViewBuilder
     private var itemsSection: some View {
-        if let taskModel {
+        if taskModel != nil {
             Section("Items") {
-                if taskModel.items.isEmpty {
+                if taskItems.isEmpty {
                     Text("No items")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(sortedItems(for: taskModel), id: \.id) { item in
+                    ForEach(taskItems, id: \.id) { item in
                         Text(item.title)
                             .foregroundStyle(.primary)
                     }
@@ -186,12 +198,4 @@ struct TaskDetailView: View {
         }
     }
 
-    private func sortedItems(for task: Task) -> [Item] {
-        task.items.sorted {
-            if $0.position == $1.position {
-                return $0.id < $1.id
-            }
-            return $0.position < $1.position
-        }
-    }
 }

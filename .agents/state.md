@@ -1,12 +1,13 @@
 # State Capsule
 
 ## Plan
-- [x] Add backend regression test to verify persisted item order is immediately reflected in task detail + project list payloads after reorder update.
-- [x] Implement backend support for reorder-only updates (`id` + `position`) without requiring title resend.
-- [x] Implement UI item drag reordering in task edit form and verify tests remain green.
+- [x] Remove temporary item-order diagnostics once backend persistence was confirmed.
+- [x] Commit reorder support checkpoint and branch for task-detail stale-order fix.
+- [x] Fix task detail item rendering to observe `Item` rows directly via `@SyncQuery` scoped by `taskID`.
+- [x] Re-run DemoBackend tests, root package tests, and Demo app build.
 
 ## Last known state
-`swift test` passes in `DemoBackend` and repo root with backend/UI item reordering support.
+`swift test` passes in `DemoBackend` and root; `xcodebuild` Demo app builds after task-detail fix branch changes.
 
 ## Decisions (don't revisit)
 - Start with backend-only scope first and defer demo app/model changes until later.
@@ -17,6 +18,7 @@
 - Checklist items are list-only; backend no longer stores a `done` column.
 - Renamed child resource naming from checklist/checklist_items to item/items across demo backend and demo app.
 - Reordering must be for `items` naming only.
+- Task detail should read ordered `items` from a direct `@SyncQuery` instead of relying on potentially stale `task.items` relationship snapshots.
 
 ## Files touched
 - .agents/state.md
