@@ -17,7 +17,7 @@ This contract defines current behavior for:
 - Convention-first mapping is expected.
 - `absent = ignore` for payload fields.
 - `null = clear` for optional fields/relationships when delete semantics apply.
-- Explicit overrides (`@PrimaryKey(remote:)`, `@RemoteKey`, `@RemotePath`) take precedence over conventions.
+- Explicit overrides (`@PrimaryKey(remote:)`, `@RemoteKey`) take precedence over conventions.
 
 Practical defaults:
 - Prefer convention mapping first; add `@RemoteKey` only when local naming intentionally differs.
@@ -60,7 +60,7 @@ Foreign-key conventions:
 
 Nested-object conventions:
 - relationship name by convention
-- `@RemotePath` adds explicit nested key path for that relationship key
+- `@RemoteKey` may target nested key paths using dotted notation
 
 Dispatch order for relationships:
 1. if FK key is present, process FK path
@@ -98,10 +98,9 @@ When payload keys still use blocked names, map them with `@RemoteKey`.
 ## Export Key Contract
 
 Export key precedence:
-1. `@RemotePath`
-2. `@RemoteKey`
-3. `@PrimaryKey(remote:)`
-4. convention transform from `ExportOptions.keyStyle`
+1. `@RemoteKey`
+2. `@PrimaryKey(remote:)`
+3. convention transform from `ExportOptions.keyStyle`
 
 Defaults:
 - export key style defaults to snake_case

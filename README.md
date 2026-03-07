@@ -46,7 +46,7 @@ Current defaults and behavior:
 - convention-first mapping is expected
 - inbound key style is configured once at `SyncContainer` (`.snakeCase` default, `.camelCase` optional)
 - acronym-aware snake mapping (`projectID` -> `project_id`, `remoteURL` -> `remote_url`)
-- deep-path import/export is supported via `@RemotePath("a.b.c")`
+- deep-path import/export is supported via `@RemoteKey("a.b.c")`
 - scalar coercions are deterministic; relationship FK linking remains strict
 - Demo models in this repo are convention-first, with explicit mapping only where backend keys intentionally differ (for example `description` -> `descriptionText`)
 
@@ -54,7 +54,7 @@ Practical usage rules:
 - remove `@RemoteKey` when convention already matches (for example `projectID` maps to `project_id`)
 - keep `@RemoteKey` when your local property name intentionally differs from the backend key (for example `descriptionText` -> `description`)
 - configure inbound key style once at `SyncContainer` (`.snakeCase` default, `.camelCase` optional)
-- use `@RemotePath("a.b.c")` for nested payload keys (import and export)
+- use `@RemoteKey("a.b.c")` for nested payload keys (import and export)
 
 ## Basic Example
 
@@ -624,7 +624,7 @@ final class ExternalMappedUser {
 final class Account {
   @Attribute(.unique) var id: Int
   @RemoteKey("type") var userType: String
-  @RemotePath("profile.contact.email") var email: String?
+  @RemoteKey("profile.contact.email") var email: String?
   @NotExport var localOnly: String
 
   init(id: Int, userType: String, email: String?, localOnly: String) {
@@ -637,8 +637,8 @@ final class Account {
 ```
 
 Notes:
-- `@RemoteKey` and `@RemotePath` affect inbound sync mapping and export mapping.
-- `@RemotePath("a.b.c")` reads/writes nested payload paths.
+- `@RemoteKey` affects inbound sync mapping and export mapping.
+- `@RemoteKey("a.b.c")` reads/writes nested payload paths.
 - Deep paths are resolved from nested dictionaries and keep normal missing/null semantics.
 
 ## Exporting JSON

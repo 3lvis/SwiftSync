@@ -87,12 +87,12 @@ Treat to-many sync as unordered membership and store an explicit scalar order fi
 
 See `docs/project/property-mapping-contract.md` and `docs/project/backend-contract.md`.
 
-## 9) How do key mapping defaults work (`snake_case`, camelCase, `@RemotePath`)?
+## 9) How do key mapping defaults work (`snake_case`, camelCase, `@RemoteKey`)?
 
 Convention-first.
 
 - inbound key style is configured once at `SyncContainer` (`.snakeCase` default, `.camelCase` optional)
-- `@RemoteKey` / `@RemotePath` override conventions
+- `@RemoteKey` overrides conventions
 - import/export follow the same mapping contract
 
 See `docs/project/property-mapping-contract.md`.

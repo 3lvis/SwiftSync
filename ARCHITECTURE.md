@@ -27,8 +27,8 @@ ObjCExceptionCatcher      (mixed Swift/ObjC, catches NSException from ModelConta
 |---|---|
 | Core | `SyncPayload`, `SyncDateParser`, all protocols, `ExportKeyStyle`, `SyncError` |
 | SwiftDataBridge | `SwiftSync.sync()`, `SwiftSync.export()`, `SyncLeaseRegistry` |
-| MacrosImplementation | `SyncableMacro` + four no-op peer macros |
-| Macros | `@Syncable`, `@PrimaryKey`, `@RemoteKey`, `@RemotePath`, `@NotExport` declarations |
+| MacrosImplementation | `SyncableMacro` + three no-op peer macros |
+| Macros | `@Syncable`, `@PrimaryKey`, `@RemoteKey`, `@NotExport` declarations |
 | SwiftSync | `SyncContainer`, `SyncQuery`, `SyncModel` |
 | ObjCExceptionCatcher | `SwiftSyncObjCExceptionCatcher` |
 
@@ -167,7 +167,7 @@ The macro emits an `extension Task: SyncUpdatableModel, ...` containing:
 | `@PrimaryKey` | Sets `syncIdentity`; skipped in `apply` | Exported normally |
 | `@PrimaryKey(remote: "ext_id")` | Sets `syncIdentityRemoteKeys: ["ext_id"]` | Exported under `"ext_id"` |
 | `@RemoteKey("key")` | Read from `"key"` in payload | Exported under `"key"` |
-| `@RemotePath("a.b")` | Read from nested `payload["a"]["b"]` | Exported to nested dict |
+| `@RemoteKey("a.b")` | Read from nested `payload["a"]["b"]` | Exported to nested dict |
 | `@NotExport` | Normal sync | Excluded from export |
 
 ---
@@ -320,7 +320,7 @@ SwiftSync.export(as: Task.self, in: context, using: options)
      - Scalar: `exportEncodeValue(value, options)` → encode
      - Optional scalar: encode or NSNull if nil
      - Relationship: recurse via `exportObject` on children
-   - Key from `@RemoteKey`/`@RemotePath` or `options.keyStyle.transform(propertyName)`
+   - Key from `@RemoteKey` or `options.keyStyle.transform(propertyName)`
    - `exportSetValue(value, for: keyPath, into: &result)` — supports nested dot-path keys
    - `state.leave(self)`
 

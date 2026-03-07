@@ -9,6 +9,3 @@ public macro NotExport() = #externalMacro(module: "MacrosImplementation", type: 
 
 @attached(peer)
 public macro RemoteKey(_ key: String) = #externalMacro(module: "MacrosImplementation", type: "RemoteKeyMacro")
-
-@attached(peer)
-public macro RemotePath(_ path: String) = #externalMacro(module: "MacrosImplementation", type: "RemotePathMacro")
