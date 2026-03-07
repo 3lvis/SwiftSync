@@ -502,7 +502,15 @@ public final class DemoServerSimulator {
             guard let rawItems = body["items"] as? [[String: Any]] else {
                 throw DemoBackendError.validation(message: "items must be an array of objects")
             }
-            itemsToReplace = try parseItems(rawItems)
+            let existingRows = try itemsPayload(taskID: taskID)
+            let existingTitlesByID = Dictionary(
+                uniqueKeysWithValues: existingRows.compactMap { row -> (String, String)? in
+                    guard let id = row["id"] as? String,
+                          let title = row["title"] as? String else { return nil }
+                    return (id, title)
+                }
+            )
+            itemsToReplace = try parseItems(rawItems, existingTitlesByID: existingTitlesByID)
         } else {
             itemsToReplace = nil
         }
@@ -790,15 +798,22 @@ public final class DemoServerSimulator {
         return rows.map { $0.string("user_id") }
     }
 
-    private func parseItems(_ rawItems: [[String: Any]]) throws -> [ItemInput] {
+    private func parseItems(
+        _ rawItems: [[String: Any]],
+        existingTitlesByID: [String: String] = [:]
+    ) throws -> [ItemInput] {
         try rawItems.enumerated().map { index, item in
             guard let id = item["id"] as? String, !id.isEmpty else {
                 throw DemoBackendError.validation(message: "items[\(index)].id is required")
             }
-            guard let rawTitle = item["title"] as? String else {
+            let title: String
+            if let rawTitle = item["title"] as? String {
+                title = try validatedNonEmpty(rawTitle, field: "items[\(index)].title")
+            } else if let existingTitle = existingTitlesByID[id] {
+                title = existingTitle
+            } else {
                 throw DemoBackendError.validation(message: "items[\(index)].title is required")
             }
-            let title = try validatedNonEmpty(rawTitle, field: "items[\(index)].title")
 
             let position: Int
             if let positionValue = item["position"] {

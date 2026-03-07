@@ -424,6 +424,87 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(updatedItems.first?["title"] as? String, "Keep")
     }
 
+    func testUpdateTaskFromBodyDictItemsCanReorderWithIDAndPositionOnly() throws {
+        let url = makeTemporaryDatabaseURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
+
+        let newTaskID = UUID().uuidString
+        let now = iso8601(Date())
+        _ = try backend.createTask(body: [
+            "id": newTaskID,
+            "project_id": projectID,
+            "title": "Reorder-only items",
+            "description": "Initial",
+            "state": ["id": "todo"],
+            "author_id": userID,
+            "created_at": now,
+            "updated_at": now,
+            "items": [
+                ["id": "item-a", "title": "First", "position": 0],
+                ["id": "item-b", "title": "Second", "position": 1]
+            ]
+        ])
+
+        let updated = try backend.updateTask(taskID: newTaskID, body: [
+            "id": newTaskID,
+            "title": "Reorder-only items",
+            "description": "Initial",
+            "state": ["id": "todo"],
+            "items": [
+                ["id": "item-b", "position": 0],
+                ["id": "item-a", "position": 1]
+            ]
+        ])
+
+        let reorderedItems = items(in: updated)
+        XCTAssertEqual(reorderedItems.map { $0["id"] as? String }, ["item-b", "item-a"])
+        XCTAssertEqual(reorderedItems.map { $0["title"] as? String }, ["Second", "First"])
+    }
+
+    func testUpdateTaskFromBodyDictItemsReorderPersistsInDetailAndProjectPayloads() throws {
+        let url = makeTemporaryDatabaseURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
+
+        let newTaskID = UUID().uuidString
+        let now = iso8601(Date())
+        _ = try backend.createTask(body: [
+            "id": newTaskID,
+            "project_id": projectID,
+            "title": "Persisted reorder",
+            "description": "Initial",
+            "state": ["id": "todo"],
+            "author_id": userID,
+            "created_at": now,
+            "updated_at": now,
+            "items": [
+                ["id": "item-a", "title": "First", "position": 0],
+                ["id": "item-b", "title": "Second", "position": 1]
+            ]
+        ])
+
+        _ = try backend.updateTask(taskID: newTaskID, body: [
+            "id": newTaskID,
+            "title": "Persisted reorder",
+            "description": "Initial",
+            "state": ["id": "todo"],
+            "items": [
+                ["id": "item-b", "position": 0],
+                ["id": "item-a", "position": 1]
+            ]
+        ])
+
+        let detail = try backend.getTaskDetailPayload(taskID: newTaskID)
+        XCTAssertEqual(items(in: detail).map { $0["id"] as? String }, ["item-b", "item-a"])
+
+        let projectTasks = try backend.getProjectTasksPayload(projectID: projectID)
+        let persistedTask = projectTasks.first { ($0["id"] as? String) == newTaskID }
+        XCTAssertEqual(items(in: persistedTask).map { $0["id"] as? String }, ["item-b", "item-a"])
+    }
+
     func testSQLiteBackendCreateAndDeleteTaskUpdatesProjectSlice() async throws {
         let url = makeTemporaryDatabaseURL()
         defer { try? FileManager.default.removeItem(at: url) }

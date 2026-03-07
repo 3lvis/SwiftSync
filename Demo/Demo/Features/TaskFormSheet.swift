@@ -37,6 +37,7 @@ struct TaskFormSheet: View {
     @State private var isSaving = false
     @State private var saveErrorMessage: String?
     @State private var newItemTitle = ""
+    @State private var itemEditMode: EditMode = .inactive
 
     init(mode: TaskFormMode, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.mode = mode
@@ -78,6 +79,7 @@ struct TaskFormSheet: View {
                 reviewersSection
                 watchersSection
             }
+            .environment(\.editMode, $itemEditMode)
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -224,6 +226,14 @@ struct TaskFormSheet: View {
                 .disabled(newItemTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 
+            if sortedItems.count > 1 {
+                Button(itemEditMode == .active ? "Done Reordering" : "Reorder Items") {
+                    withAnimation(.snappy(duration: 0.2)) {
+                        itemEditMode = itemEditMode == .active ? .inactive : .active
+                    }
+                }
+            }
+
             if sortedItems.isEmpty {
                 Text("No items")
                     .foregroundStyle(.secondary)
@@ -242,6 +252,7 @@ struct TaskFormSheet: View {
                         .buttonStyle(.borderless)
                     }
                 }
+                .onMove(perform: moveItems)
             }
         }
     }
@@ -473,6 +484,15 @@ struct TaskFormSheet: View {
     private func normalizeItemPositions() {
         for (index, item) in sortedItems.enumerated() {
             item.position = index
+        }
+    }
+
+    private func moveItems(from source: IndexSet, to destination: Int) {
+        var reordered = sortedItems
+        reordered.move(fromOffsets: source, toOffset: destination)
+        for (index, item) in reordered.enumerated() {
+            item.position = index
+            item.updatedAt = Date()
         }
     }
 }
