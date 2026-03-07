@@ -45,6 +45,37 @@ final class ExportRemotePrimary {
 
 @Syncable
 @Model
+final class ExportBarePrimary {
+    @PrimaryKey
+    @Attribute(.unique) var externalID: String
+    var name: String
+
+    init(externalID: String, name: String) {
+        self.externalID = externalID
+        self.name = name
+    }
+}
+
+@Syncable
+@Model
+final class ExportBinaryDecimalRecord {
+    @Attribute(.unique) var id: Int
+    var blob: Data
+    var amount: Decimal
+
+    init(id: Int, blob: Data, amount: Decimal) {
+        self.id = id
+        self.blob = blob
+        self.amount = amount
+    }
+}
+
+private struct ExportUnsupportedScalarValue {
+    let raw: Int
+}
+
+@Syncable
+@Model
 final class ExportMappedFields {
     @Attribute(.unique) var id: Int
     @RemoteKey("type") var userType: String
@@ -223,6 +254,43 @@ final class ExportTests: XCTestCase {
         let rows = try SwiftSync.export(as: ExportRemotePrimary.self, in: context)
         XCTAssertEqual(rows[0]["external_id"] as? String, "abc")
         XCTAssertNil(rows[0]["xid"])
+    }
+
+    @MainActor
+    func testExportPrimaryKeyUsesDefaultKeyStyleForBarePrimaryKey() throws {
+        let context = try makeContext(for: ExportBarePrimary.self)
+        context.insert(ExportBarePrimary(externalID: "ext-1", name: "n"))
+        try context.save()
+
+        let rows = try SwiftSync.export(as: ExportBarePrimary.self, in: context)
+        XCTAssertEqual(rows[0]["external_id"] as? String, "ext-1")
+        XCTAssertNil(rows[0]["externalID"])
+    }
+
+    @MainActor
+    func testExportUnsupportedScalarFallsBackToNSNull() throws {
+        var body: [String: Any] = [:]
+        let raw = ExportUnsupportedScalarValue(raw: 10)
+        if let encoded = exportEncodeValue(raw, options: ExportOptions()) {
+            exportSetValue(encoded, for: "value", into: &body)
+        } else {
+            exportSetValue(NSNull(), for: "value", into: &body)
+        }
+
+        XCTAssertTrue(body["value"] is NSNull)
+    }
+
+    @MainActor
+    func testExportEncodesDataAndDecimal() throws {
+        let context = try makeContext(for: ExportBinaryDecimalRecord.self)
+        let blob = Data("swift-sync".utf8)
+        let amount = Decimal(string: "42.75")!
+        context.insert(ExportBinaryDecimalRecord(id: 11, blob: blob, amount: amount))
+        try context.save()
+
+        let rows = try SwiftSync.export(as: ExportBinaryDecimalRecord.self, in: context)
+        XCTAssertEqual(rows[0]["blob"] as? String, blob.base64EncodedString())
+        XCTAssertEqual((rows[0]["amount"] as? NSDecimalNumber)?.decimalValue, amount)
     }
 
     @MainActor

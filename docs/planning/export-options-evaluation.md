@@ -97,22 +97,6 @@ the implicit default) are both genuinely useful.
 
 ---
 
-## Follow-on: `ExportOptions` doc comments
-
-`ExportOptions`, `KeyStyle`, and `exportObject(for:container:)` have no doc comments.
-Now that the struct is stable, add doc comments explaining:
-
-- `ExportOptions` — what it controls, when to use a custom instance vs. the defaults
-- `KeyStyle` — what `.snakeCase` and `.camelCase` produce, with examples
-- `exportObject(for:container:)` — that it inherits `keyStyle` and `dateFormatter`
-  from the container; relationships are included unless `@NotExport` is applied
-
-This is tracked in `docs/planning/export-improvements.md` (item 4, now updated to
-reflect the removal of the relationship-mode asymmetry note).
-
----
-
 ## Status
 
 Evaluated (2026-03-04). No structural changes to `ExportOptions` planned.
-Doc comments deferred to a future pass (tracked in `export-improvements.md`).
