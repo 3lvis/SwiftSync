@@ -1,12 +1,11 @@
 # State Capsule
 
 ## Plan
-- [x] Add failing backend regression tests for dropping checklist `done` input/storage.
-- [x] Remove checklist `done` column/handling from backend schema and inserts.
-- [x] Run DemoBackend and root package tests to confirm green.
+- [x] Draft project-wide monolith-friendly simplification planning doc in `docs/planning`.
+- [x] Capture concrete repo-wide opportunities, non-negotiable strictness, and phased rollout open items.
 
 ## Last known state
-`swift test` passed in `DemoBackend` and repository root package after removing checklist `done` storage.
+Project-wide planning doc added at `docs/planning/monolith-friendly-simplification-pass.md`.
 
 ## Decisions (don't revisit)
 - Start with backend-only scope first and defer demo app/model changes until later.
@@ -26,3 +25,4 @@
 - Demo/Demo/Features/TaskFormSheet.swift
 - Demo/Demo/Features/TaskDetail/TaskDetailView.swift
 - Demo/Demo/Features/Projects/ProjectsTabView.swift
+- docs/planning/monolith-friendly-simplification-pass.md
