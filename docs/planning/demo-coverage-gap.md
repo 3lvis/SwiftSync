@@ -8,8 +8,6 @@
 
 ### Public `SyncContainer` members not exercised by demo runtime
 
-- [ ] Exercise `SyncContainer.init(_ modelContainer:keyStyle:dateFormatter:)`.
-- [ ] Exercise `SyncContainer.makeBackgroundContext()`.
 - [ ] Exercise `SyncContainer.sync(item:as:parent:relationshipOperations:)`.
 
 ### Public reactive query API overloads not exercised by demo runtime

@@ -77,16 +77,12 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         NotificationCenter.default.removeObserver(self)
     }
 
-    public func makeBackgroundContext() -> ModelContext {
-        ModelContext(modelContainer)
-    }
-
     public func sync<Model: SyncUpdatableModel>(
         payload: [Any],
         as model: Model.Type,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
-        let context = makeBackgroundContext()
+        let context = ModelContext(modelContainer)
         try await SwiftSync.sync(
             payload: payload,
             as: model,
@@ -102,7 +98,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         parent: Model.SyncParent,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
-        let context = makeBackgroundContext()
+        let context = ModelContext(modelContainer)
         try await SwiftSync.sync(
             payload: payload,
             as: model,
@@ -119,7 +115,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         parent: Parent,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
-        let context = makeBackgroundContext()
+        let context = ModelContext(modelContainer)
         try await SwiftSync.sync(
             payload: payload,
             as: model,
@@ -135,7 +131,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         as model: Model.Type,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
-        let context = makeBackgroundContext()
+        let context = ModelContext(modelContainer)
         try await SwiftSync.sync(
             item: item,
             as: model,
@@ -151,7 +147,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         parent: Parent,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
-        let context = makeBackgroundContext()
+        let context = ModelContext(modelContainer)
         try await SwiftSync.sync(
             item: item,
             as: model,

@@ -137,7 +137,7 @@ let syncContainer = try await MainActor.run {
   )
 }
 
-let background = syncContainer.makeBackgroundContext()
+let background = ModelContext(syncContainer.modelContainer)
 try await SwiftSync.sync(payload: payload, as: User.self, in: background)
 ```
 

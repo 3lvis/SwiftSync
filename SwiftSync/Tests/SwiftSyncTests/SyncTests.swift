@@ -2877,7 +2877,7 @@ final class SyncTests: XCTestCase {
         let syncContainer = try await MainActor.run {
             try SyncContainer(for: User.self, configurations: configuration)
         }
-        let writerContext = syncContainer.makeBackgroundContext()
+        let writerContext = ModelContext(syncContainer.modelContainer)
 
         try await SwiftSync.sync(
             payload: [["id": 10, "full_name": "From SyncContainer"]],
@@ -3160,7 +3160,7 @@ final class SyncTests: XCTestCase {
             try SyncContainer(for: User.self, configurations: configuration)
         }
         let mainContext = syncContainer.mainContext
-        let backgroundContext = syncContainer.makeBackgroundContext()
+        let backgroundContext = ModelContext(syncContainer.modelContainer)
 
         try await SwiftSync.sync(
             payload: [["id": 11, "full_name": "Main Seed"]],
