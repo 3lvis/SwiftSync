@@ -469,7 +469,6 @@ struct TaskFormSheet: View {
             updatedAt: Date(),
             task: draft
         )
-        editContext.insert(item)
         draft.items.append(item)
         normalizeItemPositions()
         newItemTitle = ""
