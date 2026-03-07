@@ -8,9 +8,8 @@
 
 ### Export system (bulk paths)
 
-The core `exportObject` path is exercised by the demo. These remain uncovered:
+The core `exportObject` path is exercised by the demo, including relationship properties via the task `items` flow. These remain uncovered:
 
-- [ ] `exportObject` with relationship properties (covered by checklist-items feature)
 - [ ] `exportEncodeValue(_:options:)` free function
 - [ ] `exportSetValue(_:for:into:)` free function
 - [ ] `SwiftSync.export(as:in:using:)` static method (bulk export)

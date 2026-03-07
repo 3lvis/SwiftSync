@@ -132,7 +132,7 @@ public struct DemoSeedData {
         public enum Tasks {
             public static let sessionTimeout      = "C3E7A1B2-3001-0000-0000-000000000001"
             public static let securityPolicyPatch = "C3E7A1B2-3001-0000-0000-000000000002"
-            public static let qaChecklist         = "C3E7A1B2-3001-0000-0000-000000000003"
+            public static let qaItemList          = "C3E7A1B2-3001-0000-0000-000000000003"
             public static let warningCopy         = "C3E7A1B2-3001-0000-0000-000000000004"
             public static let rolloutFlag         = "C3E7A1B2-3001-0000-0000-000000000005"
             public static let duplicatePushFix    = "C3E7A1B2-3001-0000-0000-000000000006"
@@ -209,11 +209,11 @@ public struct DemoSeedData {
                 createdAt: at(305), updatedAt: at(305)
             ),
             .init(
-                id: t.qaChecklist,
+                id: t.qaItemList,
                 projectID: p.accountSecurity,
                 assigneeID: u.sofiaGarcia,
                 reviewerIDs: [u.liamBrown],
-                title: "Write QA checklist for forced re-auth scenarios",
+                title: "Write QA item list for forced re-auth scenarios",
                 descriptionText: """
                 Cover app relaunch, expired session recovery, and offline-to-online transitions after the policy changes.
                 """,
@@ -353,7 +353,7 @@ public struct DemoSeedData {
             ),
             .init(
                 id: c.qaLaunchFlow,
-                taskID: t.qaChecklist,
+                taskID: t.qaItemList,
                 title: "Relauch flow after timeout",
                 position: 0,
                 createdAt: at(311),
@@ -361,7 +361,7 @@ public struct DemoSeedData {
             ),
             .init(
                 id: c.qaOfflineRecovery,
-                taskID: t.qaChecklist,
+                taskID: t.qaItemList,
                 title: "Offline to online recovery",
                 position: 1,
                 createdAt: at(312),

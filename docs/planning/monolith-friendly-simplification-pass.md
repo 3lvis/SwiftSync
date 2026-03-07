@@ -9,7 +9,7 @@
 - [ ] Reduce date parsing surface area to one canonical inbound format for Demo backend payloads.
 - [ ] Decide whether `@SyncQuery` relationship inference failures should fail-soft in Demo UX instead of crashing.
 - [ ] Simplify demo backend create/update validation by defaulting missing non-critical fields server-side.
-- [ ] Make checklist parser/server timestamps authoritative and remove client timestamp validation burden.
+- [ ] Make item parser/server timestamps authoritative and remove client timestamp validation burden.
 - [ ] Document non-negotiable strictness rules that remain in both profiles.
 - [ ] Add profile-focused tests that assert relaxed Demo behavior without regressing core data integrity.
 
@@ -118,10 +118,10 @@ Monolith-friendly option:
 Primary files:
 - `DemoBackend/Sources/DemoBackend/DemoServerSimulator.swift`
 
-### F) Checklist parser/timestamps permissiveness (Low risk)
+### F) Item parser/timestamps permissiveness (Low risk)
 
 Observation:
-- Checklist parsing still validates client-provided timestamp fields and strict integer position type.
+- Item parsing still validates client-provided timestamp fields and strict integer position type.
 
 Monolith-friendly option:
 - Make server timestamps authoritative and normalize positions by array order when missing.
@@ -158,7 +158,7 @@ Primary files:
 
 Phase 1 (safe / low risk)
 - Snake_case-only usage in Demo runtime.
-- Checklist parser simplification and timestamp ownership.
+- Item parser simplification and timestamp ownership.
 - Fail-soft `@SyncQuery` diagnostics for Demo views.
 
 Phase 2 (medium risk)
