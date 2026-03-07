@@ -25,6 +25,14 @@ public enum DemoBackendError: LocalizedError {
 }
 
 public final class DemoServerSimulator {
+    private struct ChecklistItemInput {
+        let id: String
+        let title: String
+        let position: Int
+        let createdAt: Date
+        let updatedAt: Date
+    }
+
     private let sqlite: DemoSQLiteDatabase
     private let formatter = ISO8601DateFormatter()
     private let enableAmbientProjectMutationsOnRead: Bool
@@ -373,6 +381,15 @@ public final class DemoServerSimulator {
             throw DemoBackendError.validation(message: "updated_at is required (ISO 8601)")
         }
         let assigneeID = body["assignee_id"] as? String
+        let checklistItems: [ChecklistItemInput]
+        if body.keys.contains("checklist_items") {
+            guard let rawChecklistItems = body["checklist_items"] as? [[String: Any]] else {
+                throw DemoBackendError.validation(message: "checklist_items must be an array of objects")
+            }
+            checklistItems = try parseChecklistItems(rawChecklistItems)
+        } else {
+            checklistItems = []
+        }
 
         return try createTaskInternal(
             id: id,
@@ -383,7 +400,8 @@ public final class DemoServerSimulator {
             assigneeID: assigneeID,
             authorID: authorID,
             createdAt: createdAt,
-            updatedAt: updatedAt
+            updatedAt: updatedAt,
+            checklistItems: checklistItems
         )
     }
 
@@ -396,7 +414,8 @@ public final class DemoServerSimulator {
         assigneeID: String?,
         authorID: String,
         createdAt: Date,
-        updatedAt: Date
+        updatedAt: Date,
+        checklistItems: [ChecklistItemInput] = []
     ) throws -> [String: Any] {
         if try exists(in: "tasks", id: id) {
             throw DemoBackendError.validation(message: "task with id \(id) already exists")
@@ -416,23 +435,32 @@ public final class DemoServerSimulator {
 
         suspendAmbientMutationsAfterWrite()
 
-        try self.sqlite.execute(
-            """
-            INSERT INTO tasks (id, project_id, assignee_id, author_id, title, description, state, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            bind: { stmt in
-                self.sqlite.bind(text: id, at: 1, in: stmt)
-                self.sqlite.bind(text: projectID, at: 2, in: stmt)
-                self.sqlite.bind(nullableText: assigneeID, at: 3, in: stmt)
-                self.sqlite.bind(text: authorID, at: 4, in: stmt)
-                self.sqlite.bind(text: normalizedTitle, at: 5, in: stmt)
-                self.sqlite.bind(text: normalizedDescription, at: 6, in: stmt)
-                self.sqlite.bind(text: normalizedState, at: 7, in: stmt)
-                self.sqlite.bind(double: createdAt.timeIntervalSince1970, at: 8, in: stmt)
-                self.sqlite.bind(double: updatedAt.timeIntervalSince1970, at: 9, in: stmt)
-            }
-        )
+        try self.sqlite.execute("BEGIN TRANSACTION;")
+        do {
+            try self.sqlite.execute(
+                """
+                INSERT INTO tasks (id, project_id, assignee_id, author_id, title, description, state, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                bind: { stmt in
+                    self.sqlite.bind(text: id, at: 1, in: stmt)
+                    self.sqlite.bind(text: projectID, at: 2, in: stmt)
+                    self.sqlite.bind(nullableText: assigneeID, at: 3, in: stmt)
+                    self.sqlite.bind(text: authorID, at: 4, in: stmt)
+                    self.sqlite.bind(text: normalizedTitle, at: 5, in: stmt)
+                    self.sqlite.bind(text: normalizedDescription, at: 6, in: stmt)
+                    self.sqlite.bind(text: normalizedState, at: 7, in: stmt)
+                    self.sqlite.bind(double: createdAt.timeIntervalSince1970, at: 8, in: stmt)
+                    self.sqlite.bind(double: updatedAt.timeIntervalSince1970, at: 9, in: stmt)
+                }
+            )
+
+            try insertChecklistItems(checklistItems, forTaskID: id)
+            try self.sqlite.execute("COMMIT;")
+        } catch {
+            try? self.sqlite.execute("ROLLBACK;")
+            throw error
+        }
 
         guard let payload = try getTaskDetailPayload(taskID: id) else {
             throw DemoBackendError.notFound(entity: "task", id: id)
@@ -469,6 +497,15 @@ public final class DemoServerSimulator {
         let normalizedTitle = try validatedNonEmpty(title, field: "title")
         let normalizedDescription = try validatedNonEmpty(description, field: "description")
         let normalizedState = try validatedTaskState(stateID)
+        let checklistItemsToReplace: [ChecklistItemInput]?
+        if body.keys.contains("checklist_items") {
+            guard let rawChecklistItems = body["checklist_items"] as? [[String: Any]] else {
+                throw DemoBackendError.validation(message: "checklist_items must be an array of objects")
+            }
+            checklistItemsToReplace = try parseChecklistItems(rawChecklistItems)
+        } else {
+            checklistItemsToReplace = nil
+        }
 
         // assignee_id: present key means update (NSNull clears, String sets)
         let assigneeID: String?
@@ -487,21 +524,39 @@ public final class DemoServerSimulator {
         let currentUpdatedAt = try parseISO8601(current["updated_at"])
         let next = nextTimestamp(after: currentUpdatedAt)
 
-        try self.sqlite.execute(
-            """
-            UPDATE tasks
-            SET title = ?, description = ?, state = ?, assignee_id = ?, updated_at = ?
-            WHERE id = ?
-            """,
-            bind: { stmt in
-                self.sqlite.bind(text: normalizedTitle, at: 1, in: stmt)
-                self.sqlite.bind(text: normalizedDescription, at: 2, in: stmt)
-                self.sqlite.bind(text: normalizedState, at: 3, in: stmt)
-                self.sqlite.bind(nullableText: assigneeID, at: 4, in: stmt)
-                self.sqlite.bind(double: next.timeIntervalSince1970, at: 5, in: stmt)
-                self.sqlite.bind(text: taskID, at: 6, in: stmt)
+        try self.sqlite.execute("BEGIN TRANSACTION;")
+        do {
+            try self.sqlite.execute(
+                """
+                UPDATE tasks
+                SET title = ?, description = ?, state = ?, assignee_id = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                bind: { stmt in
+                    self.sqlite.bind(text: normalizedTitle, at: 1, in: stmt)
+                    self.sqlite.bind(text: normalizedDescription, at: 2, in: stmt)
+                    self.sqlite.bind(text: normalizedState, at: 3, in: stmt)
+                    self.sqlite.bind(nullableText: assigneeID, at: 4, in: stmt)
+                    self.sqlite.bind(double: next.timeIntervalSince1970, at: 5, in: stmt)
+                    self.sqlite.bind(text: taskID, at: 6, in: stmt)
+                }
+            )
+
+            if let checklistItemsToReplace {
+                try self.sqlite.execute(
+                    "DELETE FROM checklist_items WHERE task_id = ?",
+                    bind: { stmt in
+                        self.sqlite.bind(text: taskID, at: 1, in: stmt)
+                    }
+                )
+                try insertChecklistItems(checklistItemsToReplace, forTaskID: taskID)
             }
-        )
+
+            try self.sqlite.execute("COMMIT;")
+        } catch {
+            try? self.sqlite.execute("ROLLBACK;")
+            throw error
+        }
 
         guard let result = try getTaskDetailPayload(taskID: taskID) else {
             throw DemoBackendError.notFound(entity: "task", id: taskID)
@@ -645,9 +700,34 @@ public final class DemoServerSimulator {
             "description": row.string("description"),
             "state": labeledValuePayload(id: stateID, label: taskStateLabel(id: stateID)),
             "watcher_ids": try watcherIDs(forTaskID: taskID),
+            "checklist_items": try checklistItemsPayload(taskID: taskID),
             "created_at": iso8601(row.double("created_at")),
             "updated_at": iso8601(row.double("updated_at"))
         ]
+    }
+
+    private func checklistItemsPayload(taskID: String) throws -> [[String: Any]] {
+        let rows = try self.sqlite.query(
+            """
+            SELECT id, task_id, title, position, created_at, updated_at
+            FROM checklist_items
+            WHERE task_id = ?
+            ORDER BY position ASC, id ASC
+            """,
+            bind: { stmt in
+                self.sqlite.bind(text: taskID, at: 1, in: stmt)
+            }
+        )
+        return rows.map { row in
+            [
+                "id": row.string("id"),
+                "task_id": row.string("task_id"),
+                "title": row.string("title"),
+                "position": Int(row.int64("position")),
+                "created_at": iso8601(row.double("created_at")),
+                "updated_at": iso8601(row.double("updated_at"))
+            ]
+        }
     }
 
     private func taskStateLabel(id stateID: String) -> String {
@@ -708,6 +788,78 @@ public final class DemoServerSimulator {
             }
         )
         return rows.map { $0.string("user_id") }
+    }
+
+    private func parseChecklistItems(_ rawChecklistItems: [[String: Any]]) throws -> [ChecklistItemInput] {
+        try rawChecklistItems.enumerated().map { index, item in
+            guard let id = item["id"] as? String, !id.isEmpty else {
+                throw DemoBackendError.validation(message: "checklist_items[\(index)].id is required")
+            }
+            guard let rawTitle = item["title"] as? String else {
+                throw DemoBackendError.validation(message: "checklist_items[\(index)].title is required")
+            }
+            let title = try validatedNonEmpty(rawTitle, field: "checklist_items[\(index)].title")
+
+            let position: Int
+            if let positionValue = item["position"] {
+                guard let parsedPosition = positionValue as? Int else {
+                    throw DemoBackendError.validation(message: "checklist_items[\(index)].position must be an Int")
+                }
+                position = parsedPosition
+            } else {
+                position = index
+            }
+
+            let createdAt: Date
+            if let createdAtValue = item["created_at"] {
+                guard let createdAtString = createdAtValue as? String,
+                      let parsedCreatedAt = parseISO8601String(createdAtString) else {
+                    throw DemoBackendError.validation(message: "checklist_items[\(index)].created_at must be ISO 8601")
+                }
+                createdAt = parsedCreatedAt
+            } else {
+                createdAt = Date()
+            }
+
+            let updatedAt: Date
+            if let updatedAtValue = item["updated_at"] {
+                guard let updatedAtString = updatedAtValue as? String,
+                      let parsedUpdatedAt = parseISO8601String(updatedAtString) else {
+                    throw DemoBackendError.validation(message: "checklist_items[\(index)].updated_at must be ISO 8601")
+                }
+                updatedAt = parsedUpdatedAt
+            } else {
+                updatedAt = Date()
+            }
+
+            return ChecklistItemInput(
+                id: id,
+                title: title,
+                position: position,
+                createdAt: createdAt,
+                updatedAt: updatedAt
+            )
+        }
+    }
+
+    private func insertChecklistItems(_ checklistItems: [ChecklistItemInput], forTaskID taskID: String) throws {
+        for item in checklistItems {
+            try self.sqlite.execute(
+                """
+                INSERT INTO checklist_items (id, task_id, title, done, position, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                bind: { stmt in
+                    self.sqlite.bind(text: item.id, at: 1, in: stmt)
+                    self.sqlite.bind(text: taskID, at: 2, in: stmt)
+                    self.sqlite.bind(text: item.title, at: 3, in: stmt)
+                    sqlite3_bind_int64(stmt, 4, 0)
+                    sqlite3_bind_int64(stmt, 5, Int64(item.position))
+                    self.sqlite.bind(double: item.createdAt.timeIntervalSince1970, at: 6, in: stmt)
+                    self.sqlite.bind(double: item.updatedAt.timeIntervalSince1970, at: 7, in: stmt)
+                }
+            )
+        }
     }
 
     private func exists(in table: String, id: String) throws -> Bool {
@@ -830,6 +982,17 @@ public final class DemoServerSimulator {
                 FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS checklist_items (
+                id TEXT PRIMARY KEY,
+                task_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                done INTEGER NOT NULL DEFAULT 0,
+                position INTEGER NOT NULL DEFAULT 0,
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL,
+                FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
+            );
+
             """
         )
     }
@@ -916,6 +1079,23 @@ public final class DemoServerSimulator {
                         }
                     )
                 }
+            }
+
+            for item in seedData.checklistItems {
+                try sqlite.execute(
+                    """
+                    INSERT INTO checklist_items (id, task_id, title, done, position, created_at, updated_at)
+                    VALUES (?, ?, ?, 0, ?, ?, ?)
+                    """,
+                    bind: { stmt in
+                        sqlite.bind(text: item.id, at: 1, in: stmt)
+                        sqlite.bind(text: item.taskID, at: 2, in: stmt)
+                        sqlite.bind(text: item.title, at: 3, in: stmt)
+                        sqlite3_bind_int64(stmt, 4, Int64(item.position))
+                        sqlite.bind(double: item.createdAt.timeIntervalSince1970, at: 5, in: stmt)
+                        sqlite.bind(double: item.updatedAt.timeIntervalSince1970, at: 6, in: stmt)
+                    }
+                )
             }
 
             try sqlite.execute("COMMIT;")

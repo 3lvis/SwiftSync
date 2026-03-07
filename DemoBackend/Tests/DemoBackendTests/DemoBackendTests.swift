@@ -42,6 +42,11 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(projectTasks.first?["reviewer_ids"] as? [String], [userID])
         XCTAssertEqual(projectTasks.first?["author_id"] as? String, userID)
         XCTAssertEqual(projectTasks.first?["watcher_ids"] as? [String], [userID])
+        XCTAssertEqual(checklistItems(in: projectTasks.first).count, 2)
+        XCTAssertEqual(
+            checklistItems(in: projectTasks.first).map { $0["title"] as? String },
+            ["Gather requirements", "Draft implementation plan"]
+        )
         XCTAssertEqual(stateID(in: projectTasks.first), "todo")
         XCTAssertEqual(stateLabel(in: projectTasks.first), "To Do")
         XCTAssertNotNil(projectTasks.first?["description"])
@@ -60,6 +65,9 @@ final class DemoBackendTests: XCTestCase {
         let projects = try backend.getProjectsPayload()
         let users = try backend.getUsersPayload()
         let tasks = try backend.getProjectTasksPayload(projectID: seed.projects[0].id)
+        let firstTaskID = tasks.first?["id"] as? String
+        let detail = try backend.getTaskDetailPayload(taskID: firstTaskID ?? "")
+        let checklist = checklistItems(in: detail)
 
         for project in projects {
             let id = project["id"] as? String ?? ""
@@ -73,6 +81,11 @@ final class DemoBackendTests: XCTestCase {
             let id = task["id"] as? String ?? ""
             XCTAssertNotNil(UUID(uuidString: id), "task id '\(id)' is not a UUID")
         }
+        for item in checklist {
+            let id = item["id"] as? String ?? ""
+            XCTAssertNotNil(UUID(uuidString: id), "checklist item id '\(id)' is not a UUID")
+        }
+        XCTAssertFalse(checklist.isEmpty)
     }
 
     func testCreateTaskIDIsUUID() throws {
@@ -298,6 +311,119 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertThrowsError(try backend.createTask(body: duplicateBody))
     }
 
+    func testCreateTaskFromBodyDictWithChecklistItemsEmbedsAndReturnsItems() throws {
+        let url = makeTemporaryDatabaseURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
+
+        let newTaskID = UUID().uuidString
+        let now = iso8601(Date())
+        let body: [String: Any] = [
+            "id": newTaskID,
+            "project_id": projectID,
+            "title": "Task with checklist",
+            "description": "Has child items",
+            "state": ["id": "todo"],
+            "author_id": userID,
+            "created_at": now,
+            "updated_at": now,
+            "checklist_items": [
+                ["id": "item-2", "title": "Second", "done": true, "position": 1],
+                ["id": "item-1", "title": "First", "done": false, "position": 0]
+            ]
+        ]
+
+        let created = try backend.createTask(body: body)
+        let createdItems = checklistItems(in: created)
+        XCTAssertEqual(createdItems.count, 2)
+        XCTAssertEqual(createdItems.map { $0["id"] as? String }, ["item-1", "item-2"])
+        XCTAssertEqual(createdItems.map { $0["title"] as? String }, ["First", "Second"])
+        XCTAssertTrue(createdItems.allSatisfy { $0["done"] == nil })
+        XCTAssertEqual(createdItems.map { $0["position"] as? Int }, [0, 1])
+        XCTAssertEqual(createdItems.map { $0["task_id"] as? String }, [newTaskID, newTaskID])
+
+        let detail = try backend.getTaskDetailPayload(taskID: newTaskID)
+        let detailItems = checklistItems(in: detail)
+        XCTAssertEqual(detailItems.count, 2)
+        XCTAssertEqual(detailItems.map { $0["id"] as? String }, ["item-1", "item-2"])
+    }
+
+    func testUpdateTaskFromBodyDictChecklistItemsKeyPresentReplacesItems() throws {
+        let url = makeTemporaryDatabaseURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
+
+        let newTaskID = UUID().uuidString
+        let now = iso8601(Date())
+        _ = try backend.createTask(body: [
+            "id": newTaskID,
+            "project_id": projectID,
+            "title": "Replaceable checklist",
+            "description": "Initial",
+            "state": ["id": "todo"],
+            "author_id": userID,
+            "created_at": now,
+            "updated_at": now,
+            "checklist_items": [
+                ["id": "initial-item", "title": "Initial", "done": false, "position": 0]
+            ]
+        ])
+
+        let updated = try backend.updateTask(taskID: newTaskID, body: [
+            "id": newTaskID,
+            "title": "Replaceable checklist",
+            "description": "Updated",
+            "state": ["id": "inProgress"],
+            "checklist_items": [
+                ["id": "item-a", "title": "A", "done": true, "position": 2],
+                ["id": "item-b", "title": "B", "done": false, "position": 1]
+            ]
+        ])
+
+        let updatedItems = checklistItems(in: updated)
+        XCTAssertEqual(updatedItems.count, 2)
+        XCTAssertEqual(updatedItems.map { $0["id"] as? String }, ["item-b", "item-a"])
+        XCTAssertTrue(updatedItems.allSatisfy { $0["done"] == nil })
+        XCTAssertFalse(updatedItems.contains { ($0["id"] as? String) == "initial-item" })
+    }
+
+    func testUpdateTaskFromBodyDictChecklistItemsKeyAbsentPreservesItems() throws {
+        let url = makeTemporaryDatabaseURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
+
+        let newTaskID = UUID().uuidString
+        let now = iso8601(Date())
+        _ = try backend.createTask(body: [
+            "id": newTaskID,
+            "project_id": projectID,
+            "title": "Preserved checklist",
+            "description": "Initial",
+            "state": ["id": "todo"],
+            "author_id": userID,
+            "created_at": now,
+            "updated_at": now,
+            "checklist_items": [
+                ["id": "keep-item", "title": "Keep", "done": false, "position": 0]
+            ]
+        ])
+
+        let updated = try backend.updateTask(taskID: newTaskID, body: [
+            "id": newTaskID,
+            "title": "Preserved checklist",
+            "description": "Changed description only",
+            "state": ["id": "done"]
+        ])
+
+        let updatedItems = checklistItems(in: updated)
+        XCTAssertEqual(updatedItems.count, 1)
+        XCTAssertEqual(updatedItems.first?["id"] as? String, "keep-item")
+        XCTAssertEqual(updatedItems.first?["title"] as? String, "Keep")
+    }
+
     func testSQLiteBackendCreateAndDeleteTaskUpdatesProjectSlice() async throws {
         let url = makeTemporaryDatabaseURL()
         defer { try? FileManager.default.removeItem(at: url) }
@@ -488,6 +614,10 @@ final class DemoBackendTests: XCTestCase {
         (task?["state"] as? [String: Any])?["label"] as? String
     }
 
+    private func checklistItems(in task: [String: Any]?) -> [[String: Any]] {
+        (task?["checklist_items"] as? [[String: Any]]) ?? []
+    }
+
     private func iso8601(_ date: Date) -> String {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -516,6 +646,24 @@ final class DemoBackendTests: XCTestCase {
                     descriptionText: "Old description",
                     state: "todo",
                     watcherIDs: [userID],
+                    createdAt: now,
+                    updatedAt: now
+                )
+            ],
+            checklistItems: [
+                .init(
+                    id: "B1B2C3D4-0000-0000-0000-000000000010",
+                    taskID: taskID,
+                    title: "Gather requirements",
+                    position: 0,
+                    createdAt: now,
+                    updatedAt: now
+                ),
+                .init(
+                    id: "B1B2C3D4-0000-0000-0000-000000000011",
+                    taskID: taskID,
+                    title: "Draft implementation plan",
+                    position: 1,
                     createdAt: now,
                     updatedAt: now
                 )

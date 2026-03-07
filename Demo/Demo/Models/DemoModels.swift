@@ -108,13 +108,25 @@ final class Task {
     var stateLabel: String
     var createdAt: Date
     var updatedAt: Date
+
+    @NotExport
     var project: Project?
 
+    @NotExport
     var author: User?
+
+    @NotExport
     var assignee: User?
 
-    @Relationship var reviewers: [User]
-    @Relationship var watchers: [User]
+    @NotExport
+    @Relationship
+    var reviewers: [User]
+
+    @NotExport
+    @Relationship
+    var watchers: [User]
+    @Relationship(deleteRule: .cascade, inverse: \ChecklistItem.task)
+    var checklistItems: [ChecklistItem]
 
     init(
         id: String = UUID().uuidString,
@@ -131,7 +143,8 @@ final class Task {
         author: User? = nil,
         assignee: User? = nil,
         reviewers: [User] = [],
-        watchers: [User] = []
+        watchers: [User] = [],
+        checklistItems: [ChecklistItem] = []
     ) {
         self.id = id
         self.projectID = projectID
@@ -148,5 +161,35 @@ final class Task {
         self.assignee = assignee
         self.reviewers = reviewers
         self.watchers = watchers
+        self.checklistItems = checklistItems
+    }
+}
+
+@Syncable
+@Model
+final class ChecklistItem {
+    @Attribute(.unique) var id: String
+    var title: String
+    var position: Int
+    var createdAt: Date
+    var updatedAt: Date
+
+    @NotExport
+    var task: Task?
+
+    init(
+        id: String = UUID().uuidString,
+        title: String = "",
+        position: Int = 0,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date(),
+        task: Task? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.position = position
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.task = task
     }
 }

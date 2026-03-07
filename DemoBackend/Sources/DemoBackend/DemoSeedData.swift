@@ -71,18 +71,46 @@ public struct DemoSeedData {
         }
     }
 
+    public struct SeedChecklistItem: Sendable {
+        public let id: String
+        public let taskID: String
+        public let title: String
+        public let position: Int
+        public let createdAt: Date
+        public let updatedAt: Date
+
+        public init(
+            id: String,
+            taskID: String,
+            title: String,
+            position: Int,
+            createdAt: Date,
+            updatedAt: Date
+        ) {
+            self.id = id
+            self.taskID = taskID
+            self.title = title
+            self.position = position
+            self.createdAt = createdAt
+            self.updatedAt = updatedAt
+        }
+    }
+
     public let projects: [SeedProject]
     public let users: [SeedUser]
     public let tasks: [SeedTask]
+    public let checklistItems: [SeedChecklistItem]
 
     public init(
         projects: [SeedProject],
         users: [SeedUser],
-        tasks: [SeedTask]
+        tasks: [SeedTask],
+        checklistItems: [SeedChecklistItem] = []
     ) {
         self.projects = projects
         self.users = users
         self.tasks = tasks
+        self.checklistItems = checklistItems
     }
 
     // Stable UUID constants for the canonical seed dataset.
@@ -115,6 +143,14 @@ public struct DemoSeedData {
             public static let inboxFilterKeys     = "C3E7A1B2-3001-0000-0000-000000000011"
             public static let regressionChecks    = "C3E7A1B2-3001-0000-0000-000000000012"
         }
+        public enum ChecklistItems {
+            public static let sessionRequirements = "C3E7A1B2-4001-0000-0000-000000000001"
+            public static let sessionDraftPlan    = "C3E7A1B2-4001-0000-0000-000000000002"
+            public static let qaLaunchFlow        = "C3E7A1B2-4001-0000-0000-000000000003"
+            public static let qaOfflineRecovery   = "C3E7A1B2-4001-0000-0000-000000000004"
+            public static let pushReproCase       = "C3E7A1B2-4001-0000-0000-000000000005"
+            public static let pushVerifyFix       = "C3E7A1B2-4001-0000-0000-000000000006"
+        }
     }
 
     public static func generate() -> DemoSeedData {
@@ -126,6 +162,7 @@ public struct DemoSeedData {
         let p = SeedIDs.Projects.self
         let u = SeedIDs.Users.self
         let t = SeedIDs.Tasks.self
+        let c = SeedIDs.ChecklistItems.self
 
         let projects: [SeedProject] = [
             .init(id: p.accountSecurity,          name: "Account Security Controls",      createdAt: at(540), updatedAt: at(540)),
@@ -297,10 +334,62 @@ public struct DemoSeedData {
             )
         ]
 
+        let checklistItems: [SeedChecklistItem] = [
+            .init(
+                id: c.sessionRequirements,
+                taskID: t.sessionTimeout,
+                title: "Gather requirements",
+                position: 0,
+                createdAt: at(301),
+                updatedAt: at(301)
+            ),
+            .init(
+                id: c.sessionDraftPlan,
+                taskID: t.sessionTimeout,
+                title: "Draft implementation plan",
+                position: 1,
+                createdAt: at(302),
+                updatedAt: at(302)
+            ),
+            .init(
+                id: c.qaLaunchFlow,
+                taskID: t.qaChecklist,
+                title: "Relauch flow after timeout",
+                position: 0,
+                createdAt: at(311),
+                updatedAt: at(311)
+            ),
+            .init(
+                id: c.qaOfflineRecovery,
+                taskID: t.qaChecklist,
+                title: "Offline to online recovery",
+                position: 1,
+                createdAt: at(312),
+                updatedAt: at(312)
+            ),
+            .init(
+                id: c.pushReproCase,
+                taskID: t.duplicatePushFix,
+                title: "Capture repro case",
+                position: 0,
+                createdAt: at(331),
+                updatedAt: at(331)
+            ),
+            .init(
+                id: c.pushVerifyFix,
+                taskID: t.duplicatePushFix,
+                title: "Verify fix after reconnect",
+                position: 1,
+                createdAt: at(332),
+                updatedAt: at(332)
+            )
+        ]
+
         return DemoSeedData(
             projects: projects,
             users: users,
-            tasks: tasks
+            tasks: tasks,
+            checklistItems: checklistItems
         )
     }
 }

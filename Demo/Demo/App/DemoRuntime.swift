@@ -39,6 +39,7 @@ final class DemoRuntime: ObservableObject {
             for: Project.self,
             User.self,
             Task.self,
+            ChecklistItem.self,
             TaskStateOption.self,
             UserRoleOption.self,
             recoverOnFailure: true,

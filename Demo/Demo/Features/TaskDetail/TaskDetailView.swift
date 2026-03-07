@@ -26,6 +26,7 @@ struct TaskDetailView: View {
         List {
             taskSection
             descriptionSection
+            checklistSection
             peopleSection
         }
         .navigationTitle("Task")
@@ -136,6 +137,23 @@ struct TaskDetailView: View {
     }
 
     @ViewBuilder
+    private var checklistSection: some View {
+        if let taskModel {
+            Section("Checklist") {
+                if taskModel.checklistItems.isEmpty {
+                    Text("No checklist items")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(sortedChecklistItems(for: taskModel), id: \.id) { item in
+                        Text(item.title)
+                            .foregroundStyle(.primary)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
     private var peopleSection: some View {
         if let taskModel {
             Section("Assignee") {
@@ -165,6 +183,15 @@ struct TaskDetailView: View {
                     }
                 }
             }
+        }
+    }
+
+    private func sortedChecklistItems(for task: Task) -> [ChecklistItem] {
+        task.checklistItems.sorted {
+            if $0.position == $1.position {
+                return $0.id < $1.id
+            }
+            return $0.position < $1.position
         }
     }
 }

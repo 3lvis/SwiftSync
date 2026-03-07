@@ -36,6 +36,7 @@ struct TaskFormSheet: View {
     @State private var isLoadingTaskStates = false
     @State private var isSaving = false
     @State private var saveErrorMessage: String?
+    @State private var newChecklistTitle = ""
 
     init(mode: TaskFormMode, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.mode = mode
@@ -70,6 +71,7 @@ struct TaskFormSheet: View {
             Form {
                 titleSection
                 descriptionSection
+                checklistSection
                 stateSection
                 assigneeSection
                 if case .create = mode { authorSection }
@@ -89,11 +91,12 @@ struct TaskFormSheet: View {
                         if draft.descriptionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             draft.descriptionText = "No description yet."
                         }
+                        normalizeChecklistPositions()
                         draft.updatedAt = Date()
                         isSaving = true
                         saveErrorMessage = nil
 
-                        let body = draft.exportObject(for: syncContainer, relationshipMode: .none)
+                        let body = draft.exportObject(for: syncContainer)
                         let capturedReviewerIDs = draft.reviewers.map(\.id).sorted()
                         let capturedWatcherIDs = draft.watchers.map(\.id).sorted()
 
@@ -206,6 +209,40 @@ struct TaskFormSheet: View {
         Section("Description") {
             TextEditor(text: $draft.descriptionText)
                 .frame(minHeight: 120)
+        }
+    }
+
+    private var checklistSection: some View {
+        Section("Checklist") {
+            HStack(spacing: 8) {
+                TextField("Add item...", text: $newChecklistTitle)
+                    .textInputAutocapitalization(.sentences)
+
+                Button("Add") {
+                    addChecklistItem()
+                }
+                .disabled(newChecklistTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+
+            if sortedChecklistItems.isEmpty {
+                Text("No checklist items")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(sortedChecklistItems, id: \.id) { item in
+                    HStack(spacing: 10) {
+                        TextField("Item title", text: checklistTitleBinding(for: item))
+
+                        Spacer(minLength: 4)
+
+                        Button(role: .destructive) {
+                            deleteChecklistItem(item)
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+            }
         }
     }
 
@@ -389,5 +426,53 @@ struct TaskFormSheet: View {
         let refreshed = Self.metadataSnapshot(from: editContext)
         users = refreshed.users
         taskStateOptions = refreshed.taskStateOptions
+    }
+
+    private var sortedChecklistItems: [ChecklistItem] {
+        draft.checklistItems.sorted {
+            if $0.position == $1.position {
+                return $0.id < $1.id
+            }
+            return $0.position < $1.position
+        }
+    }
+
+    private func checklistTitleBinding(for item: ChecklistItem) -> Binding<String> {
+        Binding(
+            get: { item.title },
+            set: { newValue in
+                item.title = newValue
+                item.updatedAt = Date()
+            }
+        )
+    }
+
+    private func addChecklistItem() {
+        let trimmed = newChecklistTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let item = ChecklistItem(
+            title: trimmed,
+            position: draft.checklistItems.count,
+            createdAt: Date(),
+            updatedAt: Date(),
+            task: draft
+        )
+        editContext.insert(item)
+        draft.checklistItems.append(item)
+        normalizeChecklistPositions()
+        newChecklistTitle = ""
+    }
+
+    private func deleteChecklistItem(_ item: ChecklistItem) {
+        draft.checklistItems.removeAll { $0.id == item.id }
+        editContext.delete(item)
+        normalizeChecklistPositions()
+    }
+
+    private func normalizeChecklistPositions() {
+        for (index, item) in sortedChecklistItems.enumerated() {
+            item.position = index
+        }
     }
 }

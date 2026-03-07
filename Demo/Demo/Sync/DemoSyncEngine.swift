@@ -138,6 +138,7 @@ final class DemoSyncEngine: ObservableObject {
             var edited = baseBody
             edited["title"] = "\(existing.title) [EQ \(iteration)]"
             edited["description"] = "\(existing.descriptionText)\n\nEarthquake touch #\(iteration)"
+            edited["checklist_items"] = stressChecklistPayload(taskID: taskID, iteration: iteration)
             let users = try allUsers()
             if !users.isEmpty {
                 if iteration.isMultiple(of: 3) {
@@ -187,8 +188,24 @@ final class DemoSyncEngine: ObservableObject {
             "title": "[EQ] Temp \(iteration)",
             "description": "Earthquake temp task for iteration \(iteration).",
             "state": ["id": state.id, "label": state.label],
+            "checklist_items": stressChecklistPayload(taskID: taskID, iteration: iteration),
             "created_at": formatter.string(from: now),
             "updated_at": formatter.string(from: now)
+        ]
+    }
+
+    private func stressChecklistPayload(taskID: String, iteration: Int) -> [[String: Any]] {
+        [
+            [
+                "id": "\(taskID)-eq-\(iteration)-0",
+                "title": "Earthquake step \(iteration)",
+                "position": 0
+            ],
+            [
+                "id": "\(taskID)-eq-\(iteration)-1",
+                "title": "Verify overlap \(iteration)",
+                "position": 1
+            ]
         ]
     }
 
@@ -336,8 +353,11 @@ final class DemoSyncEngine: ObservableObject {
 
     func createTask(body: [String: Any], projectID: String) async throws {
         try await syncOperationThrowing("createTask-\(projectID)") {
-            _ = try await apiClient.createTask(body: body)
+            let created = try await apiClient.createTask(body: body)
             try await syncProjectTasksInternal(projectID: projectID)
+            if let createdID = created["id"] as? String {
+                try await syncTaskDetailInternal(taskID: createdID)
+            }
         }
     }
 
@@ -410,6 +430,7 @@ final class DemoSyncEngine: ObservableObject {
     private func syncTaskDetailInternal(taskID: String) async throws {
         guard let payload = try await apiClient.getTaskDetail(taskID: taskID) else { return }
         try await syncContainer.sync(item: payload, as: Task.self)
+        try await syncChecklistItemsIfPresent(in: payload, taskID: taskID)
         markDataSynced(DataKey(namespace: DemoDataNamespace.taskDetail, id: taskID))
     }
 
@@ -455,6 +476,17 @@ final class DemoSyncEngine: ObservableObject {
 
     private func project(withID projectID: String) throws -> Project? {
         try syncContainer.mainContext.fetch(FetchDescriptor<Project>()).first { $0.id == projectID }
+    }
+
+    private func taskForSync(withID taskID: String) throws -> Task? {
+        let descriptor = FetchDescriptor<Task>(predicate: #Predicate { $0.id == taskID })
+        return try syncContainer.mainContext.fetch(descriptor).first
+    }
+
+    private func syncChecklistItemsIfPresent(in payload: [String: Any], taskID: String) async throws {
+        guard let checklistPayload = payload["checklist_items"] as? [[String: Any]] else { return }
+        guard let task = try taskForSync(withID: taskID) else { return }
+        try await syncContainer.sync(payload: checklistPayload, as: ChecklistItem.self, parent: task)
     }
 
     private func markDataSynced(_ key: DataKey, at date: Date = Date()) {
