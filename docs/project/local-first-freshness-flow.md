@@ -1,32 +1,24 @@
 # Demo Local-First Freshness Flow
 
-This demo now teaches a local-first sync pattern with explicit freshness policy.
+This demo now teaches a local-first sync pattern without TTL-based skip logic.
 
 ## Normal flow
 
 - Screens render from local SwiftData immediately.
-- Engine evaluates freshness per dataset key (`DataKey`).
-- If local data is fresh, the engine runs a background network refresh (`local-first refresh`).
-- If local data is empty or stale, the engine runs a blocking network fetch (`network-first load`).
+- Engine always refreshes from network when a screen triggers sync.
 - There is no pull-to-refresh in demo screens.
-- Retry uses the same screen load call and re-evaluates freshness policy.
+- Retry uses the same `sync*` method.
 
 ## Engine boundaries
 
-- One public `load*Screen` call exists per screen flow in `DemoSyncEngine`.
-- All screen interactions use the same `load*Screen` method (initial load + retry).
-- `sync*` methods remain explicit network primitives.
-- Views do not pass load hints/reasons; engine chooses the path internally.
+- One public `sync*` call exists per screen flow in `DemoSyncEngine`.
+- Screen entrypoints call only `syncProjects`, `syncProjectTasks`, `syncTaskDetail`, or `syncTaskFormMetadata`.
+- Views do not pass freshness hints or reasons.
 
-## Scope status stream
+## Error/state boundaries
 
-Each scope publishes status by `DataKey`:
-
-- `phase`: `idle | loading | refreshing | failed`
-- `path`: `localFirstRefresh | networkFirst | networkOnly`
-- `errorMessage` for actionable failures
-
-The detail screens show this stream and expose Retry when failed.
+- Engine publishes `isSyncing` and `lastErrorMessage`.
+- Sync methods throw; call sites decide retry and user messaging.
 
 ## Earthquake Mode boundaries
 
@@ -38,13 +30,11 @@ The detail screens show this stream and expose Retry when failed.
 ## What this teaches SwiftSync adopters
 
 - Keep business sync policy in an engine, not in views.
-- Treat freshness as a policy decision over three facts: local presence, last successful sync, and TTL.
-- Separate orchestration APIs (`load*`) from low-level network APIs (`sync*`).
-- Publish scope-level status so UI can explain what is happening.
+- Prefer one simple `sync*` API per screen flow.
+- Keep local-first UX by binding UI to local models and always refreshing network after entry.
 
 ## Troubleshooting
 
-- **UI shows old data briefly**: expected in local-first mode; check status path (`localFirstRefresh`) and wait for refresh completion.
-- **UI remains stale**: verify scope status is not `failed`; use Retry.
-- **Unexpected network fetches**: verify TTL for that namespace and last-success timestamp updates.
+- **UI shows old data briefly**: expected in local-first mode; wait for network sync completion.
+- **UI remains stale**: verify `lastErrorMessage`; retry the same `sync*` call.
 - **Form metadata looks stale**: retry metadata load in the form.
