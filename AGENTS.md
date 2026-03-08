@@ -2,9 +2,9 @@
 
 ## Core Mantra
 
-- Convention-first, explicit only for ambiguity.
-- Parent relationship inference is the default behavior.
-- `parentRelationship` is required only when multiple parent relationships are valid candidates.
+- Convention-first with explicit relationship paths at API boundaries.
+- Parent-scoped sync requires explicit `relationship` key paths.
+- Query relationship scoping requires explicit `relationship` + `relationshipID`.
 - Payload semantics are strict:
   - absent key => ignore (no mutation)
   - explicit `null` => clear/delete
