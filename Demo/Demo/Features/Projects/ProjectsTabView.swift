@@ -46,9 +46,6 @@ private struct ProjectDetailView: View {
     @StateObject private var machine: ProjectDetailMachine
     @State private var isShowingCreateTaskSheet = false
     @State private var taskPendingDelete: TaskDeletePrompt?
-#if DEBUG
-    @State private var showingStressPrompt = false
-#endif
 
     init(projectID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.projectID = projectID
@@ -186,63 +183,6 @@ private struct ProjectDetailView: View {
                 Text("Could not delete this task.")
             }
         }
-#if DEBUG
-        .overlay(alignment: .bottom) {
-            if syncEngine.isEarthquakeModeRunning,
-               let status = syncEngine.earthquakeStatusText {
-                HStack(spacing: 8) {
-                    Image(systemName: "waveform.path.ecg")
-                    Text(status)
-                        .font(.caption)
-                        .lineLimit(2)
-                    Spacer(minLength: 8)
-                    Button("Stop") {
-                        syncEngine.stopEarthquakeMode()
-                    }
-                    .font(.caption)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
-                .shadow(radius: 6)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 18)
-            }
-        }
-        .alert(
-            "Earthquake Mode Stopped",
-            isPresented: Binding(
-                get: { syncEngine.earthquakeFailureDetails != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        syncEngine.dismissEarthquakeFailure()
-                    }
-                }
-            )
-        ) {
-            Button("OK", role: .cancel) {
-                syncEngine.dismissEarthquakeFailure()
-            }
-        } message: {
-            Text(syncEngine.earthquakeFailureDetails ?? "Unknown failure")
-        }
-        .alert("Stress test this screen?", isPresented: $showingStressPrompt) {
-            Button("Start Stress", role: .destructive) {
-                syncEngine.startEarthquakeMode(for: .projectDetail(projectID: projectID))
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Debug-only Earthquake Mode runs finite add/edit/delete overlap for this project screen.")
-        }
-        .background(
-            ShakeDetector {
-                guard !syncEngine.isEarthquakeModeRunning else { return }
-                showingStressPrompt = true
-            }
-            .allowsHitTesting(false)
-        )
-#endif
         .overlay {
             loadOverlay
         }

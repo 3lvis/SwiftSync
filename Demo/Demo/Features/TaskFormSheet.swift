@@ -149,7 +149,7 @@ struct TaskFormSheet: View {
     private var itemsSection: some View {
         let items = machine.sortedItems(in: draft)
 
-        Section("Items") {
+        return Section("Items") {
             HStack(spacing: 8) {
                 TextField("Add item...", text: $newItemTitle)
                     .textInputAutocapitalization(.sentences)

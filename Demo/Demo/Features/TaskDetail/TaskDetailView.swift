@@ -9,9 +9,6 @@ struct TaskDetailView: View {
 
     @StateObject private var machine: TaskDetailMachine
     @State private var showingEditSheet = false
-#if DEBUG
-    @State private var showingStressPrompt = false
-#endif
 
     init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.taskID = taskID
@@ -52,64 +49,6 @@ struct TaskDetailView: View {
                 )
             }
         }
-#if DEBUG
-        .overlay(alignment: .bottom) {
-            if syncEngine.isEarthquakeModeRunning,
-               let status = syncEngine.earthquakeStatusText {
-                HStack(spacing: 8) {
-                    Image(systemName: "waveform.path.ecg")
-                    Text(status)
-                        .font(.caption)
-                        .lineLimit(2)
-                    Spacer(minLength: 8)
-                    Button("Stop") {
-                        syncEngine.stopEarthquakeMode()
-                    }
-                    .font(.caption)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
-                .shadow(radius: 6)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 18)
-            }
-        }
-        .alert(
-            "Earthquake Mode Stopped",
-            isPresented: Binding(
-                get: { syncEngine.earthquakeFailureDetails != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        syncEngine.dismissEarthquakeFailure()
-                    }
-                }
-            )
-        ) {
-            Button("OK", role: .cancel) {
-                syncEngine.dismissEarthquakeFailure()
-            }
-        } message: {
-            Text(syncEngine.earthquakeFailureDetails ?? "Unknown failure")
-        }
-        .alert("Stress test this screen?", isPresented: $showingStressPrompt) {
-            Button("Start Stress", role: .destructive) {
-                syncEngine.startEarthquakeMode(for: .taskDetail(taskID: taskID))
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Debug-only Earthquake Mode runs finite add/edit/delete overlap for this task screen.")
-        }
-        .background(
-            ShakeDetector {
-                guard !syncEngine.isEarthquakeModeRunning else { return }
-                guard !showingEditSheet else { return }
-                showingStressPrompt = true
-            }
-            .allowsHitTesting(false)
-        )
-#endif
         .overlay {
             loadOverlay
         }

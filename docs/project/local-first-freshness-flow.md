@@ -20,13 +20,6 @@ This demo now teaches a local-first sync pattern without TTL-based skip logic.
 - Engine publishes `isSyncing`.
 - Sync methods throw; call sites decide retry and user messaging.
 
-## Earthquake Mode boundaries
-
-- Earthquake Mode is DEBUG-only and opt-in.
-- It is triggered by shake + confirmation on detail screens.
-- It is never part of normal sync orchestration.
-- It exists only to stress overlap between refresh and mutation paths.
-
 ## What this teaches SwiftSync adopters
 
 - Keep business sync policy in an engine, not in views.

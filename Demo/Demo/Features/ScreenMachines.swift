@@ -416,7 +416,7 @@ final class TaskFormMachine: ObservableObject {
 
         case .move(let source, let destination):
             var reordered = sortedItems(in: draft)
-            reordered.move(fromOffsets: source, toOffset: destination)
+            reordered = reorderItems(reordered, from: source, to: destination)
             for (index, item) in reordered.enumerated() {
                 item.position = index
                 item.updatedAt = Date()
@@ -457,5 +457,23 @@ final class TaskFormMachine: ObservableObject {
             sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.id)]
         )
         taskStateOptions = (try? editContext.fetch(stateDescriptor)) ?? []
+    }
+
+    private func reorderItems(_ items: [Item], from source: IndexSet, to destination: Int) -> [Item] {
+        guard !items.isEmpty else { return items }
+
+        var reordered = items
+        let validSource = source.filter { reordered.indices.contains($0) }
+        guard !validSource.isEmpty else { return reordered }
+
+        let moving = validSource.map { reordered[$0] }
+        for index in validSource.sorted(by: >) {
+            reordered.remove(at: index)
+        }
+
+        let removedBeforeDestination = validSource.filter { $0 < destination }.count
+        let adjustedDestination = max(0, min(reordered.count, destination - removedBeforeDestination))
+        reordered.insert(contentsOf: moving, at: adjustedDestination)
+        return reordered
     }
 }
