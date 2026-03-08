@@ -360,7 +360,12 @@ final class DemoSyncEngine: ObservableObject {
         }
 
         guard let project = try project(withID: projectID) else { return }
-        try await syncContainer.sync(payload: payload, as: Task.self, parent: project)
+        try await syncContainer.sync(
+            payload: payload,
+            as: Task.self,
+            parent: project,
+            relationship: \Task.project
+        )
         try await syncProjectsData()
     }
 
@@ -377,7 +382,12 @@ final class DemoSyncEngine: ObservableObject {
         guard let project = try project(withID: projectID) else {
             throw SyncTaskDetailError.missingProject(projectID)
         }
-        try await syncContainer.sync(item: payload, as: Task.self, parent: project)
+        try await syncContainer.sync(
+            item: payload,
+            as: Task.self,
+            parent: project,
+            relationship: \Task.project
+        )
     }
 
     /// Canonical post-mutation sync sequence for a single task.
@@ -423,7 +433,12 @@ final class DemoSyncEngine: ObservableObject {
     private func syncItemsIfPresent(in payload: [String: Any], taskID: String) async throws {
         guard let itemPayload = payload["items"] as? [[String: Any]] else { return }
         guard let task = try taskForSync(withID: taskID) else { return }
-        try await syncContainer.sync(payload: itemPayload, as: Item.self, parent: task)
+        try await syncContainer.sync(
+            payload: itemPayload,
+            as: Item.self,
+            parent: task,
+            relationship: \Item.task
+        )
     }
 
 }

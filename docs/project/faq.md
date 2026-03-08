@@ -24,27 +24,24 @@ import SwiftSync
 Yes, if the model uses parent-scoped identity.
 
 - `ParentScopedModel` defaults to `.scopedByParent`
-- inferred parent sync defaults to `.global` unless you pass `identityPolicy: .scopedByParent`
+- explicit parent-relationship sync on non-`ParentScopedModel` types defaults to `.global`
 - `@Attribute(.unique)` on raw `id` still enforces global uniqueness at the store level
 
 See `docs/project/parent-scope.md`.
 
-## 3) Why does parent-scoped sync need relationship inference / `parentRelationship`?
+## 3) Why does parent-scoped sync need `relationship`?
 
 Because SwiftSync must know which child->parent relationship defines the sync scope (especially for scoped delete/diff).
 
-- exactly one candidate => inferred
-- ambiguous => explicit `parentRelationship`
-- none => fail fast
+- parent-scoped sync always passes an explicit `relationship:` key path
 
 See `docs/project/parent-scope.md`.
 
 ## 4) How do I think about `@SyncQuery` filtering?
 
 Use this mental rule:
-- `relatedTo:` + `relatedID:` = relationship-scoped query by ID
-- `through:` = explicit relationship path for ambiguous cases
-- Demo example: `Task -> User` is ambiguous once `Task` has `assignee`, `reviewer`, and `watchers`, so `through:` is required there
+- `relationship:` + `relationshipID:` = relationship-scoped query by ID
+- `relationship:` always names the relationship path used by the query
 - `predicate:` = custom business filters or scalar-only filters
 
 See `docs/project/reactive-reads.md`.

@@ -23,8 +23,8 @@ struct TaskDetailView: View {
         _taskModel = SyncModel(Task.self, id: taskID, in: syncContainer, animation: .snappy(duration: 0.22))
         _taskItems = SyncQuery(
             Item.self,
-            relatedTo: Task.self,
-            relatedID: taskID,
+            relationship: \Item.task,
+            relationshipID: taskID,
             in: syncContainer,
             sortBy: [
                 SortDescriptor(\Item.position, order: .forward),

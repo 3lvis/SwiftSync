@@ -2423,7 +2423,8 @@ final class SyncTests: XCTestCase {
             payload: childPayload,
             as: SuperNote.self,
             in: context,
-            parent: userA
+            parent: userA,
+            relationship: \SuperNote.superUser
         )
 
         let notes = try context.fetch(FetchDescriptor<SuperNote>())
@@ -2451,7 +2452,8 @@ final class SyncTests: XCTestCase {
             ],
             as: SuperNote.self,
             in: context,
-            parent: userA
+            parent: userA,
+            relationship: \SuperNote.superUser
         )
         try await SwiftSync.sync(
             payload: [
@@ -2460,7 +2462,8 @@ final class SyncTests: XCTestCase {
             ],
             as: SuperNote.self,
             in: context,
-            parent: userB
+            parent: userB,
+            relationship: \SuperNote.superUser
         )
 
         // Sync user A scope with one child; user B scope must remain untouched.
@@ -2470,7 +2473,8 @@ final class SyncTests: XCTestCase {
             ],
             as: SuperNote.self,
             in: context,
-            parent: userA
+            parent: userA,
+            relationship: \SuperNote.superUser
         )
 
         let notes = try context.fetch(FetchDescriptor<SuperNote>())
@@ -2498,7 +2502,8 @@ final class SyncTests: XCTestCase {
                 payload: [["id": 1001, "text": "cross-context-child"]],
                 as: SuperNote.self,
                 in: contextB,
-                parent: userFromContextA
+                parent: userFromContextA,
+                relationship: \SuperNote.superUser
             )
         } catch {
             capturedError = error
@@ -2521,7 +2526,7 @@ final class SyncTests: XCTestCase {
     }
 
     @MainActor
-    func testParentSyncInfersSingleRelationshipWithoutParentScopedModelConformance() async throws {
+    func testParentSyncWithExplicitRelationshipWithoutParentScopedModelConformance() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: InferredTask.self, InferredComment.self, configurations: configuration)
         let context = ModelContext(container)
@@ -2539,7 +2544,8 @@ final class SyncTests: XCTestCase {
             ],
             as: InferredComment.self,
             in: context,
-            parent: taskA
+            parent: taskA,
+            relationship: \InferredComment.task
         )
         try await SwiftSync.sync(
             payload: [
@@ -2547,7 +2553,8 @@ final class SyncTests: XCTestCase {
             ],
             as: InferredComment.self,
             in: context,
-            parent: taskB
+            parent: taskB,
+            relationship: \InferredComment.task
         )
 
         try await SwiftSync.sync(
@@ -2556,82 +2563,14 @@ final class SyncTests: XCTestCase {
             ],
             as: InferredComment.self,
             in: context,
-            parent: taskA
+            parent: taskA,
+            relationship: \InferredComment.task
         )
 
         let rows = try context.fetch(FetchDescriptor<InferredComment>())
         XCTAssertEqual(Set(rows.filter { $0.task?.id == 1 }.map(\.id)), Set([1]))
         XCTAssertEqual(rows.first(where: { $0.id == 1 })?.text, "A-1 Updated")
         XCTAssertEqual(Set(rows.filter { $0.task?.id == 2 }.map(\.id)), Set([3]))
-    }
-
-    @MainActor
-    func testParentSyncInferenceThrowsWhenNoRelationshipCandidateExists() async throws {
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: InferredTask.self, InferredOrphanRecord.self, configurations: configuration)
-        let context = ModelContext(container)
-
-        let task = InferredTask(id: 1, title: "A")
-        context.insert(task)
-        try context.save()
-
-        var capturedError: Error?
-        do {
-            try await SwiftSync.sync(
-                payload: [["id": 1, "text": "orphan"]],
-                as: InferredOrphanRecord.self,
-                in: context,
-                parent: task
-            )
-        } catch {
-            capturedError = error
-        }
-
-        guard let syncError = capturedError as? SyncError else {
-            XCTFail("Expected SyncError, got: \(String(describing: capturedError))")
-            return
-        }
-        guard case .invalidPayload(_, let reason) = syncError else {
-            XCTFail("Expected invalidPayload, got: \(syncError)")
-            return
-        }
-        XCTAssertTrue(reason.contains("Found 0 candidate to-one relationships"), "Unexpected reason: \(reason)")
-        XCTAssertTrue(reason.contains("ParentScopedModel.parentRelationship"), "Unexpected reason: \(reason)")
-    }
-
-    @MainActor
-    func testParentSyncInferenceThrowsWhenRelationshipCandidatesAreAmbiguous() async throws {
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: RoleUser.self, RoleTicket.self, configurations: configuration)
-        let context = ModelContext(container)
-
-        let user = RoleUser(id: 1, name: "U1")
-        context.insert(user)
-        try context.save()
-
-        var capturedError: Error?
-        do {
-            try await SwiftSync.sync(
-                payload: [["id": 10, "title": "T-10"]],
-                as: RoleTicket.self,
-                in: context,
-                parent: user
-            )
-        } catch {
-            capturedError = error
-        }
-
-        guard let syncError = capturedError as? SyncError else {
-            XCTFail("Expected SyncError, got: \(String(describing: capturedError))")
-            return
-        }
-        guard case .invalidPayload(_, let reason) = syncError else {
-            XCTFail("Expected invalidPayload, got: \(syncError)")
-            return
-        }
-        XCTAssertTrue(reason.contains("Ambiguous parent relationship"), "Unexpected reason: \(reason)")
-        XCTAssertTrue(reason.contains("assignee"), "Unexpected reason: \(reason)")
-        XCTAssertTrue(reason.contains("reviewer"), "Unexpected reason: \(reason)")
     }
 
     @MainActor
@@ -3185,7 +3124,7 @@ final class SyncTests: XCTestCase {
     }
 
     @MainActor
-    func testSyncContainerInfersSingleParentRelationship() async throws {
+    func testSyncContainerRequiresExplicitParentRelationship() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let syncContainer = try SyncContainer(for: InferredTask.self, InferredComment.self, configurations: configuration)
 
@@ -3201,21 +3140,24 @@ final class SyncTests: XCTestCase {
                 ["id": 2, "text": "A-2"]
             ],
             as: InferredComment.self,
-            parent: taskA
+            parent: taskA,
+            relationship: \InferredComment.task
         )
         try await syncContainer.sync(
             payload: [
                 ["id": 3, "text": "B-3"]
             ],
             as: InferredComment.self,
-            parent: taskB
+            parent: taskB,
+            relationship: \InferredComment.task
         )
         try await syncContainer.sync(
             payload: [
                 ["id": 1, "text": "A-1 Updated"]
             ],
             as: InferredComment.self,
-            parent: taskA
+            parent: taskA,
+            relationship: \InferredComment.task
         )
 
         let rows = try syncContainer.mainContext.fetch(FetchDescriptor<InferredComment>())
@@ -3362,14 +3304,16 @@ final class SyncTests: XCTestCase {
             ],
             as: SuperNote.self,
             in: context,
-            parent: parent
+            parent: parent,
+            relationship: \SuperNote.superUser
         )
 
         try await SwiftSync.sync(
             item: ["id": 1, "text": "First Updated"],
             as: SuperNote.self,
             in: context,
-            parent: parent
+            parent: parent,
+            relationship: \SuperNote.superUser
         )
 
         let notes = try context.fetch(FetchDescriptor<SuperNote>())
@@ -3392,14 +3336,16 @@ final class SyncTests: XCTestCase {
             payload: [["id": 1, "text": "First"]],
             as: SuperNote.self,
             in: context,
-            parent: parent
+            parent: parent,
+            relationship: \SuperNote.superUser
         )
 
         try await SwiftSync.sync(
             item: ["id": 2, "text": "Second"],
             as: SuperNote.self,
             in: context,
-            parent: parent
+            parent: parent,
+            relationship: \SuperNote.superUser
         )
 
         let notes = try context.fetch(FetchDescriptor<SuperNote>())
@@ -3426,14 +3372,16 @@ final class SyncTests: XCTestCase {
             payload: [["id": 10, "text": "A-10"]],
             as: ScopedItem.self,
             in: context,
-            parent: parentA
+            parent: parentA,
+            relationship: \ScopedItem.bucket
         )
 
         try await SwiftSync.sync(
             payload: [["id": 10, "text": "B-10"]],
             as: ScopedItem.self,
             in: context,
-            parent: parentB
+            parent: parentB,
+            relationship: \ScopedItem.bucket
         )
 
         let all = try context.fetch(FetchDescriptor<ScopedItem>())
@@ -3458,14 +3406,16 @@ final class SyncTests: XCTestCase {
             payload: [["id": 10, "text": "A-10"]],
             as: GlobalItem.self,
             in: context,
-            parent: parentA
+            parent: parentA,
+            relationship: \GlobalItem.bucket
         )
 
         try await SwiftSync.sync(
             payload: [["id": 10, "text": "B-10"]],
             as: GlobalItem.self,
             in: context,
-            parent: parentB
+            parent: parentB,
+            relationship: \GlobalItem.bucket
         )
 
         let all = try context.fetch(FetchDescriptor<GlobalItem>())
@@ -3494,7 +3444,8 @@ final class SyncTests: XCTestCase {
             ],
             as: ScopedItem.self,
             in: context,
-            parent: parentA
+            parent: parentA,
+            relationship: \ScopedItem.bucket
         )
 
         try await SwiftSync.sync(
@@ -3504,7 +3455,8 @@ final class SyncTests: XCTestCase {
             ],
             as: ScopedItem.self,
             in: context,
-            parent: parentB
+            parent: parentB,
+            relationship: \ScopedItem.bucket
         )
 
         try await SwiftSync.sync(
@@ -3513,7 +3465,8 @@ final class SyncTests: XCTestCase {
             ],
             as: ScopedItem.self,
             in: context,
-            parent: parentA
+            parent: parentA,
+            relationship: \ScopedItem.bucket
         )
 
         let rows = try context.fetch(FetchDescriptor<ScopedItem>())
@@ -3538,14 +3491,16 @@ final class SyncTests: XCTestCase {
             payload: [["id": 10, "text": "original"]],
             as: UniqueIDNote.self,
             in: context,
-            parent: folderA
+            parent: folderA,
+            relationship: \UniqueIDNote.folder
         )
 
         try await SwiftSync.sync(
             payload: [["id": 10, "text": "moved"]],
             as: UniqueIDNote.self,
             in: context,
-            parent: folderB
+            parent: folderB,
+            relationship: \UniqueIDNote.folder
         )
 
         let all = try context.fetch(FetchDescriptor<UniqueIDNote>())
@@ -3555,7 +3510,7 @@ final class SyncTests: XCTestCase {
     }
 
     @MainActor
-    func testInferredParentSyncWithoutUniqueAttributeUsesScopedPolicy() async throws {
+    func testExplicitParentRelationshipWithoutUniqueAttributeUsesScopedPolicy() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: NoteFolder.self, InferredNote.self, configurations: configuration)
         let context = ModelContext(container)
@@ -3570,14 +3525,16 @@ final class SyncTests: XCTestCase {
             payload: [["id": 10, "text": "A-note"]],
             as: InferredNote.self,
             in: context,
-            parent: folderA
+            parent: folderA,
+            relationship: \InferredNote.folder
         )
 
         try await SwiftSync.sync(
             payload: [["id": 10, "text": "B-note"]],
             as: InferredNote.self,
             in: context,
-            parent: folderB
+            parent: folderB,
+            relationship: \InferredNote.folder
         )
 
         let all = try context.fetch(FetchDescriptor<InferredNote>())
@@ -3602,14 +3559,16 @@ final class SyncTests: XCTestCase {
             payload: [["id": 10, "email": "a@example.com", "text": "A-note"]],
             as: UniqueEmailNote.self,
             in: context,
-            parent: folderA
+            parent: folderA,
+            relationship: \UniqueEmailNote.folder
         )
 
         try await SwiftSync.sync(
             payload: [["id": 10, "email": "b@example.com", "text": "B-note"]],
             as: UniqueEmailNote.self,
             in: context,
-            parent: folderB
+            parent: folderB,
+            relationship: \UniqueEmailNote.folder
         )
 
         let all = try context.fetch(FetchDescriptor<UniqueEmailNote>())

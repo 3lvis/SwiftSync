@@ -26,14 +26,14 @@ Think of `@SyncQuery` as:
 
 Three common query shapes:
 
-1. `relatedTo:` + `relatedID:` (relationship-scoped query by ID)
+1. `relationship:` + `relationshipID:` (relationship-scoped query by ID)
 - Example: all `Task` rows that belong to a specific `Project` ID.
 
 ```swift
 @SyncQuery(
   Task.self,
-  relatedTo: Project.self,
-  relatedID: projectID,
+  relationship: \Task.project,
+  relationshipID: projectID,
   in: syncContainer,
   sortBy: [SortDescriptor(\Task.updatedAt, order: .reverse)]
 )
@@ -43,22 +43,20 @@ var tasks: [Task]
 2. `predicate:` (custom business filters)
 - Use for scalar-only filters, compound filters, or non-relationship business filters.
 
-## Inference Rules (`relatedTo:` / `relatedID:`)
+## Relationship Path Rules (`relationship:` / `relationshipID:`)
 
-SwiftSync infers the relationship automatically when exactly one matching relationship exists on the queried model for the related type.
+SwiftSync requires an explicit relationship key path for relationship-scoped queries.
 
-- exactly 1 candidate => inferred
-- 0 candidates => fail fast
-- more than 1 candidate (or both to-one and to-many candidates) => pass `through:` explicitly
+- pass `relationship:` for every relationship-scoped query
+- to-one and to-many are both supported via typed key paths
 
 Example (ambiguous relationship):
 
 ```swift
 @SyncQuery(
   Ticket.self,
-  relatedTo: User.self,
-  relatedID: userID,
-  through: \Ticket.assignee,
+  relationship: \Ticket.assignee,
+  relationshipID: userID,
   in: syncContainer,
   sortBy: [SortDescriptor(\Ticket.id)]
 )
@@ -69,7 +67,7 @@ Example (same queried model + same related model, multiple paths):
 - `Task.assignee` (`User?`)
 - `Task.reviewer` (`User?`)
 - `Task.watchers` (`[User]`)
-- `@SyncQuery(Task.self, relatedTo: User.self, relatedID: userID, ...)` is ambiguous, so pass explicit `through:` for each path.
+- `@SyncQuery(Task.self, relationship: ..., relationshipID: userID, ...)` stays explicit for each path.
 
 Related modeling note:
 - relationship-scoped queries assume the local relationship graph is trustworthy
@@ -85,9 +83,8 @@ Example:
 ```swift
 @SyncQuery(
   Task.self,
-  relatedTo: User.self,
-  relatedID: userID,
-  through: \Task.assignee,
+  relationship: \Task.assignee,
+  relationshipID: userID,
   in: syncContainer,
   sortBy: [
     SortDescriptor(\Task.priority, order: .reverse),
@@ -190,7 +187,7 @@ publisher.$rows
 
 It supports the same query shapes as `@SyncQuery`:
 - plain fetch with optional predicate
-- `relatedTo:` + `through:` for relationship-scoped queries
+- `relationship:` + `relationshipID:` for relationship-scoped queries
 
 It reacts to the same internal save notifications as `@SyncQuery` and applies the same reload heuristics (`changedTypeNames`, `changedIDs`).
 

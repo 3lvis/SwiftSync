@@ -2,22 +2,6 @@ import Foundation
 import SwiftData
 
 extension SwiftSync {
-    static func inferToOneRelationship<Model: PersistentModel, Parent: PersistentModel>(
-        for _: Model.Type,
-        parent _: Parent.Type
-    ) throws -> ReferenceWritableKeyPath<Model, Parent?> {
-        try inferSingleParentRelationship(for: Model.self, parent: Parent.self).keyPath
-    }
-
-    static func inferToManyRelationship<Model: PersistentModel, Related: PersistentModel>(
-        for _: Model.Type,
-        related _: Related.Type
-    ) throws -> ReferenceWritableKeyPath<Model, [Related]> {
-        try inferSingleToManyRelationship(for: Model.self, related: Related.self).keyPath
-    }
-}
-
-extension SwiftSync {
     static func sync<Model: SyncUpdatableModel>(
         payload: [Any],
         as _: Model.Type,
@@ -180,10 +164,10 @@ extension SwiftSync {
         as _: Model.Type,
         in context: ModelContext,
         parent: Parent,
+        relationship: ReferenceWritableKeyPath<Model, Parent?>,
         keyStyle: KeyStyle = .snakeCase,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
-        let inferred = try inferToOneRelationship(for: Model.self, parent: Parent.self)
         let lease = await acquireSyncLease(for: context)
         do {
             try throwIfCancelled()
@@ -201,7 +185,7 @@ extension SwiftSync {
             }
             let existing = try context.fetch(FetchDescriptor<Model>())
             let scopeRows = existing.filter {
-                $0[keyPath: inferred]?.persistentModelID == resolvedParent.persistentModelID
+                $0[keyPath: relationship]?.persistentModelID == resolvedParent.persistentModelID
             }
             var changed = false
 
@@ -216,7 +200,7 @@ extension SwiftSync {
                 }
             } else {
                 let created = try Model.make(from: payloadModel)
-                created[keyPath: inferred] = resolvedParent
+                created[keyPath: relationship] = resolvedParent
                 context.insert(created)
                 if relationshipOperations.contains(.insert) {
                     try throwIfCancelled()
@@ -242,41 +226,21 @@ extension SwiftSync {
         }
     }
 
-    static func sync<Model: ParentScopedModel>(
-        payload: [Any],
-        as _: Model.Type,
-        in context: ModelContext,
-        parent: Model.SyncParent,
-        keyStyle: KeyStyle = .snakeCase,
-        relationshipOperations: SyncRelationshipOperations = .all
-    ) async throws {
-        try await sync(
-            payload: payload,
-            as: Model.self,
-            in: context,
-            parent: parent,
-            parentRelationship: Model.parentRelationship,
-            isGlobal: syncIdentityHasUniqueAttribute(Model.self),
-            keyStyle: keyStyle,
-            relationshipOperations: relationshipOperations
-        )
-    }
-
     static func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
         payload: [Any],
         as _: Model.Type,
         in context: ModelContext,
         parent: Parent,
+        relationship: ReferenceWritableKeyPath<Model, Parent?>,
         keyStyle: KeyStyle = .snakeCase,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
-        let inferred = try inferToOneRelationship(for: Model.self, parent: Parent.self)
         try await sync(
             payload: payload,
             as: Model.self,
             in: context,
             parent: parent,
-            parentRelationship: inferred,
+            parentRelationship: relationship,
             isGlobal: syncIdentityHasUniqueAttribute(Model.self),
             keyStyle: keyStyle,
             relationshipOperations: relationshipOperations
@@ -495,102 +459,6 @@ extension SwiftSync {
             }
         }
         return nil
-    }
-
-    private struct ParentRelationshipCandidate<Model: PersistentModel, Parent: PersistentModel> {
-        let name: String
-        let keyPath: ReferenceWritableKeyPath<Model, Parent?>
-    }
-
-    private struct ToManyRelationshipCandidate<Model: PersistentModel, Related: PersistentModel> {
-        let name: String
-        let keyPath: ReferenceWritableKeyPath<Model, [Related]>
-    }
-
-    private static func inferSingleParentRelationship<Model: PersistentModel, Parent: PersistentModel>(
-        for _: Model.Type,
-        parent _: Parent.Type
-    ) throws -> ParentRelationshipCandidate<Model, Parent> {
-        var candidates: [ParentRelationshipCandidate<Model, Parent>] = []
-        for metadata in Model.schemaMetadata {
-            let metadataMirror = Mirror(reflecting: metadata)
-            let name = metadataMirror.children.first(where: { $0.label == "name" })?.value as? String ?? "<unknown>"
-            guard let keyPathAny = metadataMirror.children.first(where: { $0.label == "keypath" })?.value else {
-                continue
-            }
-            guard let keyPath = keyPathAny as? ReferenceWritableKeyPath<Model, Parent?> else {
-                continue
-            }
-            candidates.append(ParentRelationshipCandidate(name: name, keyPath: keyPath))
-        }
-
-        if candidates.isEmpty {
-            throw SyncError.invalidPayload(
-                model: String(describing: Model.self),
-                reason: """
-                Could not infer a parent relationship to \(String(describing: Parent.self)). \
-                Found 0 candidate to-one relationships. \
-                Add explicit ParentScopedModel.parentRelationship for this model.
-                """
-            )
-        }
-
-        if candidates.count > 1 {
-            let names = candidates.map(\.name).sorted().joined(separator: ", ")
-            throw SyncError.invalidPayload(
-                model: String(describing: Model.self),
-                reason: """
-                Ambiguous parent relationship to \(String(describing: Parent.self)). \
-                Found \(candidates.count) candidates: \(names). \
-                Add explicit ParentScopedModel.parentRelationship for this model.
-                """
-            )
-        }
-
-        return candidates[0]
-    }
-
-    private static func inferSingleToManyRelationship<Model: PersistentModel, Related: PersistentModel>(
-        for _: Model.Type,
-        related _: Related.Type
-    ) throws -> ToManyRelationshipCandidate<Model, Related> {
-        var candidates: [ToManyRelationshipCandidate<Model, Related>] = []
-        for metadata in Model.schemaMetadata {
-            let metadataMirror = Mirror(reflecting: metadata)
-            let name = metadataMirror.children.first(where: { $0.label == "name" })?.value as? String ?? "<unknown>"
-            guard let keyPathAny = metadataMirror.children.first(where: { $0.label == "keypath" })?.value else {
-                continue
-            }
-            guard let keyPath = keyPathAny as? ReferenceWritableKeyPath<Model, [Related]> else {
-                continue
-            }
-            candidates.append(ToManyRelationshipCandidate(name: name, keyPath: keyPath))
-        }
-
-        if candidates.isEmpty {
-            throw SyncError.invalidPayload(
-                model: String(describing: Model.self),
-                reason: """
-                Could not infer a to-many relationship to \(String(describing: Related.self)). \
-                Found 0 candidate to-many relationships. \
-                Pass an explicit query relationship via `via:`.
-                """
-            )
-        }
-
-        if candidates.count > 1 {
-            let names = candidates.map(\.name).sorted().joined(separator: ", ")
-            throw SyncError.invalidPayload(
-                model: String(describing: Model.self),
-                reason: """
-                Ambiguous to-many relationship to \(String(describing: Related.self)). \
-                Found \(candidates.count) candidates: \(names). \
-                Pass an explicit query relationship via `via:`.
-                """
-            )
-        }
-
-        return candidates[0]
     }
 
     private static func syncIdentityHasUniqueAttribute<Model: SyncModelable>(_ model: Model.Type) -> Bool {

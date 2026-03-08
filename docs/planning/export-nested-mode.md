@@ -130,7 +130,7 @@ This produces:
 ```
 
 The server inserts both the task and the comment atomically. The client then syncs the
-task's comments back via a normal `getTaskComments` → `syncContainer.sync(payload:as:parent:)`
+task's comments back via a normal `getTaskComments` → `syncContainer.sync(payload:as:parent:relationship:)`
 call.
 
 This is the smallest honest demonstration: one new model, one new `_attributes` key, one

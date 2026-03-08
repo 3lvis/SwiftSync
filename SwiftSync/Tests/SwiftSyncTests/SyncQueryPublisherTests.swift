@@ -187,10 +187,10 @@ final class SyncQueryPublisherTests: XCTestCase {
         XCTAssertEqual(reloadCount, 0)
     }
 
-    // MARK: - postFetchFilter (relatedTo)
+    // MARK: - postFetchFilter (relationship)
 
     @MainActor
-    func testPublisherWithToOneRelatedIDFilter() async throws {
+    func testPublisherWithToOneRelationshipIDFilter() async throws {
         let syncContainer = try makeContainer(modelTypes: PubTask.self, PubUser.self)
 
         try await syncContainer.sync(
@@ -212,9 +212,8 @@ final class SyncQueryPublisherTests: XCTestCase {
 
         let publisher = SyncQueryPublisher(
             PubTask.self,
-            relatedTo: PubUser.self,
-            relatedID: "u1",
-            through: \PubTask.assignee,
+            relationship: \PubTask.assignee,
+            relationshipID: "u1",
             in: syncContainer,
             sortBy: [SortDescriptor(\PubTask.title)]
         )
@@ -239,9 +238,8 @@ final class SyncQueryPublisherTests: XCTestCase {
 
         let publisher = SyncQueryPublisher(
             PubTask.self,
-            relatedTo: PubUser.self,
-            relatedID: "u1",
-            through: \PubTask.assignee,
+            relationship: \PubTask.assignee,
+            relationshipID: "u1",
             in: syncContainer,
             sortBy: [SortDescriptor(\PubTask.title)]
         )

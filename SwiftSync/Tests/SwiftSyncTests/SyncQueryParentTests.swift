@@ -4,7 +4,7 @@ import SwiftSync
 
 final class SyncQueryParentTests: XCTestCase {
     @MainActor
-    func testSyncQueryRelatedToIDInferredToOneFiltersToParentScope() throws {
+    func testSyncQueryRelationshipToOneFiltersToParentScope() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let modelContainer = try ModelContainer(
             for: InferredTask.self,
@@ -25,8 +25,8 @@ final class SyncQueryParentTests: XCTestCase {
 
         let query = SyncQuery(
             InferredComment.self,
-            relatedTo: InferredTask.self,
-            relatedID: taskA.id,
+            relationship: \InferredComment.task,
+            relationshipID: taskA.id,
             in: syncContainer,
             sortBy: [SortDescriptor(\InferredComment.id)]
         )
@@ -35,7 +35,7 @@ final class SyncQueryParentTests: XCTestCase {
     }
 
     @MainActor
-    func testSyncQueryRelatedToIDExplicitThroughSupportsAmbiguousToOne() throws {
+    func testSyncQueryRelationshipSupportsAmbiguousToOne() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let modelContainer = try ModelContainer(
             for: RoleUser.self,
@@ -56,9 +56,8 @@ final class SyncQueryParentTests: XCTestCase {
 
         let query = SyncQuery(
             RoleTicket.self,
-            relatedTo: RoleUser.self,
-            relatedID: userA.id,
-            through: \RoleTicket.assignee,
+            relationship: \RoleTicket.assignee,
+            relationshipID: userA.id,
             in: syncContainer,
             sortBy: [SortDescriptor(\RoleTicket.id)]
         )
@@ -67,7 +66,7 @@ final class SyncQueryParentTests: XCTestCase {
     }
 
     @MainActor
-    func testSyncQueryRelatedToIDInferredToManyFiltersMembership() throws {
+    func testSyncQueryRelationshipToManyFiltersMembership() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let modelContainer = try ModelContainer(
             for: Tag.self,
@@ -95,8 +94,8 @@ final class SyncQueryParentTests: XCTestCase {
 
         let query = SyncQuery(
             Tag.self,
-            relatedTo: UserTagsByObjects.self,
-            relatedID: userA.id,
+            relationship: \Tag.usersByObjects,
+            relationshipID: userA.id,
             in: syncContainer,
             sortBy: [SortDescriptor(\Tag.id)]
         )
@@ -105,7 +104,7 @@ final class SyncQueryParentTests: XCTestCase {
     }
 
     @MainActor
-    func testSyncQueryRelatedToIDExplicitThroughSupportsAmbiguousToMany() throws {
+    func testSyncQueryRelationshipSupportsAmbiguousToMany() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let modelContainer = try ModelContainer(
             for: RoleUser.self,
@@ -125,9 +124,8 @@ final class SyncQueryParentTests: XCTestCase {
 
         let query = SyncQuery(
             RoleUser.self,
-            relatedTo: RoleTicket.self,
-            relatedID: ticket.id,
-            through: \RoleUser.assignedTickets,
+            relationship: \RoleUser.assignedTickets,
+            relationshipID: ticket.id,
             in: syncContainer,
             sortBy: [SortDescriptor(\RoleUser.id)]
         )

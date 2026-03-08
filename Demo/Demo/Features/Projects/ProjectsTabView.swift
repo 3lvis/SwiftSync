@@ -60,8 +60,8 @@ private struct ProjectDetailView: View {
         _projectModel = SyncModel(Project.self, id: projectID, in: syncContainer)
         _tasks = SyncQuery(
             Task.self,
-            relatedTo: Project.self,
-            relatedID: projectID,
+            relationship: \Task.project,
+            relationshipID: projectID,
             in: syncContainer,
             sortBy: [
                 SortDescriptor(\Task.updatedAt, order: .reverse),
