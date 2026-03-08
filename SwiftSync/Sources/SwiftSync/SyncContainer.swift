@@ -96,7 +96,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         payload: [Any],
         as model: Model.Type,
         parent: Parent,
-        parentRelationship: ReferenceWritableKeyPath<Model, Parent?>,
+        relationship: ReferenceWritableKeyPath<Model, Parent?>,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         let context = ModelContext(modelContainer)
@@ -105,7 +105,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             as: model,
             in: context,
             parent: parent,
-            parentRelationship: parentRelationship,
+            relationship: relationship,
             keyStyle: keyStyle,
             relationshipOperations: relationshipOperations
         )
@@ -130,7 +130,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         item: [String: Any],
         as model: Model.Type,
         parent: Parent,
-        parentRelationship: ReferenceWritableKeyPath<Model, Parent?>,
+        relationship: ReferenceWritableKeyPath<Model, Parent?>,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         let context = ModelContext(modelContainer)
@@ -139,7 +139,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             as: model,
             in: context,
             parent: parent,
-            parentRelationship: parentRelationship,
+            relationship: relationship,
             keyStyle: keyStyle,
             relationshipOperations: relationshipOperations
         )

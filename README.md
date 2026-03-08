@@ -286,13 +286,13 @@ try await SwiftSync.sync(
   as: Note.self,
   in: context,
   parent: user,
-  parentRelationship: \Note.user
+  relationship: \Note.user
 )
 ```
 
 Notes:
 - This example keeps `ParentScopedModel`, so scoped identity is the default for `Note`.
-- Parent-scoped sync requires an explicit `parentRelationship:` key path.
+- Parent-scoped sync requires an explicit `relationship:` key path.
 - For models conforming to `ParentScopedModel`, the default identity policy remains scoped-by-parent.
 
 ### Scenario: to-one relationship by nested object
@@ -707,7 +707,7 @@ public extension SwiftSync {
     as model: Model.Type,
     in context: ModelContext,
     parent: Parent,
-    parentRelationship: ReferenceWritableKeyPath<Model, Parent?>,
+    relationship: ReferenceWritableKeyPath<Model, Parent?>,
     relationshipOperations: SyncRelationshipOperations = .all
   ) async throws
 
@@ -716,7 +716,7 @@ public extension SwiftSync {
     as model: Model.Type,
     in context: ModelContext,
     parent: Parent,
-    parentRelationship: ReferenceWritableKeyPath<Model, Parent?>,
+    relationship: ReferenceWritableKeyPath<Model, Parent?>,
     relationshipOperations: SyncRelationshipOperations = .all
   ) async throws
 

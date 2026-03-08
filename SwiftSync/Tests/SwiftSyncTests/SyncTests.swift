@@ -2424,7 +2424,7 @@ final class SyncTests: XCTestCase {
             as: SuperNote.self,
             in: context,
             parent: userA,
-            parentRelationship: \SuperNote.superUser
+            relationship: \SuperNote.superUser
         )
 
         let notes = try context.fetch(FetchDescriptor<SuperNote>())
@@ -2453,7 +2453,7 @@ final class SyncTests: XCTestCase {
             as: SuperNote.self,
             in: context,
             parent: userA,
-            parentRelationship: \SuperNote.superUser
+            relationship: \SuperNote.superUser
         )
         try await SwiftSync.sync(
             payload: [
@@ -2463,7 +2463,7 @@ final class SyncTests: XCTestCase {
             as: SuperNote.self,
             in: context,
             parent: userB,
-            parentRelationship: \SuperNote.superUser
+            relationship: \SuperNote.superUser
         )
 
         // Sync user A scope with one child; user B scope must remain untouched.
@@ -2474,7 +2474,7 @@ final class SyncTests: XCTestCase {
             as: SuperNote.self,
             in: context,
             parent: userA,
-            parentRelationship: \SuperNote.superUser
+            relationship: \SuperNote.superUser
         )
 
         let notes = try context.fetch(FetchDescriptor<SuperNote>())
@@ -2503,7 +2503,7 @@ final class SyncTests: XCTestCase {
                 as: SuperNote.self,
                 in: contextB,
                 parent: userFromContextA,
-                parentRelationship: \SuperNote.superUser
+                relationship: \SuperNote.superUser
             )
         } catch {
             capturedError = error
@@ -2545,7 +2545,7 @@ final class SyncTests: XCTestCase {
             as: InferredComment.self,
             in: context,
             parent: taskA,
-            parentRelationship: \InferredComment.task
+            relationship: \InferredComment.task
         )
         try await SwiftSync.sync(
             payload: [
@@ -2554,7 +2554,7 @@ final class SyncTests: XCTestCase {
             as: InferredComment.self,
             in: context,
             parent: taskB,
-            parentRelationship: \InferredComment.task
+            relationship: \InferredComment.task
         )
 
         try await SwiftSync.sync(
@@ -2564,7 +2564,7 @@ final class SyncTests: XCTestCase {
             as: InferredComment.self,
             in: context,
             parent: taskA,
-            parentRelationship: \InferredComment.task
+            relationship: \InferredComment.task
         )
 
         let rows = try context.fetch(FetchDescriptor<InferredComment>())
@@ -3141,7 +3141,7 @@ final class SyncTests: XCTestCase {
             ],
             as: InferredComment.self,
             parent: taskA,
-            parentRelationship: \InferredComment.task
+            relationship: \InferredComment.task
         )
         try await syncContainer.sync(
             payload: [
@@ -3149,7 +3149,7 @@ final class SyncTests: XCTestCase {
             ],
             as: InferredComment.self,
             parent: taskB,
-            parentRelationship: \InferredComment.task
+            relationship: \InferredComment.task
         )
         try await syncContainer.sync(
             payload: [
@@ -3157,7 +3157,7 @@ final class SyncTests: XCTestCase {
             ],
             as: InferredComment.self,
             parent: taskA,
-            parentRelationship: \InferredComment.task
+            relationship: \InferredComment.task
         )
 
         let rows = try syncContainer.mainContext.fetch(FetchDescriptor<InferredComment>())
@@ -3305,7 +3305,7 @@ final class SyncTests: XCTestCase {
             as: SuperNote.self,
             in: context,
             parent: parent,
-            parentRelationship: \SuperNote.superUser
+            relationship: \SuperNote.superUser
         )
 
         try await SwiftSync.sync(
@@ -3313,7 +3313,7 @@ final class SyncTests: XCTestCase {
             as: SuperNote.self,
             in: context,
             parent: parent,
-            parentRelationship: \SuperNote.superUser
+            relationship: \SuperNote.superUser
         )
 
         let notes = try context.fetch(FetchDescriptor<SuperNote>())
@@ -3337,7 +3337,7 @@ final class SyncTests: XCTestCase {
             as: SuperNote.self,
             in: context,
             parent: parent,
-            parentRelationship: \SuperNote.superUser
+            relationship: \SuperNote.superUser
         )
 
         try await SwiftSync.sync(
@@ -3345,7 +3345,7 @@ final class SyncTests: XCTestCase {
             as: SuperNote.self,
             in: context,
             parent: parent,
-            parentRelationship: \SuperNote.superUser
+            relationship: \SuperNote.superUser
         )
 
         let notes = try context.fetch(FetchDescriptor<SuperNote>())
@@ -3373,7 +3373,7 @@ final class SyncTests: XCTestCase {
             as: ScopedItem.self,
             in: context,
             parent: parentA,
-            parentRelationship: \ScopedItem.bucket
+            relationship: \ScopedItem.bucket
         )
 
         try await SwiftSync.sync(
@@ -3381,7 +3381,7 @@ final class SyncTests: XCTestCase {
             as: ScopedItem.self,
             in: context,
             parent: parentB,
-            parentRelationship: \ScopedItem.bucket
+            relationship: \ScopedItem.bucket
         )
 
         let all = try context.fetch(FetchDescriptor<ScopedItem>())
@@ -3407,7 +3407,7 @@ final class SyncTests: XCTestCase {
             as: GlobalItem.self,
             in: context,
             parent: parentA,
-            parentRelationship: \GlobalItem.bucket
+            relationship: \GlobalItem.bucket
         )
 
         try await SwiftSync.sync(
@@ -3415,7 +3415,7 @@ final class SyncTests: XCTestCase {
             as: GlobalItem.self,
             in: context,
             parent: parentB,
-            parentRelationship: \GlobalItem.bucket
+            relationship: \GlobalItem.bucket
         )
 
         let all = try context.fetch(FetchDescriptor<GlobalItem>())
@@ -3445,7 +3445,7 @@ final class SyncTests: XCTestCase {
             as: ScopedItem.self,
             in: context,
             parent: parentA,
-            parentRelationship: \ScopedItem.bucket
+            relationship: \ScopedItem.bucket
         )
 
         try await SwiftSync.sync(
@@ -3456,7 +3456,7 @@ final class SyncTests: XCTestCase {
             as: ScopedItem.self,
             in: context,
             parent: parentB,
-            parentRelationship: \ScopedItem.bucket
+            relationship: \ScopedItem.bucket
         )
 
         try await SwiftSync.sync(
@@ -3466,7 +3466,7 @@ final class SyncTests: XCTestCase {
             as: ScopedItem.self,
             in: context,
             parent: parentA,
-            parentRelationship: \ScopedItem.bucket
+            relationship: \ScopedItem.bucket
         )
 
         let rows = try context.fetch(FetchDescriptor<ScopedItem>())
@@ -3492,7 +3492,7 @@ final class SyncTests: XCTestCase {
             as: UniqueIDNote.self,
             in: context,
             parent: folderA,
-            parentRelationship: \UniqueIDNote.folder
+            relationship: \UniqueIDNote.folder
         )
 
         try await SwiftSync.sync(
@@ -3500,7 +3500,7 @@ final class SyncTests: XCTestCase {
             as: UniqueIDNote.self,
             in: context,
             parent: folderB,
-            parentRelationship: \UniqueIDNote.folder
+            relationship: \UniqueIDNote.folder
         )
 
         let all = try context.fetch(FetchDescriptor<UniqueIDNote>())
@@ -3526,7 +3526,7 @@ final class SyncTests: XCTestCase {
             as: InferredNote.self,
             in: context,
             parent: folderA,
-            parentRelationship: \InferredNote.folder
+            relationship: \InferredNote.folder
         )
 
         try await SwiftSync.sync(
@@ -3534,7 +3534,7 @@ final class SyncTests: XCTestCase {
             as: InferredNote.self,
             in: context,
             parent: folderB,
-            parentRelationship: \InferredNote.folder
+            relationship: \InferredNote.folder
         )
 
         let all = try context.fetch(FetchDescriptor<InferredNote>())
@@ -3560,7 +3560,7 @@ final class SyncTests: XCTestCase {
             as: UniqueEmailNote.self,
             in: context,
             parent: folderA,
-            parentRelationship: \UniqueEmailNote.folder
+            relationship: \UniqueEmailNote.folder
         )
 
         try await SwiftSync.sync(
@@ -3568,7 +3568,7 @@ final class SyncTests: XCTestCase {
             as: UniqueEmailNote.self,
             in: context,
             parent: folderB,
-            parentRelationship: \UniqueEmailNote.folder
+            relationship: \UniqueEmailNote.folder
         )
 
         let all = try context.fetch(FetchDescriptor<UniqueEmailNote>())

@@ -364,7 +364,7 @@ final class DemoSyncEngine: ObservableObject {
             payload: payload,
             as: Task.self,
             parent: project,
-            parentRelationship: \Task.project
+            relationship: \Task.project
         )
         try await syncProjectsData()
     }
@@ -386,7 +386,7 @@ final class DemoSyncEngine: ObservableObject {
             item: payload,
             as: Task.self,
             parent: project,
-            parentRelationship: \Task.project
+            relationship: \Task.project
         )
     }
 
@@ -437,7 +437,7 @@ final class DemoSyncEngine: ObservableObject {
             payload: itemPayload,
             as: Item.self,
             parent: task,
-            parentRelationship: \Item.task
+            relationship: \Item.task
         )
     }
 

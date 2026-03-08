@@ -29,11 +29,11 @@ Yes, if the model uses parent-scoped identity.
 
 See `docs/project/parent-scope.md`.
 
-## 3) Why does parent-scoped sync need `parentRelationship`?
+## 3) Why does parent-scoped sync need `relationship`?
 
 Because SwiftSync must know which child->parent relationship defines the sync scope (especially for scoped delete/diff).
 
-- parent-scoped sync always passes an explicit `parentRelationship:` key path
+- parent-scoped sync always passes an explicit `relationship:` key path
 
 See `docs/project/parent-scope.md`.
 

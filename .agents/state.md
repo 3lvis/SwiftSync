@@ -1,20 +1,21 @@
 # State Capsule
 
 ## Plan
-- [x] Update parent-scoped sync tests/call sites to require explicit `parentRelationship:`.
-- [x] Run targeted tests to capture expected compile failures before removing parent inference APIs.
-- [x] Remove parent inference-only sync overloads and inference helper machinery from API.
-- [x] Update docs to explicit parent relationship contract.
-- [x] Run targeted tests for parent-scoped sync and broader `swift test --filter Sync` verification.
+- [x] Update tests/call sites to use `relationship:` instead of `parentRelationship:` for parent-scoped sync.
+- [x] Run targeted tests to confirm expected compile failures before label rename.
+- [x] Rename parent-scoped sync API labels from `parentRelationship` to `relationship`.
+- [x] Update docs to new parent-scoped sync label.
+- [x] Run `swift test --filter Sync` and verify green.
 
 ## Last known state
-`swift test --filter Sync` green after requiring explicit `parentRelationship:` for parent-scoped sync APIs
+`swift test --filter Sync` green after renaming parent-scoped sync label to `relationship:`
 
 ## Decisions (don't revisit)
 - Keep `SyncQuery` base and `predicate` initializers; remove only relationship overloads that infer relationships when explicit relationship alternatives exist.
 - Remove `relatedTo:` where explicit relationship key paths already provide related model typing.
 - No backward compatibility for label rename: replace `through`/`relatedID` with `relationship`/`relationshipID` everywhere.
-- Require explicit `parentRelationship:` for parent-scoped sync APIs; remove inference-only sync overloads.
+- Require explicit parent relationship key paths for parent-scoped sync APIs; remove inference-only sync overloads.
+- Simplify parent-scoped sync call sites to use `relationship:` label.
 
 ## Files touched
 - .agents/state.md

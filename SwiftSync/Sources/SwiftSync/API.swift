@@ -164,7 +164,7 @@ extension SwiftSync {
         as _: Model.Type,
         in context: ModelContext,
         parent: Parent,
-        parentRelationship: ReferenceWritableKeyPath<Model, Parent?>,
+        relationship: ReferenceWritableKeyPath<Model, Parent?>,
         keyStyle: KeyStyle = .snakeCase,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
@@ -185,7 +185,7 @@ extension SwiftSync {
             }
             let existing = try context.fetch(FetchDescriptor<Model>())
             let scopeRows = existing.filter {
-                $0[keyPath: parentRelationship]?.persistentModelID == resolvedParent.persistentModelID
+                $0[keyPath: relationship]?.persistentModelID == resolvedParent.persistentModelID
             }
             var changed = false
 
@@ -200,7 +200,7 @@ extension SwiftSync {
                 }
             } else {
                 let created = try Model.make(from: payloadModel)
-                created[keyPath: parentRelationship] = resolvedParent
+                created[keyPath: relationship] = resolvedParent
                 context.insert(created)
                 if relationshipOperations.contains(.insert) {
                     try throwIfCancelled()
@@ -231,7 +231,7 @@ extension SwiftSync {
         as _: Model.Type,
         in context: ModelContext,
         parent: Parent,
-        parentRelationship: ReferenceWritableKeyPath<Model, Parent?>,
+        relationship: ReferenceWritableKeyPath<Model, Parent?>,
         keyStyle: KeyStyle = .snakeCase,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
@@ -240,7 +240,7 @@ extension SwiftSync {
             as: Model.self,
             in: context,
             parent: parent,
-            parentRelationship: parentRelationship,
+            parentRelationship: relationship,
             isGlobal: syncIdentityHasUniqueAttribute(Model.self),
             keyStyle: keyStyle,
             relationshipOperations: relationshipOperations

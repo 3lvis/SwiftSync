@@ -23,11 +23,11 @@ try await SwiftSync.sync(
   as: Child.self,
   in: context,
   parent: parentObject,
-  parentRelationship: \Child.parent
+  relationship: \Child.parent
 )
 ```
 
-SwiftSync uses the provided `parentRelationship` key path directly; no relationship inference is performed.
+SwiftSync uses the provided `relationship` key path directly; no relationship inference is performed.
 
 ## Why This Matters
 
@@ -59,7 +59,7 @@ Models:
 }
 ```
 
-Pass `parentRelationship: \Task.project` when syncing tasks for a project parent scope.
+Pass `relationship: \Task.project` when syncing tasks for a project parent scope.
 
 ### Case B: Multiple relationships (choose explicit path)
 
@@ -88,13 +88,13 @@ try await SwiftSync.sync(
   as: Ticket.self,
   in: context,
   parent: user,
-  parentRelationship: \Ticket.assignee
+  relationship: \Ticket.assignee
 )
 ```
 
 ## Safety Contract
 
-SwiftSync does not guess parent relationships. Call sites must declare scope explicitly via `parentRelationship:`.
+SwiftSync does not guess parent relationships. Call sites must declare scope explicitly via `relationship:`.
 
 ## To-One Query Example
 
