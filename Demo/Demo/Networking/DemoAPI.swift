@@ -94,11 +94,6 @@ final class FakeDemoAPIClient {
         return try backend.getTaskStateOptionsPayload()
     }
 
-    func getUserRoleOptions() async throws -> [[String: Any]] {
-        try await networkGate(endpoint: "GET /user-role-options")
-        return try backend.getUserRoleOptionsPayload()
-    }
-
     func patchTaskDescription(taskID: String, descriptionText: String) async throws -> [String: Any]? {
         try await networkGate(endpoint: "PATCH /tasks/{id}/description")
         return try backend.patchTaskDescription(taskID: taskID, descriptionText: descriptionText)

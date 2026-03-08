@@ -29,10 +29,6 @@ final class DemoRuntime: ObservableObject {
         self.syncEngine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
     }
 
-    func bootstrapIfNeeded() async throws {
-        try await syncEngine.bootstrapIfNeeded()
-    }
-
     private static func makeSyncContainer() throws -> SyncContainer {
         let configuration = ModelConfiguration(url: localStoreURL())
         return try SyncContainer(
@@ -41,7 +37,6 @@ final class DemoRuntime: ObservableObject {
             Task.self,
             Item.self,
             TaskStateOption.self,
-            UserRoleOption.self,
             recoverOnFailure: true,
             configurations: configuration
         )

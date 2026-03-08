@@ -50,7 +50,7 @@ final class DirtyTrackingGapTests: XCTestCase {
     func testToManyOnlyWriteIncludesOwnerInNotification_persistentStore() async throws {
         let config = ModelConfiguration(url: makeTemporaryStoreURL())
         let container = try ModelContainer(
-            for: Task.self, User.self, Project.self, TaskStateOption.self, UserRoleOption.self,
+            for: Task.self, User.self, Project.self, TaskStateOption.self,
             configurations: config
         )
         try await runDirtyTrackingTest(container: container, label: "persistent")
@@ -60,7 +60,7 @@ final class DirtyTrackingGapTests: XCTestCase {
     func testToManyOnlyWriteIncludesOwnerInNotification_inMemoryStore() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(
-            for: Task.self, User.self, Project.self, TaskStateOption.self, UserRoleOption.self,
+            for: Task.self, User.self, Project.self, TaskStateOption.self,
             configurations: config
         )
         try await runDirtyTrackingTest(container: container, label: "in-memory")

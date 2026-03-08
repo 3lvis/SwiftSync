@@ -34,7 +34,6 @@ final class DemoSyncEngine: ObservableObject {
     }
 #endif
 
-    private(set) var hasBootstrapped = false
     private var inFlightOperations: Set<String> = []
     private var lastSuccessfulSyncByDataKey: [DataKey: Date] = [:]
 
@@ -46,7 +45,6 @@ final class DemoSyncEngine: ObservableObject {
             DemoDataNamespace.projects: 300,
             DemoDataNamespace.users: 300,
             DemoDataNamespace.taskStates: 600,
-            DemoDataNamespace.userRoles: 600,
             DemoDataNamespace.projectTasks: 20,
             DemoDataNamespace.taskDetail: 20
         ]
@@ -288,26 +286,6 @@ final class DemoSyncEngine: ObservableObject {
     }
 #endif
 
-    func bootstrapIfNeeded() async throws {
-        guard !hasBootstrapped else { return }
-        hasBootstrapped = true
-        do {
-            try await syncInitialData()
-        } catch {
-            hasBootstrapped = false
-            throw error
-        }
-    }
-
-    func syncInitialData() async throws {
-        try await runOperation("initial") {
-            try await syncProjectsInternal()
-            try await syncUsersInternal()
-            try await syncTaskStatesInternal()
-            try await syncUserRolesInternal()
-        }
-    }
-
     func syncProjects() async throws {
         try await runOperation("projects") {
             try await syncProjectsInternal()
@@ -321,21 +299,15 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    func syncUsers() async throws {
+    private func syncUsers() async throws {
         try await runOperation("users") {
             try await syncUsersInternal()
         }
     }
 
-    func syncTaskStates() async throws {
+    private func syncTaskStates() async throws {
         try await runOperation("taskStates") {
             try await syncTaskStatesInternal()
-        }
-    }
-
-    func syncUserRoles() async throws {
-        try await runOperation("userRoles") {
-            try await syncUserRolesInternal()
         }
     }
 
@@ -434,12 +406,6 @@ final class DemoSyncEngine: ObservableObject {
         let payload = try await apiClient.getTaskStateOptions()
         try await syncContainer.sync(payload: payload, as: TaskStateOption.self)
         markDataSynced(DataKey(namespace: DemoDataNamespace.taskStates))
-    }
-
-    private func syncUserRolesInternal() async throws {
-        let payload = try await apiClient.getUserRoleOptions()
-        try await syncContainer.sync(payload: payload, as: UserRoleOption.self)
-        markDataSynced(DataKey(namespace: DemoDataNamespace.userRoles))
     }
 
     private func syncProjectTasksInternal(projectID: String) async throws {
@@ -568,10 +534,6 @@ final class DemoSyncEngine: ObservableObject {
         (try? syncContainer.mainContext.fetch(FetchDescriptor<TaskStateOption>()).isEmpty == false) ?? false
     }
 
-    private func hasLocalUserRoles() -> Bool {
-        (try? syncContainer.mainContext.fetch(FetchDescriptor<UserRoleOption>()).isEmpty == false) ?? false
-    }
-
     private func hasLocalProjectTasks(projectID: String) -> Bool {
         let descriptor = FetchDescriptor<Task>(predicate: #Predicate { $0.projectID == projectID })
         return (try? syncContainer.mainContext.fetch(descriptor).isEmpty == false) ?? false
@@ -590,8 +552,6 @@ final class DemoSyncEngine: ObservableObject {
             return hasLocalUsers()
         case DemoDataNamespace.taskStates:
             return hasLocalTaskStates()
-        case DemoDataNamespace.userRoles:
-            return hasLocalUserRoles()
         case DemoDataNamespace.projectTasks:
             guard let projectID = key.id else { return false }
             return hasLocalProjectTasks(projectID: projectID)
@@ -608,7 +568,6 @@ private enum DemoDataNamespace {
     static let projects = "projects"
     static let users = "users"
     static let taskStates = "taskStates"
-    static let userRoles = "userRoles"
     static let projectTasks = "projectTasks"
     static let taskDetail = "taskDetail"
     static let taskDetailScreen = "taskDetailScreen"

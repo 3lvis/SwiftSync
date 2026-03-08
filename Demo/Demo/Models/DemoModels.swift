@@ -71,24 +71,6 @@ final class TaskStateOption {
 
 @Syncable
 @Model
-final class UserRoleOption {
-    @Attribute(.unique) var id: String
-    var label: String
-    var sortOrder: Int
-    var createdAt: Date
-    var updatedAt: Date
-
-    init(id: String, label: String, sortOrder: Int, createdAt: Date, updatedAt: Date) {
-        self.id = id
-        self.label = label
-        self.sortOrder = sortOrder
-        self.createdAt = createdAt
-        self.updatedAt = updatedAt
-    }
-}
-
-@Syncable
-@Model
 final class Task {
     @Attribute(.unique) var id: String
 
