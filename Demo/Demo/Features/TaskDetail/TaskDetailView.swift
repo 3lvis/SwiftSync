@@ -10,7 +10,7 @@ struct TaskDetailView: View {
     @SyncModel private var taskModel: Task?
     @SyncQuery private var taskItems: [Item]
     @State private var hasTriggeredInitialSync = false
-    @State private var loadState: ScreenLoadState = .idle
+    @StateObject private var loadMachine: ScreenLoadMachine
     @State private var showingEditSheet = false
 #if DEBUG
     @State private var showingStressPrompt = false
@@ -33,11 +33,16 @@ struct TaskDetailView: View {
             ],
             animation: .snappy(duration: 0.22)
         )
+        _loadMachine = StateObject(
+            wrappedValue: ScreenLoadMachine { error in
+                presentError(error, retryActionTitle: "Retry", fallbackMessage: "Could not load this task yet.")
+            }
+        )
     }
 
     var body: some View {
         List {
-            if case .error(let presentation) = loadState {
+            if let presentation = loadMachine.state.errorPresentation {
                 Section {
                     VStack(alignment: .leading, spacing: 10) {
                         Text(presentation.message)
@@ -45,7 +50,7 @@ struct TaskDetailView: View {
                             .foregroundStyle(.secondary)
                         if let retryActionTitle = presentation.retryActionTitle {
                             Button(retryActionTitle) {
-                                _Concurrency.Task { await loadTaskDetail() }
+                                requestLoad(.retry)
                             }
                             .buttonStyle(.borderedProminent)
                         }
@@ -70,7 +75,7 @@ struct TaskDetailView: View {
         .task {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
-            await loadTaskDetail()
+            requestLoad(.onAppear)
         }
         .sheet(isPresented: $showingEditSheet) {
             if let taskModel {
@@ -123,7 +128,7 @@ struct TaskDetailView: View {
         )
 #endif
         .overlay {
-            if loadState == .loading {
+            if loadMachine.state.isLoading {
                 ProgressView("Loading task...")
                     .padding(14)
                     .background(.ultraThinMaterial)
@@ -132,21 +137,10 @@ struct TaskDetailView: View {
         }
     }
 
-    @MainActor
-    private func loadTaskDetail() async {
-        loadState = .loading
-        do {
+    private func requestLoad(_ event: ScreenLoadEvent) {
+        loadMachine.send(event, run: {
             try await syncEngine.syncTaskDetail(taskID: taskID)
-            loadState = .loaded
-        } catch {
-            loadState = .error(
-                presentError(
-                    error,
-                    retryActionTitle: "Retry",
-                    fallbackMessage: "Could not load this task yet."
-                )
-            )
-        }
+        })
     }
 
     private var taskSection: some View {

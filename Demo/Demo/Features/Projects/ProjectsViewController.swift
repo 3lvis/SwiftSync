@@ -14,9 +14,7 @@ final class ProjectsViewController: UITableViewController {
 
     private var cancellables = Set<AnyCancellable>()
     private var projects: [Project] = []
-    private var loadState: ScreenLoadState = .idle {
-        didSet { updateLoadStateUI() }
-    }
+    private let loadMachine: ScreenLoadMachine
 
     private lazy var statusContainer: UIStackView = {
         let stack = UIStackView(arrangedSubviews: [statusIndicator, statusLabel, retryButton])
@@ -75,6 +73,9 @@ final class ProjectsViewController: UITableViewController {
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
         self.onSelect = onSelect
+        self.loadMachine = ScreenLoadMachine { error in
+            presentError(error, retryActionTitle: "Retry", fallbackMessage: "Could not load projects.")
+        }
         super.init(style: .plain)
     }
 
@@ -98,15 +99,18 @@ final class ProjectsViewController: UITableViewController {
                 snapshot.appendSections(["projects"])
                 snapshot.appendItems(rows.map(\.id), toSection: "projects")
                 self.diffableDataSource.apply(snapshot, animatingDifferences: true)
-
-                if self.loadState == .loading, !rows.isEmpty {
-                    self.loadState = .loaded
-                }
             }
             .store(in: &cancellables)
 
-        updateLoadStateUI()
-        runInitialLoad()
+        loadMachine.$state
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                self?.updateLoadStateUI(state)
+            }
+            .store(in: &cancellables)
+
+        updateLoadStateUI(loadMachine.state)
+        requestLoad(.onAppear)
     }
 
     // MARK: - UITableViewDelegate
@@ -119,41 +123,20 @@ final class ProjectsViewController: UITableViewController {
 
     // MARK: - Loading UI
 
-    private func runInitialLoad() {
-        guard loadState == .idle else { return }
-        _Concurrency.Task { [weak self] in
-            await self?.loadProjects()
-        }
-    }
-
     @objc
     private func retryTapped() {
-        _Concurrency.Task { [weak self] in
-            await self?.loadProjects()
-        }
+        requestLoad(.retry)
     }
 
-    @MainActor
-    private func loadProjects() async {
-        loadState = .loading
-        do {
-            try await syncEngine.syncProjects()
-            if projects.isEmpty {
-                loadState = .loaded
-            }
-        } catch {
-            loadState = .error(
-                presentError(
-                    error,
-                    retryActionTitle: "Retry",
-                    fallbackMessage: "Could not load projects."
-                )
-            )
-        }
+    private func requestLoad(_ event: ScreenLoadEvent) {
+        loadMachine.send(event, run: { [weak self] in
+            guard let self else { return }
+            try await self.syncEngine.syncProjects()
+        })
     }
 
-    private func updateLoadStateUI() {
-        switch loadState {
+    private func updateLoadStateUI(_ state: ScreenLoadState) {
+        switch state {
         case .idle:
             statusIndicator.stopAnimating()
             statusLabel.text = nil

@@ -46,7 +46,7 @@ private struct ProjectDetailView: View {
     @SyncModel private var projectModel: Project?
     @SyncQuery private var tasks: [Task]
     @State private var hasTriggeredInitialSync = false
-    @State private var loadState: ScreenLoadState = .idle
+    @StateObject private var loadMachine: ScreenLoadMachine
     @State private var isShowingCreateTaskSheet = false
     @State private var taskPendingDelete: TaskDeletePrompt?
 #if DEBUG
@@ -71,11 +71,16 @@ private struct ProjectDetailView: View {
             refreshOn: [\.assignee, \.items],
             animation: .snappy(duration: 0.24)
         )
+        _loadMachine = StateObject(
+            wrappedValue: ScreenLoadMachine { error in
+                presentError(error, retryActionTitle: "Retry", fallbackMessage: "Could not load this project yet.")
+            }
+        )
     }
 
     var body: some View {
         List {
-            if case .error(let presentation) = loadState {
+            if let presentation = loadMachine.state.errorPresentation {
                 Section {
                     VStack(alignment: .leading, spacing: 10) {
                         Text(presentation.message)
@@ -83,7 +88,7 @@ private struct ProjectDetailView: View {
                             .foregroundStyle(.secondary)
                         if let retryActionTitle = presentation.retryActionTitle {
                             Button(retryActionTitle) {
-                                _Concurrency.Task { await loadProjectTasks() }
+                                requestLoad(.retry)
                             }
                             .buttonStyle(.borderedProminent)
                         }
@@ -161,7 +166,7 @@ private struct ProjectDetailView: View {
         .task {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
-            await loadProjectTasks()
+            requestLoad(.onAppear)
         }
         .sheet(isPresented: $isShowingCreateTaskSheet) {
             TaskFormSheet(
@@ -233,7 +238,7 @@ private struct ProjectDetailView: View {
         )
 #endif
         .overlay {
-            if loadState == .loading {
+            if loadMachine.state.isLoading {
                 ProgressView("Loading project...")
                     .padding(14)
                     .background(.ultraThinMaterial)
@@ -242,21 +247,10 @@ private struct ProjectDetailView: View {
         }
     }
 
-    @MainActor
-    private func loadProjectTasks() async {
-        loadState = .loading
-        do {
+    private func requestLoad(_ event: ScreenLoadEvent) {
+        loadMachine.send(event, run: {
             try await syncEngine.syncProjectTasks(projectID: projectID)
-            loadState = .loaded
-        } catch {
-            loadState = .error(
-                presentError(
-                    error,
-                    retryActionTitle: "Retry",
-                    fallbackMessage: "Could not load this project yet."
-                )
-            )
-        }
+        })
     }
 }
 

@@ -33,10 +33,8 @@ struct TaskFormSheet: View {
     @State private var users: [User] = []
     @State private var taskStateOptions: [TaskStateOption] = []
 
-    @State private var isLoadingTaskStates = false
-    @State private var isSaving = false
-    @State private var metadataError: ErrorPresentationState?
-    @State private var saveError: ErrorPresentationState?
+    @StateObject private var metadataLoadMachine: ScreenLoadMachine
+    @StateObject private var saveMachine: SubmissionMachine
     @State private var newItemTitle = ""
     @State private var itemEditMode: EditMode = .inactive
 
@@ -48,6 +46,24 @@ struct TaskFormSheet: View {
         let ctx = ModelContext(syncContainer.modelContainer)
         ctx.autosaveEnabled = false
         self.editContext = ctx
+        _metadataLoadMachine = StateObject(
+            wrappedValue: ScreenLoadMachine { error in
+                presentError(
+                    error,
+                    retryActionTitle: "Retry Loading Metadata",
+                    fallbackMessage: "Could not load form options yet."
+                )
+            }
+        )
+        _saveMachine = StateObject(
+            wrappedValue: SubmissionMachine { error in
+                presentError(
+                    error,
+                    retryActionTitle: nil,
+                    fallbackMessage: "Could not save this task."
+                )
+            }
+        )
 
         switch mode {
         case .create(let projectID):
@@ -87,7 +103,7 @@ struct TaskFormSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
-                        .disabled(isSaving)
+                        .disabled(saveMachine.state == .submitting)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -97,8 +113,7 @@ struct TaskFormSheet: View {
                         }
                         normalizeItemPositions()
                         draft.updatedAt = Date()
-                        isSaving = true
-                        saveError = nil
+                        guard saveMachine.send(.submit) else { return }
 
                         let body = draft.exportObject(for: syncContainer)
                         let capturedReviewerIDs = draft.reviewers.map(\.id).sorted()
@@ -150,21 +165,19 @@ struct TaskFormSheet: View {
                                         )
                                     }
                                 }
-                                await MainActor.run { isSaving = false; dismiss() }
+                                await MainActor.run {
+                                    _ = saveMachine.send(.success)
+                                    dismiss()
+                                }
                             } catch {
                                 await MainActor.run {
-                                    isSaving = false
-                                    saveError = presentError(
-                                        error,
-                                        retryActionTitle: nil,
-                                        fallbackMessage: "Could not save this task."
-                                    )
+                                    _ = saveMachine.send(.failure(error))
                                 }
                             }
                         }
                     } label: {
                         HStack(spacing: 6) {
-                            if isSaving { ProgressView().controlSize(.small) }
+                            if saveMachine.state == .submitting { ProgressView().controlSize(.small) }
                             Text(confirmLabel)
                         }
                     }
@@ -172,7 +185,10 @@ struct TaskFormSheet: View {
                 }
             }
         }
-        .task { await reloadMetadata() }
+        .task {
+            refreshMetadataSnapshot()
+            requestMetadataLoad(.onAppear)
+        }
         // Auto-select first valid state when options load (safe for edit — guard prevents override)
         .task(id: taskStateOptions.map(\.id)) {
             guard !taskStateOptions.isEmpty,
@@ -195,13 +211,24 @@ struct TaskFormSheet: View {
         .alert(
             "Save Failed",
             isPresented: Binding(
-                get: { saveError != nil },
-                set: { if !$0 { saveError = nil } }
+                get: {
+                    if case .failed = saveMachine.state { return true }
+                    return false
+                },
+                set: { isPresented in
+                    if !isPresented {
+                        _ = saveMachine.send(.dismissError)
+                    }
+                }
             )
         ) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(saveError?.message ?? "Unknown error")
+            if case .failed(let error) = saveMachine.state {
+                Text(error.message)
+            } else {
+                Text("Unknown error")
+            }
         }
         .presentationDetents([.large])
     }
@@ -269,15 +296,10 @@ struct TaskFormSheet: View {
         Section("State") {
             if taskStateOptions.isEmpty {
                 LabeledContent("State") {
-                    if isLoadingTaskStates {
+                    if metadataLoadMachine.state.isLoading {
                         ProgressView()
                     } else {
                         Text("Unavailable").foregroundStyle(.secondary)
-                    }
-                }
-                if !isLoadingTaskStates {
-                    Button("Retry Loading States") {
-                        _Concurrency.Task { await reloadMetadata() }
                     }
                 }
             } else {
@@ -392,7 +414,7 @@ struct TaskFormSheet: View {
 
     @ViewBuilder
     private var metadataErrorSection: some View {
-        if let metadataError {
+        if let metadataError = metadataLoadMachine.state.errorPresentation {
             Section {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(metadataError.message)
@@ -400,7 +422,7 @@ struct TaskFormSheet: View {
                         .foregroundStyle(.secondary)
                     if let retryActionTitle = metadataError.retryActionTitle {
                         Button(retryActionTitle) {
-                            _Concurrency.Task { await reloadMetadata() }
+                            requestMetadataLoad(.retry)
                         }
                         .buttonStyle(.bordered)
                     }
@@ -427,7 +449,7 @@ struct TaskFormSheet: View {
     }
 
     private var isSaveDisabled: Bool {
-        guard !isSaving,
+        guard saveMachine.state != .submitting,
               !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return true }
         if case .create = mode {
@@ -451,29 +473,20 @@ struct TaskFormSheet: View {
     }
 
     @MainActor
-    private func reloadMetadata() async {
-        let local = Self.metadataSnapshot(from: editContext)
-        users = local.users
-        taskStateOptions = local.taskStateOptions
-
-        guard !isLoadingTaskStates else { return }
-        isLoadingTaskStates = true
-        defer { isLoadingTaskStates = false }
-
-        do {
+    private func requestMetadataLoad(_ event: ScreenLoadEvent) {
+        metadataLoadMachine.send(event, run: {
             try await syncEngine.syncTaskFormMetadata()
-            metadataError = nil
-        } catch {
-            metadataError = presentError(
-                error,
-                retryActionTitle: "Retry Loading Metadata",
-                fallbackMessage: "Could not load form options yet."
-            )
-        }
+            await MainActor.run {
+                refreshMetadataSnapshot()
+            }
+        })
+    }
 
-        let refreshed = Self.metadataSnapshot(from: editContext)
-        users = refreshed.users
-        taskStateOptions = refreshed.taskStateOptions
+    @MainActor
+    private func refreshMetadataSnapshot() {
+        let snapshot = Self.metadataSnapshot(from: editContext)
+        users = snapshot.users
+        taskStateOptions = snapshot.taskStateOptions
     }
 
     private var sortedItems: [Item] {
