@@ -1318,6 +1318,18 @@ extension ConcurrentRaceUser: SyncUpdatableModel {
 }
 
 final class SyncTests: XCTestCase {
+    private struct SendableUserPayload: SyncPayloadConvertible {
+        let id: Int
+        let fullName: String
+
+        func toSyncPayloadDictionary() -> [String: Any] {
+            [
+                "id": id,
+                "full_name": fullName
+            ]
+        }
+    }
+
     func testApplyReturnsFalseWhenPayloadMatchesExistingValues() throws {
         let user = User(id: 1, fullName: "Ava Swift")
         let payload = SyncPayload(values: ["id": 1, "full_name": "Ava Swift"])
@@ -1357,6 +1369,32 @@ final class SyncTests: XCTestCase {
         users = try context.fetch(FetchDescriptor<User>())
         XCTAssertEqual(users.count, 1)
         XCTAssertEqual(users.first?.fullName, "Ava Updated")
+    }
+
+    @MainActor
+    func testSyncContainerAcceptsSendablePayloadArray() async throws {
+        let container = try SyncContainer(for: User.self, configurations: .init(isStoredInMemoryOnly: true))
+        let payload = [SendableUserPayload(id: 7, fullName: "Sendable User")]
+
+        try await container.sync(payload: payload, as: User.self)
+
+        let users = try container.mainContext.fetch(FetchDescriptor<User>())
+        XCTAssertEqual(users.count, 1)
+        XCTAssertEqual(users.first?.id, 7)
+        XCTAssertEqual(users.first?.fullName, "Sendable User")
+    }
+
+    @MainActor
+    func testSyncContainerAcceptsSendableSingleItem() async throws {
+        let container = try SyncContainer(for: User.self, configurations: .init(isStoredInMemoryOnly: true))
+        try await container.sync(payload: [SendableUserPayload(id: 9, fullName: "Initial")], as: User.self)
+
+        try await container.sync(item: SendableUserPayload(id: 9, fullName: "Updated"), as: User.self)
+
+        let users = try container.mainContext.fetch(FetchDescriptor<User>())
+        XCTAssertEqual(users.count, 1)
+        XCTAssertEqual(users.first?.id, 9)
+        XCTAssertEqual(users.first?.fullName, "Updated")
     }
 
     @MainActor

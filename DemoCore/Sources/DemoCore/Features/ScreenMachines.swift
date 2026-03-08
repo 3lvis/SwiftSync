@@ -276,7 +276,8 @@ public final class TaskFormMachine {
                 do {
                     switch mode {
                     case .create(let projectID):
-                        try await syncEngine.createTask(body: body, projectID: projectID)
+                        let createPayload = try DemoSyncPayload(dictionary: body)
+                        try await syncEngine.createTask(body: createPayload, projectID: projectID)
                         if !capturedReviewerIDs.isEmpty {
                             try await syncEngine.replaceTaskReviewers(
                                 taskID: draft.id,
@@ -293,7 +294,8 @@ public final class TaskFormMachine {
                         }
 
                     case .edit(let task):
-                        try await syncEngine.updateTask(taskID: task.id, projectID: task.projectID, body: body)
+                        let updatePayload = try DemoSyncPayload(dictionary: body)
+                        try await syncEngine.updateTask(taskID: task.id, projectID: task.projectID, body: updatePayload)
                         if reviewersChanged {
                             try await syncEngine.replaceTaskReviewers(
                                 taskID: task.id,
@@ -342,6 +344,7 @@ public final class TaskFormMachine {
             guard !trimmed.isEmpty else { return false }
 
             let item = Item(
+                taskID: draft.id,
                 title: trimmed,
                 position: draft.items.count,
                 createdAt: Date(),

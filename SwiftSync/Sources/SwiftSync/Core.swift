@@ -759,6 +759,10 @@ private final class CandidateKeysCache {
     var cache: [String: [String]] = [:]
 }
 
+public protocol SyncPayloadConvertible: Sendable {
+    func toSyncPayloadDictionary() -> [String: Any]
+}
+
 public struct SyncPayload {
     public let values: [String: Any]
     public let keyStyle: KeyStyle

@@ -57,17 +57,17 @@ public final class DemoSyncEngine {
         }
     }
 
-    public func createTask(body: [String: Any], projectID: String) async throws {
+    public func createTask(body: DemoSyncPayload, projectID: String) async throws {
         try await runOperation("createTask-\(projectID)") {
             let created = try await apiClient.createTask(body: body)
             try await syncProjectTasksData(projectID: projectID)
-            if let createdID = created["id"] as? String {
+            if let createdID = created.string("id") {
                 try await syncTaskDetailData(taskID: createdID)
             }
         }
     }
 
-    public func updateTask(taskID: String, projectID: String?, body: [String: Any]) async throws {
+    public func updateTask(taskID: String, projectID: String?, body: DemoSyncPayload) async throws {
         try await runOperation("updateTask-\(taskID)") {
             _ = try await apiClient.updateTask(taskID: taskID, body: body)
             try await syncTaskAfterMutation(taskID: taskID, projectID: projectID)
@@ -117,13 +117,9 @@ public final class DemoSyncEngine {
             let projectsPayload = try await apiClient.getProjects()
             try await syncContainer.sync(payload: projectsPayload, as: Project.self)
         }
-
-        guard let project = try project(withID: projectID) else { return }
         try await syncContainer.sync(
             payload: payload,
-            as: Task.self,
-            parent: project,
-            relationship: \Task.project
+            as: Task.self
         )
         try await syncProjectsData()
     }
@@ -134,19 +130,14 @@ public final class DemoSyncEngine {
         try await syncItemsIfPresent(in: payload, taskID: taskID)
     }
 
-    private func syncTaskDetailItem(_ payload: [String: Any]) async throws {
-        guard let projectID = payload["project_id"] as? String, !projectID.isEmpty else {
+    private func syncTaskDetailItem(_ payload: DemoSyncPayload) async throws {
+        guard let projectID = payload.string("project_id"), !projectID.isEmpty else {
             throw SyncTaskDetailError.missingProjectID
         }
-        guard let project = try project(withID: projectID) else {
+        guard try project(withID: projectID) != nil else {
             throw SyncTaskDetailError.missingProject(projectID)
         }
-        try await syncContainer.sync(
-            item: payload,
-            as: Task.self,
-            parent: project,
-            relationship: \Task.project
-        )
+        try await syncContainer.sync(item: payload, as: Task.self)
     }
 
     private func syncTaskAfterMutation(taskID: String, projectID: String?) async throws {
@@ -174,19 +165,8 @@ public final class DemoSyncEngine {
         try syncContainer.mainContext.fetch(FetchDescriptor<Project>()).first { $0.id == projectID }
     }
 
-    private func taskForSync(withID taskID: String) throws -> Task? {
-        let descriptor = FetchDescriptor<Task>(predicate: #Predicate { $0.id == taskID })
-        return try syncContainer.mainContext.fetch(descriptor).first
-    }
-
-    private func syncItemsIfPresent(in payload: [String: Any], taskID: String) async throws {
-        guard let itemPayload = payload["items"] as? [[String: Any]] else { return }
-        guard let task = try taskForSync(withID: taskID) else { return }
-        try await syncContainer.sync(
-            payload: itemPayload,
-            as: Item.self,
-            parent: task,
-            relationship: \Item.task
-        )
+    private func syncItemsIfPresent(in payload: DemoSyncPayload, taskID _: String) async throws {
+        guard let itemPayload = payload.objectArray("items") else { return }
+        try await syncContainer.sync(payload: itemPayload, as: Item.self)
     }
 }

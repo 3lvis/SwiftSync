@@ -24,7 +24,7 @@ let package = Package(
             ],
             path: "Sources/DemoCore",
             swiftSettings: [
-                .unsafeFlags(["-strict-concurrency=minimal"])
+                .unsafeFlags(["-strict-concurrency=complete"])
             ]
         ),
         .testTarget(
@@ -33,5 +33,5 @@ let package = Package(
             path: "Tests/DemoCoreTests"
         )
     ],
-    swiftLanguageModes: [.v5]
+    swiftLanguageModes: [.v6]
 )

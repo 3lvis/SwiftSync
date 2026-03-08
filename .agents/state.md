@@ -2,14 +2,14 @@
 
 ## Plan
 
-- [x] Replace duplicated Observation observer plumbing with actor-isolated observer implementations and tighter observation surfaces.
-- [x] Move package/app compiler settings toward stricter concurrency defaults, keeping DemoCore on Swift 5 mode pending Sendable payload boundary work.
-- [x] Add CI coverage for all local packages plus a Sendable/concurrency playbook doc.
-- [x] Run full relevant test suites and update final state.
+- [x] Add Sendable payload protocol support in SwiftSync sync APIs and verify with tests.
+- [x] Replace DemoCore `[String: Any]` sync payload flows with `DemoSyncPayload` DTOs.
+- [x] Remove parent-object sync requirements in DemoCore by syncing via foreign-key payloads.
+- [x] Flip DemoCore package to Swift 6 + strict concurrency complete and validate tests.
 
 ## Last known state
 
-`swift test` (root) passes; `DemoBackend/swift test` passes; `DemoCore/swift test` passes.
+`swift test` (root) passes with 119 tests; `DemoBackend/swift test` passes; `DemoCore/swift test` passes under Swift 6 + `-strict-concurrency=complete` (with existing warning-level test closure capture diagnostics).
 
 ## Decisions (don't revisit)
 
@@ -19,7 +19,7 @@
 - Use a single shared observation loop helper (`observeContinuously`) to avoid diverging manual `withObservationTracking` implementations.
 - Keep `SyncQueryPublisher` queue contract explicit with `dispatchPrecondition(.onQueue(.main))` in `reload()` instead of forcing a global actor annotation that complicates NotificationCenter callbacks.
 - User explicitly approved API-breaking concurrency refactors to maximize safety and strictness.
-- Full Swift 6 + strict concurrency migration is blocked in DemoCore by non-Sendable `[String: Any]` payload boundaries to `SyncContainer`; keep DemoCore in Swift 5 mode until payload DTO migration.
+- Use `SyncPayloadConvertible` at SwiftSync boundaries so package consumers can keep Sendable DTOs while SwiftSync internals still work with dictionary payload semantics.
 
 ## Files touched
 
@@ -44,4 +44,9 @@
 - DemoBackend/Package.swift
 - DemoCore/Package.swift
 - DemoCore/Sources/DemoCore/Networking/DemoAPI.swift
+- DemoCore/Sources/DemoCore/Networking/DemoSyncPayload.swift
+- DemoCore/Sources/DemoCore/Models/DemoModels.swift
+- SwiftSync/Sources/SwiftSync/Core.swift
+- SwiftSync/Sources/SwiftSync/SyncContainer.swift
+- SwiftSync/Tests/SwiftSyncTests/SyncTests.swift
 - docs/project/sendable-playbook.md

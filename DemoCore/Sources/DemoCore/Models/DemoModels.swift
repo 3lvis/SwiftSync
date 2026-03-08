@@ -151,6 +151,7 @@ public final class Task {
 @Model
 public final class Item {
     @Attribute(.unique) public var id: String
+    public var taskID: String
     public var title: String
     public var position: Int
     public var createdAt: Date
@@ -161,6 +162,7 @@ public final class Item {
 
     public init(
         id: String = UUID().uuidString,
+        taskID: String = "",
         title: String = "",
         position: Int = 0,
         createdAt: Date = Date(),
@@ -168,6 +170,7 @@ public final class Item {
         task: Task? = nil
     ) {
         self.id = id
+        self.taskID = taskID
         self.title = title
         self.position = position
         self.createdAt = createdAt
