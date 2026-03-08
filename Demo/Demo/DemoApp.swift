@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import DemoCore
 import SwiftSync
 
 @main
@@ -8,7 +9,7 @@ struct DemoApp: App {
 
     var body: some Scene {
         WindowGroup {
-            DemoRootView(runtime: runtime)
+            DemoView(runtime: runtime)
         }
         .modelContainer(runtime.syncContainer.modelContainer)
     }

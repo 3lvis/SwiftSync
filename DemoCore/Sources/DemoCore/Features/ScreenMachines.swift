@@ -1,19 +1,24 @@
 import Combine
 import Foundation
 import SwiftData
-import SwiftSync
+@preconcurrency import SwiftSync
+
+public enum TaskFormMode {
+    case create(projectID: String)
+    case edit(task: Task)
+}
 
 @MainActor
-final class ProjectsListMachine: ObservableObject {
-    @Published private(set) var loadState: ScreenLoadState = .idle
-    @Published private(set) var rows: [Project] = []
+public final class ProjectsListMachine: ObservableObject {
+    @Published public private(set) var loadState: ScreenLoadState = .idle
+    @Published public private(set) var rows: [Project] = []
 
     private let syncEngine: DemoSyncEngine
     private let rowsPublisher: SyncQueryPublisher<Project>
     private let loadMachine: ScreenLoadMachine
     private var cancellables = Set<AnyCancellable>()
 
-    init(syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
+    public init(syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.syncEngine = syncEngine
         self.rowsPublisher = SyncQueryPublisher(
             Project.self,
@@ -39,20 +44,19 @@ final class ProjectsListMachine: ObservableObject {
             .store(in: &cancellables)
     }
 
-    func send(_ event: ScreenLoadEvent) {
+    public func send(_ event: ScreenLoadEvent) {
         loadMachine.send(event, run: { [syncEngine] in
             try await syncEngine.syncProjects()
         })
     }
-
 }
 
 @MainActor
-final class ProjectDetailMachine: ObservableObject {
-    @Published private(set) var loadState: ScreenLoadState = .idle
-    @Published private(set) var deleteState: SubmissionState = .idle
-    @Published private(set) var project: Project?
-    @Published private(set) var tasks: [Task] = []
+public final class ProjectDetailMachine: ObservableObject {
+    @Published public private(set) var loadState: ScreenLoadState = .idle
+    @Published public private(set) var deleteState: SubmissionState = .idle
+    @Published public private(set) var project: Project?
+    @Published public private(set) var tasks: [Task] = []
 
     private let projectID: String
     private let syncEngine: DemoSyncEngine
@@ -62,12 +66,12 @@ final class ProjectDetailMachine: ObservableObject {
     private let deleteMachine: SubmissionMachine
     private var cancellables = Set<AnyCancellable>()
 
-    enum DeleteEvent {
+    public enum DeleteEvent {
         case request(taskID: String)
         case dismissError
     }
 
-    init(projectID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
+    public init(projectID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.projectID = projectID
         self.syncEngine = syncEngine
         self.projectPublisher = SyncQueryPublisher(
@@ -122,13 +126,13 @@ final class ProjectDetailMachine: ObservableObject {
             .store(in: &cancellables)
     }
 
-    func send(_ event: ScreenLoadEvent) {
+    public func send(_ event: ScreenLoadEvent) {
         loadMachine.send(event, run: { [syncEngine, projectID] in
             try await syncEngine.syncProjectTasks(projectID: projectID)
         })
     }
 
-    func sendDelete(_ event: DeleteEvent) {
+    public func sendDelete(_ event: DeleteEvent) {
         switch event {
         case .request(let taskID):
             guard deleteMachine.send(.submit) else { return }
@@ -150,14 +154,13 @@ final class ProjectDetailMachine: ObservableObject {
             _ = deleteMachine.send(.dismissError)
         }
     }
-
 }
 
 @MainActor
-final class TaskDetailMachine: ObservableObject {
-    @Published private(set) var loadState: ScreenLoadState = .idle
-    @Published private(set) var task: Task?
-    @Published private(set) var items: [Item] = []
+public final class TaskDetailMachine: ObservableObject {
+    @Published public private(set) var loadState: ScreenLoadState = .idle
+    @Published public private(set) var task: Task?
+    @Published public private(set) var items: [Item] = []
 
     private let taskID: String
     private let syncEngine: DemoSyncEngine
@@ -166,7 +169,7 @@ final class TaskDetailMachine: ObservableObject {
     private let loadMachine: ScreenLoadMachine
     private var cancellables = Set<AnyCancellable>()
 
-    init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
+    public init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.taskID = taskID
         self.syncEngine = syncEngine
         self.taskPublisher = SyncQueryPublisher(
@@ -208,20 +211,19 @@ final class TaskDetailMachine: ObservableObject {
             .store(in: &cancellables)
     }
 
-    func send(_ event: ScreenLoadEvent) {
+    public func send(_ event: ScreenLoadEvent) {
         loadMachine.send(event, run: { [syncEngine, taskID] in
             try await syncEngine.syncTaskDetail(taskID: taskID)
         })
     }
-
 }
 
 @MainActor
-final class TaskFormMachine: ObservableObject {
-    @Published private(set) var users: [User] = []
-    @Published private(set) var taskStateOptions: [TaskStateOption] = []
-    @Published private(set) var metadataLoadState: ScreenLoadState = .idle
-    @Published private(set) var saveState: SubmissionState = .idle
+public final class TaskFormMachine: ObservableObject {
+    @Published public private(set) var users: [User] = []
+    @Published public private(set) var taskStateOptions: [TaskStateOption] = []
+    @Published public private(set) var metadataLoadState: ScreenLoadState = .idle
+    @Published public private(set) var saveState: SubmissionState = .idle
 
     private let syncContainer: SyncContainer
     private let syncEngine: DemoSyncEngine
@@ -230,20 +232,20 @@ final class TaskFormMachine: ObservableObject {
     private let saveMachine: SubmissionMachine
     private var cancellables = Set<AnyCancellable>()
 
-    enum ItemMutation {
+    public enum ItemMutation {
         case add(title: String)
         case updateTitle(item: Item, title: String)
         case delete(Item)
         case move(from: IndexSet, to: Int)
     }
 
-    enum Event {
+    public enum Event {
         case metadata(ScreenLoadEvent)
         case save(mode: TaskFormMode, draft: Task, onSuccess: @MainActor () -> Void)
         case dismissSaveError
     }
 
-    init(syncContainer: SyncContainer, syncEngine: DemoSyncEngine, editContext: ModelContext) {
+    public init(syncContainer: SyncContainer, syncEngine: DemoSyncEngine, editContext: ModelContext) {
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
         self.editContext = editContext
@@ -275,7 +277,7 @@ final class TaskFormMachine: ObservableObject {
             .store(in: &cancellables)
     }
 
-    func send(_ event: Event) {
+    public func send(_ event: Event) {
         switch event {
         case .metadata(let loadEvent):
             if case .onAppear = loadEvent {
@@ -366,7 +368,7 @@ final class TaskFormMachine: ObservableObject {
         }
     }
 
-    func sortedItems(in draft: Task) -> [Item] {
+    public func sortedItems(in draft: Task) -> [Item] {
         draft.items.sorted {
             if $0.position == $1.position {
                 return $0.id < $1.id
@@ -376,7 +378,7 @@ final class TaskFormMachine: ObservableObject {
     }
 
     @discardableResult
-    func mutateItems(_ mutation: ItemMutation, in draft: Task) -> Bool {
+    public func mutateItems(_ mutation: ItemMutation, in draft: Task) -> Bool {
         switch mutation {
         case .add(let title):
             let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -415,13 +417,13 @@ final class TaskFormMachine: ObservableObject {
         }
     }
 
-    func normalizeItemPositions(in draft: Task) {
+    public func normalizeItemPositions(in draft: Task) {
         for (index, item) in sortedItems(in: draft).enumerated() {
             item.position = index
         }
     }
 
-    func applyDefaultsIfNeeded(to draft: Task) {
+    public func applyDefaultsIfNeeded(to draft: Task) {
         if !taskStateOptions.isEmpty,
            (draft.state.isEmpty || !taskStateOptions.contains(where: { $0.id == draft.state })),
            let first = taskStateOptions.first {

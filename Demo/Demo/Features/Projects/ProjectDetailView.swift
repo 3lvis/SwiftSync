@@ -1,44 +1,8 @@
+import DemoCore
 import SwiftSync
 import SwiftUI
-import UIKit
 
-struct ProjectsTabView: View {
-    let syncContainer: SyncContainer
-    @ObservedObject var syncEngine: DemoSyncEngine
-    @State private var selectedProjectID: String?
-
-    var body: some View {
-        NavigationStack {
-            _ProjectsRepresentable(syncContainer: syncContainer, syncEngine: syncEngine) { projectID in
-                selectedProjectID = projectID
-            }
-            .navigationTitle("Projects")
-            .navigationDestination(item: $selectedProjectID) { projectID in
-                ProjectDetailView(
-                    projectID: projectID,
-                    syncContainer: syncContainer,
-                    syncEngine: syncEngine
-                )
-            }
-        }
-    }
-}
-
-private struct _ProjectsRepresentable: UIViewControllerRepresentable {
-    let syncContainer: SyncContainer
-    let syncEngine: DemoSyncEngine
-    let onSelect: (String) -> Void
-
-    func makeUIViewController(context: Context) -> ProjectsViewController {
-        ProjectsViewController(syncContainer: syncContainer, syncEngine: syncEngine, onSelect: onSelect)
-    }
-
-    func updateUIViewController(_ uiViewController: ProjectsViewController, context: Context) {}
-}
-
-// MARK: - Project Detail
-
-private struct ProjectDetailView: View {
+struct ProjectDetailView: View {
     let projectID: String
     let syncContainer: SyncContainer
     @ObservedObject var syncEngine: DemoSyncEngine
