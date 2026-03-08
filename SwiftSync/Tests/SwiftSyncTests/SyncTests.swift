@@ -2811,11 +2811,10 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(secondMainRead.first?.fullName, "Background Updated")
     }
 
+    @MainActor
     func testSyncContainerInitializesLikeModelContainerAndSyncs() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let syncContainer = try await MainActor.run {
-            try SyncContainer(for: User.self, configurations: configuration)
-        }
+        let syncContainer = try SyncContainer(for: User.self, configurations: configuration)
         let writerContext = ModelContext(syncContainer.modelContainer)
 
         try await SwiftSync.sync(
@@ -3093,11 +3092,10 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(rows[0].email, "direct@example.com")
     }
 
+    @MainActor
     func testSyncContainerBackgroundSaveVisibilityBehavior() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let syncContainer = try await MainActor.run {
-            try SyncContainer(for: User.self, configurations: configuration)
-        }
+        let syncContainer = try SyncContainer(for: User.self, configurations: configuration)
         let mainContext = syncContainer.mainContext
         let backgroundContext = ModelContext(syncContainer.modelContainer)
 

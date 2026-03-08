@@ -12,7 +12,8 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../"),
-        .package(path: "../DemoBackend")
+        .package(path: "../DemoBackend"),
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0")
     ],
     targets: [
         .target(

@@ -3,8 +3,9 @@ import Observation
 import SwiftData
 import SwiftUI
 
+@MainActor
 @Observable
-private final class SyncQueryObserver<Model: PersistentModel>: @unchecked Sendable {
+private final class SyncQueryObserver<Model: PersistentModel> {
     var rows: [Model] = []
 
     @ObservationIgnored private let syncContainer: SyncContainer
@@ -13,7 +14,7 @@ private final class SyncQueryObserver<Model: PersistentModel>: @unchecked Sendab
     @ObservationIgnored private let postFetchFilter: ((Model) -> Bool)?
     @ObservationIgnored private let observedModelTypeNames: Set<String>
     @ObservationIgnored private let animation: Animation?
-    @ObservationIgnored private var notificationToken: NSObjectProtocol?
+    @ObservationIgnored nonisolated(unsafe) private var notificationToken: NSObjectProtocol?
 
     init(
         syncContainer: SyncContainer,
@@ -44,9 +45,11 @@ private final class SyncQueryObserver<Model: PersistentModel>: @unchecked Sendab
             forName: SyncContainer.didSaveChangesNotification,
             object: syncContainer,
             queue: .main
-        ) { [weak self] notification in
-            guard let self, self.shouldReload(for: notification) else { return }
-            self.reload()
+        ) { [weak self] _ in
+            guard let self else { return }
+            MainActor.assumeIsolated {
+                self.reload()
+            }
         }
     }
 
@@ -325,15 +328,16 @@ public extension SyncQuery where Model: SyncModelable {
 
 
 
+@MainActor
 @Observable
-private final class SyncModelObserver<Model: PersistentModel & SyncModelable>: @unchecked Sendable {
+private final class SyncModelObserver<Model: PersistentModel & SyncModelable> {
     var model: Model?
 
     @ObservationIgnored private let syncContainer: SyncContainer
     @ObservationIgnored private let id: Model.SyncID
     @ObservationIgnored private let observedModelTypeNames: Set<String>
     @ObservationIgnored private let animation: Animation?
-    @ObservationIgnored private var notificationToken: NSObjectProtocol?
+    @ObservationIgnored nonisolated(unsafe) private var notificationToken: NSObjectProtocol?
 
     init(
         syncContainer: SyncContainer,
@@ -360,9 +364,11 @@ private final class SyncModelObserver<Model: PersistentModel & SyncModelable>: @
             forName: SyncContainer.didSaveChangesNotification,
             object: syncContainer,
             queue: .main
-        ) { [weak self] notification in
-            guard let self, self.shouldReload(for: notification) else { return }
-            self.reload()
+        ) { [weak self] _ in
+            guard let self else { return }
+            MainActor.assumeIsolated {
+                self.reload()
+            }
         }
     }
 

@@ -29,6 +29,13 @@ jobs:
       - name: Xcode Version
         run: xcodebuild -version && swift --version
 
-      - name: Test (Swift Testing + XCTest)
+      - name: Test SwiftSync package
         run: swift test -v
 
+      - name: Test DemoBackend package
+        working-directory: DemoBackend
+        run: swift test -v
+
+      - name: Test DemoCore package
+        working-directory: DemoCore
+        run: swift test -v

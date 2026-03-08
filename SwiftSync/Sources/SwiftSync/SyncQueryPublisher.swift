@@ -1,12 +1,11 @@
-import Dispatch
 import Foundation
 import Observation
 import SwiftData
 
 // Observation callbacks are dispatched on queue: .main.
-// @unchecked Sendable is kept for API compatibility with existing callers.
+@MainActor
 @Observable
-public final class SyncQueryPublisher<Model: PersistentModel>: @unchecked Sendable {
+public final class SyncQueryPublisher<Model: PersistentModel> {
 
     // MARK: - Public interface
 
@@ -19,7 +18,7 @@ public final class SyncQueryPublisher<Model: PersistentModel>: @unchecked Sendab
     @ObservationIgnored private let sortBy: [SortDescriptor<Model>]
     @ObservationIgnored private let postFetchFilter: ((Model) -> Bool)?
     @ObservationIgnored private let observedModelTypeNames: Set<String>
-    @ObservationIgnored private var notificationToken: NSObjectProtocol?
+    @ObservationIgnored nonisolated(unsafe) private var notificationToken: NSObjectProtocol?
 
     // MARK: - Designated init
 
@@ -38,9 +37,11 @@ public final class SyncQueryPublisher<Model: PersistentModel>: @unchecked Sendab
             forName: SyncContainer.didSaveChangesNotification,
             object: syncContainer,
             queue: .main
-        ) { [weak self] notification in
-            guard let self, self.shouldReload(for: notification.userInfo) else { return }
-            self.reload()
+        ) { [weak self] _ in
+            guard let self else { return }
+            MainActor.assumeIsolated {
+                self.reload()
+            }
         }
         reload()
     }
@@ -118,7 +119,6 @@ public final class SyncQueryPublisher<Model: PersistentModel>: @unchecked Sendab
     }
 
     private func reload() {
-        dispatchPrecondition(condition: .onQueue(.main))
         let descriptor = predicate.map { FetchDescriptor(predicate: $0, sortBy: sortBy) }
             ?? FetchDescriptor(sortBy: sortBy)
         let fetched = (try? syncContainer.mainContext.fetch(descriptor)) ?? []

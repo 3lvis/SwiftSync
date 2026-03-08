@@ -36,6 +36,7 @@ public enum DemoAPIError: LocalizedError {
     }
 }
 
+@MainActor
 public final class FakeDemoAPIClient {
     public var scenario: DemoNetworkScenario
 

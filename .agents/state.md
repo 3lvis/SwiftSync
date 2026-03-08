@@ -2,14 +2,14 @@
 
 ## Plan
 
-- [x] Add shared reusable Observation tracking helper and adopt it in DemoCore and Demo UIKit screen.
-- [x] Tighten observation surfaces with `@ObservationIgnored` on non-observable internals.
-- [x] Clarify actor isolation for `SyncQueryPublisher` and make view `@State` access control consistent.
-- [x] Run relevant tests and update final state.
+- [x] Replace duplicated Observation observer plumbing with actor-isolated observer implementations and tighter observation surfaces.
+- [x] Move package/app compiler settings toward stricter concurrency defaults, keeping DemoCore on Swift 5 mode pending Sendable payload boundary work.
+- [x] Add CI coverage for all local packages plus a Sendable/concurrency playbook doc.
+- [x] Run full relevant test suites and update final state.
 
 ## Last known state
 
-`swift test` passes (117 tests, 0 failures) with existing known macro warnings in schema-validation test macro expansions.
+`swift test` (root) passes; `DemoBackend/swift test` passes; `DemoCore/swift test` passes.
 
 ## Decisions (don't revisit)
 
@@ -18,6 +18,8 @@
 - In `ScreenMachines.swift`, use `_Concurrency.Task` (not bare `Task`) because the local `Task` model type shadows Swift concurrency `Task`.
 - Use a single shared observation loop helper (`observeContinuously`) to avoid diverging manual `withObservationTracking` implementations.
 - Keep `SyncQueryPublisher` queue contract explicit with `dispatchPrecondition(.onQueue(.main))` in `reload()` instead of forcing a global actor annotation that complicates NotificationCenter callbacks.
+- User explicitly approved API-breaking concurrency refactors to maximize safety and strictness.
+- Full Swift 6 + strict concurrency migration is blocked in DemoCore by non-Sendable `[String: Any]` payload boundaries to `SyncContainer`; keep DemoCore in Swift 5 mode until payload DTO migration.
 
 ## Files touched
 
@@ -37,3 +39,9 @@
 - SwiftSync/Sources/SwiftSync/SyncQueryPublisher.swift
 - SwiftSync/Tests/SwiftSyncTests/SyncQueryPublisherTests.swift
 - DemoCore/Sources/DemoCore/Features/ObservationTracking.swift
+- .github/workflows/ci.yml
+- Demo/Demo.xcodeproj/project.pbxproj
+- DemoBackend/Package.swift
+- DemoCore/Package.swift
+- DemoCore/Sources/DemoCore/Networking/DemoAPI.swift
+- docs/project/sendable-playbook.md
