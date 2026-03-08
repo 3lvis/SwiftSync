@@ -24,18 +24,16 @@ import SwiftSync
 Yes, if the model uses parent-scoped identity.
 
 - `ParentScopedModel` defaults to `.scopedByParent`
-- inferred parent sync defaults to `.global` unless you pass `identityPolicy: .scopedByParent`
+- explicit parent-relationship sync on non-`ParentScopedModel` types defaults to `.global`
 - `@Attribute(.unique)` on raw `id` still enforces global uniqueness at the store level
 
 See `docs/project/parent-scope.md`.
 
-## 3) Why does parent-scoped sync need relationship inference / `parentRelationship`?
+## 3) Why does parent-scoped sync need `parentRelationship`?
 
 Because SwiftSync must know which child->parent relationship defines the sync scope (especially for scoped delete/diff).
 
-- exactly one candidate => inferred
-- ambiguous => explicit `parentRelationship`
-- none => fail fast
+- parent-scoped sync always passes an explicit `parentRelationship:` key path
 
 See `docs/project/parent-scope.md`.
 

@@ -35,7 +35,7 @@ Adds:
 
 Adds one associated type (`SyncParent`) and one property (`parentRelationship`). Tells the engine which keypath is the parent relationship so it can scope queries and deletes to that parent.
 
-**Used by:** a dedicated `sync(payload:as:parent:)` overload that constrains `Model: ParentScopedModel`.
+**Used by:** parent-scoped sync and export APIs where relationship scope must be explicit and type-safe.
 
 ## The Real Cost
 
@@ -53,4 +53,4 @@ The current shape is 4 public protocol/enum surface points:
 
 **Remaining simplification opportunities (low risk):**
 
-- **Replace `ParentScopedModel` with a static property** (e.g. `static var syncParentRelationship: AnyKeyPath?`) — you'd lose the typed `SyncParent` associated type, meaning the `sync(parent:)` overload becomes `sync<Parent: PersistentModel>(parent: Parent)` with the relationship resolved at runtime. The downside is that ambiguous relationships would be a runtime error instead of a compile-time one.
+- **Replace `ParentScopedModel` with an untyped static property** (e.g. `static var syncParentRelationship: AnyKeyPath?`) — you'd lose the typed `SyncParent` associated type, and parent scoping would move toward runtime checks instead of compile-time key-path safety.

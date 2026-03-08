@@ -92,27 +92,11 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         )
     }
 
-    public func sync<Model: ParentScopedModel>(
-        payload: [Any],
-        as model: Model.Type,
-        parent: Model.SyncParent,
-        relationshipOperations: SyncRelationshipOperations = .all
-    ) async throws {
-        let context = ModelContext(modelContainer)
-        try await SwiftSync.sync(
-            payload: payload,
-            as: model,
-            in: context,
-            parent: parent,
-            keyStyle: keyStyle,
-            relationshipOperations: relationshipOperations
-        )
-    }
-
     public func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
         payload: [Any],
         as model: Model.Type,
         parent: Parent,
+        parentRelationship: ReferenceWritableKeyPath<Model, Parent?>,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         let context = ModelContext(modelContainer)
@@ -121,6 +105,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             as: model,
             in: context,
             parent: parent,
+            parentRelationship: parentRelationship,
             keyStyle: keyStyle,
             relationshipOperations: relationshipOperations
         )
@@ -145,6 +130,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         item: [String: Any],
         as model: Model.Type,
         parent: Parent,
+        parentRelationship: ReferenceWritableKeyPath<Model, Parent?>,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         let context = ModelContext(modelContainer)
@@ -153,6 +139,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             as: model,
             in: context,
             parent: parent,
+            parentRelationship: parentRelationship,
             keyStyle: keyStyle,
             relationshipOperations: relationshipOperations
         )

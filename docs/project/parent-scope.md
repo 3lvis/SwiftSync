@@ -1,6 +1,6 @@
 # Parent-Scoped Sync and Query Behavior
 
-This document explains current parent-scoped behavior and the relationship inference rules used by SwiftSync.
+This document explains current parent-scoped behavior and explicit parent relationship rules in SwiftSync.
 
 ## TL;DR
 
@@ -8,9 +8,7 @@ Parent sync has two responsibilities:
 1. Attach child rows to the provided parent.
 2. Scope diff/delete to only that parent's children.
 
-SwiftSync now supports both styles:
-- inferred parent relationship by default when exactly one candidate exists
-- explicit `parentRelationship` only when relationship choice is ambiguous
+SwiftSync uses explicit parent relationships for parent-scoped sync.
 
 Reactive reads always use explicit relationship paths:
 - `@SyncQuery(..., relationship: \.relationship, relationshipID: parentID, ...)`
@@ -24,17 +22,12 @@ try await SwiftSync.sync(
   payload: payload,
   as: Child.self,
   in: context,
-  parent: parentObject
+  parent: parentObject,
+  parentRelationship: \Child.parent
 )
 ```
 
-SwiftSync resolves the child->parent relationship using this rule:
-1. Find to-one relationships on `Child` that match the runtime parent type.
-2. If exactly 1 exists: use it automatically.
-3. If 0 exist: throw a typed `invalidPayload` error.
-4. If more than 1 exist: throw a typed `invalidPayload` error listing candidates.
-
-No fallback guessing is used for ambiguous cases.
+SwiftSync uses the provided `parentRelationship` key path directly; no relationship inference is performed.
 
 ## Why This Matters
 
@@ -48,7 +41,7 @@ If scope resolution is wrong, delete can target valid rows from another logical 
 
 ## Minimal Real-World Scenario
 
-### Case A: Single relationship (inference succeeds)
+### Case A: Single relationship (explicit key path)
 
 Models:
 
@@ -66,9 +59,9 @@ Models:
 }
 ```
 
-There is exactly one `Task -> Project?` relationship (`project`), so default parent inference resolves it automatically.
+Pass `parentRelationship: \Task.project` when syncing tasks for a project parent scope.
 
-### Case B: Multiple relationships (explicit key path required)
+### Case B: Multiple relationships (choose explicit path)
 
 Models:
 
@@ -87,18 +80,21 @@ Models:
 ```
 
 If parent passed is a `User`, both `assignee` and `reviewer` are valid candidates.
-SwiftSync throws and asks for explicit configuration:
+Choose the intended path explicitly at call sites:
 
 ```swift
-extension Ticket: ParentScopedModel {
-  static var parentRelationship: ReferenceWritableKeyPath<Ticket, User?> { \.assignee }
-}
+try await SwiftSync.sync(
+  payload: payload,
+  as: Ticket.self,
+  in: context,
+  parent: user,
+  parentRelationship: \Ticket.assignee
+)
 ```
 
 ## Safety Contract
 
-SwiftSync does not silently guess between multiple candidate parent relationships.
-Ambiguity is surfaced as an error to avoid cross-scope delete mistakes.
+SwiftSync does not guess parent relationships. Call sites must declare scope explicitly via `parentRelationship:`.
 
 ## To-One Query Example
 

@@ -265,7 +265,7 @@ final class Note {
 }
 
 // Keep this extension when you want scoped identity by default for this model.
-// `parentRelationship` is required only for ambiguous parent mappings.
+// `parentRelationship` provides the default parent scope relationship for this model.
 extension Note: ParentScopedModel {
   static var parentRelationship: ReferenceWritableKeyPath<Note, User?> { \.user }
 }
@@ -285,18 +285,15 @@ try await SwiftSync.sync(
   payload: payload,
   as: Note.self,
   in: context,
-  parent: user
+  parent: user,
+  parentRelationship: \Note.user
 )
 ```
 
 Notes:
 - This example keeps `ParentScopedModel`, so scoped identity is the default for `Note`.
-- Parent relationship inference is the default behavior for parent sync.
-- If `Note` has exactly one to-one relationship to `User`, `parentRelationship` is inferred.
-- `parentRelationship` is only required when there are multiple candidate relationships to the same parent type.
-- If there are zero candidates, sync fails because the requested parent scope cannot be resolved for that model.
-- `identityPolicy` defaults to `.global` for inferred parent sync. Use `.scopedByParent` when duplicate child IDs across different parents are valid.
-- Inferred scoped example: `try await SwiftSync.sync(payload: payload, as: Note.self, in: context, parent: user, identityPolicy: .scopedByParent)`
+- Parent-scoped sync requires an explicit `parentRelationship:` key path.
+- For models conforming to `ParentScopedModel`, the default identity policy remains scoped-by-parent.
 
 ### Scenario: to-one relationship by nested object
 
@@ -569,7 +566,7 @@ Identity selection order:
 Defaults:
 - `SyncUpdatableModel` -> `.global`
 - `ParentScopedModel` -> `.scopedByParent`
-- inferred parent sync (`sync(... parent: Parent)`) -> `.global` unless you pass `identityPolicy: .scopedByParent`
+- explicit parent-relationship sync on non-`ParentScopedModel` types -> `.global`
 
 If you need global behavior on a parent-scoped model, override it:
 
@@ -705,19 +702,12 @@ public extension SwiftSync {
     relationshipOperations: SyncRelationshipOperations = .all
   ) async throws
 
-  static func sync<Model: ParentScopedModel>(
-    payload: [Any],
-    as model: Model.Type,
-    in context: ModelContext,
-    parent: Model.SyncParent,
-    relationshipOperations: SyncRelationshipOperations = .all
-  ) async throws
-
   static func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
     payload: [Any],
     as model: Model.Type,
     in context: ModelContext,
     parent: Parent,
+    parentRelationship: ReferenceWritableKeyPath<Model, Parent?>,
     relationshipOperations: SyncRelationshipOperations = .all
   ) async throws
 
@@ -726,6 +716,7 @@ public extension SwiftSync {
     as model: Model.Type,
     in context: ModelContext,
     parent: Parent,
+    parentRelationship: ReferenceWritableKeyPath<Model, Parent?>,
     relationshipOperations: SyncRelationshipOperations = .all
   ) async throws
 
