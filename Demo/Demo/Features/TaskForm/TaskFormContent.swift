@@ -1,146 +1,22 @@
-import SwiftData
 import DemoCore
-import SwiftSync
 import SwiftUI
 
-// MARK: - Sheet
-
-struct TaskFormSheet: View {
-    let mode: TaskFormMode
-    let syncContainer: SyncContainer
-    let syncEngine: DemoSyncEngine
-
-    @Environment(\.dismiss) private var dismiss
-
-    // Throwaway context — autosave disabled. Never saved to the store.
-    // On cancel it is simply released; on save we export the values and call the API.
-    private let editContext: ModelContext
-
-    // The draft lives in editContext. For create it is a freshly-inserted Task.
-    // For edit it is the same row fetched into this isolated context.
-    // Relationship arrays (reviewers, watchers) are real [User] objects from editContext,
-    // so the pickers can assign them directly without cross-context crashes.
-    @State private var draft: Task
-
-    @StateObject private var machine: TaskFormMachine
-    @State private var newItemTitle = ""
-    @State private var itemEditMode: EditMode = .inactive
-
-    init(mode: TaskFormMode, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
-        self.mode = mode
-        self.syncContainer = syncContainer
-        self.syncEngine = syncEngine
-
-        let ctx = ModelContext(syncContainer.modelContainer)
-        ctx.autosaveEnabled = false
-        self.editContext = ctx
-        _machine = StateObject(
-            wrappedValue: TaskFormMachine(syncContainer: syncContainer, syncEngine: syncEngine, editContext: ctx)
-        )
-
-        switch mode {
-        case .create(let projectID):
-            let task = Task(projectID: projectID)
-            ctx.insert(task)
-            _draft = State(initialValue: task)
-
-        case .edit(let task):
-            let taskID = task.id
-            let descriptor = FetchDescriptor<Task>(predicate: #Predicate { $0.id == taskID })
-            let fetched = (try? ctx.fetch(descriptor))?.first
-            // Fallback should never be reached in practice — the row is always in the store.
-            // If it somehow is, we fall back to the passed object (which lives in mainContext,
-            // so edits won't reach the store either, preserving the no-save guarantee).
-            _draft = State(initialValue: fetched ?? task)
-        }
-    }
-
-    // MARK: Body
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                loadErrorSection
-                titleSection
-                descriptionSection
-                itemsSection
-                stateSection
-                assigneeSection
-                if case .create = mode { authorSection }
-                reviewersSection
-                watchersSection
-            }
-            .environment(\.editMode, $itemEditMode)
-            .navigationTitle(navigationTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                        .disabled(machine.saveState == .submitting)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        machine.send(.save(mode: mode, draft: draft, onSuccess: {
-                            dismiss()
-                        }))
-                    } label: {
-                        HStack(spacing: 6) {
-                            if machine.saveState == .submitting { ProgressView().controlSize(.small) }
-                            Text(confirmLabel)
-                        }
-                    }
-                    .disabled(isSaveDisabled)
-                }
-            }
-        }
-        .task {
-            machine.send(.metadata(.onAppear))
-        }
-        .task(id: "\(machine.taskStateOptions.map(\.id).joined(separator: ","))|\(machine.users.map(\.id).joined(separator: ","))") {
-            machine.applyDefaultsIfNeeded(to: draft)
-        }
-        .alert(
-            "Save Failed",
-            isPresented: Binding(
-                get: {
-                    if case .failed = machine.saveState { return true }
-                    return false
-                },
-                set: { isPresented in
-                    if !isPresented {
-                        machine.send(.dismissSaveError)
-                    }
-                }
-            )
-        ) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            if case .failed(let error) = machine.saveState {
-                Text(error.message)
-            } else {
-                Text("Unknown error")
-            }
-        }
-        .presentationDetents([.large])
-    }
-
-    // MARK: Sections
-
-    private var titleSection: some View {
+extension TaskFormSheet {
+    var titleSection: some View {
         Section("Title") {
             TextEditor(text: $draft.title)
                 .frame(minHeight: 60)
         }
     }
 
-    private var descriptionSection: some View {
+    var descriptionSection: some View {
         Section("Description") {
             TextEditor(text: $draft.descriptionText)
                 .frame(minHeight: 120)
         }
     }
 
-    private var itemsSection: some View {
+    var itemsSection: some View {
         let items = machine.sortedItems(in: draft)
 
         return Section("Items") {
@@ -189,7 +65,7 @@ struct TaskFormSheet: View {
         }
     }
 
-    private var stateSection: some View {
+    var stateSection: some View {
         Section("State") {
             if machine.taskStateOptions.isEmpty {
                 LabeledContent("State") {
@@ -218,7 +94,7 @@ struct TaskFormSheet: View {
         }
     }
 
-    private var assigneeSection: some View {
+    var assigneeSection: some View {
         Section("Assignee") {
             Button {
                 draft.assigneeID = nil
@@ -247,7 +123,7 @@ struct TaskFormSheet: View {
         }
     }
 
-    private var authorSection: some View {
+    var authorSection: some View {
         Section("Author") {
             ForEach(machine.users, id: \.id) { user in
                 Button {
@@ -265,7 +141,7 @@ struct TaskFormSheet: View {
         }
     }
 
-    private var reviewersSection: some View {
+    var reviewersSection: some View {
         Section("Reviewers") {
             ForEach(machine.users, id: \.id) { user in
                 Button {
@@ -287,7 +163,7 @@ struct TaskFormSheet: View {
         }
     }
 
-    private var watchersSection: some View {
+    var watchersSection: some View {
         Section("Watchers") {
             ForEach(machine.users, id: \.id) { user in
                 Button {
@@ -310,7 +186,7 @@ struct TaskFormSheet: View {
     }
 
     @ViewBuilder
-    private var loadErrorSection: some View {
+    var loadErrorSection: some View {
         if let metadataError = machine.metadataLoadState.errorPresentation {
             Section {
                 VStack(alignment: .leading, spacing: 10) {
@@ -321,40 +197,5 @@ struct TaskFormSheet: View {
                 .padding(.vertical, 4)
             }
         }
-    }
-
-    // MARK: Helpers
-
-    private var navigationTitle: String {
-        switch mode {
-        case .create: "New Task"
-        case .edit: "Edit Task"
-        }
-    }
-
-    private var confirmLabel: String {
-        switch mode {
-        case .create: "Create"
-        case .edit: "Save"
-        }
-    }
-
-    private var isSaveDisabled: Bool {
-        guard machine.saveState != .submitting,
-              !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else { return true }
-        if case .create = mode {
-            return draft.state.isEmpty || draft.authorID.isEmpty
-        }
-        return false
-    }
-
-    private func itemTitleBinding(for item: Item) -> Binding<String> {
-        Binding(
-            get: { item.title },
-            set: { newValue in
-                _ = machine.mutateItems(.updateTitle(item: item, title: newValue), in: draft)
-            }
-        )
     }
 }
