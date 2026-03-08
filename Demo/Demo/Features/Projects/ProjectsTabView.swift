@@ -43,9 +43,7 @@ private struct ProjectDetailView: View {
     let syncContainer: SyncContainer
     @ObservedObject var syncEngine: DemoSyncEngine
 
-    @SyncModel private var projectModel: Project?
-    @SyncQuery private var tasks: [Task]
-    @State private var hasTriggeredInitialSync = false
+    @StateObject private var machine: ProjectDetailMachine
     @State private var isShowingCreateTaskSheet = false
     @State private var taskPendingDelete: TaskDeletePrompt?
 #if DEBUG
@@ -57,25 +55,17 @@ private struct ProjectDetailView: View {
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
 
-        _projectModel = SyncModel(Project.self, id: projectID, in: syncContainer)
-        _tasks = SyncQuery(
-            Task.self,
-            relationship: \Task.project,
-            relationshipID: projectID,
-            in: syncContainer,
-            sortBy: [
-                SortDescriptor(\Task.updatedAt, order: .reverse),
-                SortDescriptor(\Task.id)
-            ],
-            refreshOn: [\.assignee, \.items],
-            animation: .snappy(duration: 0.24)
+        _machine = StateObject(
+            wrappedValue: ProjectDetailMachine(projectID: projectID, syncContainer: syncContainer, syncEngine: syncEngine)
         )
     }
 
     var body: some View {
         List {
+            loadErrorSection
+
             Section {
-                if let projectModel {
+                if let projectModel = machine.project {
                     Text(projectModel.name)
                         .font(.headline)
                         .lineLimit(3)
@@ -89,7 +79,7 @@ private struct ProjectDetailView: View {
             }
 
             Section("Tasks") {
-                ForEach(tasks, id: \.id) { task in
+                ForEach(machine.tasks, id: \.id) { task in
                     NavigationLink {
                         TaskDetailView(taskID: task.id, syncContainer: syncContainer, syncEngine: syncEngine)
                     } label: {
@@ -141,13 +131,7 @@ private struct ProjectDetailView: View {
             }
         }
         .task {
-            guard !hasTriggeredInitialSync else { return }
-            hasTriggeredInitialSync = true
-            do {
-                try await syncEngine.syncProjectTasks(projectID: projectID)
-            } catch {
-                // Error state is surfaced by the sync engine.
-            }
+            requestLoad(.onAppear)
         }
         .sheet(isPresented: $isShowingCreateTaskSheet) {
             TaskFormSheet(
@@ -166,11 +150,7 @@ private struct ProjectDetailView: View {
         ) { prompt in
             Button("Delete", role: .destructive) {
                 _Concurrency.Task {
-                    do {
-                        try await syncEngine.deleteTask(taskID: prompt.id, projectID: projectID)
-                    } catch {
-                        // Error state is surfaced by the sync engine.
-                    }
+                    await machine.deleteTask(taskID: prompt.id)
                     taskPendingDelete = nil
                 }
             }
@@ -218,6 +198,43 @@ private struct ProjectDetailView: View {
             .allowsHitTesting(false)
         )
 #endif
+        .overlay {
+            loadOverlay
+        }
+    }
+
+    @ViewBuilder
+    private var loadErrorSection: some View {
+        if let presentation = machine.loadState.errorPresentation {
+            Section {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(presentation.message)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    if let retryActionTitle = presentation.retryActionTitle {
+                        Button(retryActionTitle) {
+                            requestLoad(.retry)
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var loadOverlay: some View {
+        if machine.loadState.isLoading {
+            ProgressView("Loading project...")
+                .padding(14)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+    }
+
+    private func requestLoad(_ event: ScreenLoadEvent) {
+        machine.send(event)
     }
 }
 

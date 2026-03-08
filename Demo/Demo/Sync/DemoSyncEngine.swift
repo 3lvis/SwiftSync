@@ -20,7 +20,6 @@ final class DemoSyncEngine: ObservableObject {
     }
 
     @Published private(set) var isSyncing = false
-    @Published private(set) var lastErrorMessage: String?
 
 #if DEBUG
     @Published private(set) var isEarthquakeModeRunning = false
@@ -86,9 +85,7 @@ final class DemoSyncEngine: ObservableObject {
         case .projectDetail(let projectID):
             do {
                 try await syncProjectTasks(projectID: projectID)
-            } catch {
-                lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            }
+            } catch {}
             await runProjectStressMutation(projectID: projectID, iteration: iteration)
 
         case .taskDetail(let taskID):
@@ -101,17 +98,13 @@ final class DemoSyncEngine: ObservableObject {
             guard let projectID = loadedTask?.projectID else {
                 do {
                     try await syncTaskDetail(taskID: taskID)
-                } catch {
-                    lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                }
+                } catch {}
                 return
             }
             do {
                 try await syncTaskDetail(taskID: taskID)
                 try await syncProjectTasks(projectID: projectID)
-            } catch {
-                lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            }
+            } catch {}
             await runTaskDetailStressMutation(taskID: taskID, projectID: projectID, iteration: iteration)
         }
     }
@@ -133,9 +126,7 @@ final class DemoSyncEngine: ObservableObject {
             _ = try await apiClient.updateTask(taskID: createdID, body: updated)
             try await apiClient.deleteTask(taskID: createdID)
             try await syncProjectTasksData(projectID: projectID)
-        } catch {
-            lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-        }
+        } catch {}
     }
 
     private func runTaskDetailStressMutation(taskID: String, projectID: String, iteration: Int) async {
@@ -175,9 +166,7 @@ final class DemoSyncEngine: ObservableObject {
 
             try await syncTaskAfterMutation(taskID: taskID, projectID: projectID)
             try await syncProjectTasksData(projectID: projectID)
-        } catch {
-            lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-        }
+        } catch {}
     }
 
     private func makeStressTaskBody(projectID: String, iteration: Int) throws -> [String: Any]? {
@@ -413,10 +402,7 @@ final class DemoSyncEngine: ObservableObject {
 
         do {
             try await operation()
-            lastErrorMessage = nil
         } catch {
-            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            lastErrorMessage = message
             throw error
         }
     }
