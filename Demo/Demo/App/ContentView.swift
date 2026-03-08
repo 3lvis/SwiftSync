@@ -2,11 +2,11 @@ import SwiftUI
 import DemoCore
 import SwiftSync
 
-struct DemoView: View {
+struct ContentView: View {
     @ObservedObject var runtime: DemoRuntime
 
     var body: some View {
-        DemoContainerView(syncContainer: runtime.syncContainer, syncEngine: runtime.syncEngine)
+        ProjectsView(syncContainer: runtime.syncContainer, syncEngine: runtime.syncEngine)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Picker("Scenario", selection: $runtime.scenario) {

@@ -9,7 +9,7 @@ struct DemoApp: App {
 
     var body: some Scene {
         WindowGroup {
-            DemoView(runtime: runtime)
+            ContentView(runtime: runtime)
         }
         .modelContainer(runtime.syncContainer.modelContainer)
     }
