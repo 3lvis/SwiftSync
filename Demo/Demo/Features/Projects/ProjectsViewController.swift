@@ -71,7 +71,7 @@ final class ProjectsViewController: UITableViewController {
 
         _Concurrency.Task {
             do {
-                try await syncEngine.loadProjectsScreen()
+                try await syncEngine.syncProjects()
             } catch {
                 // Error state is surfaced by the sync engine.
             }

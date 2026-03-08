@@ -54,7 +54,7 @@ struct TaskDetailView: View {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
             do {
-                try await syncEngine.loadTaskDetailScreen(taskID: taskID)
+                try await syncEngine.syncTaskDetail(taskID: taskID)
             } catch {
                 // Error state is surfaced by the sync engine.
             }

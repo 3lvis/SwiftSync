@@ -433,7 +433,7 @@ struct TaskFormSheet: View {
         defer { isLoadingTaskStates = false }
 
         do {
-            try await syncEngine.loadTaskFormScreen()
+            try await syncEngine.syncTaskFormMetadata()
         } catch {
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             saveErrorMessage = message

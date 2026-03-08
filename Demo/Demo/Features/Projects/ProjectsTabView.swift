@@ -144,7 +144,7 @@ private struct ProjectDetailView: View {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
             do {
-                try await syncEngine.loadProjectDetailScreen(projectID: projectID)
+                try await syncEngine.syncProjectTasks(projectID: projectID)
             } catch {
                 // Error state is surfaced by the sync engine.
             }
