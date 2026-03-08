@@ -37,40 +37,25 @@
 ## docs/planning Rules
 
 1. Cleanup on new task start
+
 - Before adding new work, remove completed or stale items.
 - Remove: `[x]`, `[~]`, `completed`, `done`, `superseded`, `scheduled`.
 - Keep only active items.
 
 2. Required todo format
+
 - Every planning file must include `## Open items`.
 - Open items must use unchecked checkboxes only: `- [ ] <task>`.
 - Items must be short, actionable, and implementation-focused.
 
-## Git Command Safety
+## Execution Safety
 
-- Default all Git commands to sequential execution.
-- Only parallelize Git commands when they are clearly read-only and no other Git command in the same step may write repo metadata.
-- Never run Git index- or worktree-mutating commands in parallel.
-- Run these sequentially only: `git add`, `git rm`, `git mv`, `git commit`, `git merge`, `git rebase`, `git cherry-pick`, `git checkout`, `git stash`, `git reset`, `git clean`.
-- Do not use parallel tool calls for multiple Git commands when any command may write `.git/index`, `.git/HEAD`, refs, or the worktree.
-- If a Git command fails due to `index.lock`, stop, remove the stale lock, and retry the same command sequentially.
-
-## Parallel Command Safety
-
-- Default commands that mutate shared state to sequential execution.
-- Never run commands in parallel if they may write to the same workspace files, build artifacts, caches, or derived data.
+- Default all commands to sequential execution.
+- Run commands in parallel only when they are independent and read-only.
+- Never run mutating commands in parallel (git/worktree/index writes, file writes, build artifacts, caches, or derived data).
 - Run build/test/codegen commands sequentially (for example `xcodebuild`, `swift test`, formatters, generators).
-- If a failure could be caused by contention, rerun the same command alone before debugging deeper.
-
-## `multi_tool_use.parallel` Usage Rules
-
-- Use parallel only for read-only exploration and independent commands.
-- Good parallel examples: `rg`, `sed`, `cat`, `ls`, `git diff`, `git show`, `git status`.
-- Do not use parallel when any command in the group:
-  - writes files
-  - mutates git state
-  - runs build/test tooling
-  - depends on another command's output in that same group
+- For Git, run these sequentially only: `git add`, `git rm`, `git mv`, `git commit`, `git merge`, `git rebase`, `git cherry-pick`, `git checkout`, `git stash`, `git reset`, `git clean`.
+- If a Git command fails due to `index.lock`, stop, remove the stale lock, and retry the same command sequentially.
 
 ## Pre-Commit Checkpoint
 
@@ -128,18 +113,22 @@ Keep it committed and current while working.
 # State Capsule
 
 ## Plan
+
 - [x] Step already done
 - [~] Step in progress — brief note on exactly where it stopped
 - [ ] Step not started yet
 - [ ] Step not started yet
 
 ## Last known state
+
 tests green / build failing / untested
 
 ## Decisions (don't revisit)
+
 - <decision> — <why>
 
 ## Files touched
+
 - path
 ```
 
@@ -179,13 +168,13 @@ No special procedure needed. If the plan was kept current during work, `state.md
 
 ### Lifecycle
 
-| Event | Action |
-|---|---|
-| Start feature branch | Create `.agents/state.md` and write the full plan before touching code |
-| Switch machines mid-task | Read `.agents/state.md` to restore context — no lost work |
-| Usage cap hit mid-task | Read `.agents/state.md` on resume — continue from the `[~]` or first `[ ]` step |
-| PR merged / branch closed | CI purges `.agents/` automatically on next push to `main` |
-| Hard context switch (abandon task) | Delete `.agents/` — stale state misleads more than it helps |
+| Event                              | Action                                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------------- |
+| Start feature branch               | Create `.agents/state.md` and write the full plan before touching code          |
+| Switch machines mid-task           | Read `.agents/state.md` to restore context — no lost work                       |
+| Usage cap hit mid-task             | Read `.agents/state.md` on resume — continue from the `[~]` or first `[ ]` step |
+| PR merged / branch closed          | CI purges `.agents/` automatically on next push to `main`                       |
+| Hard context switch (abandon task) | Delete `.agents/` — stale state misleads more than it helps                     |
 
 ### Why not gitignore it?
 

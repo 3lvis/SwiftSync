@@ -1,10 +1,11 @@
 # State Capsule
 
 ## Plan
-- [x] Update `AGENTS.md` to scope strict TDD to library changes and exempt removals.
+- [x] Consolidate overlapping safety sections in `AGENTS.md` into a single execution safety policy.
+- [x] Add a compact required-workflow summary to the `.agents` protocol section.
 
 ## Last known state
-docs updated (AGENTS policy now scoped to library TDD and removal exemption)
+docs updated (AGENTS safety + required workflow simplified)
 
 ## Decisions (don't revisit)
 - Use explicit load state machines (`idle/loading/loaded/error`) rather than boolean loading flags for demo screen fetch flows.
