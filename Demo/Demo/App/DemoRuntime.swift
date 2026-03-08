@@ -29,8 +29,8 @@ final class DemoRuntime: ObservableObject {
         self.syncEngine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
     }
 
-    func bootstrapIfNeeded() async {
-        await syncEngine.bootstrapIfNeeded()
+    func bootstrapIfNeeded() async throws {
+        try await syncEngine.bootstrapIfNeeded()
     }
 
     private static func makeSyncContainer() throws -> SyncContainer {

@@ -432,7 +432,12 @@ struct TaskFormSheet: View {
         isLoadingTaskStates = true
         defer { isLoadingTaskStates = false }
 
-        await syncEngine.loadTaskFormScreen()
+        do {
+            try await syncEngine.loadTaskFormScreen()
+        } catch {
+            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            saveErrorMessage = message
+        }
 
         let refreshed = Self.metadataSnapshot(from: editContext)
         users = refreshed.users

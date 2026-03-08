@@ -143,7 +143,11 @@ private struct ProjectDetailView: View {
         .task {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
-            await syncEngine.loadProjectDetailScreen(projectID: projectID)
+            do {
+                try await syncEngine.loadProjectDetailScreen(projectID: projectID)
+            } catch {
+                // Error state is surfaced by the sync engine.
+            }
         }
         .sheet(isPresented: $isShowingCreateTaskSheet) {
             TaskFormSheet(
@@ -162,7 +166,11 @@ private struct ProjectDetailView: View {
         ) { prompt in
             Button("Delete", role: .destructive) {
                 _Concurrency.Task {
-                    await syncEngine.deleteTask(taskID: prompt.id, projectID: projectID)
+                    do {
+                        try await syncEngine.deleteTask(taskID: prompt.id, projectID: projectID)
+                    } catch {
+                        // Error state is surfaced by the sync engine.
+                    }
                     taskPendingDelete = nil
                 }
             }

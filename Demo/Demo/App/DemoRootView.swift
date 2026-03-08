@@ -7,7 +7,11 @@ struct DemoRootView: View {
     var body: some View {
         ProjectsTabView(syncContainer: runtime.syncContainer, syncEngine: runtime.syncEngine)
         .task {
-            await runtime.bootstrapIfNeeded()
+            do {
+                try await runtime.bootstrapIfNeeded()
+            } catch {
+                // Error state is surfaced by the sync engine.
+            }
         }
         .safeAreaInset(edge: .bottom) {
             if let error = runtime.syncEngine.lastErrorMessage {

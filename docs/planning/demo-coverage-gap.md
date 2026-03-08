@@ -6,10 +6,6 @@
 
 ## Open items
 
-### Public `SyncContainer` members not exercised by demo runtime
-
-- [ ] Exercise `SyncContainer.sync(item:as:parent:relationshipOperations:)`.
-
 ### Public reactive query API overloads not exercised by demo runtime
 
 - [ ] Exercise `SyncQuery.init(_:in:sortBy:animation:)` (no `relatedTo`, no `predicate`).

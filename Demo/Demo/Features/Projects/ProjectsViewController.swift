@@ -69,7 +69,13 @@ final class ProjectsViewController: UITableViewController {
             }
             .store(in: &cancellables)
 
-        _Concurrency.Task { await syncEngine.loadProjectsScreen() }
+        _Concurrency.Task {
+            do {
+                try await syncEngine.loadProjectsScreen()
+            } catch {
+                // Error state is surfaced by the sync engine.
+            }
+        }
     }
 
     // MARK: - UITableViewDelegate

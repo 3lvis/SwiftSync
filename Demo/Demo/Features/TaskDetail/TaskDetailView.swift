@@ -53,7 +53,11 @@ struct TaskDetailView: View {
         .task {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
-            await syncEngine.loadTaskDetailScreen(taskID: taskID)
+            do {
+                try await syncEngine.loadTaskDetailScreen(taskID: taskID)
+            } catch {
+                // Error state is surfaced by the sync engine.
+            }
         }
         .sheet(isPresented: $showingEditSheet) {
             if let taskModel {
