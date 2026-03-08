@@ -38,7 +38,7 @@ struct TaskDetailView: View {
             }
         }
         .task {
-            requestLoad(.onAppear)
+            requestLoad()
         }
         .sheet(isPresented: $showingEditSheet) {
             if let taskModel = machine.task {
@@ -62,12 +62,6 @@ struct TaskDetailView: View {
                     Text(presentation.message)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                    if let retryActionTitle = presentation.retryActionTitle {
-                        Button(retryActionTitle) {
-                            requestLoad(.retry)
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
                 }
                 .padding(.vertical, 4)
             }
@@ -84,8 +78,8 @@ struct TaskDetailView: View {
         }
     }
 
-    private func requestLoad(_ event: ScreenLoadEvent) {
-        machine.send(event)
+    private func requestLoad() {
+        machine.send(.onAppear)
     }
 
     private var taskSection: some View {

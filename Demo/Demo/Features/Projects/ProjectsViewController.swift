@@ -14,7 +14,7 @@ final class ProjectsViewController: UITableViewController {
     private let machine: ProjectsListMachine
 
     private lazy var statusContainer: UIStackView = {
-        let stack = UIStackView(arrangedSubviews: [statusIndicator, statusLabel, retryButton])
+        let stack = UIStackView(arrangedSubviews: [statusIndicator, statusLabel])
         stack.axis = .vertical
         stack.alignment = .center
         stack.spacing = 12
@@ -30,15 +30,6 @@ final class ProjectsViewController: UITableViewController {
         label.numberOfLines = 0
         label.textAlignment = .center
         return label
-    }()
-
-    private lazy var retryButton: UIButton = {
-        var config = UIButton.Configuration.filled()
-        config.cornerStyle = .capsule
-        config.title = "Retry"
-        let button = UIButton(configuration: config)
-        button.addTarget(self, action: #selector(retryTapped), for: .touchUpInside)
-        return button
     }()
 
     private lazy var diffableDataSource: UITableViewDiffableDataSource<String, String> = {
@@ -109,33 +100,23 @@ final class ProjectsViewController: UITableViewController {
 
     // MARK: - Loading UI
 
-    @objc
-    private func retryTapped() {
-        machine.send(.retry)
-    }
-
     private func renderLoadState(_ state: ScreenLoadState) {
         switch state {
         case .idle:
             statusIndicator.stopAnimating()
             statusLabel.text = nil
-            retryButton.isHidden = true
             tableView.backgroundView?.isHidden = true
         case .loading:
             statusIndicator.startAnimating()
             statusLabel.text = "Loading projects..."
-            retryButton.isHidden = true
             tableView.backgroundView?.isHidden = false
         case .loaded:
             statusIndicator.stopAnimating()
             statusLabel.text = machine.rows.isEmpty ? "No projects yet." : nil
-            retryButton.isHidden = true
             tableView.backgroundView?.isHidden = !machine.rows.isEmpty
         case .error(let presentation):
             statusIndicator.stopAnimating()
             statusLabel.text = presentation.message
-            retryButton.isHidden = presentation.retryActionTitle == nil
-            retryButton.setTitle(presentation.retryActionTitle, for: .normal)
             tableView.backgroundView?.isHidden = false
         }
     }

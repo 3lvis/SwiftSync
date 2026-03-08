@@ -2,8 +2,10 @@
 
 ## Plan
 
-- [x] Remove SwiftUI dependency from state machine data logic in `ScreenMachines.swift`
-- [x] Re-run Demo app build (`xcodebuild ... -scheme Demo ... build`) and record result
+- [x] Remove retry events and retry metadata from Demo error/load state models
+- [x] Remove retry UI/actions from Demo screens and controllers
+- [x] Update Demo docs to remove retry guidance
+- [x] Re-run Demo build (`xcodebuild ... -scheme Demo ... build`) and record result
 
 ## Last known state
 
@@ -24,3 +26,5 @@
 - docs/project/local-first-freshness-flow.md
 - Demo/Demo/Features/ScreenMachines.swift
 - Demo/Demo/Features/TaskFormSheet.swift
+- Demo/Demo/App/ErrorPresentation.swift
+- Demo/Demo/Features/Projects/ProjectsViewController.swift

@@ -7,7 +7,6 @@ This demo now teaches a local-first sync pattern without TTL-based skip logic.
 - Screens render from local SwiftData immediately.
 - Engine always refreshes from network when a screen triggers sync.
 - There is no pull-to-refresh in demo screens.
-- Retry uses the same `sync*` method.
 
 ## Engine boundaries
 
@@ -18,7 +17,7 @@ This demo now teaches a local-first sync pattern without TTL-based skip logic.
 ## Error/state boundaries
 
 - Engine publishes `isSyncing`.
-- Sync methods throw; call sites decide retry and user messaging.
+- Sync methods throw; call sites decide user messaging.
 
 ## What this teaches SwiftSync adopters
 
@@ -29,5 +28,4 @@ This demo now teaches a local-first sync pattern without TTL-based skip logic.
 ## Troubleshooting
 
 - **UI shows old data briefly**: expected in local-first mode; wait for network sync completion.
-- **UI remains stale**: use the screen-level retry action and verify the screen-level error copy.
-- **Form metadata looks stale**: retry metadata load in the form.
+- **UI remains stale**: leave and re-enter the screen to trigger a fresh sync.

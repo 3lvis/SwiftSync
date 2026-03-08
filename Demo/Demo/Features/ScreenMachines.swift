@@ -21,7 +21,7 @@ final class ProjectsListMachine: ObservableObject {
             sortBy: [SortDescriptor(\Project.name), SortDescriptor(\Project.id)]
         )
         self.loadMachine = ScreenLoadMachine { error in
-            presentError(error, retryActionTitle: "Retry", fallbackMessage: "Could not load projects.")
+            presentError(error, fallbackMessage: "Could not load projects.")
         }
 
         rowsPublisher.$rows
@@ -60,12 +60,10 @@ final class ProjectDetailMachine: ObservableObject {
     private let taskPublisher: SyncQueryPublisher<Task>
     private let loadMachine: ScreenLoadMachine
     private let deleteMachine: SubmissionMachine
-    private var pendingDeleteTaskID: String?
     private var cancellables = Set<AnyCancellable>()
 
     enum DeleteEvent {
         case request(taskID: String)
-        case retry
         case dismissError
     }
 
@@ -88,10 +86,10 @@ final class ProjectDetailMachine: ObservableObject {
             ]
         )
         self.loadMachine = ScreenLoadMachine { error in
-            presentError(error, retryActionTitle: "Retry", fallbackMessage: "Could not load this project yet.")
+            presentError(error, fallbackMessage: "Could not load this project yet.")
         }
         self.deleteMachine = SubmissionMachine { error in
-            presentError(error, retryActionTitle: "Retry", fallbackMessage: "Could not delete this task.")
+            presentError(error, fallbackMessage: "Could not delete this task.")
         }
 
         projectPublisher.$rows
@@ -133,14 +131,12 @@ final class ProjectDetailMachine: ObservableObject {
     func sendDelete(_ event: DeleteEvent) {
         switch event {
         case .request(let taskID):
-            pendingDeleteTaskID = taskID
             guard deleteMachine.send(.submit) else { return }
 
             _Concurrency.Task {
                 do {
                     try await syncEngine.deleteTask(taskID: taskID, projectID: projectID)
                     await MainActor.run {
-                        pendingDeleteTaskID = nil
                         _ = deleteMachine.send(.success)
                     }
                 } catch {
@@ -149,10 +145,6 @@ final class ProjectDetailMachine: ObservableObject {
                     }
                 }
             }
-
-        case .retry:
-            guard let taskID = pendingDeleteTaskID else { return }
-            sendDelete(.request(taskID: taskID))
 
         case .dismissError:
             _ = deleteMachine.send(.dismissError)
@@ -190,7 +182,7 @@ final class TaskDetailMachine: ObservableObject {
             sortBy: [SortDescriptor(\Item.position, order: .forward), SortDescriptor(\Item.id, order: .forward)]
         )
         self.loadMachine = ScreenLoadMachine { error in
-            presentError(error, retryActionTitle: "Retry", fallbackMessage: "Could not load this task yet.")
+            presentError(error, fallbackMessage: "Could not load this task yet.")
         }
 
         taskPublisher.$rows
@@ -258,14 +250,12 @@ final class TaskFormMachine: ObservableObject {
         self.metadataLoadMachine = ScreenLoadMachine { error in
             presentError(
                 error,
-                retryActionTitle: "Retry Loading Metadata",
                 fallbackMessage: "Could not load form options yet."
             )
         }
         self.saveMachine = SubmissionMachine { error in
             presentError(
                 error,
-                retryActionTitle: nil,
                 fallbackMessage: "Could not save this task."
             )
         }

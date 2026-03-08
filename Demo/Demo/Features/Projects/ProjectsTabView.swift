@@ -128,7 +128,7 @@ private struct ProjectDetailView: View {
             }
         }
         .task {
-            requestLoad(.onAppear)
+            requestLoad()
         }
         .sheet(isPresented: $isShowingCreateTaskSheet) {
             TaskFormSheet(
@@ -167,12 +167,6 @@ private struct ProjectDetailView: View {
                 }
             )
         ) {
-            if case .failed(let presentation) = machine.deleteState,
-               let retryActionTitle = presentation.retryActionTitle {
-                Button(retryActionTitle) {
-                    machine.sendDelete(.retry)
-                }
-            }
             Button("OK", role: .cancel) {
                 machine.sendDelete(.dismissError)
             }
@@ -196,12 +190,6 @@ private struct ProjectDetailView: View {
                     Text(presentation.message)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                    if let retryActionTitle = presentation.retryActionTitle {
-                        Button(retryActionTitle) {
-                            requestLoad(.retry)
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
                 }
                 .padding(.vertical, 4)
             }
@@ -218,8 +206,8 @@ private struct ProjectDetailView: View {
         }
     }
 
-    private func requestLoad(_ event: ScreenLoadEvent) {
-        machine.send(event)
+    private func requestLoad() {
+        machine.send(.onAppear)
     }
 }
 

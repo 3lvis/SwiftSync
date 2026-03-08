@@ -21,23 +21,20 @@ extension ScreenLoadState {
 
 struct ErrorPresentationState: Equatable {
     let message: String
-    let retryActionTitle: String?
 }
 
 func presentError(
     _ error: Error,
-    retryActionTitle: String? = "Retry",
     fallbackMessage: String = "Something went wrong. Please try again."
 ) -> ErrorPresentationState {
     let localized = (error as? LocalizedError)?.errorDescription
     let trimmed = localized?.trimmingCharacters(in: .whitespacesAndNewlines)
     let message = (trimmed?.isEmpty == false ? trimmed : nil) ?? fallbackMessage
-    return ErrorPresentationState(message: message, retryActionTitle: retryActionTitle)
+    return ErrorPresentationState(message: message)
 }
 
 enum ScreenLoadEvent {
     case onAppear
-    case retry
     case loadSucceeded
     case loadFailed(Error)
 }
@@ -55,10 +52,6 @@ private enum ScreenLoadReducer {
         switch event {
         case .onAppear:
             guard state == .idle else { return (state, nil) }
-            return (.loading, .load)
-
-        case .retry:
-            guard case .error = state else { return (state, nil) }
             return (.loading, .load)
 
         case .loadSucceeded:

@@ -323,12 +323,6 @@ struct TaskFormSheet: View {
                     Text(metadataError.message)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                    if let retryActionTitle = metadataError.retryActionTitle {
-                        Button(retryActionTitle) {
-                            machine.send(.metadata(.retry))
-                        }
-                        .buttonStyle(.bordered)
-                    }
                 }
                 .padding(.vertical, 4)
             }
