@@ -8,17 +8,15 @@
 
 ### Public reactive query API overloads not exercised by demo runtime
 
-- [ ] Exercise `SyncQuery.init(_:in:sortBy:animation:)` (no `relatedTo`, no `predicate`).
+- [ ] Exercise `SyncQuery.init(_:in:sortBy:animation:)` (no relationship filter, no `predicate`).
 - [ ] Exercise `SyncQuery.init(_:predicate:in:sortBy:animation:)`.
-- [ ] Exercise `SyncQuery.init(_:relatedTo:relatedID:through:in:sortBy:animation:)` (to-one explicit path).
-- [ ] Exercise `SyncQuery.init(_:relatedTo:relatedID:through:in:sortBy:animation:)` (to-many explicit path).
 
 ### Public `SyncQueryPublisher` API not exercised by demo runtime
 
 - [ ] Exercise `SyncQueryPublisher.rowsPublisher`.
 - [ ] Exercise `SyncQueryPublisher.init(_:predicate:in:sortBy:)`.
-- [ ] Exercise `SyncQueryPublisher.init(_:relatedTo:relatedID:through:in:sortBy:)` (to-one explicit path).
-- [ ] Exercise `SyncQueryPublisher.init(_:relatedTo:relatedID:through:in:sortBy:)` (to-many explicit path).
+- [ ] Exercise `SyncQueryPublisher.init(_:relationship:relationshipID:in:sortBy:)` (to-one explicit path).
+- [ ] Exercise `SyncQueryPublisher.init(_:relationship:relationshipID:in:sortBy:)` (to-many explicit path).
 
 ### Public export configuration API not exercised explicitly by demo runtime
 

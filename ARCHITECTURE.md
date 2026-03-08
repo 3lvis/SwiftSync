@@ -288,7 +288,7 @@ shouldReload(for notification)
         │
         ▼  (if reload)
 FetchDescriptor<Model>(predicate:, sortBy:)
-  + optional postFetchFilter (for relatedTo queries)
+  + optional postFetchFilter (for relationship-scoped queries)
 ```
 
 SwiftUI path applies animation: `withAnimation(animation) { rows = resolved }`
@@ -299,10 +299,9 @@ UIKit path assigns directly: `rows = resolved`
 - Plus `syncDefaultRefreshModelTypeNames` (declared by the model)
 - Plus `syncRefreshModelTypeNames(for: refreshOn)` (from `refreshOn:` parameter, SwiftUI only)
 
-**`postFetchFilter` for relatedTo queries:**
-- Inferred: tries `inferToOneRelationship` + `inferToManyRelationship`; picks whichever succeeds alone
-- Explicit `through: \Task.assignee` → `explicitToOneRelatedIDFilter`
-- Explicit `through: \Task.reviewers` → `explicitToManyRelatedIDFilter`
+**`postFetchFilter` for relationship-scoped queries:**
+- Explicit `relationship: \Task.assignee` → `explicitToOneRelationshipIDFilter`
+- Explicit `relationship: \Task.reviewers` → `explicitToManyRelationshipIDFilter`
 
 ---
 

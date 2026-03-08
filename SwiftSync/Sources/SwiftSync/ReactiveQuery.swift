@@ -156,8 +156,8 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
 
     public init<Related: SyncModelable>(
         _ _: Model.Type,
-        relatedTo related: Related.Type,
-        relatedID: Related.SyncID,
+        relationship: ReferenceWritableKeyPath<Model, Related?>,
+        relationshipID: Related.SyncID,
         in syncContainer: SyncContainer,
         sortBy: [SortDescriptor<Model>] = [],
         animation: Animation? = nil
@@ -166,7 +166,7 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
             syncContainer: syncContainer,
             predicate: nil,
             sortBy: sortBy,
-            postFetchFilter: Self.inferredRelatedIDFilter(relatedTo: related, relatedID: relatedID),
+            postFetchFilter: Self.explicitToOneRelationshipIDFilter(relationshipID: relationshipID, relationship: relationship),
             observedModelTypeNames: Self.defaultObservedModelTypeNames(),
             animation: animation
         )
@@ -174,9 +174,8 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
 
     public init<Related: SyncModelable>(
         _ _: Model.Type,
-        relatedTo related: Related.Type,
-        relatedID: Related.SyncID,
-        through relationship: ReferenceWritableKeyPath<Model, Related?>,
+        relationship: ReferenceWritableKeyPath<Model, [Related]>,
+        relationshipID: Related.SyncID,
         in syncContainer: SyncContainer,
         sortBy: [SortDescriptor<Model>] = [],
         animation: Animation? = nil
@@ -185,26 +184,7 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
             syncContainer: syncContainer,
             predicate: nil,
             sortBy: sortBy,
-            postFetchFilter: Self.explicitToOneRelatedIDFilter(relatedTo: related, relatedID: relatedID, relationship: relationship),
-            observedModelTypeNames: Self.defaultObservedModelTypeNames(),
-            animation: animation
-        )
-    }
-
-    public init<Related: SyncModelable>(
-        _ _: Model.Type,
-        relatedTo related: Related.Type,
-        relatedID: Related.SyncID,
-        through relationship: ReferenceWritableKeyPath<Model, [Related]>,
-        in syncContainer: SyncContainer,
-        sortBy: [SortDescriptor<Model>] = [],
-        animation: Animation? = nil
-    ) {
-        self.init(
-            syncContainer: syncContainer,
-            predicate: nil,
-            sortBy: sortBy,
-            postFetchFilter: Self.explicitToManyRelatedIDFilter(relatedTo: related, relatedID: relatedID, relationship: relationship),
+            postFetchFilter: Self.explicitToManyRelationshipIDFilter(relationshipID: relationshipID, relationship: relationship),
             observedModelTypeNames: Self.defaultObservedModelTypeNames(),
             animation: animation
         )
@@ -238,49 +218,23 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
         return names
     }
 
-    private static func inferredRelatedIDFilter<Related: SyncModelable>(
-        relatedTo _: Related.Type,
-        relatedID: Related.SyncID
-    ) -> (Model) -> Bool {
-
-        let inferredToOne = Result { try SwiftSync.inferToOneRelationship(for: Model.self, parent: Related.self) }
-        let inferredToMany = Result { try SwiftSync.inferToManyRelationship(for: Model.self, related: Related.self) }
-
-        switch (inferredToOne, inferredToMany) {
-        case (.success(let relationship), .failure):
-            return explicitToOneRelatedIDFilter(relatedTo: Related.self, relatedID: relatedID, relationship: relationship)
-        case (.failure, .success(let relationship)):
-            return explicitToManyRelatedIDFilter(relatedTo: Related.self, relatedID: relatedID, relationship: relationship)
-        case (.success, .success):
-            preconditionFailure(
-                "SyncQuery relatedTo inference failed for \(Model.self) -> \(Related.self): found both to-one and to-many relationships. Pass an explicit query relationship via `through:`."
-            )
-        case (.failure(let toOneError), .failure(let toManyError)):
-            preconditionFailure(
-                "SyncQuery relatedTo inference failed for \(Model.self) -> \(Related.self). Pass an explicit query relationship via `through:`. To-one error: \(toOneError). To-many error: \(toManyError)"
-            )
-        }
-    }
-
-    private static func explicitToOneRelatedIDFilter<Related: SyncModelable>(
-        relatedTo _: Related.Type,
-        relatedID: Related.SyncID,
+    private static func explicitToOneRelationshipIDFilter<Related: SyncModelable>(
+        relationshipID: Related.SyncID,
         relationship: ReferenceWritableKeyPath<Model, Related?>
     ) -> (Model) -> Bool {
         return { row in
             guard let relatedRow = row[keyPath: relationship] else { return false }
-            return relatedRow[keyPath: Related.syncIdentity] == relatedID
+            return relatedRow[keyPath: Related.syncIdentity] == relationshipID
         }
     }
 
-    private static func explicitToManyRelatedIDFilter<Related: SyncModelable>(
-        relatedTo _: Related.Type,
-        relatedID: Related.SyncID,
+    private static func explicitToManyRelationshipIDFilter<Related: SyncModelable>(
+        relationshipID: Related.SyncID,
         relationship: ReferenceWritableKeyPath<Model, [Related]>
     ) -> (Model) -> Bool {
         return { row in
             row[keyPath: relationship].contains { relatedRow in
-                relatedRow[keyPath: Related.syncIdentity] == relatedID
+                relatedRow[keyPath: Related.syncIdentity] == relationshipID
             }
         }
     }
@@ -325,8 +279,8 @@ public extension SyncQuery where Model: SyncModelable {
 
     init<Related: SyncModelable>(
         _ _: Model.Type,
-        relatedTo related: Related.Type,
-        relatedID: Related.SyncID,
+        relationship: ReferenceWritableKeyPath<Model, Related?>,
+        relationshipID: Related.SyncID,
         in syncContainer: SyncContainer,
         sortBy: [SortDescriptor<Model>] = [],
         refreshOn: [PartialKeyPath<Model>] = [],
@@ -336,7 +290,7 @@ public extension SyncQuery where Model: SyncModelable {
             syncContainer: syncContainer,
             predicate: nil,
             sortBy: sortBy,
-            postFetchFilter: Self.inferredRelatedIDFilter(relatedTo: related, relatedID: relatedID),
+            postFetchFilter: Self.explicitToOneRelationshipIDFilter(relationshipID: relationshipID, relationship: relationship),
             observedModelTypeNames: Self.observedModelTypeNames(refreshOn: refreshOn),
             animation: animation
         )
@@ -344,9 +298,8 @@ public extension SyncQuery where Model: SyncModelable {
 
     init<Related: SyncModelable>(
         _ _: Model.Type,
-        relatedTo related: Related.Type,
-        relatedID: Related.SyncID,
-        through relationship: ReferenceWritableKeyPath<Model, Related?>,
+        relationship: ReferenceWritableKeyPath<Model, [Related]>,
+        relationshipID: Related.SyncID,
         in syncContainer: SyncContainer,
         sortBy: [SortDescriptor<Model>] = [],
         refreshOn: [PartialKeyPath<Model>] = [],
@@ -356,27 +309,7 @@ public extension SyncQuery where Model: SyncModelable {
             syncContainer: syncContainer,
             predicate: nil,
             sortBy: sortBy,
-            postFetchFilter: Self.explicitToOneRelatedIDFilter(relatedTo: related, relatedID: relatedID, relationship: relationship),
-            observedModelTypeNames: Self.observedModelTypeNames(refreshOn: refreshOn),
-            animation: animation
-        )
-    }
-
-    init<Related: SyncModelable>(
-        _ _: Model.Type,
-        relatedTo related: Related.Type,
-        relatedID: Related.SyncID,
-        through relationship: ReferenceWritableKeyPath<Model, [Related]>,
-        in syncContainer: SyncContainer,
-        sortBy: [SortDescriptor<Model>] = [],
-        refreshOn: [PartialKeyPath<Model>] = [],
-        animation: Animation? = nil
-    ) {
-        self.init(
-            syncContainer: syncContainer,
-            predicate: nil,
-            sortBy: sortBy,
-            postFetchFilter: Self.explicitToManyRelatedIDFilter(relatedTo: related, relatedID: relatedID, relationship: relationship),
+            postFetchFilter: Self.explicitToManyRelationshipIDFilter(relationshipID: relationshipID, relationship: relationship),
             observedModelTypeNames: Self.observedModelTypeNames(refreshOn: refreshOn),
             animation: animation
         )

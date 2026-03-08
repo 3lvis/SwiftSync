@@ -65,9 +65,8 @@ public final class SyncQueryPublisher<Model: PersistentModel>: ObservableObject,
 
     public convenience init<Related: SyncModelable>(
         _ _: Model.Type,
-        relatedTo _: Related.Type,
-        relatedID: Related.SyncID,
-        through relationship: ReferenceWritableKeyPath<Model, Related?>,
+        relationship: ReferenceWritableKeyPath<Model, Related?>,
+        relationshipID: Related.SyncID,
         in syncContainer: SyncContainer,
         sortBy: [SortDescriptor<Model>] = []
     ) {
@@ -77,16 +76,15 @@ public final class SyncQueryPublisher<Model: PersistentModel>: ObservableObject,
             sortBy: sortBy,
             postFetchFilter: { row in
                 guard let related = row[keyPath: relationship] else { return false }
-                return related[keyPath: Related.syncIdentity] == relatedID
+                return related[keyPath: Related.syncIdentity] == relationshipID
             }
         )
     }
 
     public convenience init<Related: SyncModelable>(
         _ _: Model.Type,
-        relatedTo _: Related.Type,
-        relatedID: Related.SyncID,
-        through relationship: ReferenceWritableKeyPath<Model, [Related]>,
+        relationship: ReferenceWritableKeyPath<Model, [Related]>,
+        relationshipID: Related.SyncID,
         in syncContainer: SyncContainer,
         sortBy: [SortDescriptor<Model>] = []
     ) {
@@ -95,7 +93,7 @@ public final class SyncQueryPublisher<Model: PersistentModel>: ObservableObject,
             predicate: nil,
             sortBy: sortBy,
             postFetchFilter: { row in
-                row[keyPath: relationship].contains { $0[keyPath: Related.syncIdentity] == relatedID }
+                row[keyPath: relationship].contains { $0[keyPath: Related.syncIdentity] == relationshipID }
             }
         )
     }

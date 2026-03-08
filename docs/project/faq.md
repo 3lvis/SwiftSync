@@ -42,9 +42,8 @@ See `docs/project/parent-scope.md`.
 ## 4) How do I think about `@SyncQuery` filtering?
 
 Use this mental rule:
-- `relatedTo:` + `relatedID:` = relationship-scoped query by ID
-- `through:` = explicit relationship path for ambiguous cases
-- Demo example: `Task -> User` is ambiguous once `Task` has `assignee`, `reviewer`, and `watchers`, so `through:` is required there
+- `relationship:` + `relationshipID:` = relationship-scoped query by ID
+- `relationship:` always names the relationship path used by the query
 - `predicate:` = custom business filters or scalar-only filters
 
 See `docs/project/reactive-reads.md`.

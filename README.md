@@ -163,32 +163,33 @@ Sort order (ascending or mixed/descending):
 var tasks: [Task]
 ```
 
-To-one query shorthand (ownership / belongs-to):
+Relationship-scoped query (to-one):
 
 ```swift
 @SyncQuery(
   Task.self,
-  toOne: project,
+  relationship: \.project,
+  relationshipID: projectID,
   in: syncContainer,
   sortBy: [SortDescriptor(\Task.id)]
 )
 var tasks: [Task]
 ```
 
-If to-one inference is ambiguous, pass the relationship explicitly:
+Relationship-scoped query (to-many):
 
 ```swift
 @SyncQuery(
-  Ticket.self,
-  toOne: user,
-  via: \.assignee,
+  Project.self,
+  relationship: \.tasks,
+  relationshipID: taskID,
   in: syncContainer,
-  sortBy: [SortDescriptor(\Ticket.id)]
+  sortBy: [SortDescriptor(\Project.id)]
 )
-var assignedTickets: [Ticket]
+var projectsContainingTask: [Project]
 ```
 
-Keep using `predicate` when `toOne:` is not the right shape:
+Keep using `predicate` when relationship-scoped `relationship/relationshipID` is not the right shape:
 - screens that only have scalar IDs (no related model instance)
 - non-parent filters (for example `assigneeID == userID`)
 - compound business filters (for example status + date window + membership)
@@ -215,9 +216,8 @@ Relationship-scoped variant (to-one):
 ```swift
 let publisher = SyncQueryPublisher(
     Task.self,
-    relatedTo: User.self,
-    relatedID: userID,
-    through: \Task.assignee,
+    relationship: \Task.assignee,
+    relationshipID: userID,
     in: syncContainer,
     sortBy: [SortDescriptor(\Task.title)]
 )
