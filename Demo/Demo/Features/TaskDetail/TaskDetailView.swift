@@ -7,7 +7,6 @@ struct TaskDetailView: View {
     let syncContainer: SyncContainer
     @ObservedObject var syncEngine: DemoSyncEngine
 
-    @State private var hasTriggeredInitialSync = false
     @StateObject private var machine: TaskDetailMachine
     @State private var showingEditSheet = false
 #if DEBUG
@@ -42,8 +41,6 @@ struct TaskDetailView: View {
             }
         }
         .task {
-            guard !hasTriggeredInitialSync else { return }
-            hasTriggeredInitialSync = true
             requestLoad(.onAppear)
         }
         .sheet(isPresented: $showingEditSheet) {

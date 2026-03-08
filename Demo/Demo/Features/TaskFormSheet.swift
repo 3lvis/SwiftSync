@@ -86,12 +86,9 @@ struct TaskFormSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        draft.title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if draft.descriptionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            draft.descriptionText = "No description yet."
+                        machine.prepareDraftForSave(draft) {
+                            normalizeItemPositions()
                         }
-                        normalizeItemPositions()
-                        draft.updatedAt = Date()
                         machine.save(mode: mode, draft: draft) {
                             dismiss()
                         }
@@ -111,22 +108,11 @@ struct TaskFormSheet: View {
         }
         // Auto-select first valid state when options load (safe for edit — guard prevents override)
         .task(id: machine.taskStateOptions.map(\.id)) {
-            guard !machine.taskStateOptions.isEmpty,
-                  draft.state.isEmpty || !machine.taskStateOptions.contains(where: { $0.id == draft.state })
-            else { return }
-            if let first = machine.taskStateOptions.first {
-                draft.state = first.id
-                draft.stateLabel = first.label
-            }
+            machine.applyDefaultStateIfNeeded(to: draft)
         }
         // Auto-select author when users load (create only in practice — guard prevents override)
         .task(id: machine.users.map(\.id)) {
-            guard !machine.users.isEmpty,
-                  draft.authorID.isEmpty || !machine.users.contains(where: { $0.id == draft.authorID })
-            else { return }
-            draft.authorID = draft.assigneeID.flatMap { id in
-                machine.users.contains(where: { $0.id == id }) ? id : nil
-            } ?? machine.users.first?.id ?? ""
+            machine.applyDefaultAuthorIfNeeded(to: draft)
         }
         .alert(
             "Save Failed",

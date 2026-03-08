@@ -94,6 +94,14 @@ final class ProjectDetailMachine: ObservableObject {
         })
     }
 
+    func deleteTask(taskID: String) async {
+        do {
+            try await syncEngine.deleteTask(taskID: taskID, projectID: projectID)
+        } catch {
+            // Screen-level load state handles sync failures and retry affordances.
+        }
+    }
+
     private func bind() {
         projectPublisher.$rows
             .receive(on: DispatchQueue.main)
@@ -236,6 +244,35 @@ final class TaskFormMachine: ObservableObject {
 
     func dismissSaveError() {
         _ = saveMachine.send(.dismissError)
+    }
+
+    func prepareDraftForSave(_ draft: Task, normalizeItems: () -> Void) {
+        draft.title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if draft.descriptionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            draft.descriptionText = "No description yet."
+        }
+        normalizeItems()
+        draft.updatedAt = Date()
+    }
+
+    func applyDefaultStateIfNeeded(to draft: Task) {
+        guard !taskStateOptions.isEmpty,
+              draft.state.isEmpty || !taskStateOptions.contains(where: { $0.id == draft.state }),
+              let first = taskStateOptions.first
+        else { return }
+
+        draft.state = first.id
+        draft.stateLabel = first.label
+    }
+
+    func applyDefaultAuthorIfNeeded(to draft: Task) {
+        guard !users.isEmpty,
+              draft.authorID.isEmpty || !users.contains(where: { $0.id == draft.authorID })
+        else { return }
+
+        draft.authorID = draft.assigneeID.flatMap { id in
+            users.contains(where: { $0.id == id }) ? id : nil
+        } ?? users.first?.id ?? ""
     }
 
     func save(

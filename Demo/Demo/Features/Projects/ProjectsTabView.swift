@@ -43,7 +43,6 @@ private struct ProjectDetailView: View {
     let syncContainer: SyncContainer
     @ObservedObject var syncEngine: DemoSyncEngine
 
-    @State private var hasTriggeredInitialSync = false
     @StateObject private var machine: ProjectDetailMachine
     @State private var isShowingCreateTaskSheet = false
     @State private var taskPendingDelete: TaskDeletePrompt?
@@ -132,8 +131,6 @@ private struct ProjectDetailView: View {
             }
         }
         .task {
-            guard !hasTriggeredInitialSync else { return }
-            hasTriggeredInitialSync = true
             requestLoad(.onAppear)
         }
         .sheet(isPresented: $isShowingCreateTaskSheet) {
@@ -153,11 +150,7 @@ private struct ProjectDetailView: View {
         ) { prompt in
             Button("Delete", role: .destructive) {
                 _Concurrency.Task {
-                    do {
-                        try await syncEngine.deleteTask(taskID: prompt.id, projectID: projectID)
-                    } catch {
-                        // Error state is surfaced by the sync engine.
-                    }
+                    await machine.deleteTask(taskID: prompt.id)
                     taskPendingDelete = nil
                 }
             }
