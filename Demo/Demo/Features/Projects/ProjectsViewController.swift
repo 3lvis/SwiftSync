@@ -1,4 +1,3 @@
-import Combine
 import DemoCore
 import SwiftSync
 import UIKit
@@ -7,7 +6,6 @@ final class ProjectsViewController: UITableViewController {
 
     private let onSelect: (String) -> Void
 
-    private var cancellables = Set<AnyCancellable>()
     private let machine: ProjectsListMachine
 
     private lazy var statusContainer: UIStackView = {
@@ -61,25 +59,17 @@ final class ProjectsViewController: UITableViewController {
         tableView.dataSource = diffableDataSource
         tableView.backgroundView = statusContainer
 
-        machine.$rows
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] rows in
-                guard let self else { return }
-                var snapshot = NSDiffableDataSourceSnapshot<String, String>()
-                snapshot.appendSections(["projects"])
-                snapshot.appendItems(rows.map(\.id), toSection: "projects")
-                self.diffableDataSource.apply(snapshot, animatingDifferences: true)
-            }
-            .store(in: &cancellables)
-
-        machine.$loadState
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state in
-                self?.renderLoadState(state)
-            }
-            .store(in: &cancellables)
-
-        renderLoadState(machine.loadState)
+        observeContinuously { [weak self] in
+            guard let self else { return }
+            var snapshot = NSDiffableDataSourceSnapshot<String, String>()
+            snapshot.appendSections(["projects"])
+            snapshot.appendItems(machine.rows.map(\.id), toSection: "projects")
+            diffableDataSource.apply(snapshot, animatingDifferences: true)
+        }
+        observeContinuously { [weak self] in
+            guard let self else { return }
+            renderLoadState(machine.loadState)
+        }
         machine.send(.onAppear)
     }
 

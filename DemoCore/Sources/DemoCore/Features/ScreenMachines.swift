@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 import SwiftData
 @preconcurrency import SwiftSync
 
@@ -9,15 +9,14 @@ public enum TaskFormMode {
 }
 
 @MainActor
-public final class ProjectsListMachine: ObservableObject {
-    @Published public private(set) var loadState: ScreenLoadState = .idle
-    @Published public private(set) var rows: [Project] = []
+@Observable
+public final class ProjectsListMachine {
+    public private(set) var loadState: ScreenLoadState = .idle
+    public private(set) var rows: [Project] = []
 
     private let syncEngine: DemoSyncEngine
     private let rowsPublisher: SyncQueryPublisher<Project>
     private let loadMachine: ScreenLoadMachine
-    private var cancellables = Set<AnyCancellable>()
-
     public init(syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.syncEngine = syncEngine
         self.rowsPublisher = SyncQueryPublisher(
@@ -29,19 +28,12 @@ public final class ProjectsListMachine: ObservableObject {
             presentError(error, fallbackMessage: "Could not load projects.")
         }
 
-        rowsPublisher.$rows
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] rows in
-                self?.rows = rows
-            }
-            .store(in: &cancellables)
-
-        loadMachine.$state
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state in
-                self?.loadState = state
-            }
-            .store(in: &cancellables)
+        observeContinuously {
+            self.rows = self.rowsPublisher.rows
+        }
+        observeContinuously {
+            self.loadState = self.loadMachine.state
+        }
     }
 
     public func send(_ event: ScreenLoadEvent) {
@@ -49,14 +41,16 @@ public final class ProjectsListMachine: ObservableObject {
             try await syncEngine.syncProjects()
         })
     }
+
 }
 
 @MainActor
-public final class ProjectDetailMachine: ObservableObject {
-    @Published public private(set) var loadState: ScreenLoadState = .idle
-    @Published public private(set) var deleteState: SubmissionState = .idle
-    @Published public private(set) var project: Project?
-    @Published public private(set) var tasks: [Task] = []
+@Observable
+public final class ProjectDetailMachine {
+    public private(set) var loadState: ScreenLoadState = .idle
+    public private(set) var deleteState: SubmissionState = .idle
+    public private(set) var project: Project?
+    public private(set) var tasks: [Task] = []
 
     private let projectID: String
     private let syncEngine: DemoSyncEngine
@@ -64,8 +58,6 @@ public final class ProjectDetailMachine: ObservableObject {
     private let taskPublisher: SyncQueryPublisher<Task>
     private let loadMachine: ScreenLoadMachine
     private let deleteMachine: SubmissionMachine
-    private var cancellables = Set<AnyCancellable>()
-
     public enum DeleteEvent {
         case request(taskID: String)
         case dismissError
@@ -96,34 +88,18 @@ public final class ProjectDetailMachine: ObservableObject {
             presentError(error, fallbackMessage: "Could not delete this task.")
         }
 
-        projectPublisher.$rows
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] rows in
-                guard let self else { return }
-                self.project = rows.first(where: { $0.id == self.projectID })
-            }
-            .store(in: &cancellables)
-
-        taskPublisher.$rows
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] rows in
-                self?.tasks = rows
-            }
-            .store(in: &cancellables)
-
-        loadMachine.$state
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state in
-                self?.loadState = state
-            }
-            .store(in: &cancellables)
-
-        deleteMachine.$state
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state in
-                self?.deleteState = state
-            }
-            .store(in: &cancellables)
+        observeContinuously {
+            self.project = self.projectPublisher.rows.first(where: { $0.id == self.projectID })
+        }
+        observeContinuously {
+            self.tasks = self.taskPublisher.rows
+        }
+        observeContinuously {
+            self.loadState = self.loadMachine.state
+        }
+        observeContinuously {
+            self.deleteState = self.deleteMachine.state
+        }
     }
 
     public func send(_ event: ScreenLoadEvent) {
@@ -154,21 +130,21 @@ public final class ProjectDetailMachine: ObservableObject {
             _ = deleteMachine.send(.dismissError)
         }
     }
+
 }
 
 @MainActor
-public final class TaskDetailMachine: ObservableObject {
-    @Published public private(set) var loadState: ScreenLoadState = .idle
-    @Published public private(set) var task: Task?
-    @Published public private(set) var items: [Item] = []
+@Observable
+public final class TaskDetailMachine {
+    public private(set) var loadState: ScreenLoadState = .idle
+    public private(set) var task: Task?
+    public private(set) var items: [Item] = []
 
     private let taskID: String
     private let syncEngine: DemoSyncEngine
     private let taskPublisher: SyncQueryPublisher<Task>
     private let itemPublisher: SyncQueryPublisher<Item>
     private let loadMachine: ScreenLoadMachine
-    private var cancellables = Set<AnyCancellable>()
-
     public init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.taskID = taskID
         self.syncEngine = syncEngine
@@ -188,27 +164,15 @@ public final class TaskDetailMachine: ObservableObject {
             presentError(error, fallbackMessage: "Could not load this task yet.")
         }
 
-        taskPublisher.$rows
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] rows in
-                guard let self else { return }
-                self.task = rows.first(where: { $0.id == self.taskID })
-            }
-            .store(in: &cancellables)
-
-        itemPublisher.$rows
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] rows in
-                self?.items = rows
-            }
-            .store(in: &cancellables)
-
-        loadMachine.$state
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state in
-                self?.loadState = state
-            }
-            .store(in: &cancellables)
+        observeContinuously {
+            self.task = self.taskPublisher.rows.first(where: { $0.id == self.taskID })
+        }
+        observeContinuously {
+            self.items = self.itemPublisher.rows
+        }
+        observeContinuously {
+            self.loadState = self.loadMachine.state
+        }
     }
 
     public func send(_ event: ScreenLoadEvent) {
@@ -216,22 +180,22 @@ public final class TaskDetailMachine: ObservableObject {
             try await syncEngine.syncTaskDetail(taskID: taskID)
         })
     }
+
 }
 
 @MainActor
-public final class TaskFormMachine: ObservableObject {
-    @Published public private(set) var users: [User] = []
-    @Published public private(set) var taskStateOptions: [TaskStateOption] = []
-    @Published public private(set) var metadataLoadState: ScreenLoadState = .idle
-    @Published public private(set) var saveState: SubmissionState = .idle
+@Observable
+public final class TaskFormMachine {
+    public private(set) var users: [User] = []
+    public private(set) var taskStateOptions: [TaskStateOption] = []
+    public private(set) var metadataLoadState: ScreenLoadState = .idle
+    public private(set) var saveState: SubmissionState = .idle
 
     private let syncContainer: SyncContainer
     private let syncEngine: DemoSyncEngine
     private let editContext: ModelContext
     private let metadataLoadMachine: ScreenLoadMachine
     private let saveMachine: SubmissionMachine
-    private var cancellables = Set<AnyCancellable>()
-
     public enum ItemMutation {
         case add(title: String)
         case updateTitle(item: Item, title: String)
@@ -262,19 +226,12 @@ public final class TaskFormMachine: ObservableObject {
             )
         }
 
-        metadataLoadMachine.$state
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state in
-                self?.metadataLoadState = state
-            }
-            .store(in: &cancellables)
-
-        saveMachine.$state
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state in
-                self?.saveState = state
-            }
-            .store(in: &cancellables)
+        observeContinuously {
+            self.metadataLoadState = self.metadataLoadMachine.state
+        }
+        observeContinuously {
+            self.saveState = self.saveMachine.state
+        }
     }
 
     public func send(_ event: Event) {
@@ -319,7 +276,8 @@ public final class TaskFormMachine: ObservableObject {
                 do {
                     switch mode {
                     case .create(let projectID):
-                        try await syncEngine.createTask(body: body, projectID: projectID)
+                        let createPayload = try DemoSyncPayload(dictionary: body)
+                        try await syncEngine.createTask(body: createPayload, projectID: projectID)
                         if !capturedReviewerIDs.isEmpty {
                             try await syncEngine.replaceTaskReviewers(
                                 taskID: draft.id,
@@ -336,7 +294,8 @@ public final class TaskFormMachine: ObservableObject {
                         }
 
                     case .edit(let task):
-                        try await syncEngine.updateTask(taskID: task.id, projectID: task.projectID, body: body)
+                        let updatePayload = try DemoSyncPayload(dictionary: body)
+                        try await syncEngine.updateTask(taskID: task.id, projectID: task.projectID, body: updatePayload)
                         if reviewersChanged {
                             try await syncEngine.replaceTaskReviewers(
                                 taskID: task.id,
@@ -385,6 +344,7 @@ public final class TaskFormMachine: ObservableObject {
             guard !trimmed.isEmpty else { return false }
 
             let item = Item(
+                taskID: draft.id,
                 title: trimmed,
                 position: draft.items.count,
                 createdAt: Date(),
@@ -468,4 +428,5 @@ public final class TaskFormMachine: ObservableObject {
         reordered.insert(contentsOf: moving, at: adjustedDestination)
         return reordered
     }
+
 }

@@ -1,5 +1,5 @@
-import Combine
 import Foundation
+import Observation
 
 public enum ScreenLoadState: Equatable {
     case idle
@@ -69,8 +69,9 @@ private enum ScreenLoadReducer {
 }
 
 @MainActor
-public final class ScreenLoadMachine: ObservableObject {
-    @Published public private(set) var state: ScreenLoadState = .idle
+@Observable
+public final class ScreenLoadMachine {
+    public private(set) var state: ScreenLoadState = .idle
 
     private let presentFailure: (Error) -> ErrorPresentationState
 
@@ -113,8 +114,9 @@ public enum SubmissionState: Equatable {
 }
 
 @MainActor
-public final class SubmissionMachine: ObservableObject {
-    @Published public private(set) var state: SubmissionState = .idle
+@Observable
+public final class SubmissionMachine {
+    public private(set) var state: SubmissionState = .idle
 
     private let presentFailure: (Error) -> ErrorPresentationState
 

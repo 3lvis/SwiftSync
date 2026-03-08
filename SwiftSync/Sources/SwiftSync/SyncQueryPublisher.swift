@@ -1,24 +1,24 @@
-import Combine
 import Foundation
+import Observation
 import SwiftData
 
-// @unchecked Sendable matches the pattern used by the private observers in ReactiveQuery.swift;
-// the notification closure is dispatched on queue: .main so mutation is always on the main thread.
-public final class SyncQueryPublisher<Model: PersistentModel>: ObservableObject, @unchecked Sendable {
+// Observation callbacks are dispatched on queue: .main.
+@MainActor
+@Observable
+public final class SyncQueryPublisher<Model: PersistentModel> {
 
     // MARK: - Public interface
 
-    @Published public private(set) var rows: [Model] = []
-    public var rowsPublisher: AnyPublisher<[Model], Never> { $rows.eraseToAnyPublisher() }
+    public private(set) var rows: [Model] = []
 
     // MARK: - Private state
 
-    private let syncContainer: SyncContainer
-    private let predicate: Predicate<Model>?
-    private let sortBy: [SortDescriptor<Model>]
-    private let postFetchFilter: ((Model) -> Bool)?
-    private let observedModelTypeNames: Set<String>
-    private var notificationToken: NSObjectProtocol?
+    @ObservationIgnored private let syncContainer: SyncContainer
+    @ObservationIgnored private let predicate: Predicate<Model>?
+    @ObservationIgnored private let sortBy: [SortDescriptor<Model>]
+    @ObservationIgnored private let postFetchFilter: ((Model) -> Bool)?
+    @ObservationIgnored private let observedModelTypeNames: Set<String>
+    @ObservationIgnored nonisolated(unsafe) private var notificationToken: NSObjectProtocol?
 
     // MARK: - Designated init
 
@@ -37,11 +37,19 @@ public final class SyncQueryPublisher<Model: PersistentModel>: ObservableObject,
             forName: SyncContainer.didSaveChangesNotification,
             object: syncContainer,
             queue: .main
-        ) { [weak self] notification in
-            guard let self, self.shouldReload(for: notification.userInfo) else { return }
-            self.reload()
+        ) { [weak self] _ in
+            guard let self else { return }
+            MainActor.assumeIsolated {
+                self.reload()
+            }
         }
         reload()
+    }
+
+    deinit {
+        if let notificationToken {
+            NotificationCenter.default.removeObserver(notificationToken)
+        }
     }
 
     // MARK: - Public inits
@@ -96,14 +104,6 @@ public final class SyncQueryPublisher<Model: PersistentModel>: ObservableObject,
                 row[keyPath: relationship].contains { $0[keyPath: Related.syncIdentity] == relationshipID }
             }
         )
-    }
-
-    // MARK: - Teardown
-
-    deinit {
-        if let notificationToken {
-            NotificationCenter.default.removeObserver(notificationToken)
-        }
     }
 
     // MARK: - Private

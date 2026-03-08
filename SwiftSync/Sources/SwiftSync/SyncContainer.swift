@@ -92,6 +92,18 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         )
     }
 
+    public func sync<Model: SyncUpdatableModel, Payload: SyncPayloadConvertible>(
+        payload: [Payload],
+        as model: Model.Type,
+        relationshipOperations: SyncRelationshipOperations = .all
+    ) async throws {
+        try await sync(
+            payload: payload.map { $0.toSyncPayloadDictionary() },
+            as: model,
+            relationshipOperations: relationshipOperations
+        )
+    }
+
     public func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
         payload: [Any],
         as model: Model.Type,
@@ -122,6 +134,18 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             as: model,
             in: context,
             keyStyle: keyStyle,
+            relationshipOperations: relationshipOperations
+        )
+    }
+
+    public func sync<Model: SyncUpdatableModel, Payload: SyncPayloadConvertible>(
+        item: Payload,
+        as model: Model.Type,
+        relationshipOperations: SyncRelationshipOperations = .all
+    ) async throws {
+        try await sync(
+            item: item.toSyncPayloadDictionary(),
+            as: model,
             relationshipOperations: relationshipOperations
         )
     }

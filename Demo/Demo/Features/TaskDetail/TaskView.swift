@@ -6,9 +6,9 @@ import SwiftUI
 struct TaskView: View {
     let taskID: String
     let syncContainer: SyncContainer
-    @ObservedObject var syncEngine: DemoSyncEngine
+    let syncEngine: DemoSyncEngine
 
-    @StateObject var machine: TaskDetailMachine
+    @State private var machine: TaskDetailMachine
     @State private var showingEditSheet = false
 
     init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
@@ -16,8 +16,8 @@ struct TaskView: View {
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
 
-        _machine = StateObject(
-            wrappedValue: TaskDetailMachine(taskID: taskID, syncContainer: syncContainer, syncEngine: syncEngine)
+        _machine = State(
+            initialValue: TaskDetailMachine(taskID: taskID, syncContainer: syncContainer, syncEngine: syncEngine)
         )
     }
 

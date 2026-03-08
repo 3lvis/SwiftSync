@@ -1,18 +1,20 @@
-import Combine
 import Foundation
+import Observation
 import SwiftData
 import SwiftUI
 
-private final class SyncQueryObserver<Model: PersistentModel>: ObservableObject, @unchecked Sendable {
-    @Published var rows: [Model] = []
+@MainActor
+@Observable
+private final class SyncQueryObserver<Model: PersistentModel> {
+    var rows: [Model] = []
 
-    private let syncContainer: SyncContainer
-    private let predicate: Predicate<Model>?
-    private let sortBy: [SortDescriptor<Model>]
-    private let postFetchFilter: ((Model) -> Bool)?
-    private let observedModelTypeNames: Set<String>
-    private let animation: Animation?
-    private var notificationToken: NSObjectProtocol?
+    @ObservationIgnored private let syncContainer: SyncContainer
+    @ObservationIgnored private let predicate: Predicate<Model>?
+    @ObservationIgnored private let sortBy: [SortDescriptor<Model>]
+    @ObservationIgnored private let postFetchFilter: ((Model) -> Bool)?
+    @ObservationIgnored private let observedModelTypeNames: Set<String>
+    @ObservationIgnored private let animation: Animation?
+    @ObservationIgnored nonisolated(unsafe) private var notificationToken: NSObjectProtocol?
 
     init(
         syncContainer: SyncContainer,
@@ -43,9 +45,11 @@ private final class SyncQueryObserver<Model: PersistentModel>: ObservableObject,
             forName: SyncContainer.didSaveChangesNotification,
             object: syncContainer,
             queue: .main
-        ) { [weak self] notification in
-            guard let self, self.shouldReload(for: notification) else { return }
-            self.reload()
+        ) { [weak self] _ in
+            guard let self else { return }
+            MainActor.assumeIsolated {
+                self.reload()
+            }
         }
     }
 
@@ -117,7 +121,7 @@ func syncQueryChangedModelTypeNames(from userInfo: [AnyHashable: Any]?) -> Set<S
 @MainActor
 @propertyWrapper
 public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
-    @StateObject private var observer: SyncQueryObserver<Model>
+    @State private var observer: SyncQueryObserver<Model>
 
     public var wrappedValue: [Model] { observer.rows }
 
@@ -198,8 +202,8 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
         observedModelTypeNames: Set<String>,
         animation: Animation?
     ) {
-        _observer = StateObject(
-            wrappedValue: SyncQueryObserver(
+        _observer = State(
+            initialValue: SyncQueryObserver(
                 syncContainer: syncContainer,
                 predicate: predicate,
                 sortBy: sortBy,
@@ -324,14 +328,16 @@ public extension SyncQuery where Model: SyncModelable {
 
 
 
-private final class SyncModelObserver<Model: PersistentModel & SyncModelable>: ObservableObject, @unchecked Sendable {
-    @Published var model: Model?
+@MainActor
+@Observable
+private final class SyncModelObserver<Model: PersistentModel & SyncModelable> {
+    var model: Model?
 
-    private let syncContainer: SyncContainer
-    private let id: Model.SyncID
-    private let observedModelTypeNames: Set<String>
-    private let animation: Animation?
-    private var notificationToken: NSObjectProtocol?
+    @ObservationIgnored private let syncContainer: SyncContainer
+    @ObservationIgnored private let id: Model.SyncID
+    @ObservationIgnored private let observedModelTypeNames: Set<String>
+    @ObservationIgnored private let animation: Animation?
+    @ObservationIgnored nonisolated(unsafe) private var notificationToken: NSObjectProtocol?
 
     init(
         syncContainer: SyncContainer,
@@ -358,9 +364,11 @@ private final class SyncModelObserver<Model: PersistentModel & SyncModelable>: O
             forName: SyncContainer.didSaveChangesNotification,
             object: syncContainer,
             queue: .main
-        ) { [weak self] notification in
-            guard let self, self.shouldReload(for: notification) else { return }
-            self.reload()
+        ) { [weak self] _ in
+            guard let self else { return }
+            MainActor.assumeIsolated {
+                self.reload()
+            }
         }
     }
 
@@ -398,7 +406,7 @@ private final class SyncModelObserver<Model: PersistentModel & SyncModelable>: O
 @MainActor
 @propertyWrapper
 public struct SyncModel<Model: PersistentModel & SyncModelable>: DynamicProperty {
-    @StateObject private var observer: SyncModelObserver<Model>
+    @State private var observer: SyncModelObserver<Model>
 
     public var wrappedValue: Model? { observer.model }
 
@@ -408,8 +416,8 @@ public struct SyncModel<Model: PersistentModel & SyncModelable>: DynamicProperty
         in syncContainer: SyncContainer,
         animation: Animation? = nil
     ) {
-        _observer = StateObject(
-            wrappedValue: SyncModelObserver(
+        _observer = State(
+            initialValue: SyncModelObserver(
                 syncContainer: syncContainer,
                 id: id,
                 observedModelTypeNames: Self.defaultObservedModelTypeNames(),

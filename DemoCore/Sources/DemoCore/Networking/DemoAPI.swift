@@ -25,6 +25,7 @@ public enum DemoNetworkScenario: String, CaseIterable, Identifiable {
 public enum DemoAPIError: LocalizedError {
     case offline
     case transient(endpoint: String)
+    case invalidPayload(String)
 
     public var errorDescription: String? {
         switch self {
@@ -32,10 +33,13 @@ public enum DemoAPIError: LocalizedError {
             return "You are offline in this scenario preset."
         case let .transient(endpoint):
             return "Transient network failure while calling \(endpoint)."
+        case let .invalidPayload(message):
+            return message
         }
     }
 }
 
+@MainActor
 public final class FakeDemoAPIClient {
     public var scenario: DemoNetworkScenario
 
@@ -67,64 +71,72 @@ public final class FakeDemoAPIClient {
         }
     }
 
-    public func getProjects() async throws -> [[String: Any]] {
+    public func getProjects() async throws -> [DemoSyncPayload] {
         try await networkGate(endpoint: "GET /projects")
-        return try backend.getProjectsPayload()
+        return try backend.getProjectsPayload().map(Self.makePayload)
     }
 
-    public func getProjectTasks(projectID: String) async throws -> [[String: Any]] {
+    public func getProjectTasks(projectID: String) async throws -> [DemoSyncPayload] {
         try await networkGate(endpoint: "GET /projects/{id}/tasks")
-        return try backend.getProjectTasksPayload(projectID: projectID)
+        return try backend.getProjectTasksPayload(projectID: projectID).map(Self.makePayload)
     }
 
-    public func getUsers() async throws -> [[String: Any]] {
+    public func getUsers() async throws -> [DemoSyncPayload] {
         try await networkGate(endpoint: "GET /users")
-        return try backend.getUsersPayload()
+        return try backend.getUsersPayload().map(Self.makePayload)
     }
 
-    public func getTaskDetail(taskID: String) async throws -> [String: Any]? {
+    public func getTaskDetail(taskID: String) async throws -> DemoSyncPayload? {
         try await networkGate(endpoint: "GET /tasks/{id}")
-        return try backend.getTaskDetailPayload(taskID: taskID)
+        guard let payload = try backend.getTaskDetailPayload(taskID: taskID) else { return nil }
+        return try Self.makePayload(payload)
     }
 
-    public func getTaskStateOptions() async throws -> [[String: Any]] {
+    public func getTaskStateOptions() async throws -> [DemoSyncPayload] {
         try await networkGate(endpoint: "GET /task-state-options")
-        return try backend.getTaskStateOptionsPayload()
+        return try backend.getTaskStateOptionsPayload().map(Self.makePayload)
     }
 
-    public func patchTaskDescription(taskID: String, descriptionText: String) async throws -> [String: Any]? {
+    public func patchTaskDescription(taskID: String, descriptionText: String) async throws -> DemoSyncPayload? {
         try await networkGate(endpoint: "PATCH /tasks/{id}/description")
-        return try backend.patchTaskDescription(taskID: taskID, descriptionText: descriptionText)
+        guard let payload = try backend.patchTaskDescription(taskID: taskID, descriptionText: descriptionText) else { return nil }
+        return try Self.makePayload(payload)
     }
 
-    public func patchTaskState(taskID: String, state: String) async throws -> [String: Any]? {
+    public func patchTaskState(taskID: String, state: String) async throws -> DemoSyncPayload? {
         try await networkGate(endpoint: "PATCH /tasks/{id} (state)")
-        return try backend.patchTaskState(taskID: taskID, state: state)
+        guard let payload = try backend.patchTaskState(taskID: taskID, state: state) else { return nil }
+        return try Self.makePayload(payload)
     }
 
-    public func patchTaskAssignee(taskID: String, assigneeID: String?) async throws -> [String: Any]? {
+    public func patchTaskAssignee(taskID: String, assigneeID: String?) async throws -> DemoSyncPayload? {
         try await networkGate(endpoint: "PATCH /tasks/{id} (assignee_id)")
-        return try backend.patchTaskAssignee(taskID: taskID, assigneeID: assigneeID)
+        guard let payload = try backend.patchTaskAssignee(taskID: taskID, assigneeID: assigneeID) else { return nil }
+        return try Self.makePayload(payload)
     }
 
-    public func replaceTaskReviewers(taskID: String, reviewerIDs: [String]) async throws -> [String: Any]? {
+    public func replaceTaskReviewers(taskID: String, reviewerIDs: [String]) async throws -> DemoSyncPayload? {
         try await networkGate(endpoint: "PUT /tasks/{id}/reviewers")
-        return try backend.replaceTaskReviewers(taskID: taskID, reviewerIDs: reviewerIDs)
+        guard let payload = try backend.replaceTaskReviewers(taskID: taskID, reviewerIDs: reviewerIDs) else { return nil }
+        return try Self.makePayload(payload)
     }
 
-    public func replaceTaskWatchers(taskID: String, watcherIDs: [String]) async throws -> [String: Any]? {
+    public func replaceTaskWatchers(taskID: String, watcherIDs: [String]) async throws -> DemoSyncPayload? {
         try await networkGate(endpoint: "PUT /tasks/{id}/watchers")
-        return try backend.replaceTaskWatchers(taskID: taskID, watcherIDs: watcherIDs)
+        guard let payload = try backend.replaceTaskWatchers(taskID: taskID, watcherIDs: watcherIDs) else { return nil }
+        return try Self.makePayload(payload)
     }
 
-    public func createTask(body: [String: Any]) async throws -> [String: Any] {
+    public func createTask(body: DemoSyncPayload) async throws -> DemoSyncPayload {
         try await networkGate(endpoint: "POST /tasks")
-        return try backend.createTask(body: body)
+        let created = try backend.createTask(body: body.toSyncPayloadDictionary())
+        return try Self.makePayload(created)
     }
 
-    public func updateTask(taskID: String, body: [String: Any]) async throws -> [String: Any]? {
+    public func updateTask(taskID: String, body: DemoSyncPayload) async throws -> DemoSyncPayload? {
         try await networkGate(endpoint: "PUT /tasks/{id}")
-        return try backend.updateTask(taskID: taskID, body: body)
+        let updated = try backend.updateTask(taskID: taskID, body: body.toSyncPayloadDictionary())
+        return try Self.makePayload(updated)
     }
 
     public func deleteTask(taskID: String) async throws {
@@ -159,5 +171,13 @@ public final class FakeDemoAPIClient {
         let hash = endpoint.unicodeScalars.reduce(0) { ($0 * 31 + Int($1.value)) % 10_000 }
         let jitter = UInt64((hash + callIndex * 17) % 250)
         try await _Concurrency.Task.sleep(nanoseconds: (baseDelayMS + jitter + mutationExtra) * 1_000_000)
+    }
+
+    private static func makePayload(_ dictionary: [String: Any]) throws -> DemoSyncPayload {
+        do {
+            return try DemoSyncPayload(dictionary: dictionary)
+        } catch {
+            throw DemoAPIError.invalidPayload(error.localizedDescription)
+        }
     }
 }

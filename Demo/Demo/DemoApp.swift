@@ -5,7 +5,7 @@ import SwiftSync
 
 @main
 struct DemoApp: App {
-    @StateObject private var runtime = DemoRuntime()
+    @State private var runtime = DemoRuntime()
 
     var body: some Scene {
         WindowGroup {
