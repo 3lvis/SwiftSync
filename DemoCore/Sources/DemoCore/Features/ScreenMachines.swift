@@ -28,8 +28,12 @@ public final class ProjectsListMachine {
             presentError(error, fallbackMessage: "Could not load projects.")
         }
 
-        observeRowsPublisher()
-        observeLoadMachineState()
+        observe {
+            self.rows = self.rowsPublisher.rows
+        }
+        observe {
+            self.loadState = self.loadMachine.state
+        }
     }
 
     public func send(_ event: ScreenLoadEvent) {
@@ -38,22 +42,12 @@ public final class ProjectsListMachine {
         })
     }
 
-    private func observeRowsPublisher() {
+    private func observe(_ update: @escaping @MainActor () -> Void) {
         withObservationTracking {
-            rows = rowsPublisher.rows
+            update()
         } onChange: { [weak self] in
-            _Concurrency.Task { @MainActor in
-                self?.observeRowsPublisher()
-            }
-        }
-    }
-
-    private func observeLoadMachineState() {
-        withObservationTracking {
-            loadState = loadMachine.state
-        } onChange: { [weak self] in
-            _Concurrency.Task { @MainActor in
-                self?.observeLoadMachineState()
+            DispatchQueue.main.async {
+                self?.observe(update)
             }
         }
     }
@@ -103,10 +97,18 @@ public final class ProjectDetailMachine {
             presentError(error, fallbackMessage: "Could not delete this task.")
         }
 
-        observeProjectPublisher()
-        observeTaskPublisher()
-        observeLoadMachineState()
-        observeDeleteMachineState()
+        observe {
+            self.project = self.projectPublisher.rows.first(where: { $0.id == self.projectID })
+        }
+        observe {
+            self.tasks = self.taskPublisher.rows
+        }
+        observe {
+            self.loadState = self.loadMachine.state
+        }
+        observe {
+            self.deleteState = self.deleteMachine.state
+        }
     }
 
     public func send(_ event: ScreenLoadEvent) {
@@ -138,42 +140,12 @@ public final class ProjectDetailMachine {
         }
     }
 
-    private func observeProjectPublisher() {
+    private func observe(_ update: @escaping @MainActor () -> Void) {
         withObservationTracking {
-            project = projectPublisher.rows.first(where: { $0.id == projectID })
+            update()
         } onChange: { [weak self] in
-            _Concurrency.Task { @MainActor in
-                self?.observeProjectPublisher()
-            }
-        }
-    }
-
-    private func observeTaskPublisher() {
-        withObservationTracking {
-            tasks = taskPublisher.rows
-        } onChange: { [weak self] in
-            _Concurrency.Task { @MainActor in
-                self?.observeTaskPublisher()
-            }
-        }
-    }
-
-    private func observeLoadMachineState() {
-        withObservationTracking {
-            loadState = loadMachine.state
-        } onChange: { [weak self] in
-            _Concurrency.Task { @MainActor in
-                self?.observeLoadMachineState()
-            }
-        }
-    }
-
-    private func observeDeleteMachineState() {
-        withObservationTracking {
-            deleteState = deleteMachine.state
-        } onChange: { [weak self] in
-            _Concurrency.Task { @MainActor in
-                self?.observeDeleteMachineState()
+            DispatchQueue.main.async {
+                self?.observe(update)
             }
         }
     }
@@ -210,9 +182,15 @@ public final class TaskDetailMachine {
             presentError(error, fallbackMessage: "Could not load this task yet.")
         }
 
-        observeTaskPublisher()
-        observeItemPublisher()
-        observeLoadMachineState()
+        observe {
+            self.task = self.taskPublisher.rows.first(where: { $0.id == self.taskID })
+        }
+        observe {
+            self.items = self.itemPublisher.rows
+        }
+        observe {
+            self.loadState = self.loadMachine.state
+        }
     }
 
     public func send(_ event: ScreenLoadEvent) {
@@ -221,32 +199,12 @@ public final class TaskDetailMachine {
         })
     }
 
-    private func observeTaskPublisher() {
+    private func observe(_ update: @escaping @MainActor () -> Void) {
         withObservationTracking {
-            task = taskPublisher.rows.first(where: { $0.id == taskID })
+            update()
         } onChange: { [weak self] in
-            _Concurrency.Task { @MainActor in
-                self?.observeTaskPublisher()
-            }
-        }
-    }
-
-    private func observeItemPublisher() {
-        withObservationTracking {
-            items = itemPublisher.rows
-        } onChange: { [weak self] in
-            _Concurrency.Task { @MainActor in
-                self?.observeItemPublisher()
-            }
-        }
-    }
-
-    private func observeLoadMachineState() {
-        withObservationTracking {
-            loadState = loadMachine.state
-        } onChange: { [weak self] in
-            _Concurrency.Task { @MainActor in
-                self?.observeLoadMachineState()
+            DispatchQueue.main.async {
+                self?.observe(update)
             }
         }
     }
@@ -295,8 +253,12 @@ public final class TaskFormMachine {
             )
         }
 
-        observeMetadataLoadState()
-        observeSaveState()
+        observe {
+            self.metadataLoadState = self.metadataLoadMachine.state
+        }
+        observe {
+            self.saveState = self.saveMachine.state
+        }
     }
 
     public func send(_ event: Event) {
@@ -491,22 +453,12 @@ public final class TaskFormMachine {
         return reordered
     }
 
-    private func observeMetadataLoadState() {
+    private func observe(_ update: @escaping @MainActor () -> Void) {
         withObservationTracking {
-            metadataLoadState = metadataLoadMachine.state
+            update()
         } onChange: { [weak self] in
-            _Concurrency.Task { @MainActor in
-                self?.observeMetadataLoadState()
-            }
-        }
-    }
-
-    private func observeSaveState() {
-        withObservationTracking {
-            saveState = saveMachine.state
-        } onChange: { [weak self] in
-            _Concurrency.Task { @MainActor in
-                self?.observeSaveState()
+            DispatchQueue.main.async {
+                self?.observe(update)
             }
         }
     }

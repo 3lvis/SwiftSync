@@ -60,8 +60,17 @@ final class ProjectsViewController: UITableViewController {
         tableView.dataSource = diffableDataSource
         tableView.backgroundView = statusContainer
 
-        observeRows()
-        observeLoadState()
+        observe { [weak self] in
+            guard let self else { return }
+            var snapshot = NSDiffableDataSourceSnapshot<String, String>()
+            snapshot.appendSections(["projects"])
+            snapshot.appendItems(machine.rows.map(\.id), toSection: "projects")
+            diffableDataSource.apply(snapshot, animatingDifferences: true)
+        }
+        observe { [weak self] in
+            guard let self else { return }
+            renderLoadState(machine.loadState)
+        }
         machine.send(.onAppear)
     }
 
@@ -92,27 +101,12 @@ final class ProjectsViewController: UITableViewController {
         }
     }
 
-    private func observeRows() {
-        withObservationTracking { [weak self] in
-            guard let self else { return }
-            var snapshot = NSDiffableDataSourceSnapshot<String, String>()
-            snapshot.appendSections(["projects"])
-            snapshot.appendItems(machine.rows.map(\.id), toSection: "projects")
-            diffableDataSource.apply(snapshot, animatingDifferences: true)
+    private func observe(_ render: @escaping () -> Void) {
+        withObservationTracking {
+            render()
         } onChange: { [weak self] in
             DispatchQueue.main.async {
-                self?.observeRows()
-            }
-        }
-    }
-
-    private func observeLoadState() {
-        withObservationTracking { [weak self] in
-            guard let self else { return }
-            renderLoadState(machine.loadState)
-        } onChange: { [weak self] in
-            DispatchQueue.main.async {
-                self?.observeLoadState()
+                self?.observe(render)
             }
         }
     }

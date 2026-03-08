@@ -9,7 +9,7 @@
 
 ## Last known state
 
-`swift test` passes and `xcodebuild -project Demo/Demo.xcodeproj -scheme Demo -configuration Debug -destination "generic/platform=iOS Simulator" build` now succeeds.
+`swift test` passes and `xcodebuild -project Demo/Demo.xcodeproj -scheme Demo -configuration Debug -destination "generic/platform=iOS Simulator" build` succeeds after method cleanup.
 
 ## Decisions (don't revisit)
 
