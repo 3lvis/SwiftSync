@@ -7,10 +7,8 @@ struct TaskDetailView: View {
     let syncContainer: SyncContainer
     @ObservedObject var syncEngine: DemoSyncEngine
 
-    @SyncModel private var taskModel: Task?
-    @SyncQuery private var taskItems: [Item]
     @State private var hasTriggeredInitialSync = false
-    @StateObject private var loadMachine: ScreenLoadMachine
+    @StateObject private var machine: TaskDetailMachine
     @State private var showingEditSheet = false
 #if DEBUG
     @State private var showingStressPrompt = false
@@ -21,22 +19,8 @@ struct TaskDetailView: View {
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
 
-        _taskModel = SyncModel(Task.self, id: taskID, in: syncContainer, animation: .snappy(duration: 0.22))
-        _taskItems = SyncQuery(
-            Item.self,
-            relationship: \Item.task,
-            relationshipID: taskID,
-            in: syncContainer,
-            sortBy: [
-                SortDescriptor(\Item.position, order: .forward),
-                SortDescriptor(\Item.id, order: .forward)
-            ],
-            animation: .snappy(duration: 0.22)
-        )
-        _loadMachine = StateObject(
-            wrappedValue: ScreenLoadMachine { error in
-                presentError(error, retryActionTitle: "Retry", fallbackMessage: "Could not load this task yet.")
-            }
+        _machine = StateObject(
+            wrappedValue: TaskDetailMachine(taskID: taskID, syncContainer: syncContainer, syncEngine: syncEngine)
         )
     }
 
@@ -54,7 +38,7 @@ struct TaskDetailView: View {
                 Button("Edit") {
                     showingEditSheet = true
                 }
-                .disabled(taskModel == nil)
+                .disabled(machine.task == nil)
             }
         }
         .task {
@@ -63,7 +47,7 @@ struct TaskDetailView: View {
             requestLoad(.onAppear)
         }
         .sheet(isPresented: $showingEditSheet) {
-            if let taskModel {
+            if let taskModel = machine.task {
                 TaskFormSheet(
                     mode: .edit(task: taskModel),
                     syncContainer: syncContainer,
@@ -119,7 +103,7 @@ struct TaskDetailView: View {
 
     @ViewBuilder
     private var loadErrorSection: some View {
-        if let presentation = loadMachine.state.errorPresentation {
+        if let presentation = machine.loadState.errorPresentation {
             Section {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(presentation.message)
@@ -139,7 +123,7 @@ struct TaskDetailView: View {
 
     @ViewBuilder
     private var loadOverlay: some View {
-        if loadMachine.state.isLoading {
+        if machine.loadState.isLoading {
             ProgressView("Loading task...")
                 .padding(14)
                 .background(.ultraThinMaterial)
@@ -148,14 +132,12 @@ struct TaskDetailView: View {
     }
 
     private func requestLoad(_ event: ScreenLoadEvent) {
-        loadMachine.send(event, run: {
-            try await syncEngine.syncTaskDetail(taskID: taskID)
-        })
+        machine.send(event)
     }
 
     private var taskSection: some View {
         Section {
-            if let taskModel {
+            if let taskModel = machine.task {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(taskModel.title)
                         .font(.title2)
@@ -189,20 +171,20 @@ struct TaskDetailView: View {
 
     private var descriptionSection: some View {
         Section("Description") {
-            Text(taskModel?.descriptionText ?? "")
+            Text(machine.task?.descriptionText ?? "")
                 .font(.body)
         }
     }
 
     @ViewBuilder
     private var itemsSection: some View {
-        if taskModel != nil {
+        if machine.task != nil {
             Section("Items") {
-                if taskItems.isEmpty {
+                if machine.items.isEmpty {
                     Text("No items")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(taskItems, id: \.id) { item in
+                    ForEach(machine.items, id: \.id) { item in
                         Text(item.title)
                             .foregroundStyle(.primary)
                     }
@@ -213,7 +195,7 @@ struct TaskDetailView: View {
 
     @ViewBuilder
     private var peopleSection: some View {
-        if let taskModel {
+        if let taskModel = machine.task {
             Section("Assignee") {
                 Text(taskModel.assignee?.displayName ?? "Unassigned")
                     .foregroundStyle(taskModel.assignee == nil ? .secondary : .primary)

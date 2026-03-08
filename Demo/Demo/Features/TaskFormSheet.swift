@@ -28,13 +28,7 @@ struct TaskFormSheet: View {
     // so the pickers can assign them directly without cross-context crashes.
     @State private var draft: Task
 
-    // Loaded once from editContext when the sheet appears. Not kept live — form sheets
-    // are short-lived and a stale list for one session is acceptable.
-    @State private var users: [User] = []
-    @State private var taskStateOptions: [TaskStateOption] = []
-
-    @StateObject private var metadataLoadMachine: ScreenLoadMachine
-    @StateObject private var saveMachine: SubmissionMachine
+    @StateObject private var machine: TaskFormMachine
     @State private var newItemTitle = ""
     @State private var itemEditMode: EditMode = .inactive
 
@@ -46,23 +40,8 @@ struct TaskFormSheet: View {
         let ctx = ModelContext(syncContainer.modelContainer)
         ctx.autosaveEnabled = false
         self.editContext = ctx
-        _metadataLoadMachine = StateObject(
-            wrappedValue: ScreenLoadMachine { error in
-                presentError(
-                    error,
-                    retryActionTitle: "Retry Loading Metadata",
-                    fallbackMessage: "Could not load form options yet."
-                )
-            }
-        )
-        _saveMachine = StateObject(
-            wrappedValue: SubmissionMachine { error in
-                presentError(
-                    error,
-                    retryActionTitle: nil,
-                    fallbackMessage: "Could not save this task."
-                )
-            }
+        _machine = StateObject(
+            wrappedValue: TaskFormMachine(syncContainer: syncContainer, syncEngine: syncEngine, editContext: ctx)
         )
 
         switch mode {
@@ -103,7 +82,7 @@ struct TaskFormSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
-                        .disabled(saveMachine.state == .submitting)
+                        .disabled(machine.saveState == .submitting)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -113,71 +92,12 @@ struct TaskFormSheet: View {
                         }
                         normalizeItemPositions()
                         draft.updatedAt = Date()
-                        guard saveMachine.send(.submit) else { return }
-
-                        let body = draft.exportObject(for: syncContainer)
-                        let capturedReviewerIDs = draft.reviewers.map(\.id).sorted()
-                        let capturedWatcherIDs = draft.watchers.map(\.id).sorted()
-
-                        var reviewersChanged = false
-                        var watchersChanged = false
-                        if case .edit(let originalTask) = mode {
-                            let originalReviewerIDs = Set(originalTask.reviewers.map(\.id))
-                            let originalWatcherIDs = Set(originalTask.watchers.map(\.id))
-                            reviewersChanged = Set(capturedReviewerIDs) != originalReviewerIDs
-                            watchersChanged = Set(capturedWatcherIDs) != originalWatcherIDs
-                        }
-
-                        _Concurrency.Task {
-                            do {
-                                switch mode {
-                                case .create(let projectID):
-                                    try await syncEngine.createTask(body: body, projectID: projectID)
-                                    if !capturedReviewerIDs.isEmpty {
-                                        try await syncEngine.replaceTaskReviewers(
-                                            taskID: draft.id,
-                                            projectID: projectID,
-                                            reviewerIDs: capturedReviewerIDs
-                                        )
-                                    }
-                                    if !capturedWatcherIDs.isEmpty {
-                                        try await syncEngine.replaceTaskWatchers(
-                                            taskID: draft.id,
-                                            projectID: projectID,
-                                            watcherIDs: capturedWatcherIDs
-                                        )
-                                    }
-
-                                case .edit(let task):
-                                    try await syncEngine.updateTask(taskID: task.id, projectID: task.projectID, body: body)
-                                    if reviewersChanged {
-                                        try await syncEngine.replaceTaskReviewers(
-                                            taskID: task.id,
-                                            projectID: task.projectID,
-                                            reviewerIDs: capturedReviewerIDs
-                                        )
-                                    }
-                                    if watchersChanged {
-                                        try await syncEngine.replaceTaskWatchers(
-                                            taskID: task.id,
-                                            projectID: task.projectID,
-                                            watcherIDs: capturedWatcherIDs
-                                        )
-                                    }
-                                }
-                                await MainActor.run {
-                                    _ = saveMachine.send(.success)
-                                    dismiss()
-                                }
-                            } catch {
-                                await MainActor.run {
-                                    _ = saveMachine.send(.failure(error))
-                                }
-                            }
+                        machine.save(mode: mode, draft: draft) {
+                            dismiss()
                         }
                     } label: {
                         HStack(spacing: 6) {
-                            if saveMachine.state == .submitting { ProgressView().controlSize(.small) }
+                            if machine.saveState == .submitting { ProgressView().controlSize(.small) }
                             Text(confirmLabel)
                         }
                     }
@@ -186,45 +106,45 @@ struct TaskFormSheet: View {
             }
         }
         .task {
-            refreshSnapshot()
-            requestLoad(.onAppear)
+            machine.prepareMetadata()
+            machine.sendMetadata(.onAppear)
         }
         // Auto-select first valid state when options load (safe for edit — guard prevents override)
-        .task(id: taskStateOptions.map(\.id)) {
-            guard !taskStateOptions.isEmpty,
-                  draft.state.isEmpty || !taskStateOptions.contains(where: { $0.id == draft.state })
+        .task(id: machine.taskStateOptions.map(\.id)) {
+            guard !machine.taskStateOptions.isEmpty,
+                  draft.state.isEmpty || !machine.taskStateOptions.contains(where: { $0.id == draft.state })
             else { return }
-            if let first = taskStateOptions.first {
+            if let first = machine.taskStateOptions.first {
                 draft.state = first.id
                 draft.stateLabel = first.label
             }
         }
         // Auto-select author when users load (create only in practice — guard prevents override)
-        .task(id: users.map(\.id)) {
-            guard !users.isEmpty,
-                  draft.authorID.isEmpty || !users.contains(where: { $0.id == draft.authorID })
+        .task(id: machine.users.map(\.id)) {
+            guard !machine.users.isEmpty,
+                  draft.authorID.isEmpty || !machine.users.contains(where: { $0.id == draft.authorID })
             else { return }
             draft.authorID = draft.assigneeID.flatMap { id in
-                users.contains(where: { $0.id == id }) ? id : nil
-            } ?? users.first?.id ?? ""
+                machine.users.contains(where: { $0.id == id }) ? id : nil
+            } ?? machine.users.first?.id ?? ""
         }
         .alert(
             "Save Failed",
             isPresented: Binding(
                 get: {
-                    if case .failed = saveMachine.state { return true }
+                    if case .failed = machine.saveState { return true }
                     return false
                 },
                 set: { isPresented in
                     if !isPresented {
-                        _ = saveMachine.send(.dismissError)
+                        machine.dismissSaveError()
                     }
                 }
             )
         ) {
             Button("OK", role: .cancel) {}
         } message: {
-            if case .failed(let error) = saveMachine.state {
+            if case .failed(let error) = machine.saveState {
                 Text(error.message)
             } else {
                 Text("Unknown error")
@@ -294,16 +214,16 @@ struct TaskFormSheet: View {
 
     private var stateSection: some View {
         Section("State") {
-            if taskStateOptions.isEmpty {
+            if machine.taskStateOptions.isEmpty {
                 LabeledContent("State") {
-                    if metadataLoadMachine.state.isLoading {
+                    if machine.metadataLoadState.isLoading {
                         ProgressView()
                     } else {
                         Text("Unavailable").foregroundStyle(.secondary)
                     }
                 }
             } else {
-                ForEach(taskStateOptions, id: \.id) { option in
+                ForEach(machine.taskStateOptions, id: \.id) { option in
                     Button {
                         draft.state = option.id
                         draft.stateLabel = option.label
@@ -334,7 +254,7 @@ struct TaskFormSheet: View {
                     }
                 }
             }
-            ForEach(users, id: \.id) { user in
+            ForEach(machine.users, id: \.id) { user in
                 Button {
                     draft.assigneeID = user.id
                 } label: {
@@ -352,7 +272,7 @@ struct TaskFormSheet: View {
 
     private var authorSection: some View {
         Section("Author") {
-            ForEach(users, id: \.id) { user in
+            ForEach(machine.users, id: \.id) { user in
                 Button {
                     draft.authorID = user.id
                 } label: {
@@ -370,7 +290,7 @@ struct TaskFormSheet: View {
 
     private var reviewersSection: some View {
         Section("Reviewers") {
-            ForEach(users, id: \.id) { user in
+            ForEach(machine.users, id: \.id) { user in
                 Button {
                     if draft.reviewers.contains(where: { $0.id == user.id }) {
                         draft.reviewers.removeAll(where: { $0.id == user.id })
@@ -392,7 +312,7 @@ struct TaskFormSheet: View {
 
     private var watchersSection: some View {
         Section("Watchers") {
-            ForEach(users, id: \.id) { user in
+            ForEach(machine.users, id: \.id) { user in
                 Button {
                     if draft.watchers.contains(where: { $0.id == user.id }) {
                         draft.watchers.removeAll(where: { $0.id == user.id })
@@ -414,7 +334,7 @@ struct TaskFormSheet: View {
 
     @ViewBuilder
     private var loadErrorSection: some View {
-        if let metadataError = metadataLoadMachine.state.errorPresentation {
+        if let metadataError = machine.metadataLoadState.errorPresentation {
             Section {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(metadataError.message)
@@ -422,7 +342,7 @@ struct TaskFormSheet: View {
                         .foregroundStyle(.secondary)
                     if let retryActionTitle = metadataError.retryActionTitle {
                         Button(retryActionTitle) {
-                            requestLoad(.retry)
+                            machine.sendMetadata(.retry)
                         }
                         .buttonStyle(.bordered)
                     }
@@ -449,44 +369,13 @@ struct TaskFormSheet: View {
     }
 
     private var isSaveDisabled: Bool {
-        guard saveMachine.state != .submitting,
+        guard machine.saveState != .submitting,
               !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return true }
         if case .create = mode {
             return draft.state.isEmpty || draft.authorID.isEmpty
         }
         return false
-    }
-
-    private static func metadataSnapshot(from context: ModelContext) -> (users: [User], taskStateOptions: [TaskStateOption]) {
-        let userDescriptor = FetchDescriptor<User>(
-            sortBy: [SortDescriptor(\.displayName), SortDescriptor(\.id)]
-        )
-        let users = (try? context.fetch(userDescriptor)) ?? []
-
-        let stateDescriptor = FetchDescriptor<TaskStateOption>(
-            sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.id)]
-        )
-        let taskStateOptions = (try? context.fetch(stateDescriptor)) ?? []
-
-        return (users, taskStateOptions)
-    }
-
-    @MainActor
-    private func requestLoad(_ event: ScreenLoadEvent) {
-        metadataLoadMachine.send(event, run: {
-            try await syncEngine.syncTaskFormMetadata()
-            await MainActor.run {
-                refreshSnapshot()
-            }
-        })
-    }
-
-    @MainActor
-    private func refreshSnapshot() {
-        let snapshot = Self.metadataSnapshot(from: editContext)
-        users = snapshot.users
-        taskStateOptions = snapshot.taskStateOptions
     }
 
     private var sortedItems: [Item] {

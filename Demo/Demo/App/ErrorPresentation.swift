@@ -91,7 +91,7 @@ final class ScreenLoadMachine: ObservableObject {
         state = next.0
         guard next.1 == .load else { return }
 
-        Task { [weak self] in
+        _Concurrency.Task { [weak self] in
             do {
                 try await operation()
                 await MainActor.run {

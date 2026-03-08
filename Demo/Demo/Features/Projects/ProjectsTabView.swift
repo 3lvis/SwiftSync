@@ -43,10 +43,8 @@ private struct ProjectDetailView: View {
     let syncContainer: SyncContainer
     @ObservedObject var syncEngine: DemoSyncEngine
 
-    @SyncModel private var projectModel: Project?
-    @SyncQuery private var tasks: [Task]
     @State private var hasTriggeredInitialSync = false
-    @StateObject private var loadMachine: ScreenLoadMachine
+    @StateObject private var machine: ProjectDetailMachine
     @State private var isShowingCreateTaskSheet = false
     @State private var taskPendingDelete: TaskDeletePrompt?
 #if DEBUG
@@ -58,23 +56,8 @@ private struct ProjectDetailView: View {
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
 
-        _projectModel = SyncModel(Project.self, id: projectID, in: syncContainer)
-        _tasks = SyncQuery(
-            Task.self,
-            relationship: \Task.project,
-            relationshipID: projectID,
-            in: syncContainer,
-            sortBy: [
-                SortDescriptor(\Task.updatedAt, order: .reverse),
-                SortDescriptor(\Task.id)
-            ],
-            refreshOn: [\.assignee, \.items],
-            animation: .snappy(duration: 0.24)
-        )
-        _loadMachine = StateObject(
-            wrappedValue: ScreenLoadMachine { error in
-                presentError(error, retryActionTitle: "Retry", fallbackMessage: "Could not load this project yet.")
-            }
+        _machine = StateObject(
+            wrappedValue: ProjectDetailMachine(projectID: projectID, syncContainer: syncContainer, syncEngine: syncEngine)
         )
     }
 
@@ -83,7 +66,7 @@ private struct ProjectDetailView: View {
             loadErrorSection
 
             Section {
-                if let projectModel {
+                if let projectModel = machine.project {
                     Text(projectModel.name)
                         .font(.headline)
                         .lineLimit(3)
@@ -97,7 +80,7 @@ private struct ProjectDetailView: View {
             }
 
             Section("Tasks") {
-                ForEach(tasks, id: \.id) { task in
+                ForEach(machine.tasks, id: \.id) { task in
                     NavigationLink {
                         TaskDetailView(taskID: task.id, syncContainer: syncContainer, syncEngine: syncEngine)
                     } label: {
@@ -229,7 +212,7 @@ private struct ProjectDetailView: View {
 
     @ViewBuilder
     private var loadErrorSection: some View {
-        if let presentation = loadMachine.state.errorPresentation {
+        if let presentation = machine.loadState.errorPresentation {
             Section {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(presentation.message)
@@ -249,7 +232,7 @@ private struct ProjectDetailView: View {
 
     @ViewBuilder
     private var loadOverlay: some View {
-        if loadMachine.state.isLoading {
+        if machine.loadState.isLoading {
             ProgressView("Loading project...")
                 .padding(14)
                 .background(.ultraThinMaterial)
@@ -258,9 +241,7 @@ private struct ProjectDetailView: View {
     }
 
     private func requestLoad(_ event: ScreenLoadEvent) {
-        loadMachine.send(event, run: {
-            try await syncEngine.syncProjectTasks(projectID: projectID)
-        })
+        machine.send(event)
     }
 }
 

@@ -6,15 +6,12 @@ final class ProjectsViewController: UITableViewController {
 
     // MARK: - Dependencies
 
-    private let syncContainer: SyncContainer
-    private let syncEngine: DemoSyncEngine
     private let onSelect: (String) -> Void
 
     // MARK: - State
 
     private var cancellables = Set<AnyCancellable>()
-    private var projects: [Project] = []
-    private let loadMachine: ScreenLoadMachine
+    private let machine: ProjectsListMachine
 
     private lazy var statusContainer: UIStackView = {
         let stack = UIStackView(arrangedSubviews: [statusIndicator, statusLabel, retryButton])
@@ -44,16 +41,10 @@ final class ProjectsViewController: UITableViewController {
         return button
     }()
 
-    private lazy var publisher = SyncQueryPublisher(
-        Project.self,
-        in: syncContainer,
-        sortBy: [SortDescriptor(\Project.name), SortDescriptor(\Project.id)]
-    )
-
     private lazy var diffableDataSource: UITableViewDiffableDataSource<String, String> = {
         let source = UITableViewDiffableDataSource<String, String>(tableView: tableView) { [weak self] tableView, indexPath, projectID in
             let cell = tableView.dequeueReusableCell(withIdentifier: "ProjectCell", for: indexPath)
-            guard let project = self?.projects.first(where: { $0.id == projectID }) else { return cell }
+            guard let project = self?.machine.rows.first(where: { $0.id == projectID }) else { return cell }
             var config = cell.defaultContentConfiguration()
             config.text = project.name
             config.secondaryText = project.taskCount == 1 ? "1 task" : "\(project.taskCount) tasks"
@@ -70,12 +61,8 @@ final class ProjectsViewController: UITableViewController {
 
     @MainActor
     init(syncContainer: SyncContainer, syncEngine: DemoSyncEngine, onSelect: @escaping (String) -> Void) {
-        self.syncContainer = syncContainer
-        self.syncEngine = syncEngine
         self.onSelect = onSelect
-        self.loadMachine = ScreenLoadMachine { error in
-            presentError(error, retryActionTitle: "Retry", fallbackMessage: "Could not load projects.")
-        }
+        self.machine = ProjectsListMachine(syncContainer: syncContainer, syncEngine: syncEngine)
         super.init(style: .plain)
     }
 
@@ -90,11 +77,10 @@ final class ProjectsViewController: UITableViewController {
         tableView.dataSource = diffableDataSource
         tableView.backgroundView = statusContainer
 
-        publisher.$rows
+        machine.$rows
             .receive(on: DispatchQueue.main)
             .sink { [weak self] rows in
                 guard let self else { return }
-                self.projects = rows
                 var snapshot = NSDiffableDataSourceSnapshot<String, String>()
                 snapshot.appendSections(["projects"])
                 snapshot.appendItems(rows.map(\.id), toSection: "projects")
@@ -102,15 +88,15 @@ final class ProjectsViewController: UITableViewController {
             }
             .store(in: &cancellables)
 
-        loadMachine.$state
+        machine.$loadState
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
                 self?.renderLoadState(state)
             }
             .store(in: &cancellables)
 
-        renderLoadState(loadMachine.state)
-        requestLoad(.onAppear)
+        renderLoadState(machine.loadState)
+        machine.send(.onAppear)
     }
 
     // MARK: - UITableViewDelegate
@@ -125,14 +111,7 @@ final class ProjectsViewController: UITableViewController {
 
     @objc
     private func retryTapped() {
-        requestLoad(.retry)
-    }
-
-    private func requestLoad(_ event: ScreenLoadEvent) {
-        loadMachine.send(event, run: { [weak self] in
-            guard let self else { return }
-            try await self.syncEngine.syncProjects()
-        })
+        machine.send(.retry)
     }
 
     private func renderLoadState(_ state: ScreenLoadState) {
@@ -149,9 +128,9 @@ final class ProjectsViewController: UITableViewController {
             tableView.backgroundView?.isHidden = false
         case .loaded:
             statusIndicator.stopAnimating()
-            statusLabel.text = projects.isEmpty ? "No projects yet." : nil
+            statusLabel.text = machine.rows.isEmpty ? "No projects yet." : nil
             retryButton.isHidden = true
-            tableView.backgroundView?.isHidden = !projects.isEmpty
+            tableView.backgroundView?.isHidden = !machine.rows.isEmpty
         case .error(let presentation):
             statusIndicator.stopAnimating()
             statusLabel.text = presentation.message
