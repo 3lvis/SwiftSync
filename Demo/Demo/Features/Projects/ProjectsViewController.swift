@@ -5,11 +5,7 @@ import UIKit
 
 final class ProjectsViewController: UITableViewController {
 
-    // MARK: - Dependencies
-
     private let onSelect: (String) -> Void
-
-    // MARK: - State
 
     private var cancellables = Set<AnyCancellable>()
     private let machine: ProjectsListMachine
@@ -49,8 +45,6 @@ final class ProjectsViewController: UITableViewController {
         return source
     }()
 
-    // MARK: - Init
-
     @MainActor
     init(syncContainer: SyncContainer, syncEngine: DemoSyncEngine, onSelect: @escaping (String) -> Void) {
         self.onSelect = onSelect
@@ -60,8 +54,6 @@ final class ProjectsViewController: UITableViewController {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) not supported") }
-
-    // MARK: - Lifecycle
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -91,15 +83,11 @@ final class ProjectsViewController: UITableViewController {
         machine.send(.onAppear)
     }
 
-    // MARK: - UITableViewDelegate
-
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         guard let projectID = diffableDataSource.itemIdentifier(for: indexPath) else { return }
         onSelect(projectID)
     }
-
-    // MARK: - Loading UI
 
     private func renderLoadState(_ state: ScreenLoadState) {
         switch state {
