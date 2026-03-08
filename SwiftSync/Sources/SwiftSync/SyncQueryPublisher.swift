@@ -1,9 +1,10 @@
+import Dispatch
 import Foundation
 import Observation
 import SwiftData
 
-// @unchecked Sendable matches the pattern used by the private observers in ReactiveQuery.swift;
-// the notification closure is dispatched on queue: .main so mutation is always on the main thread.
+// Observation callbacks are dispatched on queue: .main.
+// @unchecked Sendable is kept for API compatibility with existing callers.
 @Observable
 public final class SyncQueryPublisher<Model: PersistentModel>: @unchecked Sendable {
 
@@ -13,12 +14,12 @@ public final class SyncQueryPublisher<Model: PersistentModel>: @unchecked Sendab
 
     // MARK: - Private state
 
-    private let syncContainer: SyncContainer
-    private let predicate: Predicate<Model>?
-    private let sortBy: [SortDescriptor<Model>]
-    private let postFetchFilter: ((Model) -> Bool)?
-    private let observedModelTypeNames: Set<String>
-    nonisolated(unsafe) private var notificationToken: NSObjectProtocol?
+    @ObservationIgnored private let syncContainer: SyncContainer
+    @ObservationIgnored private let predicate: Predicate<Model>?
+    @ObservationIgnored private let sortBy: [SortDescriptor<Model>]
+    @ObservationIgnored private let postFetchFilter: ((Model) -> Bool)?
+    @ObservationIgnored private let observedModelTypeNames: Set<String>
+    @ObservationIgnored private var notificationToken: NSObjectProtocol?
 
     // MARK: - Designated init
 
@@ -42,6 +43,12 @@ public final class SyncQueryPublisher<Model: PersistentModel>: @unchecked Sendab
             self.reload()
         }
         reload()
+    }
+
+    deinit {
+        if let notificationToken {
+            NotificationCenter.default.removeObserver(notificationToken)
+        }
     }
 
     // MARK: - Public inits
@@ -98,14 +105,6 @@ public final class SyncQueryPublisher<Model: PersistentModel>: @unchecked Sendab
         )
     }
 
-    // MARK: - Teardown
-
-    deinit {
-        if let notificationToken {
-            NotificationCenter.default.removeObserver(notificationToken)
-        }
-    }
-
     // MARK: - Private
 
     private func shouldReload(for userInfo: [AnyHashable: Any]?) -> Bool {
@@ -119,6 +118,7 @@ public final class SyncQueryPublisher<Model: PersistentModel>: @unchecked Sendab
     }
 
     private func reload() {
+        dispatchPrecondition(condition: .onQueue(.main))
         let descriptor = predicate.map { FetchDescriptor(predicate: $0, sortBy: sortBy) }
             ?? FetchDescriptor(sortBy: sortBy)
         let fetched = (try? syncContainer.mainContext.fetch(descriptor)) ?? []

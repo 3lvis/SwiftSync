@@ -28,10 +28,10 @@ public final class ProjectsListMachine {
             presentError(error, fallbackMessage: "Could not load projects.")
         }
 
-        observe {
+        observeContinuously {
             self.rows = self.rowsPublisher.rows
         }
-        observe {
+        observeContinuously {
             self.loadState = self.loadMachine.state
         }
     }
@@ -42,15 +42,6 @@ public final class ProjectsListMachine {
         })
     }
 
-    private func observe(_ update: @escaping @MainActor () -> Void) {
-        withObservationTracking {
-            update()
-        } onChange: { [weak self] in
-            DispatchQueue.main.async {
-                self?.observe(update)
-            }
-        }
-    }
 }
 
 @MainActor
@@ -97,16 +88,16 @@ public final class ProjectDetailMachine {
             presentError(error, fallbackMessage: "Could not delete this task.")
         }
 
-        observe {
+        observeContinuously {
             self.project = self.projectPublisher.rows.first(where: { $0.id == self.projectID })
         }
-        observe {
+        observeContinuously {
             self.tasks = self.taskPublisher.rows
         }
-        observe {
+        observeContinuously {
             self.loadState = self.loadMachine.state
         }
-        observe {
+        observeContinuously {
             self.deleteState = self.deleteMachine.state
         }
     }
@@ -140,15 +131,6 @@ public final class ProjectDetailMachine {
         }
     }
 
-    private func observe(_ update: @escaping @MainActor () -> Void) {
-        withObservationTracking {
-            update()
-        } onChange: { [weak self] in
-            DispatchQueue.main.async {
-                self?.observe(update)
-            }
-        }
-    }
 }
 
 @MainActor
@@ -182,13 +164,13 @@ public final class TaskDetailMachine {
             presentError(error, fallbackMessage: "Could not load this task yet.")
         }
 
-        observe {
+        observeContinuously {
             self.task = self.taskPublisher.rows.first(where: { $0.id == self.taskID })
         }
-        observe {
+        observeContinuously {
             self.items = self.itemPublisher.rows
         }
-        observe {
+        observeContinuously {
             self.loadState = self.loadMachine.state
         }
     }
@@ -199,15 +181,6 @@ public final class TaskDetailMachine {
         })
     }
 
-    private func observe(_ update: @escaping @MainActor () -> Void) {
-        withObservationTracking {
-            update()
-        } onChange: { [weak self] in
-            DispatchQueue.main.async {
-                self?.observe(update)
-            }
-        }
-    }
 }
 
 @MainActor
@@ -253,10 +226,10 @@ public final class TaskFormMachine {
             )
         }
 
-        observe {
+        observeContinuously {
             self.metadataLoadState = self.metadataLoadMachine.state
         }
-        observe {
+        observeContinuously {
             self.saveState = self.saveMachine.state
         }
     }
@@ -453,13 +426,4 @@ public final class TaskFormMachine {
         return reordered
     }
 
-    private func observe(_ update: @escaping @MainActor () -> Void) {
-        withObservationTracking {
-            update()
-        } onChange: { [weak self] in
-            DispatchQueue.main.async {
-                self?.observe(update)
-            }
-        }
-    }
 }

@@ -8,7 +8,7 @@ struct TaskView: View {
     let syncContainer: SyncContainer
     let syncEngine: DemoSyncEngine
 
-    @State var machine: TaskDetailMachine
+    @State private var machine: TaskDetailMachine
     @State private var showingEditSheet = false
 
     init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {

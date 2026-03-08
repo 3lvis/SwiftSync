@@ -7,13 +7,13 @@ import SwiftUI
 private final class SyncQueryObserver<Model: PersistentModel>: @unchecked Sendable {
     var rows: [Model] = []
 
-    private let syncContainer: SyncContainer
-    private let predicate: Predicate<Model>?
-    private let sortBy: [SortDescriptor<Model>]
-    private let postFetchFilter: ((Model) -> Bool)?
-    private let observedModelTypeNames: Set<String>
-    private let animation: Animation?
-    private var notificationToken: NSObjectProtocol?
+    @ObservationIgnored private let syncContainer: SyncContainer
+    @ObservationIgnored private let predicate: Predicate<Model>?
+    @ObservationIgnored private let sortBy: [SortDescriptor<Model>]
+    @ObservationIgnored private let postFetchFilter: ((Model) -> Bool)?
+    @ObservationIgnored private let observedModelTypeNames: Set<String>
+    @ObservationIgnored private let animation: Animation?
+    @ObservationIgnored private var notificationToken: NSObjectProtocol?
 
     init(
         syncContainer: SyncContainer,
@@ -329,11 +329,11 @@ public extension SyncQuery where Model: SyncModelable {
 private final class SyncModelObserver<Model: PersistentModel & SyncModelable>: @unchecked Sendable {
     var model: Model?
 
-    private let syncContainer: SyncContainer
-    private let id: Model.SyncID
-    private let observedModelTypeNames: Set<String>
-    private let animation: Animation?
-    private var notificationToken: NSObjectProtocol?
+    @ObservationIgnored private let syncContainer: SyncContainer
+    @ObservationIgnored private let id: Model.SyncID
+    @ObservationIgnored private let observedModelTypeNames: Set<String>
+    @ObservationIgnored private let animation: Animation?
+    @ObservationIgnored private var notificationToken: NSObjectProtocol?
 
     init(
         syncContainer: SyncContainer,

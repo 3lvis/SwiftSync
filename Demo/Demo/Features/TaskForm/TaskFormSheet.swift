@@ -18,11 +18,11 @@ struct TaskFormSheet: View {
     // For edit it is the same row fetched into this isolated context.
     // Relationship arrays (reviewers, watchers) are real [User] objects from editContext,
     // so the pickers can assign them directly without cross-context crashes.
-    @State var draft: Task
+    @State private var draft: Task
 
-    @State var machine: TaskFormMachine
-    @State var newItemTitle = ""
-    @State var itemEditMode: EditMode = .inactive
+    @State private var machine: TaskFormMachine
+    @State private var newItemTitle = ""
+    @State private var itemEditMode: EditMode = .inactive
 
     init(mode: TaskFormMode, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.mode = mode

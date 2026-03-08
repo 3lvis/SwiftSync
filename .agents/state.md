@@ -2,20 +2,22 @@
 
 ## Plan
 
-- [x] Replace Combine-based observable models with Observation in SwiftSync and DemoCore.
-- [x] Refactor demo SwiftUI and UIKit surfaces to consume Observation state.
-- [x] Update tests for removed Combine APIs and verify behavior.
-- [x] Run relevant test suite and capture final state.
+- [x] Add shared reusable Observation tracking helper and adopt it in DemoCore and Demo UIKit screen.
+- [x] Tighten observation surfaces with `@ObservationIgnored` on non-observable internals.
+- [x] Clarify actor isolation for `SyncQueryPublisher` and make view `@State` access control consistent.
+- [x] Run relevant tests and update final state.
 
 ## Last known state
 
-`swift test` passes and `xcodebuild -project Demo/Demo.xcodeproj -scheme Demo -configuration Debug -destination "generic/platform=iOS Simulator" build` succeeds after method cleanup.
+`swift test` passes (117 tests, 0 failures) with existing known macro warnings in schema-validation test macro expansions.
 
 ## Decisions (don't revisit)
 
 - Full migration requested without backwards compatibility; remove Combine publisher-facing APIs rather than shimming.
 - Keep `notificationToken` as `nonisolated(unsafe)` in `SyncQueryPublisher` to satisfy Observation macro constraints while preserving explicit observer teardown.
 - In `ScreenMachines.swift`, use `_Concurrency.Task` (not bare `Task`) because the local `Task` model type shadows Swift concurrency `Task`.
+- Use a single shared observation loop helper (`observeContinuously`) to avoid diverging manual `withObservationTracking` implementations.
+- Keep `SyncQueryPublisher` queue contract explicit with `dispatchPrecondition(.onQueue(.main))` in `reload()` instead of forcing a global actor annotation that complicates NotificationCenter callbacks.
 
 ## Files touched
 
@@ -34,3 +36,4 @@
 - SwiftSync/Sources/SwiftSync/ReactiveQuery.swift
 - SwiftSync/Sources/SwiftSync/SyncQueryPublisher.swift
 - SwiftSync/Tests/SwiftSyncTests/SyncQueryPublisherTests.swift
+- DemoCore/Sources/DemoCore/Features/ObservationTracking.swift

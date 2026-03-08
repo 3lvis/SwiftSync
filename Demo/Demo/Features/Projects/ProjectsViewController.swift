@@ -1,5 +1,4 @@
 import DemoCore
-import Observation
 import SwiftSync
 import UIKit
 
@@ -60,14 +59,14 @@ final class ProjectsViewController: UITableViewController {
         tableView.dataSource = diffableDataSource
         tableView.backgroundView = statusContainer
 
-        observe { [weak self] in
+        observeContinuously { [weak self] in
             guard let self else { return }
             var snapshot = NSDiffableDataSourceSnapshot<String, String>()
             snapshot.appendSections(["projects"])
             snapshot.appendItems(machine.rows.map(\.id), toSection: "projects")
             diffableDataSource.apply(snapshot, animatingDifferences: true)
         }
-        observe { [weak self] in
+        observeContinuously { [weak self] in
             guard let self else { return }
             renderLoadState(machine.loadState)
         }
@@ -98,16 +97,6 @@ final class ProjectsViewController: UITableViewController {
             statusIndicator.stopAnimating()
             statusLabel.text = presentation.message
             tableView.backgroundView?.isHidden = false
-        }
-    }
-
-    private func observe(_ render: @escaping () -> Void) {
-        withObservationTracking {
-            render()
-        } onChange: { [weak self] in
-            DispatchQueue.main.async {
-                self?.observe(render)
-            }
         }
     }
 
