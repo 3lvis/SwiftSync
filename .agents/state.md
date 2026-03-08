@@ -1,17 +1,16 @@
 # State Capsule
 
 ## Plan
-- [x] Refocus manual-conformance doc on data manipulation use cases in `make`/`apply`.
-- [x] Add a realistic normalization/derivation example that transforms payload data before assignment.
-- [x] Verify the updated examples still preserve SwiftSync payload semantics and operation-gated relationship behavior.
+- [x] Update `AGENTS.md` to scope strict TDD to library changes and exempt removals.
 
 ## Last known state
-untested (docs-only revision completed)
+docs updated (AGENTS policy now scoped to library TDD and removal exemption)
 
 ## Decisions (don't revisit)
-- Keep this guidance out of `README.md` and place it only in a dedicated project doc, per user request.
-- Emphasize transformation/normalization in `make`/`apply` as the primary manual-conformance motivation.
+- Use explicit load state machines (`idle/loading/loaded/error`) rather than boolean loading flags for demo screen fetch flows.
+- Keep save/mutation failures separate from load-state errors so retry copy stays context-specific.
+- Strict TDD policy applies only to `SwiftSync/**` and `DemoBackend/**`; removals are code-first with post-change test validation.
 
 ## Files touched
 - .agents/state.md
-- docs/project/manual-syncupdatablemodel.md
+- AGENTS.md

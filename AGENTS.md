@@ -9,17 +9,24 @@
   - absent key => ignore (no mutation)
   - explicit `null` => clear/delete
 
-## Development Process (Strict TDD)
+## Development Process (Scoped TDD)
 
-- Always work test-first.
-- For any behavior change or bug fix:
-  - write or update tests first
-  - run tests to confirm they fail for the expected reason
-  - only then implement code to make tests pass
-- If API surface is missing, add the smallest API needed to express the test first.
-- Do not write implementation first and then backfill tests.
-- Prefer regression tests that pin behavior at the public API boundary.
-- After implementation, run relevant targeted tests and then broader suite as needed.
+- Strict TDD is required only for library changes in:
+  - `SwiftSync/**`
+  - `DemoBackend/**`
+- TDD is required for behavior additions/changes:
+  - write/update tests first
+  - run tests and confirm failure for expected reason
+  - implement and make tests pass
+- Removals are TDD-exempt:
+  - remove code first
+  - run relevant tests
+  - remove/update tests that validate intentionally removed behavior
+
+### Demo app workflow (`Demo/Demo/**`)
+
+- Strict TDD is not required.
+- Verify changes with relevant tests when available; otherwise use manual QA.
 
 ## Implementation Guidance
 
