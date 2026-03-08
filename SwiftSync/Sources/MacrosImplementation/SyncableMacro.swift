@@ -141,7 +141,7 @@ public struct SyncableMacro: ExtensionMacro {
                         try syncApplyGeneratedRelationships(payload, in: context, operations: operations)
                     }
 
-                    func exportObject(using options: ExportOptions) -> [String: Any] {
+                    func exportObject(keyStyle: KeyStyle, dateFormatter: DateFormatter) -> [String: Any] {
                         if !ExportState.enter(self) {
                             return [:]
                         }
@@ -408,7 +408,7 @@ public struct SyncableMacro: ExtensionMacro {
 
     private static func exportBlock(for property: SyncedProperty) -> String {
         let keyLiteral = exportKeyLiteral(for: property)
-        let keyExpr = keyLiteral != nil ? "\"\(keyLiteral!)\"" : "options.keyStyle.transform(\"\(property.name)\")"
+        let keyExpr = keyLiteral != nil ? "\"\(keyLiteral!)\"" : "keyStyle.transform(\"\(property.name)\")"
 
         if property.isRelationship {
             if property.isToManyRelationship {
@@ -418,7 +418,7 @@ public struct SyncableMacro: ExtensionMacro {
                     let exportedChildren: [[String: Any]] = self.\(property.name).compactMap { child in
                         let anyChild: Any = child
                         guard let exportable = anyChild as? any SyncUpdatableModel else { return nil }
-                        return exportable.exportObject(using: options)
+                        return exportable.exportObject(keyStyle: keyStyle, dateFormatter: dateFormatter)
                     }
                     exportSetValue(exportedChildren, for: baseKey, into: &result)
                 }
@@ -429,7 +429,7 @@ public struct SyncableMacro: ExtensionMacro {
                 let baseKey = \(keyExpr)
                 let anyChild: Any? = self.\(property.name)
                 if let exportable = anyChild as? any SyncUpdatableModel {
-                    let child = exportable.exportObject(using: options)
+                    let child = exportable.exportObject(keyStyle: keyStyle, dateFormatter: dateFormatter)
                     exportSetValue(child, for: baseKey, into: &result)
                 } else {
                     exportSetValue(NSNull(), for: baseKey, into: &result)
@@ -441,7 +441,7 @@ public struct SyncableMacro: ExtensionMacro {
         if property.isOptional {
             return """
             if let value = self.\(property.name) {
-                if let encoded = exportEncodeValue(value, options: options) {
+                if let encoded = exportEncodeValue(value, dateFormatter: dateFormatter) {
                     exportSetValue(encoded, for: \(keyExpr), into: &result)
                 } else {
                     exportSetValue(NSNull(), for: \(keyExpr), into: &result)
@@ -453,7 +453,7 @@ public struct SyncableMacro: ExtensionMacro {
         }
 
         return """
-        if let encoded = exportEncodeValue(self.\(property.name), options: options) {
+        if let encoded = exportEncodeValue(self.\(property.name), dateFormatter: dateFormatter) {
             exportSetValue(encoded, for: \(keyExpr), into: &result)
         } else {
             exportSetValue(NSNull(), for: \(keyExpr), into: &result)

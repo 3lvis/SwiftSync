@@ -58,7 +58,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         )
         self.mainContext = modelContainer.mainContext
         self.keyStyle = keyStyle
-        self.dateFormatter = dateFormatter ?? ExportOptions.defaultDateFormatter()
+        self.dateFormatter = dateFormatter ?? defaultExportDateFormatter()
         super.init()
         installDidSaveObserver()
     }
@@ -68,7 +68,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         self.modelContainer = modelContainer
         self.mainContext = modelContainer.mainContext
         self.keyStyle = keyStyle
-        self.dateFormatter = dateFormatter ?? ExportOptions.defaultDateFormatter()
+        self.dateFormatter = dateFormatter ?? defaultExportDateFormatter()
         super.init()
         installDidSaveObserver()
     }
@@ -152,9 +152,8 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             String(describing: lhs[keyPath: Model.syncIdentity]) < String(describing: rhs[keyPath: Model.syncIdentity])
         }
 
-        let options = ExportOptions(keyStyle: keyStyle, dateFormatter: dateFormatter)
         return sorted.map { row in
-            row.exportObject(using: options)
+            row.exportObject(keyStyle: keyStyle, dateFormatter: dateFormatter)
         }
     }
 
@@ -169,9 +168,8 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             String(describing: lhs[keyPath: Model.syncIdentity]) < String(describing: rhs[keyPath: Model.syncIdentity])
         }
 
-        let options = ExportOptions(keyStyle: keyStyle, dateFormatter: dateFormatter)
         return sorted.map { row in
-            row.exportObject(using: options)
+            row.exportObject(keyStyle: keyStyle, dateFormatter: dateFormatter)
         }
     }
 

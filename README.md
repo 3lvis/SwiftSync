@@ -544,7 +544,7 @@ let rows = try syncContainer.export(as: User.self)
 
 `@Syncable` generates:
 - `SyncUpdatableModel` conformance (make/apply + relationship sync)
-- export support via `exportObject(using:)`
+- export support via `exportObject(keyStyle:dateFormatter:)`
 Built-in relationship sync behavior:
 - to-one by `*_id` (strict typed FK lookup)
 - to-many by `*_ids` (unordered membership updates)

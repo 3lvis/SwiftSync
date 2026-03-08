@@ -100,7 +100,7 @@ When payload keys still use blocked names, map them with `@RemoteKey`.
 Export key precedence:
 1. `@RemoteKey`
 2. `@PrimaryKey(remote:)`
-3. convention transform from `ExportOptions.keyStyle`
+3. convention transform from export `keyStyle`
 
 Defaults:
 - export key style defaults to snake_case

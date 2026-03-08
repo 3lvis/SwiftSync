@@ -203,9 +203,10 @@ final class UpdateTaskLike {
 // were missing from SyncUpdatableModel.
 private func _assertExportObjectIsOnSyncUpdatableModel<M: SyncUpdatableModel>(
     _ model: M,
-    options: ExportOptions
+    keyStyle: KeyStyle,
+    dateFormatter: DateFormatter
 ) -> [String: Any] {
-    model.exportObject(using: options)
+    model.exportObject(keyStyle: keyStyle, dateFormatter: dateFormatter)
 }
 
 final class ExportTests: XCTestCase {
@@ -276,7 +277,7 @@ final class ExportTests: XCTestCase {
     func testExportUnsupportedScalarFallsBackToNSNull() throws {
         var body: [String: Any] = [:]
         let raw = ExportUnsupportedScalarValue(raw: 10)
-        if let encoded = exportEncodeValue(raw, options: ExportOptions()) {
+        if let encoded = exportEncodeValue(raw, dateFormatter: defaultExportDateFormatter()) {
             exportSetValue(encoded, for: "value", into: &body)
         } else {
             exportSetValue(NSNull(), for: "value", into: &body)
@@ -484,8 +485,10 @@ final class ExportTests: XCTestCase {
         let model = ExportMappedFields(id: 42, userType: "editor", email: "update@example.com", localOnly: "ignored")
         context.insert(model)
 
-        let options = ExportOptions()
-        let body = model.exportObject(using: options)
+        let body = model.exportObject(
+            keyStyle: .snakeCase,
+            dateFormatter: defaultExportDateFormatter()
+        )
 
         // @RemoteKey("type") must appear as "type", not "user_type"
         XCTAssertEqual(body["type"] as? String, "editor", "Expected @RemoteKey(\"type\") to map userType → \"type\"")
@@ -521,8 +524,10 @@ final class ExportTests: XCTestCase {
         )
         context.insert(model)
 
-        let options = ExportOptions()
-        let body = model.exportObject(using: options)
+        let body = model.exportObject(
+            keyStyle: .snakeCase,
+            dateFormatter: defaultExportDateFormatter()
+        )
 
         // descriptionText → @RemoteKey("description") → must appear as "description"
         XCTAssertEqual(body["description"] as? String, "Updated body text",

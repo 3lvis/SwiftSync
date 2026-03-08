@@ -151,7 +151,7 @@ The macro emits an `extension Task: SyncUpdatableModel, ...` containing:
 - For `tags`: if `payload.contains("tags_ids") || payload.contains("tag_ids")` → `syncApplyToManyForeignKeys`
   - else if `payload.contains("tags")` → `syncApplyToManyNestedObjects`
 
-**`func exportObject(using:state:) -> [String: Any]`**
+**`func exportObject(keyStyle:dateFormatter:) -> [String: Any]`**
 - `internalFlag` skipped (`@NotExport`)
 - `stateID` exported under key `"state.id"` (nested dict)
 - `assignee` exported as object or NSNull
@@ -234,7 +234,7 @@ do {
 
 Thin orchestration layer over `SwiftSync.*` functions:
 
-- Stores `ModelContainer`, `mainContext`, `inputKeyStyle`
+- Stores `ModelContainer`, `mainContext`, `keyStyle`
 - Creates a fresh `ModelContext` per `sync()` call (background context)
 - Observes `ModelContext.didSave` on all contexts → re-posts as an internal `didSaveChangesNotification` with:
   - `changedIdentifiers`: union of inserted + updated + deleted IDs
@@ -308,18 +308,18 @@ UIKit path assigns directly: `rows = resolved`
 ## Export System
 
 ```swift
-SwiftSync.export(as: Task.self, in: context, using: options)
+syncContainer.export(as: Task.self)
 ```
 
 1. Fetch all rows, sort by identity key string
-2. For each row: `row.exportObject(using: options, state: &ExportState())`
+2. For each row: `row.exportObject(keyStyle: syncContainer.keyStyle, dateFormatter: syncContainer.dateFormatter)`
 3. Each call to `exportObject`:
    - `state.enter(self)` — guard against cycles
    - For each non-`@NotExport` property:
-     - Scalar: `exportEncodeValue(value, options)` → encode
+      - Scalar: `exportEncodeValue(value, dateFormatter: dateFormatter)` → encode
      - Optional scalar: encode or NSNull if nil
      - Relationship: recurse via `exportObject` on children
-   - Key from `@RemoteKey` or `options.keyStyle.transform(propertyName)`
+    - Key from `@RemoteKey` or `keyStyle.transform(propertyName)`
    - `exportSetValue(value, for: keyPath, into: &result)` — supports nested dot-path keys
    - `state.leave(self)`
 

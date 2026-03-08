@@ -108,7 +108,7 @@ public protocol SyncUpdatableModel: SyncModelable {
         in context: ModelContext,
         operations: SyncRelationshipOperations
     ) async throws -> Bool
-    func exportObject(using options: ExportOptions) -> [String: Any]
+    func exportObject(keyStyle: KeyStyle, dateFormatter: DateFormatter) -> [String: Any]
 
     /// Forces a scalar write so iOS CoreData marks the owning row dirty after a to-many change.
     /// `@Syncable` generates `self.id = self.id`. Hand-written conformances get a no-op default
@@ -131,16 +131,15 @@ public extension SyncUpdatableModel {
         try await applyRelationships(payload, in: context)
     }
 
-    func exportObject(using options: ExportOptions) -> [String: Any] {
+    func exportObject(keyStyle _: KeyStyle, dateFormatter _: DateFormatter) -> [String: Any] {
         [:]
     }
 
     func exportObject(for container: SyncContainer) -> [String: Any] {
-        let options = ExportOptions(
+        exportObject(
             keyStyle: container.keyStyle,
             dateFormatter: container.dateFormatter
         )
-        return exportObject(using: options)
     }
 }
 
@@ -638,31 +637,12 @@ public enum KeyStyle: Sendable {
     }
 }
 
-public struct ExportOptions: Sendable {
-    public var keyStyle: KeyStyle
-    public var dateFormatter: DateFormatter
-
-    public init(
-        keyStyle: KeyStyle = .snakeCase,
-        dateFormatter: DateFormatter? = nil
-    ) {
-        self.keyStyle = keyStyle
-        self.dateFormatter = dateFormatter ?? ExportOptions.defaultDateFormatter()
-    }
-
-    public static var camelCase: ExportOptions {
-        var options = ExportOptions()
-        options.keyStyle = .camelCase
-        return options
-    }
-
-    static func defaultDateFormatter() -> DateFormatter {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSXXXXX"
-        return formatter
-    }
+func defaultExportDateFormatter() -> DateFormatter {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.timeZone = TimeZone(secondsFromGMT: 0)
+    formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSXXXXX"
+    return formatter
 }
 
 /// Cycle-detection state for recursive relationship export.
@@ -703,7 +683,7 @@ private final class ExportStateBox {
     init(_ visiting: Set<String>) { self.visiting = visiting }
 }
 
-public func exportEncodeValue(_ raw: Any, options: ExportOptions) -> Any? {
+public func exportEncodeValue(_ raw: Any, dateFormatter: DateFormatter) -> Any? {
     switch raw {
     case let value as String:
         return value
@@ -736,7 +716,7 @@ public func exportEncodeValue(_ raw: Any, options: ExportOptions) -> Any? {
     case let value as Decimal:
         return NSDecimalNumber(decimal: value)
     case let value as Date:
-        return options.dateFormatter.string(from: value)
+        return dateFormatter.string(from: value)
     case let value as UUID:
         return value.uuidString
     case let value as URL:
@@ -752,7 +732,7 @@ public func exportEncodeValue(_ raw: Any, options: ExportOptions) -> Any? {
     case let value as [Bool]:
         return value
     case let value as [Any]:
-        return value.compactMap { exportEncodeValue($0, options: options) }
+        return value.compactMap { exportEncodeValue($0, dateFormatter: dateFormatter) }
     default:
         return nil
     }
@@ -1102,5 +1082,3 @@ public enum SyncError: Error, Sendable, Equatable {
     case invalidPayload(model: String, reason: String)
     case cancelled
 }
-
-
