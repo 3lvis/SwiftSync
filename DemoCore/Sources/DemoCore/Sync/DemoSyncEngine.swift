@@ -1,10 +1,9 @@
 import Combine
 import Foundation
 import SwiftData
-import SwiftSync
+@preconcurrency import SwiftSync
 
-@MainActor
-final class DemoSyncEngine: ObservableObject {
+public final class DemoSyncEngine: ObservableObject {
     private enum SyncTaskDetailError: LocalizedError {
         case missingProjectID
         case missingProject(String)
@@ -19,44 +18,44 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    @Published private(set) var isSyncing = false
+    @Published public private(set) var isSyncing = false
 
     private var inFlightOperations: Set<String> = []
 
     private let syncContainer: SyncContainer
     private let apiClient: FakeDemoAPIClient
 
-    init(syncContainer: SyncContainer, apiClient: FakeDemoAPIClient) {
+    public init(syncContainer: SyncContainer, apiClient: FakeDemoAPIClient) {
         self.syncContainer = syncContainer
         self.apiClient = apiClient
     }
 
-    func syncProjects() async throws {
+    public func syncProjects() async throws {
         try await runOperation("projects") {
             try await syncProjectsData()
         }
     }
 
-    func syncProjectTasks(projectID: String) async throws {
+    public func syncProjectTasks(projectID: String) async throws {
         try await runOperation("projectTasks-\(projectID)") {
             try await syncProjectTasksData(projectID: projectID)
         }
     }
 
-    func syncTaskDetail(taskID: String) async throws {
+    public func syncTaskDetail(taskID: String) async throws {
         try await runOperation("taskDetail-\(taskID)") {
             try await syncTaskDetailData(taskID: taskID)
         }
     }
 
-    func syncTaskFormMetadata() async throws {
+    public func syncTaskFormMetadata() async throws {
         try await runOperation("taskFormMetadata") {
             try await syncUsersData()
             try await syncTaskStatesData()
         }
     }
 
-    func createTask(body: [String: Any], projectID: String) async throws {
+    public func createTask(body: [String: Any], projectID: String) async throws {
         try await runOperation("createTask-\(projectID)") {
             let created = try await apiClient.createTask(body: body)
             try await syncProjectTasksData(projectID: projectID)
@@ -66,28 +65,28 @@ final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    func updateTask(taskID: String, projectID: String?, body: [String: Any]) async throws {
+    public func updateTask(taskID: String, projectID: String?, body: [String: Any]) async throws {
         try await runOperation("updateTask-\(taskID)") {
             _ = try await apiClient.updateTask(taskID: taskID, body: body)
             try await syncTaskAfterMutation(taskID: taskID, projectID: projectID)
         }
     }
 
-    func deleteTask(taskID: String, projectID: String) async throws {
+    public func deleteTask(taskID: String, projectID: String) async throws {
         try await runOperation("deleteTask-\(taskID)") {
             try await apiClient.deleteTask(taskID: taskID)
             try await syncProjectTasksData(projectID: projectID)
         }
     }
 
-    func replaceTaskReviewers(taskID: String, projectID: String?, reviewerIDs: [String]) async throws {
+    public func replaceTaskReviewers(taskID: String, projectID: String?, reviewerIDs: [String]) async throws {
         try await runOperation("replaceTaskReviewers-\(taskID)") {
             _ = try await self.apiClient.replaceTaskReviewers(taskID: taskID, reviewerIDs: reviewerIDs)
             try await self.syncTaskAfterMutation(taskID: taskID, projectID: projectID)
         }
     }
 
-    func replaceTaskWatchers(taskID: String, projectID: String?, watcherIDs: [String]) async throws {
+    public func replaceTaskWatchers(taskID: String, projectID: String?, watcherIDs: [String]) async throws {
         try await runOperation("replaceTaskWatchers-\(taskID)") {
             _ = try await self.apiClient.replaceTaskWatchers(taskID: taskID, watcherIDs: watcherIDs)
             try await self.syncTaskAfterMutation(taskID: taskID, projectID: projectID)
@@ -148,9 +147,6 @@ final class DemoSyncEngine: ObservableObject {
         )
     }
 
-    /// Canonical post-mutation sync sequence for a single task.
-    /// Project list syncs first (broad refresh), task detail syncs last so its
-    /// authoritative relationship payload always wins over any stale list snapshot.
     private func syncTaskAfterMutation(taskID: String, projectID: String?) async throws {
         if let projectID {
             try await syncProjectTasksData(projectID: projectID)
@@ -191,5 +187,4 @@ final class DemoSyncEngine: ObservableObject {
             relationship: \Item.task
         )
     }
-
 }

@@ -1,13 +1,7 @@
 import SwiftData
+import DemoCore
 import SwiftSync
 import SwiftUI
-
-// MARK: - Mode
-
-enum TaskFormMode {
-    case create(projectID: String)
-    case edit(task: Task)
-}
 
 // MARK: - Sheet
 

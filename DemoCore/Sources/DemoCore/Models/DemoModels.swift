@@ -4,15 +4,15 @@ import SwiftSync
 
 @Syncable
 @Model
-final class Project {
-    @Attribute(.unique) var id: String
-    var name: String
-    var taskCount: Int
-    var createdAt: Date
-    var updatedAt: Date
-    var tasks: [Task]
+public final class Project {
+    @Attribute(.unique) public var id: String
+    public var name: String
+    public var taskCount: Int
+    public var createdAt: Date
+    public var updatedAt: Date
+    public var tasks: [Task]
 
-    init(
+    public init(
         id: String,
         name: String,
         taskCount: Int = 0,
@@ -31,17 +31,17 @@ final class Project {
 
 @Syncable
 @Model
-final class User {
-    @Attribute(.unique) var id: String
-    var displayName: String
+public final class User {
+    @Attribute(.unique) public var id: String
+    public var displayName: String
     @RemoteKey("role.id")
-    var role: String
+    public var role: String
     @RemoteKey("role.label")
-    var roleLabel: String
-    var createdAt: Date
-    var updatedAt: Date
+    public var roleLabel: String
+    public var createdAt: Date
+    public var updatedAt: Date
 
-    init(id: String, displayName: String, role: String, roleLabel: String, createdAt: Date, updatedAt: Date) {
+    public init(id: String, displayName: String, role: String, roleLabel: String, createdAt: Date, updatedAt: Date) {
         self.id = id
         self.displayName = displayName
         self.role = role
@@ -53,14 +53,14 @@ final class User {
 
 @Syncable
 @Model
-final class TaskStateOption {
-    @Attribute(.unique) var id: String
-    var label: String
-    var sortOrder: Int
-    var createdAt: Date
-    var updatedAt: Date
+public final class TaskStateOption {
+    @Attribute(.unique) public var id: String
+    public var label: String
+    public var sortOrder: Int
+    public var createdAt: Date
+    public var updatedAt: Date
 
-    init(id: String, label: String, sortOrder: Int, createdAt: Date, updatedAt: Date) {
+    public init(id: String, label: String, sortOrder: Int, createdAt: Date, updatedAt: Date) {
         self.id = id
         self.label = label
         self.sortOrder = sortOrder
@@ -71,46 +71,46 @@ final class TaskStateOption {
 
 @Syncable
 @Model
-final class Task {
-    @Attribute(.unique) var id: String
+public final class Task {
+    @Attribute(.unique) public var id: String
 
-    var projectID: String
+    public var projectID: String
 
-    var assigneeID: String?
-    var authorID: String
+    public var assigneeID: String?
+    public var authorID: String
 
-    var title: String
+    public var title: String
 
     @RemoteKey("description")
-    var descriptionText: String
+    public var descriptionText: String
 
     @RemoteKey("state.id")
-    var state: String
+    public var state: String
     @RemoteKey("state.label")
-    var stateLabel: String
-    var createdAt: Date
-    var updatedAt: Date
+    public var stateLabel: String
+    public var createdAt: Date
+    public var updatedAt: Date
 
     @NotExport
-    var project: Project?
+    public var project: Project?
 
     @NotExport
-    var author: User?
+    public var author: User?
 
     @NotExport
-    var assignee: User?
-
-    @NotExport
-    @Relationship
-    var reviewers: [User]
+    public var assignee: User?
 
     @NotExport
     @Relationship
-    var watchers: [User]
+    public var reviewers: [User]
+
+    @NotExport
+    @Relationship
+    public var watchers: [User]
     @Relationship(deleteRule: .cascade, inverse: \Item.task)
-    var items: [Item]
+    public var items: [Item]
 
-    init(
+    public init(
         id: String = UUID().uuidString,
         projectID: String,
         assigneeID: String? = nil,
@@ -149,17 +149,17 @@ final class Task {
 
 @Syncable
 @Model
-final class Item {
-    @Attribute(.unique) var id: String
-    var title: String
-    var position: Int
-    var createdAt: Date
-    var updatedAt: Date
+public final class Item {
+    @Attribute(.unique) public var id: String
+    public var title: String
+    public var position: Int
+    public var createdAt: Date
+    public var updatedAt: Date
 
     @NotExport
-    var task: Task?
+    public var task: Task?
 
-    init(
+    public init(
         id: String = UUID().uuidString,
         title: String = "",
         position: Int = 0,

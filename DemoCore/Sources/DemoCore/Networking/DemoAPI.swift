@@ -1,19 +1,18 @@
-import Foundation
 import DemoBackend
+import Foundation
 
-typealias DemoSeedData = DemoBackend.DemoSeedData
-typealias DemoServerSimulator = DemoBackend.DemoServerSimulator
+public typealias DemoSeedData = DemoBackend.DemoSeedData
+public typealias DemoServerSimulator = DemoBackend.DemoServerSimulator
 
-@MainActor
-enum DemoNetworkScenario: String, CaseIterable, Identifiable {
+public enum DemoNetworkScenario: String, CaseIterable, Identifiable {
     case fastStable
     case slowNetwork
     case flakyNetwork
     case offline
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .fastStable: "Fast Stable"
         case .slowNetwork: "Slow Network"
@@ -23,11 +22,11 @@ enum DemoNetworkScenario: String, CaseIterable, Identifiable {
     }
 }
 
-enum DemoAPIError: LocalizedError {
+public enum DemoAPIError: LocalizedError {
     case offline
     case transient(endpoint: String)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .offline:
             return "You are offline in this scenario preset."
@@ -37,14 +36,13 @@ enum DemoAPIError: LocalizedError {
     }
 }
 
-@MainActor
-final class FakeDemoAPIClient {
-    var scenario: DemoNetworkScenario
+public final class FakeDemoAPIClient {
+    public var scenario: DemoNetworkScenario
 
     private let backend: DemoServerSimulator
     private var requestCounter = 0
 
-    init(
+    public init(
         scenario: DemoNetworkScenario = .fastStable,
         seedData: DemoSeedData? = nil,
         backend: DemoServerSimulator? = nil
@@ -69,67 +67,67 @@ final class FakeDemoAPIClient {
         }
     }
 
-    func getProjects() async throws -> [[String: Any]] {
+    public func getProjects() async throws -> [[String: Any]] {
         try await networkGate(endpoint: "GET /projects")
         return try backend.getProjectsPayload()
     }
 
-    func getProjectTasks(projectID: String) async throws -> [[String: Any]] {
+    public func getProjectTasks(projectID: String) async throws -> [[String: Any]] {
         try await networkGate(endpoint: "GET /projects/{id}/tasks")
         return try backend.getProjectTasksPayload(projectID: projectID)
     }
 
-    func getUsers() async throws -> [[String: Any]] {
+    public func getUsers() async throws -> [[String: Any]] {
         try await networkGate(endpoint: "GET /users")
         return try backend.getUsersPayload()
     }
 
-    func getTaskDetail(taskID: String) async throws -> [String: Any]? {
+    public func getTaskDetail(taskID: String) async throws -> [String: Any]? {
         try await networkGate(endpoint: "GET /tasks/{id}")
         return try backend.getTaskDetailPayload(taskID: taskID)
     }
 
-    func getTaskStateOptions() async throws -> [[String: Any]] {
+    public func getTaskStateOptions() async throws -> [[String: Any]] {
         try await networkGate(endpoint: "GET /task-state-options")
         return try backend.getTaskStateOptionsPayload()
     }
 
-    func patchTaskDescription(taskID: String, descriptionText: String) async throws -> [String: Any]? {
+    public func patchTaskDescription(taskID: String, descriptionText: String) async throws -> [String: Any]? {
         try await networkGate(endpoint: "PATCH /tasks/{id}/description")
         return try backend.patchTaskDescription(taskID: taskID, descriptionText: descriptionText)
     }
 
-    func patchTaskState(taskID: String, state: String) async throws -> [String: Any]? {
+    public func patchTaskState(taskID: String, state: String) async throws -> [String: Any]? {
         try await networkGate(endpoint: "PATCH /tasks/{id} (state)")
         return try backend.patchTaskState(taskID: taskID, state: state)
     }
 
-    func patchTaskAssignee(taskID: String, assigneeID: String?) async throws -> [String: Any]? {
+    public func patchTaskAssignee(taskID: String, assigneeID: String?) async throws -> [String: Any]? {
         try await networkGate(endpoint: "PATCH /tasks/{id} (assignee_id)")
         return try backend.patchTaskAssignee(taskID: taskID, assigneeID: assigneeID)
     }
 
-    func replaceTaskReviewers(taskID: String, reviewerIDs: [String]) async throws -> [String: Any]? {
+    public func replaceTaskReviewers(taskID: String, reviewerIDs: [String]) async throws -> [String: Any]? {
         try await networkGate(endpoint: "PUT /tasks/{id}/reviewers")
         return try backend.replaceTaskReviewers(taskID: taskID, reviewerIDs: reviewerIDs)
     }
 
-    func replaceTaskWatchers(taskID: String, watcherIDs: [String]) async throws -> [String: Any]? {
+    public func replaceTaskWatchers(taskID: String, watcherIDs: [String]) async throws -> [String: Any]? {
         try await networkGate(endpoint: "PUT /tasks/{id}/watchers")
         return try backend.replaceTaskWatchers(taskID: taskID, watcherIDs: watcherIDs)
     }
 
-    func createTask(body: [String: Any]) async throws -> [String: Any] {
+    public func createTask(body: [String: Any]) async throws -> [String: Any] {
         try await networkGate(endpoint: "POST /tasks")
         return try backend.createTask(body: body)
     }
 
-    func updateTask(taskID: String, body: [String: Any]) async throws -> [String: Any]? {
+    public func updateTask(taskID: String, body: [String: Any]) async throws -> [String: Any]? {
         try await networkGate(endpoint: "PUT /tasks/{id}")
         return try backend.updateTask(taskID: taskID, body: body)
     }
 
-    func deleteTask(taskID: String) async throws {
+    public func deleteTask(taskID: String) async throws {
         try await networkGate(endpoint: "DELETE /tasks/{id}")
         try backend.deleteTask(taskID: taskID)
     }
@@ -162,5 +160,4 @@ final class FakeDemoAPIClient {
         let jitter = UInt64((hash + callIndex * 17) % 250)
         try await _Concurrency.Task.sleep(nanoseconds: (baseDelayMS + jitter + mutationExtra) * 1_000_000)
     }
-
 }

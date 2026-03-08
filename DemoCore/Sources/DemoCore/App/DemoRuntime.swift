@@ -4,19 +4,19 @@ import SwiftData
 import SwiftSync
 
 @MainActor
-final class DemoRuntime: ObservableObject {
-    @Published var scenario: DemoNetworkScenario {
+public final class DemoRuntime: ObservableObject {
+    @Published public var scenario: DemoNetworkScenario {
         didSet {
             apiClient.scenario = scenario
         }
     }
 
-    let syncContainer: SyncContainer
-    let syncEngine: DemoSyncEngine
+    public let syncContainer: SyncContainer
+    public let syncEngine: DemoSyncEngine
 
     private let apiClient: FakeDemoAPIClient
 
-    init() {
+    public init() {
         self.scenario = .fastStable
         self.apiClient = FakeDemoAPIClient(scenario: .fastStable)
 

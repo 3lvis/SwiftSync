@@ -1,4 +1,5 @@
 import SwiftData
+import DemoCore
 import SwiftSync
 import SwiftUI
 

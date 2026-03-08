@@ -1,3 +1,4 @@
+import DemoCore
 import SwiftSync
 import SwiftUI
 import UIKit

@@ -1,4 +1,5 @@
 import SwiftUI
+import DemoCore
 import SwiftSync
 
 struct DemoRootView: View {

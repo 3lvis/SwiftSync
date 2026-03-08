@@ -1,14 +1,14 @@
 import Combine
 import Foundation
 
-enum ScreenLoadState: Equatable {
+public enum ScreenLoadState: Equatable {
     case idle
     case loading
     case loaded
     case error(ErrorPresentationState)
 }
 
-extension ScreenLoadState {
+public extension ScreenLoadState {
     var isLoading: Bool {
         self == .loading
     }
@@ -19,11 +19,15 @@ extension ScreenLoadState {
     }
 }
 
-struct ErrorPresentationState: Equatable {
-    let message: String
+public struct ErrorPresentationState: Equatable {
+    public let message: String
+
+    public init(message: String) {
+        self.message = message
+    }
 }
 
-func presentError(
+public func presentError(
     _ error: Error,
     fallbackMessage: String = "Something went wrong. Please try again."
 ) -> ErrorPresentationState {
@@ -33,7 +37,7 @@ func presentError(
     return ErrorPresentationState(message: message)
 }
 
-enum ScreenLoadEvent {
+public enum ScreenLoadEvent {
     case onAppear
     case loadSucceeded
     case loadFailed(Error)
@@ -64,22 +68,21 @@ private enum ScreenLoadReducer {
     }
 }
 
-@MainActor
-final class ScreenLoadMachine: ObservableObject {
-    @Published private(set) var state: ScreenLoadState = .idle
+public final class ScreenLoadMachine: ObservableObject {
+    @Published public private(set) var state: ScreenLoadState = .idle
 
     private let presentFailure: (Error) -> ErrorPresentationState
 
-    init(presentFailure: @escaping (Error) -> ErrorPresentationState) {
+    public init(presentFailure: @escaping (Error) -> ErrorPresentationState) {
         self.presentFailure = presentFailure
     }
 
-    func send(_ event: ScreenLoadEvent) {
+    public func send(_ event: ScreenLoadEvent) {
         let next = ScreenLoadReducer.reduce(state: state, event: event, presentFailure: presentFailure)
         state = next.0
     }
 
-    func send(_ event: ScreenLoadEvent, run operation: @escaping () async throws -> Void) {
+    public func send(_ event: ScreenLoadEvent, run operation: @escaping () async throws -> Void) {
         let next = ScreenLoadReducer.reduce(state: state, event: event, presentFailure: presentFailure)
         state = next.0
         guard next.1 == .load else { return }
@@ -87,43 +90,38 @@ final class ScreenLoadMachine: ObservableObject {
         _Concurrency.Task { [weak self] in
             do {
                 try await operation()
-                await MainActor.run {
-                    self?.send(.loadSucceeded)
-                }
+                self?.send(.loadSucceeded)
             } catch {
-                await MainActor.run {
-                    self?.send(.loadFailed(error))
-                }
+                self?.send(.loadFailed(error))
             }
         }
     }
 }
 
-enum SubmissionEvent {
+public enum SubmissionEvent {
     case submit
     case success
     case failure(Error)
     case dismissError
 }
 
-enum SubmissionState: Equatable {
+public enum SubmissionState: Equatable {
     case idle
     case submitting
     case failed(ErrorPresentationState)
 }
 
-@MainActor
-final class SubmissionMachine: ObservableObject {
-    @Published private(set) var state: SubmissionState = .idle
+public final class SubmissionMachine: ObservableObject {
+    @Published public private(set) var state: SubmissionState = .idle
 
     private let presentFailure: (Error) -> ErrorPresentationState
 
-    init(presentFailure: @escaping (Error) -> ErrorPresentationState) {
+    public init(presentFailure: @escaping (Error) -> ErrorPresentationState) {
         self.presentFailure = presentFailure
     }
 
     @discardableResult
-    func send(_ event: SubmissionEvent) -> Bool {
+    public func send(_ event: SubmissionEvent) -> Bool {
         switch event {
         case .submit:
             guard state != .submitting else { return false }

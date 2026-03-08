@@ -51,6 +51,10 @@ public struct SyncableMacro: ExtensionMacro {
         emitBlockedNameDiagnostics(in: classDecl, context: context)
 
         let typeName = classDecl.name.text
+        let declarationAccessModifier = classDecl.modifiers
+            .map { $0.name.text }
+            .first(where: { ["public", "open"].contains($0) })
+        let memberAccessModifier = declarationAccessModifier.map { "\($0) " } ?? ""
         let properties = syncedProperties(from: classDecl)
 
         guard !properties.isEmpty else {
@@ -92,33 +96,33 @@ public struct SyncableMacro: ExtensionMacro {
             try ExtensionDeclSyntax(
                 """
                 extension \(type.trimmed): SyncUpdatableModel {
-                    typealias SyncID = \(raw: identityProperty.typeSource)
+                    \(raw: memberAccessModifier)typealias SyncID = \(raw: identityProperty.typeSource)
 
-                    static var syncIdentity: KeyPath<\(raw: typeName), \(raw: identityProperty.typeSource)> { \\.\(raw: identityProperty.name) }
-                    \(raw: needsCustomRemoteIdentityKeys ? "static var syncIdentityRemoteKeys: [String] { [\"\(generatedRemoteIdentityKey)\"] }" : "")
-                    static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] { \(raw: defaultRefreshModelTypesBody) }
+                    \(raw: memberAccessModifier)static var syncIdentity: KeyPath<\(raw: typeName), \(raw: identityProperty.typeSource)> { \\.\(raw: identityProperty.name) }
+                    \(raw: needsCustomRemoteIdentityKeys ? "\(memberAccessModifier)static var syncIdentityRemoteKeys: [String] { [\"\(generatedRemoteIdentityKey)\"] }" : "")
+                    \(raw: memberAccessModifier)static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] { \(raw: defaultRefreshModelTypesBody) }
 
-                    static func syncRelatedModelType(for keyPath: PartialKeyPath<\(raw: typeName)>) -> (any PersistentModel.Type)? {
+                    \(raw: memberAccessModifier)static func syncRelatedModelType(for keyPath: PartialKeyPath<\(raw: typeName)>) -> (any PersistentModel.Type)? {
                         \(raw: relatedModelTypeBody)
                     }
 
-                    static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] {
+                    \(raw: memberAccessModifier)static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] {
                         \(raw: relationshipSchemaDescriptorsBody)
                     }
 
-                    static func make(from payload: SyncPayload) throws -> \(raw: typeName) {
+                    \(raw: memberAccessModifier)static func make(from payload: SyncPayload) throws -> \(raw: typeName) {
                         \(raw: typeName)(
                             \(raw: makeArguments)
                         )
                     }
 
-                    func apply(_ payload: SyncPayload) throws -> Bool {
+                    \(raw: memberAccessModifier)func apply(_ payload: SyncPayload) throws -> Bool {
                         var changed = false
                         \(raw: applyBody)
                         return changed
                     }
 
-                    func syncApplyGeneratedRelationships(
+                    \(raw: memberAccessModifier)func syncApplyGeneratedRelationships(
                         _ payload: SyncPayload,
                         in context: ModelContext,
                         operations: SyncRelationshipOperations = .all
@@ -129,11 +133,11 @@ public struct SyncableMacro: ExtensionMacro {
                         \(raw: relationshipApplyBody.isEmpty ? "" : "return changed")
                     }
 
-                    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+                    \(raw: memberAccessModifier)func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
                         try syncApplyGeneratedRelationships(payload, in: context, operations: .all)
                     }
 
-                    func applyRelationships(
+                    \(raw: memberAccessModifier)func applyRelationships(
                         _ payload: SyncPayload,
                         in context: ModelContext,
                         operations: SyncRelationshipOperations
@@ -141,7 +145,7 @@ public struct SyncableMacro: ExtensionMacro {
                         try syncApplyGeneratedRelationships(payload, in: context, operations: operations)
                     }
 
-                    func exportObject(keyStyle: KeyStyle, dateFormatter: DateFormatter) -> [String: Any] {
+                    \(raw: memberAccessModifier)func exportObject(keyStyle: KeyStyle, dateFormatter: DateFormatter) -> [String: Any] {
                         if !ExportState.enter(self) {
                             return [:]
                         }
@@ -152,7 +156,7 @@ public struct SyncableMacro: ExtensionMacro {
                         return result
                     }
 
-                    func syncMarkChanged() {
+                    \(raw: memberAccessModifier)func syncMarkChanged() {
                         self.\(raw: identityProperty.name) = self.\(raw: identityProperty.name)
                     }
                 }
