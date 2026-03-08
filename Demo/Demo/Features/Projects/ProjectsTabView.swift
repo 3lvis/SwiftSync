@@ -149,14 +149,42 @@ private struct ProjectDetailView: View {
             presenting: taskPendingDelete
         ) { prompt in
             Button("Delete", role: .destructive) {
-                _Concurrency.Task {
-                    await machine.deleteTask(taskID: prompt.id)
-                    taskPendingDelete = nil
-                }
+                machine.sendDelete(.request(taskID: prompt.id))
+                taskPendingDelete = nil
             }
             Button("Cancel", role: .cancel) { taskPendingDelete = nil }
         } message: { prompt in
             Text("Delete \"\(prompt.title)\" from this project?")
+        }
+        .alert(
+            "Delete Failed",
+            isPresented: Binding(
+                get: {
+                    if case .failed = machine.deleteState { return true }
+                    return false
+                },
+                set: { isPresented in
+                    if !isPresented {
+                        machine.sendDelete(.dismissError)
+                    }
+                }
+            )
+        ) {
+            if case .failed(let presentation) = machine.deleteState,
+               let retryActionTitle = presentation.retryActionTitle {
+                Button(retryActionTitle) {
+                    machine.sendDelete(.retry)
+                }
+            }
+            Button("OK", role: .cancel) {
+                machine.sendDelete(.dismissError)
+            }
+        } message: {
+            if case .failed(let presentation) = machine.deleteState {
+                Text(presentation.message)
+            } else {
+                Text("Could not delete this task.")
+            }
         }
 #if DEBUG
         .overlay(alignment: .bottom) {

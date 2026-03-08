@@ -400,11 +400,7 @@ final class DemoSyncEngine: ObservableObject {
             isSyncing = !inFlightOperations.isEmpty
         }
 
-        do {
-            try await operation()
-        } catch {
-            throw error
-        }
+        try await operation()
     }
 
     private func project(withID projectID: String) throws -> Project? {

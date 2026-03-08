@@ -86,12 +86,9 @@ struct TaskFormSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        machine.prepareDraftForSave(draft) {
-                            normalizeItemPositions()
-                        }
-                        machine.save(mode: mode, draft: draft) {
+                        machine.send(.save(mode: mode, draft: draft, onSuccess: {
                             dismiss()
-                        }
+                        }))
                     } label: {
                         HStack(spacing: 6) {
                             if machine.saveState == .submitting { ProgressView().controlSize(.small) }
@@ -103,16 +100,10 @@ struct TaskFormSheet: View {
             }
         }
         .task {
-            machine.prepareMetadata()
-            machine.sendMetadata(.onAppear)
+            machine.send(.metadata(.onAppear))
         }
-        // Auto-select first valid state when options load (safe for edit — guard prevents override)
-        .task(id: machine.taskStateOptions.map(\.id)) {
-            machine.applyDefaultStateIfNeeded(to: draft)
-        }
-        // Auto-select author when users load (create only in practice — guard prevents override)
-        .task(id: machine.users.map(\.id)) {
-            machine.applyDefaultAuthorIfNeeded(to: draft)
+        .task(id: "\(machine.taskStateOptions.map(\.id).joined(separator: ","))|\(machine.users.map(\.id).joined(separator: ","))") {
+            machine.applyDefaultsIfNeeded(to: draft)
         }
         .alert(
             "Save Failed",
@@ -123,7 +114,7 @@ struct TaskFormSheet: View {
                 },
                 set: { isPresented in
                     if !isPresented {
-                        machine.dismissSaveError()
+                        machine.send(.dismissSaveError)
                     }
                 }
             )
@@ -156,18 +147,22 @@ struct TaskFormSheet: View {
     }
 
     private var itemsSection: some View {
+        let items = machine.sortedItems(in: draft)
+
         Section("Items") {
             HStack(spacing: 8) {
                 TextField("Add item...", text: $newItemTitle)
                     .textInputAutocapitalization(.sentences)
 
                 Button("Add") {
-                    addItem()
+                    if machine.mutateItems(.add(title: newItemTitle), in: draft) {
+                        newItemTitle = ""
+                    }
                 }
                 .disabled(newItemTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 
-            if sortedItems.count > 1 {
+            if items.count > 1 {
                 Button(itemEditMode == .active ? "Done Reordering" : "Reorder Items") {
                     withAnimation(.snappy(duration: 0.2)) {
                         itemEditMode = itemEditMode == .active ? .inactive : .active
@@ -175,25 +170,27 @@ struct TaskFormSheet: View {
                 }
             }
 
-            if sortedItems.isEmpty {
+            if items.isEmpty {
                 Text("No items")
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(sortedItems, id: \.id) { item in
+                ForEach(items, id: \.id) { item in
                     HStack(spacing: 10) {
                         TextField("Item title", text: itemTitleBinding(for: item))
 
                         Spacer(minLength: 4)
 
                         Button(role: .destructive) {
-                            deleteItem(item)
+                            _ = machine.mutateItems(.delete(item), in: draft)
                         } label: {
                             Image(systemName: "trash")
                         }
                         .buttonStyle(.borderless)
                     }
                 }
-                .onMove(perform: moveItems)
+                .onMove { source, destination in
+                    _ = machine.mutateItems(.move(from: source, to: destination), in: draft)
+                }
             }
         }
     }
@@ -328,7 +325,7 @@ struct TaskFormSheet: View {
                         .foregroundStyle(.secondary)
                     if let retryActionTitle = metadataError.retryActionTitle {
                         Button(retryActionTitle) {
-                            machine.sendMetadata(.retry)
+                            machine.send(.metadata(.retry))
                         }
                         .buttonStyle(.bordered)
                     }
@@ -364,59 +361,12 @@ struct TaskFormSheet: View {
         return false
     }
 
-    private var sortedItems: [Item] {
-        draft.items.sorted {
-            if $0.position == $1.position {
-                return $0.id < $1.id
-            }
-            return $0.position < $1.position
-        }
-    }
-
     private func itemTitleBinding(for item: Item) -> Binding<String> {
         Binding(
             get: { item.title },
             set: { newValue in
-                item.title = newValue
-                item.updatedAt = Date()
+                _ = machine.mutateItems(.updateTitle(item: item, title: newValue), in: draft)
             }
         )
-    }
-
-    private func addItem() {
-        let trimmed = newItemTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-
-        let item = Item(
-            title: trimmed,
-            position: draft.items.count,
-            createdAt: Date(),
-            updatedAt: Date(),
-            task: draft
-        )
-        draft.items.append(item)
-        normalizeItemPositions()
-        newItemTitle = ""
-    }
-
-    private func deleteItem(_ item: Item) {
-        draft.items.removeAll { $0.id == item.id }
-        editContext.delete(item)
-        normalizeItemPositions()
-    }
-
-    private func normalizeItemPositions() {
-        for (index, item) in sortedItems.enumerated() {
-            item.position = index
-        }
-    }
-
-    private func moveItems(from source: IndexSet, to destination: Int) {
-        var reordered = sortedItems
-        reordered.move(fromOffsets: source, toOffset: destination)
-        for (index, item) in reordered.enumerated() {
-            item.position = index
-            item.updatedAt = Date()
-        }
     }
 }
