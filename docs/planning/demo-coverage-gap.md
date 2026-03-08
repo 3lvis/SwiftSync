@@ -6,18 +6,6 @@
 
 ## Open items
 
-### Public reactive query API overloads not exercised by demo runtime
-
-- [ ] Exercise `SyncQuery.init(_:in:sortBy:animation:)` (no relationship filter, no `predicate`).
-- [ ] Exercise `SyncQuery.init(_:predicate:in:sortBy:animation:)`.
-
-### Public `SyncQueryPublisher` API not exercised by demo runtime
-
-- [ ] Exercise `SyncQueryPublisher.rowsPublisher`.
-- [ ] Exercise `SyncQueryPublisher.init(_:predicate:in:sortBy:)`.
-- [ ] Exercise `SyncQueryPublisher.init(_:relationship:relationshipID:in:sortBy:)` (to-one explicit path).
-- [ ] Exercise `SyncQueryPublisher.init(_:relationship:relationshipID:in:sortBy:)` (to-many explicit path).
-
 ### Public export configuration API not exercised explicitly by demo runtime
 
 - [ ] Exercise non-default `KeyStyle` (`.camelCase`) through demo runtime.
