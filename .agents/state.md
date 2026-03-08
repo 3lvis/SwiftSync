@@ -13,7 +13,7 @@
 
 ## Last known state
 
-`swift test` passes (119 tests). DemoCore target compiles with Swift 5 language mode to preserve existing Demo concurrency behavior.
+`swift test` passes in root package (117 tests) and in standalone `DemoCore` package (2 tests).
 
 ## Decisions (don't revisit)
 
@@ -21,6 +21,7 @@
 - Do not add demo app unit tests or integration UI tests in this change.
 - Update `@Syncable` macro generation to emit public protocol members for public models.
 - Use Swift 5 language mode for `DemoCore` target to avoid Swift 6 `sending` diagnostics for existing demo machine/task patterns.
+- Wire `DemoCore` as its own local package (`../DemoCore`) in the Demo Xcode project, matching `DemoBackend` wiring style.
 
 ## Files touched
 
@@ -43,3 +44,4 @@
 - Demo/Demo/DemoApp.swift
 - Demo/Demo.xcodeproj/project.pbxproj
 - docs/planning/demo-architecture-hardening-plan.md
+- DemoCore/Package.swift

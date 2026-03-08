@@ -9,12 +9,10 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .library(name: "SwiftSync", targets: ["SwiftSync"]),
-        .library(name: "DemoCore", targets: ["DemoCore"])
+        .library(name: "SwiftSync", targets: ["SwiftSync"])
     ],
     dependencies: [
-        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0-latest"),
-        .package(path: "DemoBackend")
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0-latest")
     ],
     targets: [
         .macro(
@@ -36,27 +34,10 @@ let package = Package(
             path: "SwiftSync/Sources/ObjCExceptionCatcher",
             publicHeadersPath: "include"
         ),
-        .target(
-            name: "DemoCore",
-            dependencies: [
-                "SwiftSync",
-                .product(name: "DemoBackend", package: "DemoBackend")
-            ],
-            path: "DemoCore/Sources/DemoCore",
-            swiftSettings: [
-                .unsafeFlags(["-swift-version", "5"]),
-                .unsafeFlags(["-strict-concurrency=minimal"])
-            ]
-        ),
         .testTarget(
             name: "SwiftSyncTests",
             dependencies: ["SwiftSync"],
             path: "SwiftSync/Tests/SwiftSyncTests"
-        ),
-        .testTarget(
-            name: "DemoCoreTests",
-            dependencies: ["DemoCore", "SwiftSync"],
-            path: "DemoCore/Tests/DemoCoreTests"
         ),
         .testTarget(
             name: "SwiftSyncMacrosTests",
