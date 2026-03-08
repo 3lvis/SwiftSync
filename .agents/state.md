@@ -1,11 +1,11 @@
 # State Capsule
 
 ## Plan
-- [x] Add direct `SyncQuery` tests for plain and `predicate` overloads.
-- [x] Run targeted tests to verify new coverage passes.
+- [x] Add `SyncQueryPublisher` to-many relationship initializer test coverage.
+- [x] Run targeted `SyncQueryPublisherTests` to verify green.
 
 ## Last known state
-`swift test --filter SyncQueryParentTests` green (6 tests) on `feature/syncquery-overload-tests`.
+`swift test --filter testPublisherWithToManyRelationshipIDFilter` green (1 test).
 
 ## Decisions (don't revisit)
 - Add coverage in tests only; no runtime or API changes.
@@ -13,3 +13,4 @@
 ## Files touched
 - .agents/state.md
 - SwiftSync/Tests/SwiftSyncTests/SyncQueryParentTests.swift
+- SwiftSync/Tests/SwiftSyncTests/SyncQueryPublisherTests.swift

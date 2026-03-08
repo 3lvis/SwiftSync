@@ -224,6 +224,35 @@ final class SyncQueryPublisherTests: XCTestCase {
     }
 
     @MainActor
+    func testPublisherWithToManyRelationshipIDFilter() async throws {
+        let syncContainer = try makeContainer(modelTypes: RoleUser.self, RoleTicket.self)
+        let context = syncContainer.mainContext
+
+        let userA = RoleUser(id: 1, name: "A")
+        let userB = RoleUser(id: 2, name: "B")
+        let ticketA = RoleTicket(id: 10, title: "T-10", assignee: userA, reviewer: userB)
+        let ticketB = RoleTicket(id: 11, title: "T-11", assignee: userB, reviewer: userA)
+
+        context.insert(userA)
+        context.insert(userB)
+        context.insert(ticketA)
+        context.insert(ticketB)
+        try context.save()
+
+        let publisher = SyncQueryPublisher(
+            RoleUser.self,
+            relationship: \RoleUser.assignedTickets,
+            relationshipID: 10,
+            in: syncContainer,
+            sortBy: [SortDescriptor(\RoleUser.id)]
+        )
+
+        await Task.yield()
+
+        XCTAssertEqual(publisher.rows.map(\.id), [1])
+    }
+
+    @MainActor
     func testPublisherReloadsWhenLoadedRowIDAppears() async throws {
         let syncContainer = try makeContainer(modelTypes: PubTask.self, PubUser.self)
 
