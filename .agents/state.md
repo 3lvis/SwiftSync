@@ -1,17 +1,25 @@
 # State Capsule
 
 ## Plan
-- [x] Consolidate overlapping safety sections in `AGENTS.md` into a single execution safety policy.
-- [x] Add a compact required-workflow summary to the `.agents` protocol section.
+- [x] Add shared Demo error primitives (`ScreenLoadState`, `ErrorPresentationState`, `presentError(_:)`) and wire root view to remove global sync banner.
+- [x] Refactor project list and project detail flows to use explicit load/error states with visible retry actions.
+- [x] Refactor task detail flow to use explicit load/error state with visible retry action.
+- [x] Split TaskFormSheet metadata-load errors from save-submit errors with context-specific copy/actions.
+- [~] Run `swift test`, perform manual Demo QA for load/retry paths, and update planning doc to keep only active follow-up items. — `swift test` passed; manual Demo QA still pending.
 
 ## Last known state
-docs updated (AGENTS safety + required workflow simplified)
+`swift test` passed; Demo error-handling refactor implemented; manual UI QA pending
 
 ## Decisions (don't revisit)
-- Use explicit load state machines (`idle/loading/loaded/error`) rather than boolean loading flags for demo screen fetch flows.
-- Keep save/mutation failures separate from load-state errors so retry copy stays context-specific.
-- Strict TDD policy applies only to `SwiftSync/**` and `DemoBackend/**`; removals are code-first with post-change test validation.
+- Demo-only request: implement behavior changes without adding new Demo tests.
+- Screen-level retries should be rendered in each screen UI; no global root-level sync error banner.
 
 ## Files touched
 - .agents/state.md
-- AGENTS.md
+- Demo/Demo/App/ErrorPresentation.swift
+- Demo/Demo/App/DemoRootView.swift
+- Demo/Demo/Sync/DemoSyncEngine.swift
+- Demo/Demo/Features/Projects/ProjectsViewController.swift
+- Demo/Demo/Features/Projects/ProjectsTabView.swift
+- Demo/Demo/Features/TaskDetail/TaskDetailView.swift
+- Demo/Demo/Features/TaskFormSheet.swift

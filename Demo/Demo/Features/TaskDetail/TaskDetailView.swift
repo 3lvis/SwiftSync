@@ -10,6 +10,7 @@ struct TaskDetailView: View {
     @SyncModel private var taskModel: Task?
     @SyncQuery private var taskItems: [Item]
     @State private var hasTriggeredInitialSync = false
+    @State private var loadState: ScreenLoadState = .idle
     @State private var showingEditSheet = false
 #if DEBUG
     @State private var showingStressPrompt = false
@@ -36,6 +37,22 @@ struct TaskDetailView: View {
 
     var body: some View {
         List {
+            if case .error(let presentation) = loadState {
+                Section {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(presentation.message)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        if let retryActionTitle = presentation.retryActionTitle {
+                            Button(retryActionTitle) {
+                                _Concurrency.Task { await loadTaskDetail() }
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
             taskSection
             descriptionSection
             itemsSection
@@ -53,11 +70,7 @@ struct TaskDetailView: View {
         .task {
             guard !hasTriggeredInitialSync else { return }
             hasTriggeredInitialSync = true
-            do {
-                try await syncEngine.syncTaskDetail(taskID: taskID)
-            } catch {
-                // Error state is surfaced by the sync engine.
-            }
+            await loadTaskDetail()
         }
         .sheet(isPresented: $showingEditSheet) {
             if let taskModel {
@@ -109,6 +122,31 @@ struct TaskDetailView: View {
             .allowsHitTesting(false)
         )
 #endif
+        .overlay {
+            if loadState == .loading {
+                ProgressView("Loading task...")
+                    .padding(14)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+        }
+    }
+
+    @MainActor
+    private func loadTaskDetail() async {
+        loadState = .loading
+        do {
+            try await syncEngine.syncTaskDetail(taskID: taskID)
+            loadState = .loaded
+        } catch {
+            loadState = .error(
+                presentError(
+                    error,
+                    retryActionTitle: "Retry",
+                    fallbackMessage: "Could not load this task yet."
+                )
+            )
+        }
     }
 
     private var taskSection: some View {

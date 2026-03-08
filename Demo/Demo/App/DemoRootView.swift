@@ -6,16 +6,6 @@ struct DemoRootView: View {
 
     var body: some View {
         ProjectsTabView(syncContainer: runtime.syncContainer, syncEngine: runtime.syncEngine)
-        .safeAreaInset(edge: .bottom) {
-            if let error = runtime.syncEngine.lastErrorMessage {
-                Text(error)
-                    .font(.footnote)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.red.opacity(0.12))
-            }
-        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Picker("Scenario", selection: $runtime.scenario) {

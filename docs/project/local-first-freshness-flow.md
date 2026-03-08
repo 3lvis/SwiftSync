@@ -17,7 +17,7 @@ This demo now teaches a local-first sync pattern without TTL-based skip logic.
 
 ## Error/state boundaries
 
-- Engine publishes `isSyncing` and `lastErrorMessage`.
+- Engine publishes `isSyncing`.
 - Sync methods throw; call sites decide retry and user messaging.
 
 ## Earthquake Mode boundaries
@@ -36,5 +36,5 @@ This demo now teaches a local-first sync pattern without TTL-based skip logic.
 ## Troubleshooting
 
 - **UI shows old data briefly**: expected in local-first mode; wait for network sync completion.
-- **UI remains stale**: verify `lastErrorMessage`; retry the same `sync*` call.
+- **UI remains stale**: use the screen-level retry action and verify the screen-level error copy.
 - **Form metadata looks stale**: retry metadata load in the form.

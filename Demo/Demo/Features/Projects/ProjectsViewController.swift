@@ -14,6 +14,37 @@ final class ProjectsViewController: UITableViewController {
 
     private var cancellables = Set<AnyCancellable>()
     private var projects: [Project] = []
+    private var loadState: ScreenLoadState = .idle {
+        didSet { updateLoadStateUI() }
+    }
+
+    private lazy var statusContainer: UIStackView = {
+        let stack = UIStackView(arrangedSubviews: [statusIndicator, statusLabel, retryButton])
+        stack.axis = .vertical
+        stack.alignment = .center
+        stack.spacing = 12
+        return stack
+    }()
+
+    private let statusIndicator = UIActivityIndicatorView(style: .medium)
+
+    private let statusLabel: UILabel = {
+        let label = UILabel()
+        label.font = .preferredFont(forTextStyle: .body)
+        label.textColor = .secondaryLabel
+        label.numberOfLines = 0
+        label.textAlignment = .center
+        return label
+    }()
+
+    private lazy var retryButton: UIButton = {
+        var config = UIButton.Configuration.filled()
+        config.cornerStyle = .capsule
+        config.title = "Retry"
+        let button = UIButton(configuration: config)
+        button.addTarget(self, action: #selector(retryTapped), for: .touchUpInside)
+        return button
+    }()
 
     private lazy var publisher = SyncQueryPublisher(
         Project.self,
@@ -56,6 +87,7 @@ final class ProjectsViewController: UITableViewController {
         super.viewDidLoad()
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "ProjectCell")
         tableView.dataSource = diffableDataSource
+        tableView.backgroundView = statusContainer
 
         publisher.$rows
             .receive(on: DispatchQueue.main)
@@ -66,16 +98,15 @@ final class ProjectsViewController: UITableViewController {
                 snapshot.appendSections(["projects"])
                 snapshot.appendItems(rows.map(\.id), toSection: "projects")
                 self.diffableDataSource.apply(snapshot, animatingDifferences: true)
+
+                if self.loadState == .loading, !rows.isEmpty {
+                    self.loadState = .loaded
+                }
             }
             .store(in: &cancellables)
 
-        _Concurrency.Task {
-            do {
-                try await syncEngine.syncProjects()
-            } catch {
-                // Error state is surfaced by the sync engine.
-            }
-        }
+        updateLoadStateUI()
+        runInitialLoad()
     }
 
     // MARK: - UITableViewDelegate
@@ -84,6 +115,67 @@ final class ProjectsViewController: UITableViewController {
         tableView.deselectRow(at: indexPath, animated: true)
         guard let projectID = diffableDataSource.itemIdentifier(for: indexPath) else { return }
         onSelect(projectID)
+    }
+
+    // MARK: - Loading UI
+
+    private func runInitialLoad() {
+        guard loadState == .idle else { return }
+        _Concurrency.Task { [weak self] in
+            await self?.loadProjects()
+        }
+    }
+
+    @objc
+    private func retryTapped() {
+        _Concurrency.Task { [weak self] in
+            await self?.loadProjects()
+        }
+    }
+
+    @MainActor
+    private func loadProjects() async {
+        loadState = .loading
+        do {
+            try await syncEngine.syncProjects()
+            if projects.isEmpty {
+                loadState = .loaded
+            }
+        } catch {
+            loadState = .error(
+                presentError(
+                    error,
+                    retryActionTitle: "Retry",
+                    fallbackMessage: "Could not load projects."
+                )
+            )
+        }
+    }
+
+    private func updateLoadStateUI() {
+        switch loadState {
+        case .idle:
+            statusIndicator.stopAnimating()
+            statusLabel.text = nil
+            retryButton.isHidden = true
+            tableView.backgroundView?.isHidden = true
+        case .loading:
+            statusIndicator.startAnimating()
+            statusLabel.text = "Loading projects..."
+            retryButton.isHidden = true
+            tableView.backgroundView?.isHidden = false
+        case .loaded:
+            statusIndicator.stopAnimating()
+            statusLabel.text = projects.isEmpty ? "No projects yet." : nil
+            retryButton.isHidden = true
+            tableView.backgroundView?.isHidden = !projects.isEmpty
+        case .error(let presentation):
+            statusIndicator.stopAnimating()
+            statusLabel.text = presentation.message
+            retryButton.isHidden = presentation.retryActionTitle == nil
+            retryButton.setTitle(presentation.retryActionTitle, for: .normal)
+            tableView.backgroundView?.isHidden = false
+        }
     }
 
 }

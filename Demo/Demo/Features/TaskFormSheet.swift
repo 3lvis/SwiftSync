@@ -35,7 +35,8 @@ struct TaskFormSheet: View {
 
     @State private var isLoadingTaskStates = false
     @State private var isSaving = false
-    @State private var saveErrorMessage: String?
+    @State private var metadataError: ErrorPresentationState?
+    @State private var saveError: ErrorPresentationState?
     @State private var newItemTitle = ""
     @State private var itemEditMode: EditMode = .inactive
 
@@ -70,6 +71,7 @@ struct TaskFormSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                metadataErrorSection
                 titleSection
                 descriptionSection
                 itemsSection
@@ -96,7 +98,7 @@ struct TaskFormSheet: View {
                         normalizeItemPositions()
                         draft.updatedAt = Date()
                         isSaving = true
-                        saveErrorMessage = nil
+                        saveError = nil
 
                         let body = draft.exportObject(for: syncContainer)
                         let capturedReviewerIDs = draft.reviewers.map(\.id).sorted()
@@ -150,8 +152,14 @@ struct TaskFormSheet: View {
                                 }
                                 await MainActor.run { isSaving = false; dismiss() }
                             } catch {
-                                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                                await MainActor.run { isSaving = false; saveErrorMessage = message }
+                                await MainActor.run {
+                                    isSaving = false
+                                    saveError = presentError(
+                                        error,
+                                        retryActionTitle: nil,
+                                        fallbackMessage: "Could not save this task."
+                                    )
+                                }
                             }
                         }
                     } label: {
@@ -187,13 +195,13 @@ struct TaskFormSheet: View {
         .alert(
             "Save Failed",
             isPresented: Binding(
-                get: { saveErrorMessage != nil },
-                set: { if !$0 { saveErrorMessage = nil } }
+                get: { saveError != nil },
+                set: { if !$0 { saveError = nil } }
             )
         ) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(saveErrorMessage ?? "Unknown error")
+            Text(saveError?.message ?? "Unknown error")
         }
         .presentationDetents([.large])
     }
@@ -382,6 +390,26 @@ struct TaskFormSheet: View {
         }
     }
 
+    @ViewBuilder
+    private var metadataErrorSection: some View {
+        if let metadataError {
+            Section {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(metadataError.message)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    if let retryActionTitle = metadataError.retryActionTitle {
+                        Button(retryActionTitle) {
+                            _Concurrency.Task { await reloadMetadata() }
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+        }
+    }
+
     // MARK: Helpers
 
     private var navigationTitle: String {
@@ -434,9 +462,13 @@ struct TaskFormSheet: View {
 
         do {
             try await syncEngine.syncTaskFormMetadata()
+            metadataError = nil
         } catch {
-            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            saveErrorMessage = message
+            metadataError = presentError(
+                error,
+                retryActionTitle: "Retry Loading Metadata",
+                fallbackMessage: "Could not load form options yet."
+            )
         }
 
         let refreshed = Self.metadataSnapshot(from: editContext)
