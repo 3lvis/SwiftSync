@@ -211,11 +211,12 @@ private func _assertExportObjectIsOnSyncUpdatableModel<M: SyncUpdatableModel>(
 final class ExportTests: XCTestCase {
     @MainActor
     func testExportDefaultsSnakeCaseAndISODate() throws {
-        let context = try makeContext(for: ExportTask.self)
+        let syncContainer = try makeSyncContainer(for: ExportTask.self)
+        let context = syncContainer.mainContext
         context.insert(ExportTask(id: 9, completed: false, createdAt: Date(timeIntervalSince1970: 1_700_000_000)))
         try context.save()
 
-        let rows = try SwiftSync.export(as: ExportTask.self, in: context)
+        let rows = try syncContainer.export(as: ExportTask.self)
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows[0]["id"] as? Int, 9)
         XCTAssertEqual(rows[0]["completed"] as? Bool, false)
@@ -224,22 +225,24 @@ final class ExportTests: XCTestCase {
 
     @MainActor
     func testExportCamelCaseKeys() throws {
-        let context = try makeContext(for: ExportTask.self)
+        let syncContainer = try makeSyncContainer(for: ExportTask.self, keyStyle: .camelCase)
+        let context = syncContainer.mainContext
         context.insert(ExportTask(id: 1, completed: true, createdAt: Date(timeIntervalSince1970: 0)))
         try context.save()
 
-        let rows = try SwiftSync.export(as: ExportTask.self, in: context, using: .camelCase)
+        let rows = try syncContainer.export(as: ExportTask.self)
         XCTAssertNotNil(rows[0]["createdAt"])
         XCTAssertNil(rows[0]["created_at"])
     }
 
     @MainActor
     func testExportSnakeCaseNormalizesAcronyms() throws {
-        let context = try makeContext(for: ExportAcronymRecord.self)
+        let syncContainer = try makeSyncContainer(for: ExportAcronymRecord.self)
+        let context = syncContainer.mainContext
         context.insert(ExportAcronymRecord(id: 1, projectID: "P-100"))
         try context.save()
 
-        let rows = try SwiftSync.export(as: ExportAcronymRecord.self, in: context)
+        let rows = try syncContainer.export(as: ExportAcronymRecord.self)
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows[0]["project_id"] as? String, "P-100")
         XCTAssertNil(rows[0]["project_i_d"])
@@ -247,22 +250,24 @@ final class ExportTests: XCTestCase {
 
     @MainActor
     func testExportPrimaryKeyRemoteMapping() throws {
-        let context = try makeContext(for: ExportRemotePrimary.self)
+        let syncContainer = try makeSyncContainer(for: ExportRemotePrimary.self)
+        let context = syncContainer.mainContext
         context.insert(ExportRemotePrimary(xid: "abc", name: "n"))
         try context.save()
 
-        let rows = try SwiftSync.export(as: ExportRemotePrimary.self, in: context)
+        let rows = try syncContainer.export(as: ExportRemotePrimary.self)
         XCTAssertEqual(rows[0]["external_id"] as? String, "abc")
         XCTAssertNil(rows[0]["xid"])
     }
 
     @MainActor
     func testExportPrimaryKeyUsesDefaultKeyStyleForBarePrimaryKey() throws {
-        let context = try makeContext(for: ExportBarePrimary.self)
+        let syncContainer = try makeSyncContainer(for: ExportBarePrimary.self)
+        let context = syncContainer.mainContext
         context.insert(ExportBarePrimary(externalID: "ext-1", name: "n"))
         try context.save()
 
-        let rows = try SwiftSync.export(as: ExportBarePrimary.self, in: context)
+        let rows = try syncContainer.export(as: ExportBarePrimary.self)
         XCTAssertEqual(rows[0]["external_id"] as? String, "ext-1")
         XCTAssertNil(rows[0]["externalID"])
     }
@@ -282,24 +287,26 @@ final class ExportTests: XCTestCase {
 
     @MainActor
     func testExportEncodesDataAndDecimal() throws {
-        let context = try makeContext(for: ExportBinaryDecimalRecord.self)
+        let syncContainer = try makeSyncContainer(for: ExportBinaryDecimalRecord.self)
+        let context = syncContainer.mainContext
         let blob = Data("swift-sync".utf8)
         let amount = Decimal(string: "42.75")!
         context.insert(ExportBinaryDecimalRecord(id: 11, blob: blob, amount: amount))
         try context.save()
 
-        let rows = try SwiftSync.export(as: ExportBinaryDecimalRecord.self, in: context)
+        let rows = try syncContainer.export(as: ExportBinaryDecimalRecord.self)
         XCTAssertEqual(rows[0]["blob"] as? String, blob.base64EncodedString())
         XCTAssertEqual((rows[0]["amount"] as? NSDecimalNumber)?.decimalValue, amount)
     }
 
     @MainActor
     func testExportNotExportAndNestedRemoteKey() throws {
-        let context = try makeContext(for: ExportMappedFields.self)
+        let syncContainer = try makeSyncContainer(for: ExportMappedFields.self)
+        let context = syncContainer.mainContext
         context.insert(ExportMappedFields(id: 2, userType: "admin", email: "a@b.com", localOnly: "secret"))
         try context.save()
 
-        let rows = try SwiftSync.export(as: ExportMappedFields.self, in: context)
+        let rows = try syncContainer.export(as: ExportMappedFields.self)
         let row = rows[0]
         XCTAssertEqual(row["type"] as? String, "admin")
         XCTAssertNil(row["user_type"])
@@ -312,7 +319,8 @@ final class ExportTests: XCTestCase {
 
     @MainActor
     func testExportRelationshipModesArray() throws {
-        let context = try makeContext(for: ExportUser.self, ExportCompany.self, ExportNote.self)
+        let syncContainer = try makeSyncContainer(for: ExportUser.self, ExportCompany.self, ExportNote.self)
+        let context = syncContainer.mainContext
         let company = ExportCompany(id: 7, name: "Acme")
         let note0 = ExportNote(id: 10, text: "n0")
         let note1 = ExportNote(id: 11, text: "n1")
@@ -322,7 +330,7 @@ final class ExportTests: XCTestCase {
         context.insert(ExportUser(id: 1, name: "U", company: company, notes: [note0, note1]))
         try context.save()
 
-        let rows = try SwiftSync.export(as: ExportUser.self, in: context)
+        let rows = try syncContainer.export(as: ExportUser.self)
         let row = rows[0]
         XCTAssertEqual((row["company"] as? [String: Any])?["id"] as? Int, 7)
         XCTAssertEqual((row["notes"] as? [[String: Any]])?.count, 2)
@@ -330,11 +338,12 @@ final class ExportTests: XCTestCase {
 
     @MainActor
     func testExportNilNestedRemoteKeyAlwaysEmitsNSNull() throws {
-        let context = try makeContext(for: ExportMappedFields.self)
+        let syncContainer = try makeSyncContainer(for: ExportMappedFields.self)
+        let context = syncContainer.mainContext
         context.insert(ExportMappedFields(id: 3, userType: "member", email: nil, localOnly: "secret"))
         try context.save()
 
-        let rows = try SwiftSync.export(as: ExportMappedFields.self, in: context)
+        let rows = try syncContainer.export(as: ExportMappedFields.self)
         let profile = rows[0]["profile"] as? [String: Any]
         let contact = profile?["contact"] as? [String: Any]
         XCTAssertTrue(contact?["email"] is NSNull, "Nil optional under @RemoteKey nested path must always emit NSNull")
@@ -342,35 +351,38 @@ final class ExportTests: XCTestCase {
 
     @MainActor
     func testExportNotExportRelationshipOmitsRelationshipKey() throws {
-        let context = try makeContext(for: ExportParent.self, ExportChild.self)
+        let syncContainer = try makeSyncContainer(for: ExportParent.self, ExportChild.self)
+        let context = syncContainer.mainContext
         let parent = ExportParent(id: 9, name: "P")
         let child = ExportChild(id: 1, text: "c1", parent: parent)
         context.insert(parent)
         context.insert(child)
         try context.save()
 
-        let rows = try SwiftSync.export(as: ExportChild.self, in: context)
+        let rows = try syncContainer.export(as: ExportChild.self)
         XCTAssertEqual(rows.count, 1)
         XCTAssertNil(rows[0]["parent"])
     }
 
     @MainActor
     func testExportNilToOneRelationshipAlwaysEmitsNSNull() throws {
-        let context = try makeContext(for: ExportUser.self, ExportCompany.self, ExportNote.self)
+        let syncContainer = try makeSyncContainer(for: ExportUser.self, ExportCompany.self, ExportNote.self)
+        let context = syncContainer.mainContext
         context.insert(ExportUser(id: 8, name: "NoCompany", company: nil, notes: []))
         try context.save()
 
-        let rows = try SwiftSync.export(as: ExportUser.self, in: context)
+        let rows = try syncContainer.export(as: ExportUser.self)
         XCTAssertTrue(rows[0]["company"] is NSNull, "Nil to-one relationship must always emit NSNull")
     }
 
     @MainActor
     func testExportNilOptionalsAlwaysEmitNSNull() throws {
-        let context = try makeContext(for: ExportTask.self)
+        let syncContainer = try makeSyncContainer(for: ExportTask.self)
+        let context = syncContainer.mainContext
         context.insert(ExportTask(id: 3, completed: false, createdAt: Date(timeIntervalSince1970: 0), nickname: nil))
         try context.save()
 
-        let rows = try SwiftSync.export(as: ExportTask.self, in: context)
+        let rows = try syncContainer.export(as: ExportTask.self)
         XCTAssertTrue(rows[0]["nickname"] is NSNull, "Nil optional scalar must always emit NSNull")
     }
 
@@ -404,23 +416,24 @@ final class ExportTests: XCTestCase {
 
     @MainActor
     func testExportCustomDateFormatter() throws {
-        let context = try makeContext(for: ExportTask.self)
-        context.insert(ExportTask(id: 4, completed: true, createdAt: Date(timeIntervalSince1970: 0)))
-        try context.save()
-
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "yyyy/MM/dd"
-        var options = ExportOptions()
-        options.dateFormatter = formatter
-        let rows = try SwiftSync.export(as: ExportTask.self, in: context, using: options)
+
+        let syncContainer = try makeSyncContainer(for: ExportTask.self, dateFormatter: formatter)
+        let context = syncContainer.mainContext
+        context.insert(ExportTask(id: 4, completed: true, createdAt: Date(timeIntervalSince1970: 0)))
+        try context.save()
+
+        let rows = try syncContainer.export(as: ExportTask.self)
         XCTAssertEqual(rows[0]["created_at"] as? String, "1970/01/01")
     }
 
     @MainActor
     func testExportParentScopedOnlyExportsThatParentsChildren() throws {
-        let context = try makeContext(for: ExportParent.self, ExportChild.self)
+        let syncContainer = try makeSyncContainer(for: ExportParent.self, ExportChild.self)
+        let context = syncContainer.mainContext
         let parentA = ExportParent(id: 6, name: "A")
         let parentB = ExportParent(id: 7, name: "B")
         let a0 = ExportChild(id: 0, text: "a0", parent: parentA)
@@ -433,14 +446,15 @@ final class ExportTests: XCTestCase {
         context.insert(b2)
         try context.save()
 
-        let rows = try SwiftSync.export(as: ExportChild.self, in: context, parent: parentA)
+        let rows = try syncContainer.export(as: ExportChild.self, parent: parentA)
         XCTAssertEqual(rows.count, 2)
         XCTAssertEqual(Set(rows.compactMap { $0["id"] as? Int }), Set([0, 1]))
     }
 
     @MainActor
     func testExportRecursionGuardAvoidsLoopCrash() throws {
-        let context = try makeContext(for: CycleNode.self)
+        let syncContainer = try makeSyncContainer(for: CycleNode.self)
+        let context = syncContainer.mainContext
         let root = CycleNode(id: 1, name: "root")
         let child = CycleNode(id: 2, name: "child", parent: root)
         root.parent = child
@@ -448,7 +462,7 @@ final class ExportTests: XCTestCase {
         context.insert(child)
         try context.save()
 
-        let rows = try SwiftSync.export(as: CycleNode.self, in: context)
+        let rows = try syncContainer.export(as: CycleNode.self)
         XCTAssertEqual(rows.count, 2)
         XCTAssertNotNil(rows.first(where: { ($0["id"] as? Int) == 1 }))
     }
@@ -573,10 +587,14 @@ final class ExportTests: XCTestCase {
     }
 
     @MainActor
-    private func makeContext(for models: any PersistentModel.Type...) throws -> ModelContext {
+    private func makeSyncContainer(
+        for models: any PersistentModel.Type...,
+        keyStyle: KeyStyle = .snakeCase,
+        dateFormatter: DateFormatter? = nil
+    ) throws -> SyncContainer {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let schema = Schema(models)
-        let container = try ModelContainer(for: schema, configurations: configuration)
-        return ModelContext(container)
+        let modelContainer = try ModelContainer(for: schema, configurations: configuration)
+        return SyncContainer(modelContainer, keyStyle: keyStyle, dateFormatter: dateFormatter)
     }
 }

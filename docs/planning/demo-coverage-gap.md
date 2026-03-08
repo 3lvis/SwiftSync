@@ -9,7 +9,7 @@
 ### Public export configuration API not exercised explicitly by demo runtime
 
 - [ ] Exercise non-default `KeyStyle` (`.camelCase`) through demo runtime.
-- [ ] Exercise non-default `ExportOptions` date formatter through demo runtime.
+- [ ] Exercise non-default `SyncContainer` date formatter through demo runtime.
 
 ### Public protocol-level API not exercised directly by demo runtime call sites
 

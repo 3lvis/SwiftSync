@@ -399,36 +399,6 @@ extension SwiftSync {
         }
     }
 
-    static func export<Model: SyncUpdatableModel>(
-        as _: Model.Type,
-        in context: ModelContext,
-        using options: ExportOptions = ExportOptions()
-    ) throws -> [[String: Any]] {
-        let rows = try context.fetch(FetchDescriptor<Model>())
-        let sorted = rows.sorted { lhs, rhs in
-            identityKey(from: lhs[keyPath: Model.syncIdentity]) < identityKey(from: rhs[keyPath: Model.syncIdentity])
-        }
-        return sorted.map { row in
-            row.exportObject(using: options)
-        }
-    }
-
-    static func export<Model: SyncUpdatableModel & ParentScopedModel>(
-        as _: Model.Type,
-        in context: ModelContext,
-        parent: Model.SyncParent,
-        using options: ExportOptions = ExportOptions()
-    ) throws -> [[String: Any]] {
-        let rows = try context.fetch(FetchDescriptor<Model>())
-            .filter { $0[keyPath: Model.parentRelationship]?.persistentModelID == parent.persistentModelID }
-        let sorted = rows.sorted { lhs, rhs in
-            identityKey(from: lhs[keyPath: Model.syncIdentity]) < identityKey(from: rhs[keyPath: Model.syncIdentity])
-        }
-        return sorted.map { row in
-            row.exportObject(using: options)
-        }
-    }
-
     private static func resolveParent<Parent: PersistentModel>(
         _ parent: Parent,
         in context: ModelContext

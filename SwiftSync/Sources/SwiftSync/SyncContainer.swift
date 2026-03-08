@@ -145,6 +145,36 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         )
     }
 
+    public func export<Model: SyncUpdatableModel>(as _: Model.Type) throws -> [[String: Any]] {
+        let context = ModelContext(modelContainer)
+        let rows = try context.fetch(FetchDescriptor<Model>())
+        let sorted = rows.sorted { lhs, rhs in
+            String(describing: lhs[keyPath: Model.syncIdentity]) < String(describing: rhs[keyPath: Model.syncIdentity])
+        }
+
+        let options = ExportOptions(keyStyle: keyStyle, dateFormatter: dateFormatter)
+        return sorted.map { row in
+            row.exportObject(using: options)
+        }
+    }
+
+    public func export<Model: SyncUpdatableModel & ParentScopedModel>(
+        as _: Model.Type,
+        parent: Model.SyncParent
+    ) throws -> [[String: Any]] {
+        let context = ModelContext(modelContainer)
+        let rows = try context.fetch(FetchDescriptor<Model>())
+            .filter { $0[keyPath: Model.parentRelationship]?.persistentModelID == parent.persistentModelID }
+        let sorted = rows.sorted { lhs, rhs in
+            String(describing: lhs[keyPath: Model.syncIdentity]) < String(describing: rhs[keyPath: Model.syncIdentity])
+        }
+
+        let options = ExportOptions(keyStyle: keyStyle, dateFormatter: dateFormatter)
+        return sorted.map { row in
+            row.exportObject(using: options)
+        }
+    }
+
     private func installDidSaveObserver() {
         NotificationCenter.default.addObserver(
             self,

@@ -132,13 +132,12 @@ try await SwiftSync.sync(
 let syncContainer = try await MainActor.run {
   try SyncContainer(
     for: User.self,
-    inputKeyStyle: .snakeCase, // default
+    keyStyle: .snakeCase, // default
     configurations: ModelConfiguration(isStoredInMemoryOnly: true)
   )
 }
 
-let background = ModelContext(syncContainer.modelContainer)
-try await SwiftSync.sync(payload: payload, as: User.self, in: background)
+try await syncContainer.sync(payload: payload, as: User.self)
 ```
 
 Behavior note:
@@ -536,7 +535,7 @@ final class User {
 API:
 
 ```swift
-let rows = try SwiftSync.export(as: User.self, in: context)
+let rows = try syncContainer.export(as: User.self)
 ```
 
 ## Modeling and Mapping
@@ -545,7 +544,7 @@ let rows = try SwiftSync.export(as: User.self, in: context)
 
 `@Syncable` generates:
 - `SyncUpdatableModel` conformance (make/apply + relationship sync)
-- export support via `exportObject(using:state:)`
+- export support via `exportObject(using:)`
 Built-in relationship sync behavior:
 - to-one by `*_id` (strict typed FK lookup)
 - to-many by `*_ids` (unordered membership updates)
@@ -556,28 +555,6 @@ Identity selection order:
 1. property marked with `@PrimaryKey` (or `@PrimaryKey(remote: ...)`)
 2. `id`
 3. `remoteID`
-
-### Identity policy (global vs parent-scoped)
-
-`SyncModelable` supports two identity policies:
-- `.global`: one row per identity for the whole store.
-- `.scopedByParent`: identity is scoped to the parent for `ParentScopedModel`.
-
-Defaults:
-- `SyncUpdatableModel` -> `.global`
-- `ParentScopedModel` -> `.scopedByParent`
-- explicit parent-relationship sync on non-`ParentScopedModel` types -> `.global`
-
-If you need global behavior on a parent-scoped model, override it:
-
-```swift
-extension Note: GlobalParentScopedModel {
-  static var parentRelationship: ReferenceWritableKeyPath<Note, User?> { \.user }
-}
-```
-
-`GlobalParentScopedModel` is just a convenience protocol that sets
-`syncIdentityPolicy = .global` for `ParentScopedModel`.
 
 ### Custom primary key
 
@@ -643,7 +620,7 @@ Notes:
 ### Default
 
 ```swift
-let rows = try SwiftSync.export(as: User.self, in: context)
+let rows = try syncContainer.export(as: User.self)
 ```
 
 Defaults:
@@ -658,13 +635,14 @@ in your model.
 ### Camel case
 
 ```swift
-let rows = try SwiftSync.export(as: User.self, in: context, using: .camelCase)
+let syncContainer = SyncContainer(modelContainer, keyStyle: .camelCase)
+let rows = try syncContainer.export(as: User.self)
 ```
 
 ### Parent-scoped export
 
 ```swift
-let rows = try SwiftSync.export(as: Note.self, in: context, parent: user)
+let rows = try syncContainer.export(as: Note.self, parent: user)
 ```
 
 ## Date Handling
@@ -685,52 +663,42 @@ our policy is honestly we do our best without affecting performance.
 ## API Reference
 
 ```swift
-public enum SwiftSync {}
-
-public extension SwiftSync {
-  static func sync<Model: SyncUpdatableModel>(
+public final class SyncContainer {
+  func sync<Model: SyncUpdatableModel>(
     payload: [Any],
     as model: Model.Type,
-    in context: ModelContext,
     relationshipOperations: SyncRelationshipOperations = .all
   ) async throws
 
-  static func sync<Model: SyncUpdatableModel>(
+  func sync<Model: SyncUpdatableModel>(
     item: [String: Any],
     as model: Model.Type,
-    in context: ModelContext,
     relationshipOperations: SyncRelationshipOperations = .all
   ) async throws
 
-  static func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
+  func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
     payload: [Any],
     as model: Model.Type,
-    in context: ModelContext,
     parent: Parent,
     relationship: ReferenceWritableKeyPath<Model, Parent?>,
     relationshipOperations: SyncRelationshipOperations = .all
   ) async throws
 
-  static func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
+  func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
     item: [String: Any],
     as model: Model.Type,
-    in context: ModelContext,
     parent: Parent,
     relationship: ReferenceWritableKeyPath<Model, Parent?>,
     relationshipOperations: SyncRelationshipOperations = .all
   ) async throws
 
-  static func export<Model: SyncUpdatableModel>(
+  func export<Model: SyncUpdatableModel>(
     as model: Model.Type,
-    in context: ModelContext,
-    using options: ExportOptions = ExportOptions()
   ) throws -> [[String: Any]]
 
-  static func export<Model: SyncUpdatableModel & ParentScopedModel>(
+  func export<Model: SyncUpdatableModel & ParentScopedModel>(
     as model: Model.Type,
-    in context: ModelContext,
     parent: Model.SyncParent,
-    using options: ExportOptions = ExportOptions()
   ) throws -> [[String: Any]]
 }
 
@@ -744,10 +712,5 @@ public struct SyncRelationshipOperations: OptionSet, Sendable {
   public static let update: SyncRelationshipOperations
   public static let delete: SyncRelationshipOperations
   public static let all: SyncRelationshipOperations
-}
-
-public enum SyncIdentityPolicy: Sendable {
-  case global
-  case scopedByParent
 }
 ```
