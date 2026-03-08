@@ -2,7 +2,7 @@ import DemoCore
 import SwiftSync
 import SwiftUI
 
-struct ProjectDetailView: View {
+struct ProjectView: View {
     let projectID: String
     let syncContainer: SyncContainer
     @ObservedObject var syncEngine: DemoSyncEngine
@@ -42,7 +42,7 @@ struct ProjectDetailView: View {
             Section("Tasks") {
                 ForEach(machine.tasks, id: \.id) { task in
                     NavigationLink {
-                        TaskDetailView(taskID: task.id, syncContainer: syncContainer, syncEngine: syncEngine)
+                        TaskView(taskID: task.id, syncContainer: syncContainer, syncEngine: syncEngine)
                     } label: {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(task.title)

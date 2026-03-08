@@ -14,7 +14,7 @@ struct ProjectsView: View {
             }
             .navigationTitle("Projects")
             .navigationDestination(item: $selectedProjectID) { projectID in
-                ProjectDetailView(
+                ProjectView(
                     projectID: projectID,
                     syncContainer: syncContainer,
                     syncEngine: syncEngine
