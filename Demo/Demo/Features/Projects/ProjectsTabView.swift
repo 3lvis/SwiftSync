@@ -128,7 +128,7 @@ private struct ProjectDetailView: View {
             }
         }
         .task {
-            requestLoad()
+            machine.send(.onAppear)
         }
         .sheet(isPresented: $isShowingCreateTaskSheet) {
             TaskFormSheet(
@@ -204,10 +204,6 @@ private struct ProjectDetailView: View {
                 .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-    }
-
-    private func requestLoad() {
-        machine.send(.onAppear)
     }
 }
 

@@ -2,9 +2,7 @@
 
 ## Plan
 
-- [x] Remove retry events and retry metadata from Demo error/load state models
-- [x] Remove retry UI/actions from Demo screens and controllers
-- [x] Update Demo docs to remove retry guidance
+- [x] Remove trivial one-line forwarding methods from Demo views/machines
 - [x] Re-run Demo build (`xcodebuild ... -scheme Demo ... build`) and record result
 
 ## Last known state
@@ -15,6 +13,7 @@
 
 - No Earthquake Mode logic exists in `DemoBackend`; removal scope there is docs/references only.
 - State machine item reordering now uses a pure data helper instead of `SwiftUI`'s `Array.move` extension.
+- Keep machine APIs explicit for sync boundaries even when compact; remove only non-boundary forwarding helpers.
 
 ## Files touched
 

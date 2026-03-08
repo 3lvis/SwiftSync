@@ -38,7 +38,7 @@ struct TaskDetailView: View {
             }
         }
         .task {
-            requestLoad()
+            machine.send(.onAppear)
         }
         .sheet(isPresented: $showingEditSheet) {
             if let taskModel = machine.task {
@@ -77,11 +77,6 @@ struct TaskDetailView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
     }
-
-    private func requestLoad() {
-        machine.send(.onAppear)
-    }
-
     private var taskSection: some View {
         Section {
             if let taskModel = machine.task {
