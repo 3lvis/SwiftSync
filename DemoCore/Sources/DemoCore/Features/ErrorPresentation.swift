@@ -68,6 +68,7 @@ private enum ScreenLoadReducer {
     }
 }
 
+@MainActor
 public final class ScreenLoadMachine: ObservableObject {
     @Published public private(set) var state: ScreenLoadState = .idle
 
@@ -82,12 +83,12 @@ public final class ScreenLoadMachine: ObservableObject {
         state = next.0
     }
 
-    public func send(_ event: ScreenLoadEvent, run operation: @escaping () async throws -> Void) {
+    public func send(_ event: ScreenLoadEvent, run operation: @escaping @MainActor () async throws -> Void) {
         let next = ScreenLoadReducer.reduce(state: state, event: event, presentFailure: presentFailure)
         state = next.0
         guard next.1 == .load else { return }
 
-        _Concurrency.Task { [weak self] in
+        _Concurrency.Task { @MainActor [weak self] in
             do {
                 try await operation()
                 self?.send(.loadSucceeded)
@@ -111,6 +112,7 @@ public enum SubmissionState: Equatable {
     case failed(ErrorPresentationState)
 }
 
+@MainActor
 public final class SubmissionMachine: ObservableObject {
     @Published public private(set) var state: SubmissionState = .idle
 

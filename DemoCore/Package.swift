@@ -23,7 +23,6 @@ let package = Package(
             ],
             path: "Sources/DemoCore",
             swiftSettings: [
-                .unsafeFlags(["-swift-version", "5"]),
                 .unsafeFlags(["-strict-concurrency=minimal"])
             ]
         ),
@@ -32,5 +31,6 @@ let package = Package(
             dependencies: ["DemoCore", .product(name: "SwiftSync", package: "SwiftSync")],
             path: "Tests/DemoCoreTests"
         )
-    ]
+    ],
+    swiftLanguageModes: [.v5]
 )

@@ -1,3 +1,4 @@
+import DemoCore
 import SwiftUI
 
 extension TaskDetailView {

@@ -3,6 +3,7 @@ import Foundation
 import SwiftData
 @preconcurrency import SwiftSync
 
+@MainActor
 public final class DemoSyncEngine: ObservableObject {
     private enum SyncTaskDetailError: LocalizedError {
         case missingProjectID

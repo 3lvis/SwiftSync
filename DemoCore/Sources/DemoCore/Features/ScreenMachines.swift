@@ -8,6 +8,7 @@ public enum TaskFormMode {
     case edit(task: Task)
 }
 
+@MainActor
 public final class ProjectsListMachine: ObservableObject {
     @Published public private(set) var loadState: ScreenLoadState = .idle
     @Published public private(set) var rows: [Project] = []
@@ -50,6 +51,7 @@ public final class ProjectsListMachine: ObservableObject {
     }
 }
 
+@MainActor
 public final class ProjectDetailMachine: ObservableObject {
     @Published public private(set) var loadState: ScreenLoadState = .idle
     @Published public private(set) var deleteState: SubmissionState = .idle
@@ -154,6 +156,7 @@ public final class ProjectDetailMachine: ObservableObject {
     }
 }
 
+@MainActor
 public final class TaskDetailMachine: ObservableObject {
     @Published public private(set) var loadState: ScreenLoadState = .idle
     @Published public private(set) var task: Task?
@@ -215,6 +218,7 @@ public final class TaskDetailMachine: ObservableObject {
     }
 }
 
+@MainActor
 public final class TaskFormMachine: ObservableObject {
     @Published public private(set) var users: [User] = []
     @Published public private(set) var taskStateOptions: [TaskStateOption] = []
@@ -237,7 +241,7 @@ public final class TaskFormMachine: ObservableObject {
 
     public enum Event {
         case metadata(ScreenLoadEvent)
-        case save(mode: TaskFormMode, draft: Task, onSuccess: () -> Void)
+        case save(mode: TaskFormMode, draft: Task, onSuccess: @MainActor () -> Void)
         case dismissSaveError
     }
 
