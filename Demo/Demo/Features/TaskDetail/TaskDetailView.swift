@@ -76,6 +76,23 @@ struct TaskDetailView: View {
                 .padding(.bottom, 18)
             }
         }
+        .alert(
+            "Earthquake Mode Stopped",
+            isPresented: Binding(
+                get: { syncEngine.earthquakeFailureDetails != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        syncEngine.dismissEarthquakeFailure()
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                syncEngine.dismissEarthquakeFailure()
+            }
+        } message: {
+            Text(syncEngine.earthquakeFailureDetails ?? "Unknown failure")
+        }
         .alert("Stress test this screen?", isPresented: $showingStressPrompt) {
             Button("Start Stress", role: .destructive) {
                 syncEngine.startEarthquakeMode(for: .taskDetail(taskID: taskID))

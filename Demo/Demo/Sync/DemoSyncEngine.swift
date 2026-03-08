@@ -24,6 +24,7 @@ final class DemoSyncEngine: ObservableObject {
 #if DEBUG
     @Published private(set) var isEarthquakeModeRunning = false
     @Published private(set) var earthquakeStatusText: String?
+    @Published private(set) var earthquakeFailureDetails: String?
 
     enum EarthquakeScope: Equatable {
         case projectDetail(projectID: String)
@@ -48,6 +49,7 @@ final class DemoSyncEngine: ObservableObject {
 #if DEBUG
     func startEarthquakeMode(for scope: EarthquakeScope) {
         guard !isEarthquakeModeRunning else { return }
+        earthquakeFailureDetails = nil
 
         let runner = FiniteAsyncRunner(
             sleep: { nanos in
@@ -80,12 +82,19 @@ final class DemoSyncEngine: ObservableObject {
         earthquakeStatusText = nil
     }
 
+    func dismissEarthquakeFailure() {
+        earthquakeFailureDetails = nil
+    }
+
     private func runEarthquakeIteration(scope: EarthquakeScope, iteration: Int) async {
         switch scope {
         case .projectDetail(let projectID):
             do {
                 try await syncProjectTasks(projectID: projectID)
-            } catch {}
+            } catch {
+                stopEarthquakeMode(with: error, context: "Project detail sync failed (iteration \(iteration)).")
+                return
+            }
             await runProjectStressMutation(projectID: projectID, iteration: iteration)
 
         case .taskDetail(let taskID):
@@ -93,18 +102,24 @@ final class DemoSyncEngine: ObservableObject {
             do {
                 loadedTask = try task(withID: taskID)
             } catch {
-                loadedTask = nil
+                stopEarthquakeMode(with: error, context: "Task lookup failed (iteration \(iteration)).")
+                return
             }
             guard let projectID = loadedTask?.projectID else {
                 do {
                     try await syncTaskDetail(taskID: taskID)
-                } catch {}
+                } catch {
+                    stopEarthquakeMode(with: error, context: "Task detail sync failed (iteration \(iteration)).")
+                }
                 return
             }
             do {
                 try await syncTaskDetail(taskID: taskID)
                 try await syncProjectTasks(projectID: projectID)
-            } catch {}
+            } catch {
+                stopEarthquakeMode(with: error, context: "Task + project sync failed (iteration \(iteration)).")
+                return
+            }
             await runTaskDetailStressMutation(taskID: taskID, projectID: projectID, iteration: iteration)
         }
     }
@@ -126,7 +141,9 @@ final class DemoSyncEngine: ObservableObject {
             _ = try await apiClient.updateTask(taskID: createdID, body: updated)
             try await apiClient.deleteTask(taskID: createdID)
             try await syncProjectTasksData(projectID: projectID)
-        } catch {}
+        } catch {
+            stopEarthquakeMode(with: error, context: "Project stress mutation failed (iteration \(iteration)).")
+        }
     }
 
     private func runTaskDetailStressMutation(taskID: String, projectID: String, iteration: Int) async {
@@ -166,7 +183,16 @@ final class DemoSyncEngine: ObservableObject {
 
             try await syncTaskAfterMutation(taskID: taskID, projectID: projectID)
             try await syncProjectTasksData(projectID: projectID)
-        } catch {}
+        } catch {
+            stopEarthquakeMode(with: error, context: "Task detail stress mutation failed (iteration \(iteration)).")
+        }
+    }
+
+    private func stopEarthquakeMode(with error: Error, context: String) {
+        let localized = (error as? LocalizedError)?.errorDescription?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let detail = (localized?.isEmpty == false ? localized! : String(reflecting: error))
+        earthquakeFailureDetails = "\(context)\n\(detail)"
+        stopEarthquakeMode()
     }
 
     private func makeStressTaskBody(projectID: String, iteration: Int) throws -> [String: Any]? {
