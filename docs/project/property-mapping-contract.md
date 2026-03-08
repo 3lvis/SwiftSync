@@ -40,7 +40,7 @@ For generated model input keys:
 3. property name by convention
 
 Lookup behavior in `SyncPayload`:
-1. style-transformed candidate (based on `inputKeyStyle`)
+1. style-transformed candidate (based on container `keyStyle`)
 2. literal requested key
 3. identity aliases (`id`/`remote_id`/`remoteID` as applicable)
 

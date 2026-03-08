@@ -25,8 +25,8 @@ ObjCExceptionCatcher      (mixed Swift/ObjC, catches NSException from ModelConta
 
 | Target | Key types |
 |---|---|
-| Core | `SyncPayload`, `SyncDateParser`, all protocols, `ExportKeyStyle`, `SyncError` |
-| SwiftDataBridge | `SwiftSync.sync()`, `SwiftSync.export()`, `SyncLeaseRegistry` |
+| Core | `SyncPayload`, `SyncDateParser`, all protocols, `KeyStyle`, `SyncError` |
+| SwiftDataBridge | `SwiftSync.sync()`, `SyncLeaseRegistry` |
 | MacrosImplementation | `SyncableMacro` + three no-op peer macros |
 | Macros | `@Syncable`, `@PrimaryKey`, `@RemoteKey`, `@NotExport` declarations |
 | SwiftSync | `SyncContainer`, `SyncQuery`, `SyncModel` |
