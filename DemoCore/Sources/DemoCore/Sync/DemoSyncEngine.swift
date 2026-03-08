@@ -1,10 +1,11 @@
-import Combine
 import Foundation
+import Observation
 import SwiftData
 @preconcurrency import SwiftSync
 
 @MainActor
-public final class DemoSyncEngine: ObservableObject {
+@Observable
+public final class DemoSyncEngine {
     private enum SyncTaskDetailError: LocalizedError {
         case missingProjectID
         case missingProject(String)
@@ -19,7 +20,7 @@ public final class DemoSyncEngine: ObservableObject {
         }
     }
 
-    @Published public private(set) var isSyncing = false
+    public private(set) var isSyncing = false
 
     private var inFlightOperations: Set<String> = []
 

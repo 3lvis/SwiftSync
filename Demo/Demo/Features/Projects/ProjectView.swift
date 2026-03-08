@@ -5,9 +5,9 @@ import SwiftUI
 struct ProjectView: View {
     let projectID: String
     let syncContainer: SyncContainer
-    @ObservedObject var syncEngine: DemoSyncEngine
+    let syncEngine: DemoSyncEngine
 
-    @StateObject private var machine: ProjectDetailMachine
+    @State private var machine: ProjectDetailMachine
     @State private var isShowingCreateTaskSheet = false
     @State private var taskPendingDelete: TaskDeletePrompt?
 
@@ -16,8 +16,8 @@ struct ProjectView: View {
         self.syncContainer = syncContainer
         self.syncEngine = syncEngine
 
-        _machine = StateObject(
-            wrappedValue: ProjectDetailMachine(projectID: projectID, syncContainer: syncContainer, syncEngine: syncEngine)
+        _machine = State(
+            initialValue: ProjectDetailMachine(projectID: projectID, syncContainer: syncContainer, syncEngine: syncEngine)
         )
     }
 

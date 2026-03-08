@@ -1,10 +1,11 @@
-import Combine
 import Foundation
+import Observation
 import SwiftData
 import SwiftUI
 
-private final class SyncQueryObserver<Model: PersistentModel>: ObservableObject, @unchecked Sendable {
-    @Published var rows: [Model] = []
+@Observable
+private final class SyncQueryObserver<Model: PersistentModel>: @unchecked Sendable {
+    var rows: [Model] = []
 
     private let syncContainer: SyncContainer
     private let predicate: Predicate<Model>?
@@ -117,7 +118,7 @@ func syncQueryChangedModelTypeNames(from userInfo: [AnyHashable: Any]?) -> Set<S
 @MainActor
 @propertyWrapper
 public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
-    @StateObject private var observer: SyncQueryObserver<Model>
+    @State private var observer: SyncQueryObserver<Model>
 
     public var wrappedValue: [Model] { observer.rows }
 
@@ -198,8 +199,8 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
         observedModelTypeNames: Set<String>,
         animation: Animation?
     ) {
-        _observer = StateObject(
-            wrappedValue: SyncQueryObserver(
+        _observer = State(
+            initialValue: SyncQueryObserver(
                 syncContainer: syncContainer,
                 predicate: predicate,
                 sortBy: sortBy,
@@ -324,8 +325,9 @@ public extension SyncQuery where Model: SyncModelable {
 
 
 
-private final class SyncModelObserver<Model: PersistentModel & SyncModelable>: ObservableObject, @unchecked Sendable {
-    @Published var model: Model?
+@Observable
+private final class SyncModelObserver<Model: PersistentModel & SyncModelable>: @unchecked Sendable {
+    var model: Model?
 
     private let syncContainer: SyncContainer
     private let id: Model.SyncID
@@ -398,7 +400,7 @@ private final class SyncModelObserver<Model: PersistentModel & SyncModelable>: O
 @MainActor
 @propertyWrapper
 public struct SyncModel<Model: PersistentModel & SyncModelable>: DynamicProperty {
-    @StateObject private var observer: SyncModelObserver<Model>
+    @State private var observer: SyncModelObserver<Model>
 
     public var wrappedValue: Model? { observer.model }
 
@@ -408,8 +410,8 @@ public struct SyncModel<Model: PersistentModel & SyncModelable>: DynamicProperty
         in syncContainer: SyncContainer,
         animation: Animation? = nil
     ) {
-        _observer = StateObject(
-            wrappedValue: SyncModelObserver(
+        _observer = State(
+            initialValue: SyncModelObserver(
                 syncContainer: syncContainer,
                 id: id,
                 observedModelTypeNames: Self.defaultObservedModelTypeNames(),

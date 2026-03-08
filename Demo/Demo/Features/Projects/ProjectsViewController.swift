@@ -1,5 +1,5 @@
-import Combine
 import DemoCore
+import Observation
 import SwiftSync
 import UIKit
 
@@ -7,7 +7,6 @@ final class ProjectsViewController: UITableViewController {
 
     private let onSelect: (String) -> Void
 
-    private var cancellables = Set<AnyCancellable>()
     private let machine: ProjectsListMachine
 
     private lazy var statusContainer: UIStackView = {
@@ -61,25 +60,8 @@ final class ProjectsViewController: UITableViewController {
         tableView.dataSource = diffableDataSource
         tableView.backgroundView = statusContainer
 
-        machine.$rows
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] rows in
-                guard let self else { return }
-                var snapshot = NSDiffableDataSourceSnapshot<String, String>()
-                snapshot.appendSections(["projects"])
-                snapshot.appendItems(rows.map(\.id), toSection: "projects")
-                self.diffableDataSource.apply(snapshot, animatingDifferences: true)
-            }
-            .store(in: &cancellables)
-
-        machine.$loadState
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] state in
-                self?.renderLoadState(state)
-            }
-            .store(in: &cancellables)
-
-        renderLoadState(machine.loadState)
+        observeRows()
+        observeLoadState()
         machine.send(.onAppear)
     }
 
@@ -107,6 +89,31 @@ final class ProjectsViewController: UITableViewController {
             statusIndicator.stopAnimating()
             statusLabel.text = presentation.message
             tableView.backgroundView?.isHidden = false
+        }
+    }
+
+    private func observeRows() {
+        withObservationTracking { [weak self] in
+            guard let self else { return }
+            var snapshot = NSDiffableDataSourceSnapshot<String, String>()
+            snapshot.appendSections(["projects"])
+            snapshot.appendItems(machine.rows.map(\.id), toSection: "projects")
+            diffableDataSource.apply(snapshot, animatingDifferences: true)
+        } onChange: { [weak self] in
+            DispatchQueue.main.async {
+                self?.observeRows()
+            }
+        }
+    }
+
+    private func observeLoadState() {
+        withObservationTracking { [weak self] in
+            guard let self else { return }
+            renderLoadState(machine.loadState)
+        } onChange: { [weak self] in
+            DispatchQueue.main.async {
+                self?.observeLoadState()
+            }
         }
     }
 

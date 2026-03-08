@@ -1,15 +1,15 @@
-import Combine
 import Foundation
+import Observation
 import SwiftData
 
 // @unchecked Sendable matches the pattern used by the private observers in ReactiveQuery.swift;
 // the notification closure is dispatched on queue: .main so mutation is always on the main thread.
-public final class SyncQueryPublisher<Model: PersistentModel>: ObservableObject, @unchecked Sendable {
+@Observable
+public final class SyncQueryPublisher<Model: PersistentModel>: @unchecked Sendable {
 
     // MARK: - Public interface
 
-    @Published public private(set) var rows: [Model] = []
-    public var rowsPublisher: AnyPublisher<[Model], Never> { $rows.eraseToAnyPublisher() }
+    public private(set) var rows: [Model] = []
 
     // MARK: - Private state
 
@@ -18,7 +18,7 @@ public final class SyncQueryPublisher<Model: PersistentModel>: ObservableObject,
     private let sortBy: [SortDescriptor<Model>]
     private let postFetchFilter: ((Model) -> Bool)?
     private let observedModelTypeNames: Set<String>
-    private var notificationToken: NSObjectProtocol?
+    nonisolated(unsafe) private var notificationToken: NSObjectProtocol?
 
     // MARK: - Designated init
 

@@ -1,4 +1,3 @@
-import Combine
 import XCTest
 import SwiftData
 import SwiftSync
@@ -170,12 +169,7 @@ final class SyncQueryPublisherTests: XCTestCase {
             sortBy: [SortDescriptor(\PubTask.title)]
         )
 
-        var reloadCount = 0
-        var cancellables = Set<AnyCancellable>()
-        publisher.$rows
-            .dropFirst()
-            .sink { _ in reloadCount += 1 }
-            .store(in: &cancellables)
+        let originalRows = publisher.rows.map(\.id)
 
         try await syncContainer.sync(
             payload: [["id": "tag1", "name": "swift"]],
@@ -184,7 +178,7 @@ final class SyncQueryPublisherTests: XCTestCase {
 
         await Task.yield()
 
-        XCTAssertEqual(reloadCount, 0)
+        XCTAssertEqual(publisher.rows.map(\.id), originalRows)
     }
 
     // MARK: - postFetchFilter (relationship)
@@ -286,10 +280,10 @@ final class SyncQueryPublisherTests: XCTestCase {
         XCTAssertEqual(publisher.rows.first?.title, "Updated")
     }
 
-    // MARK: - Combine publisher surface
+    // MARK: - Current rows surface
 
     @MainActor
-    func testRowsPublisherEmitsValues() async throws {
+    func testRowsReflectLatestValues() async throws {
         let syncContainer = try makeContainer(modelTypes: PubTask.self, PubUser.self)
 
         let publisher = SyncQueryPublisher(
@@ -298,22 +292,13 @@ final class SyncQueryPublisherTests: XCTestCase {
             sortBy: [SortDescriptor(\PubTask.title)]
         )
 
-        var received: [[PubTask]] = []
-        var cancellables = Set<AnyCancellable>()
-        publisher.rowsPublisher
-            .sink { received.append($0) }
-            .store(in: &cancellables)
-
-        XCTAssertEqual(received.count, 1)
-        XCTAssertTrue(received[0].isEmpty)
+        XCTAssertTrue(publisher.rows.isEmpty)
 
         try await syncContainer.sync(
             payload: [["id": "t1", "title": "Alpha", "assignee_id": NSNull()]],
             as: PubTask.self
         )
         await Task.yield()
-
-        XCTAssertEqual(received.count, 2)
-        XCTAssertEqual(received[1].map(\.id), ["t1"])
+        XCTAssertEqual(publisher.rows.map(\.id), ["t1"])
     }
 }

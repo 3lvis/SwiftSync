@@ -1,9 +1,10 @@
 import SwiftUI
 import DemoCore
+import Observation
 import SwiftSync
 
 struct ContentView: View {
-    @ObservedObject var runtime: DemoRuntime
+    @Bindable var runtime: DemoRuntime
 
     var body: some View {
         ProjectsView(syncContainer: runtime.syncContainer, syncEngine: runtime.syncEngine)

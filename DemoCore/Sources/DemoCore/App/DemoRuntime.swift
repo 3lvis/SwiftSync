@@ -1,11 +1,12 @@
-import Combine
 import Foundation
+import Observation
 import SwiftData
 import SwiftSync
 
 @MainActor
-public final class DemoRuntime: ObservableObject {
-    @Published public var scenario: DemoNetworkScenario {
+@Observable
+public final class DemoRuntime {
+    public var scenario: DemoNetworkScenario {
         didSet {
             apiClient.scenario = scenario
         }

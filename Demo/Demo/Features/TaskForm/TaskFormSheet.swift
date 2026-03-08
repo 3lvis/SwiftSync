@@ -20,7 +20,7 @@ struct TaskFormSheet: View {
     // so the pickers can assign them directly without cross-context crashes.
     @State var draft: Task
 
-    @StateObject var machine: TaskFormMachine
+    @State var machine: TaskFormMachine
     @State var newItemTitle = ""
     @State var itemEditMode: EditMode = .inactive
 
@@ -32,8 +32,8 @@ struct TaskFormSheet: View {
         let ctx = ModelContext(syncContainer.modelContainer)
         ctx.autosaveEnabled = false
         self.editContext = ctx
-        _machine = StateObject(
-            wrappedValue: TaskFormMachine(syncContainer: syncContainer, syncEngine: syncEngine, editContext: ctx)
+        _machine = State(
+            initialValue: TaskFormMachine(syncContainer: syncContainer, syncEngine: syncEngine, editContext: ctx)
         )
 
         switch mode {

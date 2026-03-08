@@ -16,7 +16,7 @@ struct ProjectsRepresentable: UIViewControllerRepresentable {
 
 struct ProjectsView: View {
     let syncContainer: SyncContainer
-    @ObservedObject var syncEngine: DemoSyncEngine
+    let syncEngine: DemoSyncEngine
     @State private var selectedProjectID: String?
 
     var body: some View {
