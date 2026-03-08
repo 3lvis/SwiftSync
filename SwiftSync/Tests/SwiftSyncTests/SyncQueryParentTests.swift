@@ -4,6 +4,56 @@ import SwiftSync
 
 final class SyncQueryParentTests: XCTestCase {
     @MainActor
+    func testSyncQueryWithoutPredicateReturnsSortedRows() throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let modelContainer = try ModelContainer(
+            for: InferredTask.self,
+            configurations: configuration
+        )
+        let syncContainer = SyncContainer(modelContainer)
+        let context = syncContainer.mainContext
+
+        context.insert(InferredTask(id: 3, title: "C"))
+        context.insert(InferredTask(id: 1, title: "A"))
+        context.insert(InferredTask(id: 2, title: "B"))
+        try context.save()
+
+        let query = SyncQuery(
+            InferredTask.self,
+            in: syncContainer,
+            sortBy: [SortDescriptor(\InferredTask.title), SortDescriptor(\InferredTask.id)]
+        )
+
+        XCTAssertEqual(query.wrappedValue.map(\.id), [1, 2, 3])
+    }
+
+    @MainActor
+    func testSyncQueryWithPredicateFiltersRows() throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let modelContainer = try ModelContainer(
+            for: InferredTask.self,
+            configurations: configuration
+        )
+        let syncContainer = SyncContainer(modelContainer)
+        let context = syncContainer.mainContext
+
+        context.insert(InferredTask(id: 1, title: "A"))
+        context.insert(InferredTask(id: 2, title: "B"))
+        context.insert(InferredTask(id: 3, title: "C"))
+        try context.save()
+
+        let predicate = #Predicate<InferredTask> { $0.id >= 2 }
+        let query = SyncQuery(
+            InferredTask.self,
+            predicate: predicate,
+            in: syncContainer,
+            sortBy: [SortDescriptor(\InferredTask.id)]
+        )
+
+        XCTAssertEqual(query.wrappedValue.map(\.id), [2, 3])
+    }
+
+    @MainActor
     func testSyncQueryRelationshipToOneFiltersToParentScope() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let modelContainer = try ModelContainer(

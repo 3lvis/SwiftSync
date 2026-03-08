@@ -6,11 +6,6 @@
 
 ## Open items
 
-### Public reactive query API overloads not exercised by demo runtime
-
-- [ ] Exercise `SyncQuery.init(_:in:sortBy:animation:)` (no relationship filter, no `predicate`).
-- [ ] Exercise `SyncQuery.init(_:predicate:in:sortBy:animation:)`.
-
 ### Public `SyncQueryPublisher` API not exercised by demo runtime
 
 - [ ] Exercise `SyncQueryPublisher.rowsPublisher`.
