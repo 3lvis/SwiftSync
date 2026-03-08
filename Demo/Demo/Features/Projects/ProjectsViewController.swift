@@ -105,11 +105,11 @@ final class ProjectsViewController: UITableViewController {
         loadMachine.$state
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
-                self?.updateLoadStateUI(state)
+                self?.renderLoadState(state)
             }
             .store(in: &cancellables)
 
-        updateLoadStateUI(loadMachine.state)
+        renderLoadState(loadMachine.state)
         requestLoad(.onAppear)
     }
 
@@ -135,7 +135,7 @@ final class ProjectsViewController: UITableViewController {
         })
     }
 
-    private func updateLoadStateUI(_ state: ScreenLoadState) {
+    private func renderLoadState(_ state: ScreenLoadState) {
         switch state {
         case .idle:
             statusIndicator.stopAnimating()

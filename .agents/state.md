@@ -7,7 +7,7 @@
 - [x] Run `swift test` and update planning/state docs to reflect remaining follow-up work.
 
 ## Last known state
-state-machine APIs simplified for consistency across project/task/detail/form flows; `swift test` passing; manual Demo UI QA still pending
+naming/structure polish complete across the four target screens; `swift test` passing; manual Demo UI QA still pending
 
 ## Decisions (don't revisit)
 - Demo-only request: implement behavior changes without adding new Demo tests.

@@ -42,22 +42,7 @@ struct TaskDetailView: View {
 
     var body: some View {
         List {
-            if let presentation = loadMachine.state.errorPresentation {
-                Section {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(presentation.message)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        if let retryActionTitle = presentation.retryActionTitle {
-                            Button(retryActionTitle) {
-                                requestLoad(.retry)
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-            }
+            loadErrorSection
             taskSection
             descriptionSection
             itemsSection
@@ -128,12 +113,37 @@ struct TaskDetailView: View {
         )
 #endif
         .overlay {
-            if loadMachine.state.isLoading {
-                ProgressView("Loading task...")
-                    .padding(14)
-                    .background(.ultraThinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            loadOverlay
+        }
+    }
+
+    @ViewBuilder
+    private var loadErrorSection: some View {
+        if let presentation = loadMachine.state.errorPresentation {
+            Section {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(presentation.message)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    if let retryActionTitle = presentation.retryActionTitle {
+                        Button(retryActionTitle) {
+                            requestLoad(.retry)
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+                .padding(.vertical, 4)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var loadOverlay: some View {
+        if loadMachine.state.isLoading {
+            ProgressView("Loading task...")
+                .padding(14)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
     }
 

@@ -87,7 +87,7 @@ struct TaskFormSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                metadataErrorSection
+                loadErrorSection
                 titleSection
                 descriptionSection
                 itemsSection
@@ -186,8 +186,8 @@ struct TaskFormSheet: View {
             }
         }
         .task {
-            refreshMetadataSnapshot()
-            requestMetadataLoad(.onAppear)
+            refreshSnapshot()
+            requestLoad(.onAppear)
         }
         // Auto-select first valid state when options load (safe for edit — guard prevents override)
         .task(id: taskStateOptions.map(\.id)) {
@@ -413,7 +413,7 @@ struct TaskFormSheet: View {
     }
 
     @ViewBuilder
-    private var metadataErrorSection: some View {
+    private var loadErrorSection: some View {
         if let metadataError = metadataLoadMachine.state.errorPresentation {
             Section {
                 VStack(alignment: .leading, spacing: 10) {
@@ -422,7 +422,7 @@ struct TaskFormSheet: View {
                         .foregroundStyle(.secondary)
                     if let retryActionTitle = metadataError.retryActionTitle {
                         Button(retryActionTitle) {
-                            requestMetadataLoad(.retry)
+                            requestLoad(.retry)
                         }
                         .buttonStyle(.bordered)
                     }
@@ -473,17 +473,17 @@ struct TaskFormSheet: View {
     }
 
     @MainActor
-    private func requestMetadataLoad(_ event: ScreenLoadEvent) {
+    private func requestLoad(_ event: ScreenLoadEvent) {
         metadataLoadMachine.send(event, run: {
             try await syncEngine.syncTaskFormMetadata()
             await MainActor.run {
-                refreshMetadataSnapshot()
+                refreshSnapshot()
             }
         })
     }
 
     @MainActor
-    private func refreshMetadataSnapshot() {
+    private func refreshSnapshot() {
         let snapshot = Self.metadataSnapshot(from: editContext)
         users = snapshot.users
         taskStateOptions = snapshot.taskStateOptions
