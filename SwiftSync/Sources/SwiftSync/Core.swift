@@ -143,6 +143,35 @@ public extension SyncUpdatableModel {
     }
 }
 
+final class SyncRelationshipLookupCache: @unchecked Sendable {
+    private var rowsByType: [ObjectIdentifier: Any] = [:]
+
+    func rows<Model: PersistentModel>(
+        for modelType: Model.Type,
+        in context: ModelContext
+    ) throws -> [Model] {
+        let key = ObjectIdentifier(modelType)
+        if let cached = rowsByType[key] as? [Model] {
+            return cached
+        }
+
+        let fetched = try context.fetch(FetchDescriptor<Model>())
+        rowsByType[key] = fetched
+        return fetched
+    }
+
+    func append<Model: PersistentModel>(_ row: Model, as modelType: Model.Type) {
+        let key = ObjectIdentifier(modelType)
+        guard var cached = rowsByType[key] as? [Model] else { return }
+        cached.append(row)
+        rowsByType[key] = cached
+    }
+}
+
+enum SyncRelationshipLookupState {
+    @TaskLocal static var current: SyncRelationshipLookupCache?
+}
+
 @discardableResult
 public func syncApplyToOneForeignKey<Owner, Related: PersistentModel>(
     _ owner: Owner,
@@ -190,7 +219,7 @@ public func syncApplyToOneForeignKey<Owner, Related: SyncModelable>(
         return false
     }
 
-    let relatedRows = try context.fetch(FetchDescriptor<Related>())
+    let relatedRows = try syncFetchRelatedRows(Related.self, in: context)
     let relatedByID = Dictionary(
         uniqueKeysWithValues: relatedRows.map { row in
             (syncIdentityKey(from: row[keyPath: Related.syncIdentity]), row)
@@ -249,7 +278,7 @@ public func syncApplyToOneForeignKey<Owner, Related: SyncModelable>(
         return false
     }
 
-    let relatedRows = try context.fetch(FetchDescriptor<Related>())
+    let relatedRows = try syncFetchRelatedRows(Related.self, in: context)
     let relatedByID = Dictionary(
         uniqueKeysWithValues: relatedRows.map { row in
             (syncIdentityKey(from: row[keyPath: Related.syncIdentity]), row)
@@ -329,7 +358,7 @@ public func syncApplyToManyForeignKeys<Owner: SyncUpdatableModel, Related: SyncM
 
     // Old Sync behavior avoids duplicate membership; dedupe input deterministically.
     let desiredIDs = dedupePreservingOrder(rawIDs)
-    let relatedRows = try context.fetch(FetchDescriptor<Related>())
+    let relatedRows = try syncFetchRelatedRows(Related.self, in: context)
     let relatedByID = Dictionary(
         uniqueKeysWithValues: relatedRows.map { row in
             (syncIdentityKey(from: row[keyPath: Related.syncIdentity]), row)
@@ -398,7 +427,7 @@ public func syncApplyToOneNestedObject<Owner, Related: SyncUpdatableModel>(
     }
     let nestedPayload = SyncPayload(values: nestedValues, keyStyle: payload.keyStyle)
     var changed = false
-    let relatedRows = try context.fetch(FetchDescriptor<Related>())
+    let relatedRows = try syncFetchRelatedRows(Related.self, in: context)
     var relatedByID: [String: Related] = Dictionary(
         uniqueKeysWithValues: relatedRows.compactMap { row in
             guard let identity = resolveIdentity(from: row) else { return nil }
@@ -424,6 +453,7 @@ public func syncApplyToOneNestedObject<Owner, Related: SyncUpdatableModel>(
     } else if operations.contains(.insert) {
         let created = try Related.make(from: nestedPayload)
         context.insert(created)
+        syncRelationshipLookupCacheAppend(created, as: Related.self)
         if let createdIdentity = resolveIdentity(from: created) {
             relatedByID[createdIdentity] = created
         }
@@ -485,7 +515,7 @@ public func syncApplyToManyNestedObjects<Owner: SyncUpdatableModel, Related: Syn
     }
 
     var changed = false
-    let relatedRows = try context.fetch(FetchDescriptor<Related>())
+    let relatedRows = try syncFetchRelatedRows(Related.self, in: context)
     var relatedByID: [String: Related] = Dictionary(
         uniqueKeysWithValues: relatedRows.compactMap { row in
             guard let identity = resolveIdentity(from: row) else { return nil }
@@ -509,6 +539,7 @@ public func syncApplyToManyNestedObjects<Owner: SyncUpdatableModel, Related: Syn
         } else if operations.contains(.insert) {
             let created = try Related.make(from: nestedPayload)
             context.insert(created)
+            syncRelationshipLookupCacheAppend(created, as: Related.self)
             if let createdIdentity = resolveIdentity(from: created) {
                 relatedByID[createdIdentity] = created
             }
@@ -558,6 +589,23 @@ private func dedupePreservingOrder<ID: Hashable>(_ input: [ID]) -> [ID] {
         }
     }
     return output
+}
+
+private func syncFetchRelatedRows<Model: PersistentModel>(
+    _ modelType: Model.Type,
+    in context: ModelContext
+) throws -> [Model] {
+    if let cache = SyncRelationshipLookupState.current {
+        return try cache.rows(for: modelType, in: context)
+    }
+    return try context.fetch(FetchDescriptor<Model>())
+}
+
+private func syncRelationshipLookupCacheAppend<Model: PersistentModel>(
+    _ row: Model,
+    as modelType: Model.Type
+) {
+    SyncRelationshipLookupState.current?.append(row, as: modelType)
 }
 
 private func syncApplyToManyRelationshipMembership<Owner, Model: PersistentModel>(

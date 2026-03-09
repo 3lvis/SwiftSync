@@ -67,9 +67,9 @@ This milestone exists to answer:
 
 ## Open items
 
-- [ ] Complete Milestone 1 by running the benchmark harness across the main SQLite-backed dataset tiers and identifying the true hotspots.
-- [ ] Complete Milestone 2 by adding repeated-run and mixed-workload coverage that is credible to a third-party evaluator.
-- [ ] Complete Milestone 3 by turning the results into optimization work, documented limits, and a clear support statement.
+- [ ] Complete Milestone 3 by reducing the worst realistic workflow costs in the demo-shaped scenario benchmark.
+- [ ] Re-run the headline scenario and isolated supporting benchmarks after each optimization pass.
+- [ ] Turn the post-optimization results into either a supported operating-envelope statement or explicit documented limits.
 
 ## Solution shape
 
@@ -370,6 +370,58 @@ Milestone 2 conclusion:
 - repeated runs and the richer scenario benchmark now provide materially better third-party evidence than the original isolated-path suite
 - the benchmark story is now strong enough to move into Milestone 3
 - the results point toward optimization work before any claim of large-app readiness would be credible
+
+## Milestone 3 plan
+
+Optimization order:
+
+1. Eliminate repeated related-table scans within a single sync pass.
+   Reason: the demo-shaped scenario strongly suggests task-list sync is repeatedly re-fetching the same user/tag tables while applying relationships row by row.
+
+2. Re-measure the demo-shaped scenario.
+   Reason: this is the headline workflow and the best signal for whether the optimization changes the real user-facing cost.
+
+3. If the scenario is still dominated by parent-scoped fetch cost, narrow parent-scoped sync and export next.
+   Reason: Milestone 1 already showed those paths scale with total table size instead of scoped-slice size.
+
+4. Only after the first two optimization passes, decide whether the remaining scale-sensitive behavior is acceptable or should be documented as a limit.
+
+Implementation shape for step 1:
+
+- add a sync-pass-local relationship lookup cache
+- use it in to-one and to-many relationship helpers
+- update the cache when nested-object helpers create related rows during the same sync pass
+- avoid global or cross-sync caches; keep the cache scoped to one sync operation
+
+Why this is the first move:
+
+- it targets the worst realistic workflow directly
+- it does not require changing the public API
+- it should reduce repeated full related-table fetches from “once per row” to “once per related type per sync pass”
+
+Milestone 3 first-pass result:
+
+- implemented a sync-pass-local relationship lookup cache for relationship helpers
+- reused cached related rows across one sync operation instead of re-fetching the same related tables for each row
+- updated nested-object helpers to append newly created related rows into the same cache
+
+Measured impact on the headline scenario:
+
+- `sqlite + 1k`: about `4821 ms` median -> about `713 ms` median
+- `sqlite + 10k`: about `49842 ms` median -> about `6943 ms` median
+
+Verification after the optimization:
+
+- `swift test --filter FetchStrategyBenchmarkTests`
+- `swift test --filter ParentScoped`
+- `SWIFTSYNC_RUN_BENCHMARKS=1 SWIFTSYNC_BENCHMARK_STORES=sqlite SWIFTSYNC_BENCHMARK_TIERS=1000 swift test --filter testDemoShapedScenarioBenchmarks`
+- `SWIFTSYNC_RUN_BENCHMARKS=1 SWIFTSYNC_BENCHMARK_STORES=sqlite SWIFTSYNC_BENCHMARK_TIERS=10000 swift test --filter testDemoShapedScenarioBenchmarks`
+
+What remains after the first pass:
+
+- the headline scenario improved sharply, but `sqlite + 10k` is still about `6.9s`, which is too slow for a strong “large app” story
+- generic SwiftData predicates do not support `model[keyPath: ...]` inside `#Predicate`, so parent-scope narrowing is not a simple generic fetch-descriptor change
+- the next optimization step should therefore be a more specialized parent-scope strategy, not another round of relationship-cache work
 
 ## Candidate focus areas
 
