@@ -112,37 +112,37 @@ Use this when you want row updates but need to narrow relationship-side work for
 
 Later payload rows win (payload order is applied in order).
 
-## 14) What if local storage already has duplicate rows for the same identity?
+## 13) What if local storage already has duplicate rows for the same identity?
 
 SwiftSync deduplicates local identity collisions during sync and keeps one logical row per identity.
 
-## 15) What if a row has missing or `null` primary key?
+## 14) What if a row has missing or `null` primary key?
 
 That row is skipped for matching/diffing. Sync continues for valid rows.
 
-## 16) What happens when a scalar payload value is `null`?
+## 15) What happens when a scalar payload value is `null`?
 
 - optional scalar -> `nil`
 - non-optional primitive scalar -> default fallback (`""`, `0`, `false`, epoch date, zero UUID)
 
 See `docs/project/property-mapping-contract.md`.
 
-## 17) What happens if two sync calls run at the same time?
+## 16) What happens if two sync calls run at the same time?
 
-SwiftSync serializes sync calls per store/container.
+SwiftSync serializes sync calls per `ModelContainer`.
 
 - same `ModelContainer` => queued, no overlap
 - different stores => can run concurrently
 
-More implementation/test-planning detail lives in `docs/planning/swiftdata-concurrency-edge-cases.md`.
+This is enforced by an internal per-container sync lease, not by app code needing to add its own lock.
 
-## 18) How do I cancel a sync?
+## 17) How do I cancel a sync?
 
 Use Swift Concurrency task cancellation (`task.cancel()`).
 
 SwiftSync cooperatively cancels and rolls back unsaved in-memory work for that run.
 
-## 19) In app code, should views perform saves directly?
+## 18) In app code, should views perform saves directly?
 
 Recommended pattern: no.
 
@@ -152,7 +152,7 @@ Recommended pattern: no.
 
 See `docs/project/reactive-reads.md` ("App Best Practices").
 
-## 21) Should I pass SwiftData model objects between views/sheets?
+## 19) Should I pass SwiftData model objects between views/sheets?
 
 Recommended default: no.
 
@@ -164,7 +164,7 @@ This keeps view ownership explicit and avoids stale retained-reference assumptio
 
 See `docs/project/reactive-reads.md` ("App Best Practices").
 
-## 22) What is the inverse rule for many-to-many relationships?
+## 20) What is the inverse rule for many-to-many relationships?
 
 The corrected rule is narrower than what we first documented:
 
