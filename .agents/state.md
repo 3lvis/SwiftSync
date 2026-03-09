@@ -2,25 +2,26 @@
 
 ## Plan
 
-- [x] Create planning docs for nested to-many dirty-tracking coverage gap and fetch-strategy load validation.
-- [x] Review the new planning docs for format compliance and repo alignment.
-- [x] Refine the nested dirty-tracking planning doc with must-do implementation steps only.
-- [x] Refine the fetch-strategy planning doc with benchmark-first resolution steps and solution shape.
+- [x] Review nested to-many dirty-tracking implementation points and existing coverage.
+- [x] Add failing library tests for nested to-many dirty-marking behavior.
+- [x] Update nested to-many sync to mark owners dirty on membership changes and clears, sharing logic with the foreign-key path.
+- [x] Update dirty-tracking docs to match the implemented to-many coverage.
+- [x] Run targeted SwiftSync tests to verify the change set.
 
 ## Last known state
 
-planning docs updated; nested dirty-tracking and fetch-strategy plans now include concrete must-do work and solution shape; no tests or builds run for this docs-only change
+targeted SwiftSync tests green: SyncMarkChangedCallSiteTests and RelationshipIntegrityRegressionTests passed after nested to-many dirty-marking fix and docs update
 
 ## Decisions (don't revisit)
 
-- Use `docs/planning/` for both documents because the repo already reserves that directory for active planning artifacts.
-- Keep both docs focused on problem framing (`why` and `what`) and explicitly defer implementation details (`how`) to later work.
-- Keep both the direct nested-path parity fix and shared to-many deduplication in scope for the eventual implementation.
-- When implementation starts in `SwiftSync/**`, follow strict TDD and note that touching `Core.swift` means iOS regression will run on merge.
-- Resolve fetch-strategy work in this order: benchmark first, optimize feasible paths second, document or expose options for the remaining constrained paths third.
+- This task only implements the active items from `docs/planning/nested-to-many-dirty-tracking-gap.md`.
+- Strict TDD applies because the behavior change is in `SwiftSync/**`.
+- Touching `SwiftSync/Sources/SwiftSync/Core.swift` means iOS regression will run on merge.
 
 ## Files touched
 
 - .agents/state.md
+- SwiftSync/Sources/SwiftSync/Core.swift
+- SwiftSync/Tests/SwiftSyncTests/SyncRelationshipIntegrityTests.swift
+- docs/project/ios-dirty-tracking-gap.md
 - docs/planning/nested-to-many-dirty-tracking-gap.md
-- docs/planning/fetch-strategy-under-load.md

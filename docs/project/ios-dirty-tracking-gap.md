@@ -31,8 +31,8 @@ relationship membership changed.
 
 ## SwiftSync behavior
 
-`syncApplyToManyForeignKeys` now calls `owner.syncMarkChanged()` only when membership actually
-changes.
+`syncApplyToManyForeignKeys` and `syncApplyToManyNestedObjects` now call
+`owner.syncMarkChanged()` only when to-many membership actually changes.
 
 For `@Syncable` models, the macro-generated implementation performs:
 
@@ -50,7 +50,8 @@ func syncMarkChanged() {}
 ```
 
 If a hand-written model owns synced to-many relationships, override `syncMarkChanged()`
-explicitly. Otherwise the dirty-tracking gap can still surface for that model on iOS.
+explicitly. Otherwise the dirty-tracking gap can still surface for that model on iOS when
+foreign-key or nested-object relationship sync changes membership.
 
 ## Notification detail
 
@@ -65,8 +66,9 @@ dictionary for this flow.
 
 - Library contract: `SyncMarkChangedCallSiteTests` in
   `SwiftSync/Tests/SwiftSyncTests/SyncRelationshipIntegrityTests.swift`
-  verifies `syncApplyToManyForeignKeys` calls `syncMarkChanged()` after a real membership change
-  and does not call it when membership is unchanged.
+  verifies both `syncApplyToManyForeignKeys` and `syncApplyToManyNestedObjects` call
+  `syncMarkChanged()` after real membership changes, do not call it when membership is unchanged,
+  and call it after explicit clears.
 - End-to-end regression: `DirtyTrackingGapTests` in
   `DemoCore/Tests/DemoCoreTests/DirtyTrackingGapTests.swift`
   verifies the owning `Task` identifier appears in `ModelContext.didSave` for both persistent and

@@ -315,12 +315,12 @@ public func syncApplyToManyForeignKeys<Owner: SyncUpdatableModel, Related: SyncM
 
     if payload.value(for: key, as: NSNull.self) != nil {
         guard canDelete else { return false }
-        if !owner[keyPath: relationship].isEmpty {
-            owner[keyPath: relationship] = []
-            owner.syncMarkChanged()
-            return true
-        }
-        return false
+        return syncApplyToManyRelationshipMembership(
+            owner,
+            relationship: relationship,
+            next: [],
+            markChanged: { owner.syncMarkChanged() }
+        )
     }
 
     guard let rawIDs: [Related.SyncID] = payload.strictValue(for: key) else {
@@ -345,12 +345,12 @@ public func syncApplyToManyForeignKeys<Owner: SyncUpdatableModel, Related: SyncM
         allowDelete: canDelete,
         allowAdd: canAdd
     )
-    if modelIDSet(current) != modelIDSet(next) {
-        owner[keyPath: relationship] = next
-        owner.syncMarkChanged()
-        return true
-    }
-    return false
+    return syncApplyToManyRelationshipMembership(
+        owner,
+        relationship: relationship,
+        next: next,
+        markChanged: { owner.syncMarkChanged() }
+    )
 }
 
 @discardableResult
@@ -458,7 +458,7 @@ public func syncApplyToManyNestedObjects<Owner, Related: PersistentModel>(
 }
 
 @discardableResult
-public func syncApplyToManyNestedObjects<Owner, Related: SyncUpdatableModel>(
+public func syncApplyToManyNestedObjects<Owner: SyncUpdatableModel, Related: SyncUpdatableModel>(
     _ owner: Owner,
     relationship: ReferenceWritableKeyPath<Owner, [Related]>,
     payload: SyncPayload,
@@ -472,11 +472,12 @@ public func syncApplyToManyNestedObjects<Owner, Related: SyncUpdatableModel>(
 
     if payload.value(for: key, as: NSNull.self) != nil {
         guard canDelete else { return false }
-        if !owner[keyPath: relationship].isEmpty {
-            owner[keyPath: relationship] = []
-            return true
-        }
-        return false
+        return syncApplyToManyRelationshipMembership(
+            owner,
+            relationship: relationship,
+            next: [],
+            markChanged: { owner.syncMarkChanged() }
+        )
     }
 
     guard let nestedValues: [[String: Any]] = payload.strictValue(for: key) else {
@@ -528,8 +529,12 @@ public func syncApplyToManyNestedObjects<Owner, Related: SyncUpdatableModel>(
         allowAdd: canAdd
     )
 
-    if modelIDSet(current) != modelIDSet(next) {
-        owner[keyPath: relationship] = next
+    if syncApplyToManyRelationshipMembership(
+        owner,
+        relationship: relationship,
+        next: next,
+        markChanged: { owner.syncMarkChanged() }
+    ) {
         changed = true
     }
 
@@ -553,6 +558,19 @@ private func dedupePreservingOrder<ID: Hashable>(_ input: [ID]) -> [ID] {
         }
     }
     return output
+}
+
+private func syncApplyToManyRelationshipMembership<Owner, Model: PersistentModel>(
+    _ owner: Owner,
+    relationship: ReferenceWritableKeyPath<Owner, [Model]>,
+    next: [Model],
+    markChanged: (() -> Void)? = nil
+) -> Bool {
+    let current = owner[keyPath: relationship]
+    guard modelIDSet(current) != modelIDSet(next) else { return false }
+    owner[keyPath: relationship] = next
+    markChanged?()
+    return true
 }
 
 private func modelIDSet<Model: PersistentModel>(_ models: [Model]) -> Set<PersistentIdentifier> {
