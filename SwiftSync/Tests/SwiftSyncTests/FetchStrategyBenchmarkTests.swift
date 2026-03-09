@@ -73,6 +73,14 @@ final class BenchmarkScopedTask {
 extension BenchmarkScopedTask: ParentScopedModel {
     typealias SyncParent = BenchmarkProject
     static var parentRelationship: ReferenceWritableKeyPath<BenchmarkScopedTask, BenchmarkProject?> { \.project }
+
+    static func syncScopedFetchDescriptor(for parent: BenchmarkProject) -> FetchDescriptor<BenchmarkScopedTask>? {
+        let parentID = parent.persistentModelID
+        let predicate = #Predicate<BenchmarkScopedTask> { task in
+            task.project?.persistentModelID == parentID
+        }
+        return FetchDescriptor(predicate: predicate)
+    }
 }
 
 @Syncable
@@ -169,6 +177,14 @@ final class ScenarioTask {
 extension ScenarioTask: ParentScopedModel {
     typealias SyncParent = ScenarioProject
     static var parentRelationship: ReferenceWritableKeyPath<ScenarioTask, ScenarioProject?> { \.project }
+
+    static func syncScopedFetchDescriptor(for parent: ScenarioProject) -> FetchDescriptor<ScenarioTask>? {
+        let parentID = parent.persistentModelID
+        let predicate = #Predicate<ScenarioTask> { task in
+            task.project?.persistentModelID == parentID
+        }
+        return FetchDescriptor(predicate: predicate)
+    }
 }
 
 @MainActor

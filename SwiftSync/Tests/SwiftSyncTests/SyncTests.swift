@@ -864,8 +864,19 @@ extension ScopedItem: SyncUpdatableModel {
 }
 
 extension ScopedItem: ParentScopedModel {
+    nonisolated(unsafe) static var scopedFetchDescriptorCallCount: Int = 0
+
     typealias SyncParent = ScopedBucket
     static var parentRelationship: ReferenceWritableKeyPath<ScopedItem, ScopedBucket?> { \.bucket }
+
+    static func syncScopedFetchDescriptor(for parent: ScopedBucket) -> FetchDescriptor<ScopedItem>? {
+        scopedFetchDescriptorCallCount += 1
+        let parentID = parent.persistentModelID
+        let predicate = #Predicate<ScopedItem> { item in
+            item.bucket?.persistentModelID == parentID
+        }
+        return FetchDescriptor(predicate: predicate)
+    }
 }
 
 @Model
@@ -896,8 +907,19 @@ final class GlobalItem {
 }
 
 extension GlobalItem: SyncUpdatableModel {
+    nonisolated(unsafe) static var identityFetchDescriptorCallCount: Int = 0
+
     typealias SyncID = Int
     static var syncIdentity: KeyPath<GlobalItem, Int> { \.id }
+
+    static func syncFetchDescriptor(for identities: [Int]) -> FetchDescriptor<GlobalItem>? {
+        identityFetchDescriptorCallCount += 1
+        let identitySet = Set(identities)
+        let predicate = #Predicate<GlobalItem> { item in
+            identitySet.contains(item.id)
+        }
+        return FetchDescriptor(predicate: predicate)
+    }
 
     static func make(from payload: SyncPayload) throws -> GlobalItem {
         GlobalItem(
@@ -3428,6 +3450,7 @@ final class SyncTests: XCTestCase {
 
     @MainActor
     func testParentScopedSyncGlobalIdentityMovesRowAcrossParents() async throws {
+        GlobalItem.identityFetchDescriptorCallCount = 0
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: GlobalBucket.self, GlobalItem.self, configurations: configuration)
         let context = ModelContext(container)
@@ -3459,10 +3482,16 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(all.first?.id, 10)
         XCTAssertEqual(all.first?.text, "B-10")
         XCTAssertEqual(all.first?.bucket?.id, 2)
+        XCTAssertGreaterThan(
+            GlobalItem.identityFetchDescriptorCallCount,
+            0,
+            "Global parent-scoped sync should use a model-provided identity fetch descriptor when available."
+        )
     }
 
     @MainActor
     func testParentScopedDeleteAffectsOnlyCurrentParentScopeWhenScoped() async throws {
+        ScopedItem.scopedFetchDescriptorCallCount = 0
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: ScopedBucket.self, ScopedItem.self, configurations: configuration)
         let context = ModelContext(container)
@@ -3509,6 +3538,11 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(Set(rows.filter { $0.bucket?.id == 1 }.map(\.id)), Set([1]))
         XCTAssertEqual(rows.first(where: { $0.bucket?.id == 1 && $0.id == 1 })?.text, "A-1 updated")
         XCTAssertEqual(Set(rows.filter { $0.bucket?.id == 2 }.map(\.id)), Set([1, 3]))
+        XCTAssertGreaterThan(
+            ScopedItem.scopedFetchDescriptorCallCount,
+            0,
+            "Parent-scoped sync should use a model-provided scoped fetch descriptor when available."
+        )
     }
 
     @MainActor

@@ -423,6 +423,29 @@ What remains after the first pass:
 - generic SwiftData predicates do not support `model[keyPath: ...]` inside `#Predicate`, so parent-scope narrowing is not a simple generic fetch-descriptor change
 - the next optimization step should therefore be a more specialized parent-scope strategy, not another round of relationship-cache work
 
+Milestone 3 second-pass result:
+
+- added model-provided fetch-descriptor hooks:
+  - `SyncModelable.syncFetchDescriptor(for:)`
+  - `ParentScopedModel.syncScopedFetchDescriptor(for:)`
+- threaded those hooks through:
+  - single-item sync
+  - parent-scoped sync
+  - parent-scoped export
+- verified the narrowing path with focused tests that assert the scoped and identity descriptors are actually used when models provide them
+
+Measured impact on the headline scenario after adding the descriptor hooks to the benchmark models:
+
+- `sqlite + 1k`: about `713 ms` median -> about `671 ms` median
+- `sqlite + 10k`: about `6943 ms` median -> about `6541 ms` median
+
+Interpretation:
+
+- this pass is a real but modest improvement compared with the relationship-cache win
+- the remaining cost is still too high for a strong large-app story at `10k`
+- the hook-based narrowing works, but it currently depends on model authors providing concrete fetch descriptors
+- the next best move is to generate the identity-based descriptor automatically for default `@Syncable` models so the optimization applies broadly without extra handwritten conformance work
+
 ## Candidate focus areas
 
 - Batch sync of a model with a large existing table.
