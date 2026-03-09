@@ -43,6 +43,9 @@ var tasks: [Task]
 2. `predicate:` (custom business filters)
 - Use for scalar-only filters, compound filters, or non-relationship business filters.
 
+3. plain fetch (optionally sorted)
+- Use when the screen needs all rows of a model type and only local ordering/filter defaults.
+
 ## Relationship Path Rules (`relationship:` / `relationshipID:`)
 
 SwiftSync requires an explicit relationship key path for relationship-scoped queries.
@@ -58,7 +61,7 @@ Example (ambiguous relationship):
   relationship: \Ticket.assignee,
   relationshipID: userID,
   in: syncContainer,
-  sortBy: [SortDescriptor(\Ticket.id)]
+  sortBy: [SortDescriptor(\Ticket.updatedAt, order: .reverse)]
 )
 var assignedTickets: [Ticket]
 ```
@@ -77,6 +80,7 @@ Related modeling note:
 
 - `sortBy:` defines order.
 - `refreshOn:` expands which related model changes should invalidate/refetch the query.
+- `sortBy:` does not change invalidation scope.
 
 Example:
 
@@ -88,7 +92,7 @@ Example:
   in: syncContainer,
   sortBy: [
     SortDescriptor(\Task.priority, order: .reverse),
-    SortDescriptor(\Task.id)
+    SortDescriptor(\Task.updatedAt, order: .reverse)
   ],
   refreshOn: [\.project]
 )

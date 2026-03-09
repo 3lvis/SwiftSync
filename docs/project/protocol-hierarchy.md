@@ -45,7 +45,7 @@ The current shape is 4 public protocol/enum surface points:
 - `SyncModelable`
 - `SyncUpdatableModel`
 - `ParentScopedModel`
-- `SyncInputKeyStyle` (enum, not protocol)
+- `KeyStyle` (enum, not protocol)
 
 ---
 
