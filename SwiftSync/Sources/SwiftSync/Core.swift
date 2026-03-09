@@ -51,7 +51,6 @@ public protocol SyncModelable: PersistentModel {
     associatedtype SyncID: Hashable & Codable & Sendable
     static var syncIdentity: KeyPath<Self, SyncID> { get }
     static var syncIdentityRemoteKeys: [String] { get }
-    static func syncFetchDescriptor(for identities: [SyncID]) -> FetchDescriptor<Self>?
     static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] { get }
     static func syncRelatedModelType(for keyPath: PartialKeyPath<Self>) -> (any PersistentModel.Type)?
     static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] { get }
@@ -60,10 +59,6 @@ public protocol SyncModelable: PersistentModel {
 public extension SyncModelable {
     static var syncIdentityRemoteKeys: [String] { ["id", "remote_id", "remoteID"] }
     static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] { [] }
-    static func syncFetchDescriptor(for identities: [SyncID]) -> FetchDescriptor<Self>? {
-        _ = identities
-        return nil
-    }
 
     static func syncRelatedModelType(for keyPath: PartialKeyPath<Self>) -> (any PersistentModel.Type)? {
         _ = keyPath
@@ -675,14 +670,6 @@ private func syncIdentityKey<ID: Hashable>(from identity: ID) -> String {
 public protocol ParentScopedModel: SyncUpdatableModel {
     associatedtype SyncParent: PersistentModel
     static var parentRelationship: ReferenceWritableKeyPath<Self, SyncParent?> { get }
-    static func syncScopedFetchDescriptor(for parent: SyncParent) -> FetchDescriptor<Self>?
-}
-
-public extension ParentScopedModel {
-    static func syncScopedFetchDescriptor(for parent: SyncParent) -> FetchDescriptor<Self>? {
-        _ = parent
-        return nil
-    }
 }
 
 public struct SyncRelationshipOperations: OptionSet, Sendable {

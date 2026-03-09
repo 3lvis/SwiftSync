@@ -444,7 +444,8 @@ Interpretation:
 - this pass is a real but modest improvement compared with the relationship-cache win
 - the remaining cost is still too high for a strong large-app story at `10k`
 - the hook-based narrowing works, but it currently depends on model authors providing concrete fetch descriptors
-- the next best move is to generate the identity-based descriptor automatically for default `@Syncable` models so the optimization applies broadly without extra handwritten conformance work
+- the measured gain is too small to justify the added protocol surface and model-level complexity
+- this path should be treated as rejected unless it later proves necessary as part of a much larger optimization
 
 ## Candidate focus areas
 
@@ -452,6 +453,31 @@ Interpretation:
 - Parent-scoped sync where the global child table is much larger than the parent slice being updated.
 - To-one and to-many relationship resolution when related tables are large.
 - Export behavior when full-table reads are used for deterministic ordering.
+
+## Rejected path
+
+- Model-provided identity and scoped fetch descriptors were measured and did improve the benchmark, but only modestly:
+  - `sqlite + 1k`: about `713 ms` -> about `671 ms`
+  - `sqlite + 10k`: about `6943 ms` -> about `6541 ms`
+- The `10k` gain is about `5.8%`, which is not enough to justify the extra public API surface, branching, and per-model authoring burden.
+- This optimization path should not stay in the library in its current form.
+
+## Alternative optimization paths
+
+- Special-case parent-scoped authoritative sync around the actual scope diff rather than full-table reconciliation.
+  Reason: the benchmark evidence still says project-scoped task-list sync is paying too much for global child-table size.
+
+- Build a sync-pass identity index for the target model rows, not just related rows.
+  Reason: `sync(item:)` and authoritative sync still appear to spend too much time rediscovering existing rows by scanning fetched arrays.
+
+- Separate authoritative delete planning from row materialization.
+  Reason: if delete/diff decisions can be made from compact identity sets instead of loading whole model objects, global sync may drop sharply.
+
+- Narrow export by stable scope-first ordering instead of fetch-all-then-filter.
+  Reason: parent-scoped export is still paying a table-wide penalty for a fixed slice.
+
+- Revisit parent-scoped strategy at the API level if SwiftData cannot express the needed generic predicates cleanly.
+  Reason: a targeted specialized path may be worth it if it produces a large scenario-level gain, unlike the generic hook approach.
 
 ## References
 

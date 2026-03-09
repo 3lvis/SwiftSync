@@ -14,13 +14,13 @@
 - [x] Decide whether parent-scoped fetch narrowing is still needed after the relationship-cache pass.
 - [x] Add model-provided identity/scoped fetch descriptors and thread them through sync/export paths.
 - [x] Re-run focused tests and headline benchmarks to measure the narrowing pass.
-- [~] Add generated identity-based fetch descriptors for default `@Syncable` models so narrowing applies without handwritten hooks.
-- [ ] Re-run the headline scenario after macro-generated identity narrowing.
+- [x] Remove the rejected fetch-descriptor optimization path from the library and keep only the documented findings.
+- [ ] Choose the next high-leverage optimization direction after the rejected-path cleanup.
 - [ ] Decide the next Milestone 3 optimization based on the updated scenario timings.
 
 ## Last known state
 
-Parent-scope/identity hook pass is verified; focused tests are green and the demo-shaped SQLite scenario moved from ~713 ms to ~671 ms at 1k and from ~6943 ms to ~6541 ms at 10k; next step is automatic identity narrowing for default `@Syncable` models
+Fetch-descriptor narrowing is rejected and removed from the library; planning doc records the ~5.8% sqlite/10k gain as insufficient, and focused `ParentScoped` tests are green on the cleaned-up codepath
 
 ## Decisions (don't revisit)
 
@@ -29,7 +29,8 @@ Parent-scope/identity hook pass is verified; focused tests are green and the dem
 - Keep benchmark execution opt-in so normal `swift test` remains fast.
 - Avoid inventing performance thresholds before measurements exist; collect evidence first.
 - Generic `#Predicate` construction cannot use arbitrary key-path access, so narrowing needs model-provided concrete descriptors rather than a generic key-path predicate builder.
-- The model-provided narrowing hooks work, but the 10k scenario improvement is modest enough that they should be synthesized for default `@Syncable` models instead of remaining purely opt-in.
+- The fetch-descriptor narrowing path is not worth keeping as a standalone optimization because the 10k scenario gain is only about 5.8%.
+- Changes in `Core.swift` mean iOS regression will run on merge.
 
 ## Files touched
 
@@ -39,5 +40,6 @@ Parent-scope/identity hook pass is verified; focused tests are green and the dem
 - SwiftSync/Sources/SwiftSync/Core.swift
 - SwiftSync/Sources/SwiftSync/SyncContainer.swift
 - SwiftSync/Tests/SwiftSyncTests/FetchStrategyBenchmarkTests.swift
+- SwiftSync/Tests/SwiftSyncMacrosTests/SyncableMacroDiagnosticsTests.swift
 - SwiftSync/Tests/SwiftSyncTests/SyncExportTests.swift
 - SwiftSync/Tests/SwiftSyncTests/SyncTests.swift

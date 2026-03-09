@@ -186,13 +186,8 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         parent: Model.SyncParent
     ) throws -> [[String: Any]] {
         let context = ModelContext(modelContainer)
-        let rows: [Model]
-        if let scopedDescriptor = Model.syncScopedFetchDescriptor(for: parent) {
-            rows = try context.fetch(scopedDescriptor)
-        } else {
-            rows = try context.fetch(FetchDescriptor<Model>())
-                .filter { $0[keyPath: Model.parentRelationship]?.persistentModelID == parent.persistentModelID }
-        }
+        let rows = try context.fetch(FetchDescriptor<Model>())
+            .filter { $0[keyPath: Model.parentRelationship]?.persistentModelID == parent.persistentModelID }
         let sorted = rows.sorted { lhs, rhs in
             String(describing: lhs[keyPath: Model.syncIdentity]) < String(describing: rhs[keyPath: Model.syncIdentity])
         }

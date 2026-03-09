@@ -161,19 +161,8 @@ final class ExportChild {
 }
 
 extension ExportChild: ParentScopedModel {
-    nonisolated(unsafe) static var scopedFetchDescriptorCallCount: Int = 0
-
     typealias SyncParent = ExportParent
     static var parentRelationship: ReferenceWritableKeyPath<ExportChild, ExportParent?> { \.parent }
-
-    static func syncScopedFetchDescriptor(for parent: ExportParent) -> FetchDescriptor<ExportChild>? {
-        scopedFetchDescriptorCallCount += 1
-        let parentID = parent.persistentModelID
-        let predicate = #Predicate<ExportChild> { child in
-            child.parent?.persistentModelID == parentID
-        }
-        return FetchDescriptor(predicate: predicate)
-    }
 }
 
 @Syncable
@@ -444,7 +433,6 @@ final class ExportTests: XCTestCase {
 
     @MainActor
     func testExportParentScopedOnlyExportsThatParentsChildren() throws {
-        ExportChild.scopedFetchDescriptorCallCount = 0
         let syncContainer = try makeSyncContainer(for: ExportParent.self, ExportChild.self)
         let context = syncContainer.mainContext
         let parentA = ExportParent(id: 6, name: "A")
@@ -462,11 +450,6 @@ final class ExportTests: XCTestCase {
         let rows = try syncContainer.export(as: ExportChild.self, parent: parentA)
         XCTAssertEqual(rows.count, 2)
         XCTAssertEqual(Set(rows.compactMap { $0["id"] as? Int }), Set([0, 1]))
-        XCTAssertGreaterThan(
-            ExportChild.scopedFetchDescriptorCallCount,
-            0,
-            "Parent-scoped export should use a model-provided scoped fetch descriptor when available."
-        )
     }
 
     @MainActor

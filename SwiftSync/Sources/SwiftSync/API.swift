@@ -121,12 +121,7 @@ extension SwiftSync {
                     return
                 }
                 let key = identityKey(from: identity)
-                let existing: [Model]
-                if let descriptor = Model.syncFetchDescriptor(for: [identity]) {
-                    existing = try context.fetch(descriptor)
-                } else {
-                    existing = try context.fetch(FetchDescriptor<Model>())
-                }
+                let existing = try context.fetch(FetchDescriptor<Model>())
                 var changed = false
 
                 if let row = existing.first(where: { identityKey(from: $0[keyPath: Model.syncIdentity]) == key }) {
@@ -190,12 +185,7 @@ extension SwiftSync {
                         reason: "Parent must be resolved in the same ModelContext used for sync."
                     )
                 }
-                let existing: [Model]
-                if let descriptor = Model.syncFetchDescriptor(for: [identity]) {
-                    existing = try context.fetch(descriptor)
-                } else {
-                    existing = try context.fetch(FetchDescriptor<Model>())
-                }
+                let existing = try context.fetch(FetchDescriptor<Model>())
                 let scopeRows = existing.filter {
                     $0[keyPath: relationship]?.persistentModelID == resolvedParent.persistentModelID
                 }
@@ -260,28 +250,6 @@ extension SwiftSync {
         )
     }
 
-    static func sync<Model: SyncUpdatableModel & ParentScopedModel>(
-        payload: [Any],
-        as _: Model.Type,
-        in context: ModelContext,
-        parent: Model.SyncParent,
-        relationship: ReferenceWritableKeyPath<Model, Model.SyncParent?>,
-        keyStyle: KeyStyle = .snakeCase,
-        relationshipOperations: SyncRelationshipOperations = .all
-    ) async throws {
-        try await sync(
-            payload: payload,
-            as: Model.self,
-            in: context,
-            parent: parent,
-            parentRelationship: relationship,
-            isGlobal: syncIdentityHasUniqueAttribute(Model.self),
-            keyStyle: keyStyle,
-            relationshipOperations: relationshipOperations,
-            scopedFetchDescriptor: Model.syncScopedFetchDescriptor(for: parent)
-        )
-    }
-
     private static func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
         payload: [Any],
         as _: Model.Type,
@@ -290,8 +258,7 @@ extension SwiftSync {
         parentRelationship: ReferenceWritableKeyPath<Model, Parent?>,
         isGlobal: Bool,
         keyStyle: KeyStyle,
-        relationshipOperations: SyncRelationshipOperations,
-        scopedFetchDescriptor: FetchDescriptor<Model>? = nil
+        relationshipOperations: SyncRelationshipOperations
     ) async throws {
         let lease = await acquireSyncLease(for: context)
         do {
@@ -304,29 +271,9 @@ extension SwiftSync {
                         reason: "Parent must be resolved in the same ModelContext used for sync."
                     )
                 }
-                let payloadIdentities = entries.compactMap { entry in
-                    resolveIdentity(from: SyncPayload(values: entry, keyStyle: keyStyle), model: Model.self)
-                }
-                let existing: [Model]
-                if isGlobal, let descriptor = Model.syncFetchDescriptor(for: payloadIdentities) {
-                    existing = try context.fetch(descriptor)
-                } else {
-                    existing = try context.fetch(FetchDescriptor<Model>())
-                }
-                let scopeRows: [Model]
-                if let scopedFetchDescriptor {
-                    scopeRows = try context.fetch(scopedFetchDescriptor)
-                } else {
-                    if isGlobal {
-                        let allRows = try context.fetch(FetchDescriptor<Model>())
-                        scopeRows = allRows.filter {
-                            $0[keyPath: parentRelationship]?.persistentModelID == resolvedParent.persistentModelID
-                        }
-                    } else {
-                        scopeRows = existing.filter {
-                            $0[keyPath: parentRelationship]?.persistentModelID == resolvedParent.persistentModelID
-                        }
-                    }
+                let existing = try context.fetch(FetchDescriptor<Model>())
+                let scopeRows = existing.filter {
+                    $0[keyPath: parentRelationship]?.persistentModelID == resolvedParent.persistentModelID
                 }
 
                 var index: [String: Model] = [:]
