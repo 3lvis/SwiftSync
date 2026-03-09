@@ -174,26 +174,42 @@ The key invariant is stable: views read local reactive state; the domain layer k
 
 ## UIKit: SyncQueryPublisher
 
-For UIKit screens, use `SyncQueryPublisher` — the Combine-backed equivalent of `@SyncQuery`.
+For UIKit screens, use `SyncQueryPublisher` when `@SyncQuery` is not available.
+
+It is Observation-based and exposes a reactive `rows` property.
 
 ```swift
-let publisher = SyncQueryPublisher(
-    Project.self,
-    in: syncContainer,
-    sortBy: [SortDescriptor(\Project.name)]
-)
+import Observation
 
-publisher.$rows
-    .receive(on: DispatchQueue.main)
-    .sink { [weak self] rows in self?.applySnapshot(rows) }
-    .store(in: &cancellables)
+final class ProjectsViewController: UIViewController {
+    private var projectsObserver: SyncQueryPublisher<Project>?
+
+    func bindProjects() {
+        let observer = SyncQueryPublisher(
+            Project.self,
+            in: syncContainer,
+            sortBy: [SortDescriptor(\Project.name)]
+        )
+        projectsObserver = observer
+
+        func track() {
+            withObservationTracking {
+                applySnapshot(observer.rows)
+            } onChange: {
+                Task { @MainActor in track() }
+            }
+        }
+
+        track()
+    }
+}
 ```
 
 It supports the same query shapes as `@SyncQuery`:
 - plain fetch with optional predicate
 - `relationship:` + `relationshipID:` for relationship-scoped queries
 
-It reacts to the same internal save notifications as `@SyncQuery` and applies the same reload heuristics (`changedTypeNames`, `changedIDs`).
+It reacts to the same internal save notifications as `@SyncQuery` and reloads from the local store after sync-driven save notifications.
 
 Hold it as a property — it starts observing on init and stops on deinit.
 
