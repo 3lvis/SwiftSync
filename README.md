@@ -195,30 +195,44 @@ Keep using `predicate` when relationship-scoped `relationship/relationshipID` is
 
 ### UIKit (SyncQueryPublisher)
 
-SwiftUI is first class. `SyncQueryPublisher` exists for UIKit screens where `@SyncQuery` is not available — it covers the same reactive contract using Combine.
+SwiftUI is first class. `SyncQueryPublisher` exists for UIKit screens where `@SyncQuery` is not available. It is Observation-based and exposes a reactive `rows` property.
 
 ```swift
-let publisher = SyncQueryPublisher(
-    Project.self,
-    in: syncContainer,
-    sortBy: [SortDescriptor(\Project.name)]
-)
+import Observation
 
-publisher.$rows
-    .receive(on: DispatchQueue.main)
-    .sink { [weak self] projects in self?.applySnapshot(projects) }
-    .store(in: &cancellables)
+final class ProjectsViewController: UIViewController {
+  private var projectsObserver: SyncQueryPublisher<Project>?
+
+  func bindProjects() {
+    let observer = SyncQueryPublisher(
+      Project.self,
+      in: syncContainer,
+      sortBy: [SortDescriptor(\Project.name)]
+    )
+    projectsObserver = observer
+
+    func track() {
+      withObservationTracking {
+        applySnapshot(observer.rows)
+      } onChange: {
+        Task { @MainActor in track() }
+      }
+    }
+
+    track()
+  }
+}
 ```
 
 Relationship-scoped variant (to-one):
 
 ```swift
 let publisher = SyncQueryPublisher(
-    Task.self,
-    relationship: \Task.assignee,
-    relationshipID: userID,
-    in: syncContainer,
-    sortBy: [SortDescriptor(\Task.title)]
+  Task.self,
+  relationship: \Task.assignee,
+  relationshipID: userID,
+  in: syncContainer,
+  sortBy: [SortDescriptor(\Task.title)]
 )
 ```
 
