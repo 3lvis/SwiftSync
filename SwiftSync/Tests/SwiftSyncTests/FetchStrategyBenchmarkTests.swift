@@ -99,6 +99,78 @@ final class BenchmarkWorkItem {
     }
 }
 
+@Syncable
+@Model
+final class ScenarioUser {
+    @Attribute(.unique) var id: Int
+    var fullName: String
+
+    init(id: Int, fullName: String) {
+        self.id = id
+        self.fullName = fullName
+    }
+}
+
+@Syncable
+@Model
+final class ScenarioTag {
+    @Attribute(.unique) var id: Int
+    var name: String
+
+    init(id: Int, name: String) {
+        self.id = id
+        self.name = name
+    }
+}
+
+@Syncable
+@Model
+final class ScenarioProject {
+    @Attribute(.unique) var id: Int
+    var name: String
+
+    init(id: Int, name: String) {
+        self.id = id
+        self.name = name
+    }
+}
+
+@Syncable
+@Model
+final class ScenarioTask {
+    @Attribute(.unique) var id: Int
+    var title: String
+    var project: ScenarioProject?
+    var assignee: ScenarioUser?
+
+    @RemoteKey("tag_ids")
+    var tags: [ScenarioTag]
+
+    @RemoteKey("watcher_ids")
+    var watchers: [ScenarioUser]
+
+    init(
+        id: Int,
+        title: String,
+        project: ScenarioProject? = nil,
+        assignee: ScenarioUser? = nil,
+        tags: [ScenarioTag] = [],
+        watchers: [ScenarioUser] = []
+    ) {
+        self.id = id
+        self.title = title
+        self.project = project
+        self.assignee = assignee
+        self.tags = tags
+        self.watchers = watchers
+    }
+}
+
+extension ScenarioTask: ParentScopedModel {
+    typealias SyncParent = ScenarioProject
+    static var parentRelationship: ReferenceWritableKeyPath<ScenarioTask, ScenarioProject?> { \.project }
+}
+
 @MainActor
 final class FetchStrategyBenchmarkTests: XCTestCase {
     private let environment = BenchmarkEnvironment.current
@@ -486,6 +558,79 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
         }
     }
 
+    func testDemoShapedScenarioBenchmarks() async throws {
+        try requireBenchmarksEnabled()
+
+        for storeKind in environment.storeKinds {
+            for existingCount in environment.datasetTiers {
+                let scopeCount = min(environment.scopeSize, existingCount)
+                let relationshipCount = min(10, max(1, existingCount))
+
+                let result = try await measureRepeatedAsyncCase(
+                    name: "demo-shaped-project-session",
+                    storeKind: storeKind,
+                    totalRows: existingCount,
+                    payloadRows: scopeCount + 2,
+                    scopeRows: scopeCount,
+                    relationRows: existingCount,
+                    relationshipCount: relationshipCount,
+                    workload: "mixed"
+                ) {
+                    let fixture = try makeStoreFixture(storeKind: storeKind)
+                    defer { fixture.cleanup() }
+
+                    let container = try ModelContainer(
+                        for: ScenarioUser.self,
+                        ScenarioTag.self,
+                        ScenarioProject.self,
+                        ScenarioTask.self,
+                        configurations: fixture.configuration
+                    )
+                    let context = ModelContext(container)
+                    let syncContainer = SyncContainer(container)
+
+                    let targetProject = try seedScenarioWorkspace(
+                        totalTaskCount: existingCount,
+                        targetScopeCount: scopeCount,
+                        relatedCount: existingCount,
+                        in: context
+                    )
+
+                    let taskListPayload = makeScenarioTaskListPayload(
+                        count: scopeCount,
+                        relationshipCount: relationshipCount
+                    )
+                    let taskDetailPayload: [String: Any] = [
+                        "id": 1,
+                        "title": "Scenario Task 1 Detail Updated",
+                        "assignee_id": existingCount,
+                        "tag_ids": Array(1...relationshipCount),
+                        "watcher_ids": Array(max(1, existingCount - relationshipCount + 1)...existingCount)
+                    ]
+                    let userPresencePayload: [String: Any] = [
+                        "id": existingCount,
+                        "full_name": "Scenario User \(existingCount) Active"
+                    ]
+
+                    return try await measureDuration {
+                        try await SwiftSync.sync(
+                            payload: taskListPayload,
+                            as: ScenarioTask.self,
+                            in: context,
+                            parent: targetProject,
+                            relationship: \ScenarioTask.project
+                        )
+                        try await SwiftSync.sync(item: taskDetailPayload, as: ScenarioTask.self, in: context)
+                        try await SwiftSync.sync(item: userPresencePayload, as: ScenarioUser.self, in: context)
+                        _ = try syncContainer.export(as: ScenarioTask.self, parent: targetProject)
+                    }
+                }
+
+                emit(result)
+            }
+        }
+    }
+
     private func requireBenchmarksEnabled() throws {
         guard environment.isEnabled else {
             throw XCTSkip(
@@ -576,6 +721,44 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
         return target
     }
 
+    private func seedScenarioWorkspace(
+        totalTaskCount: Int,
+        targetScopeCount: Int,
+        relatedCount: Int,
+        in context: ModelContext
+    ) throws -> ScenarioProject {
+        for index in 1...relatedCount {
+            context.insert(ScenarioUser(id: index, fullName: "Scenario User \(index)"))
+            context.insert(ScenarioTag(id: index, name: "Scenario Tag \(index)"))
+        }
+
+        let targetProject = ScenarioProject(id: 1, name: "Project 1")
+        context.insert(targetProject)
+
+        let otherProjectCount = max(1, min(8, totalTaskCount - targetScopeCount))
+        var otherProjects: [ScenarioProject] = []
+        for index in 0..<otherProjectCount {
+            let project = ScenarioProject(id: index + 2, name: "Project \(index + 2)")
+            context.insert(project)
+            otherProjects.append(project)
+        }
+
+        for index in 1...targetScopeCount {
+            context.insert(ScenarioTask(id: index, title: "Scenario Task \(index)", project: targetProject))
+        }
+
+        if totalTaskCount > targetScopeCount {
+            for offset in 0..<(totalTaskCount - targetScopeCount) {
+                let taskID = targetScopeCount + offset + 1
+                let project = otherProjects[offset % otherProjects.count]
+                context.insert(ScenarioTask(id: taskID, title: "Scenario Task \(taskID)", project: project))
+            }
+        }
+
+        try context.save()
+        return targetProject
+    }
+
     private func makeUserPayload(count: Int, namePrefix: String) -> [[String: Any]] {
         (1...count).map { index in
             ["id": index, "full_name": "\(namePrefix) \(index)"]
@@ -585,6 +768,21 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
     private func makeScopedTaskPayload(count: Int) -> [[String: Any]] {
         (1...count).map { index in
             ["id": index, "title": "Scoped Updated \(index)"]
+        }
+    }
+
+    private func makeScenarioTaskListPayload(
+        count: Int,
+        relationshipCount: Int
+    ) -> [[String: Any]] {
+        (1...count).map { index in
+            [
+                "id": index,
+                "title": "Scenario Task \(index) List Updated",
+                "assignee_id": ((index - 1) % max(1, count)) + 1,
+                "tag_ids": Array(1...relationshipCount),
+                "watcher_ids": Array(1...relationshipCount)
+            ]
         }
     }
 

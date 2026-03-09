@@ -342,6 +342,35 @@ Remaining Milestone 2 question:
 
 - whether we need one richer, less synthetic graph benchmark before treating the results as strong enough for third-party guidance
 
+Demo-shaped scenario benchmark added in `FetchStrategyBenchmarkTests.swift` and verified with:
+
+- `SWIFTSYNC_RUN_BENCHMARKS=1 SWIFTSYNC_BENCHMARK_STORES=sqlite SWIFTSYNC_BENCHMARK_TIERS=1000 swift test --filter testDemoShapedScenarioBenchmarks`
+- `SWIFTSYNC_RUN_BENCHMARKS=1 SWIFTSYNC_BENCHMARK_STORES=sqlite SWIFTSYNC_BENCHMARK_TIERS=10000 swift test --filter testDemoShapedScenarioBenchmarks`
+
+Scenario shape:
+
+- project-scoped task list sync
+- single task detail update with assignee, tags, and watchers
+- single user update
+- scoped export for the same project
+
+Scenario findings:
+
+- `sqlite + 1k`: about `4821 ms` median
+- `sqlite + 10k`: about `49842 ms` median
+
+Why this matters:
+
+- the demo-shaped scenario is dramatically heavier than the generic mixed workload
+- that suggests the more realistic graph is exposing repeated relationship-resolution cost inside the project task sync
+- the earlier mixed workload was directionally useful, but it substantially understated the impact of a task-list style session
+
+Milestone 2 conclusion:
+
+- repeated runs and the richer scenario benchmark now provide materially better third-party evidence than the original isolated-path suite
+- the benchmark story is now strong enough to move into Milestone 3
+- the results point toward optimization work before any claim of large-app readiness would be credible
+
 ## Candidate focus areas
 
 - Batch sync of a model with a large existing table.
