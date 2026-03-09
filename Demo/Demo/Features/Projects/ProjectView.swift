@@ -70,11 +70,12 @@ struct ProjectView: View {
                         }
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button(role: .destructive) {
+                        Button {
                             taskPendingDelete = TaskDeletePrompt(id: task.id, title: task.title)
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }
+                        .tint(.red)
                     }
                 }
             }
@@ -101,6 +102,7 @@ struct ProjectView: View {
                 syncEngine: syncEngine
             )
         }
+        .animation(.snappy(duration: 0.2), value: machine.tasks.map(\.id))
         .alert(
             "Delete Task?",
             isPresented: Binding(

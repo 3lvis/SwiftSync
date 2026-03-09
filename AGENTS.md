@@ -26,7 +26,9 @@
 ### Demo app workflow (`Demo/Demo/**`)
 
 - Strict TDD is not required.
-- Verify changes with relevant tests when available; otherwise use manual QA.
+- Verify changes with relevant tests when available.
+- For UI or behavior changes in `Demo/Demo/**`, build the demo app before finishing the task.
+- Use manual QA in the demo app as needed, but do not treat manual QA as a substitute for the required build step.
 
 ## Implementation Guidance
 
@@ -186,7 +188,8 @@ Gitignoring `.agents/` defeats the "switch machines" goal. The files must be com
 
 ## iOS Test Policy
 
-- Default: run `swift test` (macOS/SPM) only. Never run `xcodebuild` unless explicitly asked.
+- Default: run `swift test` (macOS/SPM) only.
+- Exception: if a task changes `Demo/Demo/**`, run the relevant demo app build even if the user did not explicitly ask for `xcodebuild`.
 - iOS regression runs automatically post-merge via `ios-regression.yml` — that is the gate.
 - If a task touches `Core.swift`, `MacrosImplementation/`, or `SyncableMacro.swift`, note in
   the plan that the iOS regression will run on merge.
