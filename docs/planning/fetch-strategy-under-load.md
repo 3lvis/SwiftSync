@@ -21,16 +21,28 @@ This ambiguity affects adoption decisions more than the raw implementation itsel
 
 This work should define the expected performance envelope for the current fetch strategy and identify the evidence needed to support that position.
 
-The goal is to decide what the project wants to claim, not how to optimize it yet.
+The goal is to resolve the scaling question in a controlled order:
+
+1. benchmark the current behavior
+2. optimize the paths that can be improved cleanly
+3. define explicit options or limits for the paths that cannot be improved enough
+
+This keeps the work evidence-driven and avoids speculative rewrites.
 
 ## Open items
 
-- [ ] Inventory the sync paths that currently fetch complete model tables before filtering or indexing.
-- [ ] Describe the data-shape variables that matter for runtime cost: total row count, payload size, parent-scope width, and relationship fan-out.
-- [ ] Define the dataset sizes that represent “small,” “moderate,” and “large” for SwiftSync evaluation.
-- [ ] Decide whether SwiftSync intends to support large local stores or explicitly target modest dataset sizes.
-- [ ] Define what evidence is required to justify that claim: benchmarks, profiling traces, or documentation limits.
-- [ ] Write acceptance criteria for this planning item in terms of documented expectations and measurable validation goals, without choosing implementation changes yet.
+- [ ] Add benchmarks for the current full-table fetch paths in sync, relationship resolution, parent-scoped sync, and export.
+- [ ] Define the dataset sizes and payload shapes the benchmarks must cover.
+- [ ] Identify which measured paths can be improved without changing the public contract.
+- [ ] Replace the worst full-table fetch paths with narrower fetches where SwiftData supports it cleanly.
+- [ ] Define explicit caller options or documented limits for the paths that cannot be optimized enough.
+- [ ] Update library docs to state the supported operating envelope and remaining scale-sensitive paths.
+
+## Solution shape
+
+- Benchmark first so optimization work is driven by measured cost instead of assumption.
+- Optimize the paths that can be narrowed without making the API or implementation brittle.
+- Expose clear limits or alternative usage guidance for the paths that must remain scale-sensitive.
 
 ## Candidate focus areas
 

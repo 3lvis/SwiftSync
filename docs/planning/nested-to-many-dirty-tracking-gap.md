@@ -28,12 +28,12 @@ The intended output is clarity, not implementation detail:
 
 ## Open items
 
-- [ ] State the supported guarantee in library docs using path-specific language.
-- [ ] Identify every to-many mutation path in SwiftSync and classify whether it is expected to trigger `syncMarkChanged()`.
-- [ ] Record the current gap between foreign-key to-many handling and nested-object to-many handling.
-- [ ] Specify the minimum test matrix needed to prove parity or intentionally document non-parity.
-- [ ] Decide whether nested-object to-many updates are part of the same public notification contract as foreign-key to-many updates.
-- [ ] Define the acceptance criteria for closing this planning item without prescribing code changes yet.
+- [ ] Add library tests for nested to-many membership changes that must call `syncMarkChanged()`.
+- [ ] Add library tests proving nested to-many does not call `syncMarkChanged()` when membership is unchanged.
+- [ ] Add library tests for nested to-many clear behavior that must call `syncMarkChanged()`.
+- [ ] Update `syncApplyToManyNestedObjects` to call `syncMarkChanged()` on membership changes and clears.
+- [ ] Deduplicate the to-many dirty-marking flow shared by foreign-key and nested-object sync paths.
+- [ ] Update dirty-tracking docs to describe the supported to-many paths after the code and tests agree.
 
 ## References
 
