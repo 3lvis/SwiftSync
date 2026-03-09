@@ -1,22 +1,34 @@
 # Reactive Reads
 
-SwiftSync provides three reactive local read APIs:
+SwiftSync has three reactive local read APIs:
 
-- `@SyncQuery` (SwiftUI list reads)
-- `@SyncModel` (SwiftUI detail reads by identity)
-- `SyncQueryPublisher` (UIKit/plain Swift class-based reads)
+- `@SyncQuery` for SwiftUI list reads
+- `@SyncModel` for SwiftUI detail reads by sync ID
+- `SyncQueryPublisher` for UIKit and non-SwiftUI flows
 
-These APIs read from local `SwiftData` (`syncContainer.mainContext`). They do not call the network.
+All three read from local `SwiftData` (`syncContainer.mainContext`). They do not call the network by themselves.
+
+## User-facing mental model
+
+Think of `@SyncQuery` as:
+
+- "Keep this list in sync with local storage using this filter and this sort order."
+
+Think of `@SyncModel` as:
+
+- "Keep this single model (by sync ID) refreshed for UI rendering."
+
+Reactive reads are query-snapshot driven. They are not retained-object live merge semantics.
 
 ## Query shapes
 
-`@SyncQuery` and `SyncQueryPublisher` support the same query shapes:
+`@SyncQuery` and `SyncQueryPublisher` support the same fetch shapes:
 
-1. Full model fetch
-2. Predicate-based fetch
+1. Full fetch (optionally sorted)
+2. Predicate-based fetch (`predicate:`)
 3. Relationship-scoped fetch (`relationship:` + `relationshipID:`)
 
-To-one relationship example:
+Relationship-scoped example (tasks for one project):
 
 ```swift
 @SyncQuery(
@@ -24,41 +36,148 @@ To-one relationship example:
   relationship: \Task.project,
   relationshipID: projectID,
   in: syncContainer,
-  sortBy: [SortDescriptor(\Task.id)]
+  sortBy: [SortDescriptor(\Task.updatedAt, order: .reverse)]
 )
 var tasks: [Task]
 ```
 
-To-many relationship example:
+Predicate example (business filter):
 
 ```swift
 @SyncQuery(
-  Project.self,
-  relationship: \Project.tasks,
-  relationshipID: taskID,
+  Task.self,
+  predicate: #Predicate<Task> { $0.isArchived == false },
   in: syncContainer,
-  sortBy: [SortDescriptor(\Project.id)]
+  sortBy: [
+    SortDescriptor(\Task.priority, order: .reverse),
+    SortDescriptor(\Task.updatedAt, order: .reverse)
+  ]
 )
-var projects: [Project]
+var activeTasks: [Task]
 ```
 
-## Refresh behavior
+## Relationship path rules
 
-- `SyncContainer` observes background save notifications.
-- After sync writes, it posts an internal `didSaveChangesNotification`.
-- Reactive wrappers observe that notification and reload from `mainContext`.
+SwiftSync uses explicit relationship paths for relationship-scoped queries:
 
-In practice, this gives the "sync local data, UI re-renders from local store" flow.
+- pass `relationship:` and `relationshipID:` together
+- to-one and to-many relationship key paths are both supported
+- keep the path explicit when a model has multiple relationships to the same related type
 
-## `refreshOn` (SwiftUI only)
+Example (multiple `User` relationships on `Task`):
 
-When `Model` conforms to `SyncModelable`, `@SyncQuery` has overloads with `refreshOn:`.
+- `Task.assignee`
+- `Task.reviewer`
+- `Task.watchers`
 
-- `refreshOn:` adds related model types to the query's observed type set.
-- Use it when a screen renders related-model fields and should refresh when those related models change.
+Use the intended path directly:
 
-## App usage guidelines
+```swift
+@SyncQuery(
+  Task.self,
+  relationship: \Task.assignee,
+  relationshipID: userID,
+  in: syncContainer,
+  sortBy: [SortDescriptor(\Task.updatedAt, order: .reverse)]
+)
+var assignedTasks: [Task]
+```
 
-- Keep network calls and sync orchestration in a domain/service layer.
-- Keep views focused on local reads and user interaction.
-- Pass IDs/scalars between views instead of passing `SwiftData` model instances around.
+## `sortBy` vs `refreshOn`
+
+- `sortBy:` controls result ordering
+- `refreshOn:` expands invalidation to related model changes used by the screen
+
+Example:
+
+```swift
+@SyncQuery(
+  Task.self,
+  relationship: \Task.assignee,
+  relationshipID: userID,
+  in: syncContainer,
+  sortBy: [
+    SortDescriptor(\Task.priority, order: .reverse),
+    SortDescriptor(\Task.updatedAt, order: .reverse)
+  ],
+  refreshOn: [\.project]
+)
+var tasks: [Task]
+```
+
+Mental model for `refreshOn: [\.project]`:
+
+- "Reload this task query if a related project changes because this UI reads project fields."
+
+## How updates reach UI
+
+High-level flow:
+
+1. Sync writes happen in a background context.
+2. `SyncContainer` observes saves and computes changed type/ID metadata.
+3. Reactive wrappers invalidate and refetch when those changes are relevant.
+4. SwiftUI/UIKit renders fresh snapshots from the local store.
+
+This is the intended "sync and forget" path: sync updates local data and reactive reads update UI.
+
+## App usage conventions
+
+These conventions keep app-level behavior predictable:
+
+- treat views as reactive local readers (`@SyncQuery` / `@SyncModel`)
+- put backend mutation and sync orchestration in a domain/service layer
+- pass IDs/scalars between views and let each view own its own query
+- avoid passing long-lived `SwiftData` model references through navigation flows
+
+Typical save flow:
+
+1. Detail view opens a modal with IDs/scalars.
+2. Modal submits a save intent.
+3. Domain layer performs backend mutation and sync.
+4. UI re-renders from local store updates.
+
+## UIKit usage (`SyncQueryPublisher`)
+
+Use `SyncQueryPublisher` as the Combine equivalent of `@SyncQuery`:
+
+```swift
+let publisher = SyncQueryPublisher(
+  Project.self,
+  in: syncContainer,
+  sortBy: [SortDescriptor(\Project.name)]
+)
+
+publisher.$rows
+  .receive(on: DispatchQueue.main)
+  .sink { [weak self] rows in self?.applySnapshot(rows) }
+  .store(in: &cancellables)
+```
+
+It supports the same query shapes (full/predicate/relationship-scoped) and reacts to the same save invalidation path as `@SyncQuery`.
+
+## Design rationale and tradeoffs
+
+### Goal
+
+Provide practical reactive reads with minimal app-side invalidation plumbing:
+
+- sync writes local data
+- UI re-renders from local query snapshots
+- app code stays convention-first
+
+### Why this direction
+
+SwiftData gives strong fetch/save primitives and change notifications, but not full FRC-style list diff callbacks. SwiftSync therefore favors query-driven invalidation and refetch over retained-object live merge behavior.
+
+### Current tradeoff
+
+Pros:
+
+- simple API surface
+- fits SwiftUI well
+- predictable "local source of truth" behavior
+
+Tradeoffs:
+
+- no FRC-style granular diff callback contract
+- refetch precision depends on invalidation heuristics and `refreshOn`

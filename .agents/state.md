@@ -2,18 +2,17 @@
 
 ## Plan
 
-- [x] Review repository state and collect current documentation files
-- [x] Audit documentation content against current source and tests
-- [x] Update docs to remove stale claims and keep only verified behavior
-- [x] Run swift test to verify documented behavior still matches code
+- [x] Rewrite `docs/project/reactive-reads.md` with stronger mental model and clearer examples
+- [x] Review wording against current conventions and remove weak examples
 
 ## Last known state
 
-`swift test` passed (119 XCTest + 48 Swift Testing assertions)
+Reactive reads doc rewritten and reviewed; tests not run (docs-only change)
 
 ## Decisions (don't revisit)
 
 - Keep documentation changes behavior-neutral and remove any claim that is not directly verifiable from source or tests.
+- Replace ID-only sort examples with realistic UI-oriented sort descriptors (`updatedAt`, `priority`, `name`) to avoid misleading guidance.
 
 ## Files touched
 
