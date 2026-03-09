@@ -70,11 +70,12 @@ struct ProjectView: View {
                         }
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button(role: .destructive) {
+                        Button {
                             taskPendingDelete = TaskDeletePrompt(id: task.id, title: task.title)
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }
+                        .tint(.red)
                     }
                 }
             }
