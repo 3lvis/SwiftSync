@@ -1,5 +1,10 @@
 # Documentation
 
-This folder contains user-facing documentation on how SwiftSync works, API behavior, and backend contract.
+This folder contains user-facing SwiftSync docs.
 
-If you are using SwiftSync in an app, start in `docs/project/`.
+Start with:
+
+- `docs/project/faq.md`
+- `docs/project/property-mapping-contract.md`
+- `docs/project/parent-scope.md`
+- `docs/project/reactive-reads.md`

@@ -1,64 +1,24 @@
 # SwiftSync
 
-SwiftSync makes syncing JSON with SwiftData feel obvious.
-
-You define models once, then use one API to:
-- sync server payloads into local SwiftData
-- export local SwiftData back into API-ready JSON
-
-It follows convention over configuration and keeps behavior deterministic.
+SwiftSync syncs JSON into SwiftData and exports SwiftData back to JSON using a convention-first model.
 
 ## Install
 
-Add the package to your project and import:
+Add the package and import:
 
 ```swift
 import SwiftSync
 ```
 
-## Table of Contents
+## Core behavior
 
-- [Why SwiftSync](#why-swiftsync)
-- [Property Mapping](#property-mapping)
-- [Basic Example](#basic-example)
-- [Reactive Reads](#reactive-reads)
-- [Scenario -> Way of Use](#scenario---way-of-use)
-- [Modeling and Mapping](#modeling-and-mapping)
-- [Exporting JSON](#exporting-json)
-- [Date Handling](#date-handling)
-- [FAQ](docs/project/faq.md)
-- [Backend Contract](docs/project/backend-contract.md)
-- [API Reference](#api-reference)
+- `sync(payload:as:)` inserts, updates, and deletes rows by identity.
+- `sync(item:as:)` updates/inserts one row (no collection-level delete diff).
+- Parent-scoped sync requires an explicit `relationship:` key path.
+- Missing keys are ignored; explicit `null` applies clear/reset semantics.
+- Relationship operations are controlled with `SyncRelationshipOperations` (`.insert`, `.update`, `.delete`, `.all`).
 
-## Why SwiftSync
-
-Syncing JSON into a local store is repetitive:
-- map attributes
-- diff inserts/updates/deletes
-- handle relationship updates
-- avoid unnecessary writes
-
-SwiftSync handles that core flow so app code can stay focused on domain behavior.
-
-## Property Mapping
-
-Current defaults and behavior:
-- convention-first mapping is expected
-- inbound key style is configured once at `SyncContainer` (`.snakeCase` default, `.camelCase` optional)
-- acronym-aware snake mapping (`projectID` -> `project_id`, `remoteURL` -> `remote_url`)
-- deep-path import/export is supported via `@RemoteKey("a.b.c")`
-- scalar coercions are deterministic; relationship FK linking remains strict
-- Demo models in this repo are convention-first, with explicit mapping only where backend keys intentionally differ (for example `description` -> `descriptionText`)
-
-Practical usage rules:
-- remove `@RemoteKey` when convention already matches (for example `projectID` maps to `project_id`)
-- keep `@RemoteKey` when your local property name intentionally differs from the backend key (for example `descriptionText` -> `description`)
-- configure inbound key style once at `SyncContainer` (`.snakeCase` default, `.camelCase` optional)
-- use `@RemoteKey("a.b.c")` for nested payload keys (import and export)
-
-## Basic Example
-
-### Model
+## Quick example
 
 ```swift
 import SwiftData
@@ -67,650 +27,82 @@ import SwiftSync
 @Syncable
 @Model
 final class User {
-  @Attribute(.unique) var id: Int
-  var name: String
-  var createdAt: Date?
+    @Attribute(.unique) var id: Int
+    var name: String
 
-  init(id: Int, name: String, createdAt: Date? = nil) {
-    self.id = id
-    self.name = name
-    self.createdAt = createdAt
-  }
-}
-```
-
-### JSON payload
-
-```json
-[
-  {
-    "id": 6,
-    "name": "Shawn Merrill",
-    "created_at": "2014-02-14T04:30:10+00:00"
-  }
-]
-```
-
-### Sync
-
-```swift
-try await SwiftSync.sync(payload: payload, as: User.self, in: context)
-```
-
-That single call will insert, update, and delete based on identity diffing.
-
-You can also tune behavior per call:
-
-```swift
-try await SwiftSync.sync(
-  payload: payload,
-  as: User.self,
-  in: context,
-  relationshipOperations: .all
-)
-```
-
-To update a single item without touching other rows, use `sync(item:)`:
-
-```swift
-try await SwiftSync.sync(
-  item: taskDict,
-  as: Task.self,
-  in: context
-)
-```
-
-## SyncContainer
-
-`SyncContainer` is a thin SwiftData-based wrapper around `ModelContainer` that:
-- exposes a shared `mainContext`
-- creates background contexts for sync work
-- observes background `ModelContext.didSave` and processes main-context pending changes
-- configures inbound key style once (`.snakeCase` default, `.camelCase` optional)
-
-```swift
-let syncContainer = try await MainActor.run {
-  try SyncContainer(
-    for: User.self,
-    keyStyle: .snakeCase, // default
-    configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-  )
-}
-
-try await syncContainer.sync(payload: payload, as: User.self)
-```
-
-Behavior note:
-- fresh fetches on `mainContext` see background saves
-- retained object references may still need explicit UI rebind/requery
-
-## Reactive Reads
-
-SwiftUI is the primary integration path. Use `@SyncQuery` for list reads and `@SyncModel` for detail reads.
-
-Sort order (ascending or mixed/descending):
-
-```swift
-@SyncQuery(
-  Task.self,
-  in: syncContainer,
-  sortBy: [
-    SortDescriptor(\Task.priority, order: .reverse),
-    SortDescriptor(\Task.id)
-  ]
-)
-var tasks: [Task]
-```
-
-Relationship-scoped query (to-one):
-
-```swift
-@SyncQuery(
-  Task.self,
-  relationship: \.project,
-  relationshipID: projectID,
-  in: syncContainer,
-  sortBy: [SortDescriptor(\Task.id)]
-)
-var tasks: [Task]
-```
-
-Relationship-scoped query (to-many):
-
-```swift
-@SyncQuery(
-  Project.self,
-  relationship: \.tasks,
-  relationshipID: taskID,
-  in: syncContainer,
-  sortBy: [SortDescriptor(\Project.id)]
-)
-var projectsContainingTask: [Project]
-```
-
-Keep using `predicate` when relationship-scoped `relationship/relationshipID` is not the right shape:
-- screens that only have scalar IDs (no related model instance)
-- non-parent filters (for example `assigneeID == userID`)
-- compound business filters (for example status + date window + membership)
-
-### UIKit (SyncQueryPublisher)
-
-SwiftUI is first class. `SyncQueryPublisher` exists for UIKit screens where `@SyncQuery` is not available — it covers the same reactive contract using Combine.
-
-```swift
-let publisher = SyncQueryPublisher(
-    Project.self,
-    in: syncContainer,
-    sortBy: [SortDescriptor(\Project.name)]
-)
-
-publisher.$rows
-    .receive(on: DispatchQueue.main)
-    .sink { [weak self] projects in self?.applySnapshot(projects) }
-    .store(in: &cancellables)
-```
-
-Relationship-scoped variant (to-one):
-
-```swift
-let publisher = SyncQueryPublisher(
-    Task.self,
-    relationship: \Task.assignee,
-    relationshipID: userID,
-    in: syncContainer,
-    sortBy: [SortDescriptor(\Task.title)]
-)
-```
-
-`SyncQueryPublisher` reloads automatically after every sync, using the same internal mechanism as `@SyncQuery`.
-
-## Scenario -> Way of Use
-
-### Scenario: payload only contains children for one parent
-
-You have a user details screen, and the backend endpoint `/users/6/notes` returns only that user's notes. Each note comes without a `user_id`, because the endpoint itself is already scoped.
-
-JSON:
-
-```json
-[
-  {
-    "id": 301,
-    "text": "Call supplier before Friday"
-  },
-  {
-    "id": 302,
-    "text": "Prepare Q1 budget review"
-  }
-]
-```
-
-Model:
-
-```swift
-@Syncable
-@Model
-final class User {
-  @Attribute(.unique) var id: Int
-  var name: String
-}
-
-@Syncable
-@Model
-final class Note {
-  var id: Int
-  var text: String
-  @Relationship var user: User?
-}
-
-// Keep this extension when you want scoped identity by default for this model.
-// `parentRelationship` provides the default parent scope relationship for this model.
-extension Note: ParentScopedModel {
-  static var parentRelationship: ReferenceWritableKeyPath<Note, User?> { \.user }
-}
-```
-
-Why `id` is not unique in this example:
-- `ParentScopedModel` defaults to scoped identity (`(parent, id)` semantics).
-- This allows the same remote child ID under different parents.
-- If you add `@Attribute(.unique)` on `id`, SwiftData enforces global uniqueness and scoped duplicates cannot exist.
-
-API:
-
-```swift
-let user = try context.fetch(FetchDescriptor<User>()).first { $0.id == 6 }!
-
-try await SwiftSync.sync(
-  payload: payload,
-  as: Note.self,
-  in: context,
-  parent: user,
-  relationship: \Note.user
-)
-```
-
-Notes:
-- This example keeps `ParentScopedModel`, so scoped identity is the default for `Note`.
-- Parent-scoped sync requires an explicit `relationship:` key path.
-- For models conforming to `ParentScopedModel`, the default identity policy remains scoped-by-parent.
-
-### Scenario: to-one relationship by nested object
-
-You have a list of employees, each employee has one company. The backend sends that company as an inline object in each employee row.
-
-JSON:
-
-```json
-[
-  {
-    "id": 44,
-    "full_name": "Ariana Patel",
-    "company": {
-      "id": 10,
-      "name": "Apple"
+    init(id: Int, name: String) {
+        self.id = id
+        self.name = name
     }
-  }
-]
-```
-
-Model:
-
-```swift
-@Syncable
-@Model
-final class Company {
-  @Attribute(.unique) var id: Int
-  var name: String
 }
 
-@Syncable
-@Model
-final class Employee {
-  @Attribute(.unique) var id: Int
-  var fullName: String
-  var company: Company?
-}
+let syncContainer = try SyncContainer(
+    for: User.self,
+    keyStyle: .snakeCase,
+    configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+)
+
+try await syncContainer.sync(
+    payload: [["id": 1, "name": "Ava"]],
+    as: User.self
+)
 ```
 
-API:
+## Mapping and keys
+
+- Container-level input key style is `KeyStyle.snakeCase` by default (`.camelCase` is optional).
+- Convention mapping is preferred.
+- Use `@RemoteKey("...")` only when backend keys intentionally differ.
+- Deep paths are supported for import/export (`@RemoteKey("profile.contact.email")`).
+
+## Reactive reads
+
+SwiftUI wrappers:
+
+- `@SyncQuery` for list reads.
+- `@SyncModel` for single-row reads by identity.
+
+UIKit/non-wrapper usage:
+
+- `SyncQueryPublisher` provides the same query shapes as `@SyncQuery`.
+
+Relationship-scoped query example:
 
 ```swift
-try await SwiftSync.sync(payload: payload, as: Employee.self, in: context)
+@SyncQuery(
+    Task.self,
+    relationship: \Task.project,
+    relationshipID: projectID,
+    in: syncContainer,
+    sortBy: [SortDescriptor(\Task.id)]
+)
+var tasks: [Task]
 ```
 
-### Scenario: to-one relationship by `*_id`
-
-You have employees and companies already synced. For employee updates, the backend sends only `company_id` instead of a nested company object.
-
-JSON:
-
-```json
-[
-  {
-    "id": 44,
-    "company_id": 10
-  }
-]
-```
-
-JSON to clear:
-
-```json
-[
-  {
-    "id": 44,
-    "company_id": null
-  }
-]
-```
-
-Model:
-
-```swift
-@Syncable
-@Model
-final class Employee {
-  @Attribute(.unique) var id: Int
-  var company: Company?
-}
-```
-
-API:
-
-```swift
-try await SwiftSync.sync(payload: payload, as: Employee.self, in: context)
-```
-
-### Scenario: to-many relationship by objects
-
-You have chats and each chat has many messages. The backend sends each chat with an inline `messages` array.
-SwiftSync treats to-many relationship updates as membership updates (unordered) in SwiftData.
-
-JSON A:
-
-```json
-[
-  {
-    "id": 77,
-    "title": "Launch Planning",
-    "messages": [
-      {
-        "id": 101,
-        "text": "Draft kickoff agenda"
-      },
-      {
-        "id": 102,
-        "text": "Share timeline v1"
-      }
-    ]
-  }
-]
-```
-
-JSON B:
-
-```json
-[
-  {
-    "id": 77,
-    "title": "Launch Planning",
-    "messages": [
-      {
-        "id": 102,
-        "text": "Share timeline v2"
-      },
-      {
-        "id": 103,
-        "text": "Book design review"
-      }
-    ]
-  }
-]
-```
-
-Model:
-
-```swift
-@Syncable
-@Model
-final class Message {
-  @Attribute(.unique) var id: Int
-  var text: String
-}
-
-@Syncable
-@Model
-final class Chat {
-  @Attribute(.unique) var id: Int
-  var title: String
-  var messages: [Message]
-}
-```
-
-API:
-
-```swift
-try await SwiftSync.sync(payload: payload, as: Chat.self, in: context)
-```
-
-### Scenario: to-many relationship by `*_ids`
-
-You already synced notes separately, and user payloads now include only `notes_ids` to define membership.
-SwiftSync treats this as membership sync (unordered) and does not guarantee payload order persistence.
-
-JSON A:
-
-```json
-[
-  {
-    "id": 6,
-    "notes_ids": [301, 302]
-  }
-]
-```
-
-JSON B:
-
-```json
-[
-  {
-    "id": 6,
-    "notes_ids": [302, 305]
-  }
-]
-```
-
-Model:
-
-```swift
-@Syncable
-@Model
-final class Note {
-  @Attribute(.unique) var id: Int
-}
-
-@Syncable
-@Model
-final class User {
-  @Attribute(.unique) var id: Int
-  var name: String
-  var notes: [Note]
-}
-```
-
-API:
-
-```swift
-try await SwiftSync.sync(payload: payload, as: User.self, in: context)
-```
-
-### Scenario: export local rows to API JSON
-
-You have local SwiftData rows and need to send them to your backend in API format.
-
-JSON output shape (default):
-
-```json
-[
-  {
-    "id": 1,
-    "first_name": "Elvis",
-    "last_name": "Nunez"
-  }
-]
-```
-
-Model:
-
-```swift
-@Syncable
-@Model
-final class User {
-  @Attribute(.unique) var id: Int
-  var firstName: String
-  var lastName: String
-}
-```
-
-API:
-
-```swift
-let rows = try syncContainer.export(as: User.self)
-```
-
-## Modeling and Mapping
-
-### `@Syncable`
-
-`@Syncable` generates:
-- `SyncUpdatableModel` conformance (make/apply + relationship sync)
-- export support via `exportObject(keyStyle:dateFormatter:)`
-Built-in relationship sync behavior:
-- to-one by `*_id` (strict typed FK lookup)
-- to-many by `*_ids` (unordered membership updates)
-- nested to-one by relationship key (for example `company`)
-- nested to-many by relationship key (for example `members`)
-
-Identity selection order:
-1. property marked with `@PrimaryKey` (or `@PrimaryKey(remote: ...)`)
-2. `id`
-3. `remoteID`
-
-### Custom primary key
-
-```swift
-@Syncable
-@Model
-final class ExternalUser {
-  @PrimaryKey
-  @Attribute(.unique) var xid: String
-  var name: String
-
-  init(xid: String, name: String) {
-    self.xid = xid
-    self.name = name
-  }
-}
-```
-
-### Custom remote identity key
-
-```swift
-@Syncable
-@Model
-final class ExternalMappedUser {
-  @PrimaryKey(remote: "external_id")
-  @Attribute(.unique) var xid: String
-  var name: String
-
-  init(xid: String, name: String) {
-    self.xid = xid
-    self.name = name
-  }
-}
-```
-
-### Custom property mapping (import + export)
-
-```swift
-@Syncable
-@Model
-final class Account {
-  @Attribute(.unique) var id: Int
-  @RemoteKey("type") var userType: String
-  @RemoteKey("profile.contact.email") var email: String?
-  @NotExport var localOnly: String
-
-  init(id: Int, userType: String, email: String?, localOnly: String) {
-    self.id = id
-    self.userType = userType
-    self.email = email
-    self.localOnly = localOnly
-  }
-}
-```
-
-Notes:
-- `@RemoteKey` affects inbound sync mapping and export mapping.
-- `@RemoteKey("a.b.c")` reads/writes nested payload paths.
-- Deep paths are resolved from nested dictionaries and keep normal missing/null semantics.
-
-## Exporting JSON
-
-### Default
+## Export
 
 ```swift
 let rows = try syncContainer.export(as: User.self)
 ```
 
 Defaults:
-- snake_case keys
-- relationships included as inline arrays/objects
-- ISO-style UTC dates
-- nils exported as `null`
 
-To exclude a specific relationship from all exports, apply `@NotExport` to the property
-in your model.
+- key style follows container `keyStyle`
+- relationships are exported inline
+- dates use `yyyy-MM-dd'T'HH:mm:ss.SSSXXXXX` in UTC
 
-### Camel case
+## API surface (current)
 
-```swift
-let syncContainer = SyncContainer(modelContainer, keyStyle: .camelCase)
-let rows = try syncContainer.export(as: User.self)
-```
+- `SyncContainer` (sync + export entry point)
+- `@Syncable`, `@PrimaryKey`, `@RemoteKey`, `@NotExport`
+- `SyncPayloadConvertible` overloads for typed payload wrappers
+- `SyncError` (`.invalidPayload`, `.cancelled`)
+- `SyncRelationshipOperations`
 
-### Parent-scoped export
+## Docs index
 
-```swift
-let rows = try syncContainer.export(as: Note.self, parent: user)
-```
-
-## Date Handling
-
-SwiftSync uses a custom high-performance inbound date parser (`SyncDateParser`).
-
-Supported inputs:
-- ISO8601 variants (`Z`, `+00:00`, `+0000`, no-timezone)
-- date-only (`YYYY-MM-DD`)
-- `YYYY-MM-DD HH:mm:ss`
-- fractional seconds (deci/centi/milli/micro)
-- unix timestamps (seconds and microseconds-like)
-
-Invalid date behavior is best-effort and non-crashing.
-
-our policy is honestly we do our best without affecting performance.
-
-## API Reference
-
-```swift
-public final class SyncContainer {
-  func sync<Model: SyncUpdatableModel>(
-    payload: [Any],
-    as model: Model.Type,
-    relationshipOperations: SyncRelationshipOperations = .all
-  ) async throws
-
-  func sync<Model: SyncUpdatableModel>(
-    item: [String: Any],
-    as model: Model.Type,
-    relationshipOperations: SyncRelationshipOperations = .all
-  ) async throws
-
-  func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
-    payload: [Any],
-    as model: Model.Type,
-    parent: Parent,
-    relationship: ReferenceWritableKeyPath<Model, Parent?>,
-    relationshipOperations: SyncRelationshipOperations = .all
-  ) async throws
-
-  func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
-    item: [String: Any],
-    as model: Model.Type,
-    parent: Parent,
-    relationship: ReferenceWritableKeyPath<Model, Parent?>,
-    relationshipOperations: SyncRelationshipOperations = .all
-  ) async throws
-
-  func export<Model: SyncUpdatableModel>(
-    as model: Model.Type,
-  ) throws -> [[String: Any]]
-
-  func export<Model: SyncUpdatableModel & ParentScopedModel>(
-    as model: Model.Type,
-    parent: Model.SyncParent,
-  ) throws -> [[String: Any]]
-}
-
-public enum SyncError: Error, Sendable, Equatable {
-  case invalidPayload(model: String, reason: String)
-  case cancelled
-}
-
-public struct SyncRelationshipOperations: OptionSet, Sendable {
-  public static let insert: SyncRelationshipOperations
-  public static let update: SyncRelationshipOperations
-  public static let delete: SyncRelationshipOperations
-  public static let all: SyncRelationshipOperations
-}
-```
+- `docs/project/property-mapping-contract.md`
+- `docs/project/parent-scope.md`
+- `docs/project/reactive-reads.md`
+- `docs/project/backend-contract.md`
+- `docs/project/faq.md`

@@ -82,15 +82,16 @@ For existing APIs:
 
 ---
 
-## Implemented In This Repo
+## Implemented in this repo (DemoBackend)
 
-Current demo backend payloads now follow:
-- stable UUID `id` on all entities (no opaque integer or slug IDs)
-- snake_case naming
-- `*_id` / `*_ids` relationship keys
-- explicit `null` emission for optional fields in task payloads
-- `created_at` and `updated_at` on all demo resources
-- no ordered-relationship assumptions
+Verified from `DemoBackend/Sources/DemoBackend/DemoServerSimulator.swift` and `DemoBackend/Sources/DemoBackend/DemoSeedData.swift`:
+
+- all seeded entities use stable `String` IDs (UUID-formatted constants in seed data)
+- payload keys are snake_case
+- relationship keys use `*_id` / `*_ids`
+- optional `assignee_id` is emitted as `NSNull` when absent in task payloads
+- resources include `created_at` and `updated_at`
+- to-many sync should be treated as unordered membership
 
 ### Client-Authoritative Create
 
