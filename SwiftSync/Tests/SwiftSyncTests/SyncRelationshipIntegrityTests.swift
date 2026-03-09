@@ -301,6 +301,98 @@ extension OneSidedTask: SyncUpdatableModel {
     }
 }
 
+@Model
+final class OneSidedNestedUser {
+    @Attribute(.unique) var id: Int
+    var name: String
+
+    init(id: Int, name: String) {
+        self.id = id
+        self.name = name
+    }
+}
+
+@Model
+final class OneSidedNestedTask {
+    @Attribute(.unique) var id: Int
+    var title: String
+
+    @Relationship var members: [OneSidedNestedUser]
+
+    init(id: Int, title: String, members: [OneSidedNestedUser] = []) {
+        self.id = id
+        self.title = title
+        self.members = members
+    }
+}
+
+extension OneSidedNestedUser: SyncUpdatableModel {
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<OneSidedNestedUser, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> OneSidedNestedUser {
+        OneSidedNestedUser(
+            id: try payload.required(Int.self, for: "id"),
+            name: try payload.required(String.self, for: "name")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        var changed = false
+        if payload.contains("name") {
+            let incoming: String = try payload.required(String.self, for: "name")
+            if name != incoming { name = incoming; changed = true }
+        }
+        return changed
+    }
+}
+
+extension OneSidedNestedTask: SyncUpdatableModel {
+    nonisolated(unsafe) static var syncMarkChangedCallCount: Int = 0
+
+    typealias SyncID = Int
+    static var syncIdentity: KeyPath<OneSidedNestedTask, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> OneSidedNestedTask {
+        OneSidedNestedTask(
+            id: try payload.required(Int.self, for: "id"),
+            title: try payload.required(String.self, for: "title")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        var changed = false
+        if payload.contains("title") {
+            let incoming: String = try payload.required(String.self, for: "title")
+            if title != incoming { title = incoming; changed = true }
+        }
+        return changed
+    }
+
+    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+        try await applyRelationships(payload, in: context, operations: .all)
+    }
+
+    func applyRelationships(
+        _ payload: SyncPayload,
+        in context: ModelContext,
+        operations: SyncRelationshipOperations
+    ) async throws -> Bool {
+        try syncApplyToManyNestedObjects(
+            self,
+            relationship: \OneSidedNestedTask.members,
+            payload: payload,
+            keys: ["members"],
+            in: context,
+            operations: operations
+        )
+    }
+
+    func syncMarkChanged() {
+        OneSidedNestedTask.syncMarkChangedCallCount += 1
+    }
+}
+
 // MARK: - syncMarkChanged call-site tests
 
 /// Verifies syncApplyToManyForeignKeys calls syncMarkChanged() at the right times.
@@ -396,6 +488,130 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
             OneSidedTask.syncMarkChangedCallCount, 0,
             "syncMarkChanged() must not be called when relationship membership is unchanged."
         )
+    }
+
+    func testSyncApplyToManyNestedObjectsCallsSyncMarkChangedAfterMembershipChange() async throws {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: OneSidedNestedTask.self, OneSidedNestedUser.self,
+            configurations: config
+        )
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [["id": 10, "title": "Task 10", "members": [] as [[String: Any]]]],
+            as: OneSidedNestedTask.self,
+            in: context
+        )
+
+        let task = try XCTUnwrap(context.fetch(FetchDescriptor<OneSidedNestedTask>()).first)
+        XCTAssertEqual(task.members.count, 0, "precondition: task starts with no members")
+
+        OneSidedNestedTask.syncMarkChangedCallCount = 0
+
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 10,
+                "title": "Task 10",
+                "members": [
+                    ["id": 1, "name": "Alice"],
+                    ["id": 2, "name": "Bob"]
+                ]
+            ]],
+            as: OneSidedNestedTask.self,
+            in: context
+        )
+
+        XCTAssertEqual(
+            OneSidedNestedTask.syncMarkChangedCallCount, 1,
+            "syncApplyToManyNestedObjects must call syncMarkChanged() after a membership change."
+        )
+        XCTAssertEqual(Set(task.members.map(\.id)), Set([1, 2]))
+    }
+
+    func testSyncApplyToManyNestedObjectsDoesNotCallSyncMarkChangedWhenUnchanged() async throws {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: OneSidedNestedTask.self, OneSidedNestedUser.self,
+            configurations: config
+        )
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 10,
+                "title": "Task 10",
+                "members": [
+                    ["id": 1, "name": "Alice"],
+                    ["id": 2, "name": "Bob"]
+                ]
+            ]],
+            as: OneSidedNestedTask.self,
+            in: context
+        )
+
+        OneSidedNestedTask.syncMarkChangedCallCount = 0
+
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 10,
+                "title": "Task 10",
+                "members": [
+                    ["id": 1, "name": "Alice"],
+                    ["id": 2, "name": "Bob"]
+                ]
+            ]],
+            as: OneSidedNestedTask.self,
+            in: context
+        )
+
+        XCTAssertEqual(
+            OneSidedNestedTask.syncMarkChangedCallCount, 0,
+            "syncMarkChanged() must not be called when nested relationship membership is unchanged."
+        )
+    }
+
+    func testSyncApplyToManyNestedObjectsCallsSyncMarkChangedAfterClear() async throws {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: OneSidedNestedTask.self, OneSidedNestedUser.self,
+            configurations: config
+        )
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 10,
+                "title": "Task 10",
+                "members": [
+                    ["id": 1, "name": "Alice"],
+                    ["id": 2, "name": "Bob"]
+                ]
+            ]],
+            as: OneSidedNestedTask.self,
+            in: context
+        )
+
+        let task = try XCTUnwrap(context.fetch(FetchDescriptor<OneSidedNestedTask>()).first)
+        XCTAssertEqual(Set(task.members.map(\.id)), Set([1, 2]), "precondition: task starts populated")
+
+        OneSidedNestedTask.syncMarkChangedCallCount = 0
+
+        try await SwiftSync.sync(
+            payload: [[
+                "id": 10,
+                "title": "Task 10",
+                "members": NSNull()
+            ]],
+            as: OneSidedNestedTask.self,
+            in: context
+        )
+
+        XCTAssertEqual(
+            OneSidedNestedTask.syncMarkChangedCallCount, 1,
+            "syncApplyToManyNestedObjects must call syncMarkChanged() after an explicit clear."
+        )
+        XCTAssertEqual(task.members.count, 0)
     }
 }
 
