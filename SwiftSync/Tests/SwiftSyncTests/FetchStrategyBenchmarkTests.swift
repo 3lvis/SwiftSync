@@ -108,19 +108,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
 
         for storeKind in environment.storeKinds {
             for existingCount in environment.datasetTiers {
-                let fixture = try makeStoreFixture(storeKind: storeKind)
-                defer { fixture.cleanup() }
-
-                let container = try ModelContainer(
-                    for: BenchmarkUser.self,
-                    configurations: fixture.configuration
-                )
-                let context = ModelContext(container)
-
-                try seedUsers(count: existingCount, in: context)
-                let payload = makeUserPayload(count: existingCount, namePrefix: "batch-updated")
-
-                let result = try await measureCase(
+                let result = try await measureRepeatedAsyncCase(
                     name: "global-batch-sync",
                     storeKind: storeKind,
                     totalRows: existingCount,
@@ -128,7 +116,20 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                     scopeRows: nil,
                     relationRows: nil
                 ) {
-                    try await SwiftSync.sync(payload: payload, as: BenchmarkUser.self, in: context)
+                    let fixture = try makeStoreFixture(storeKind: storeKind)
+                    defer { fixture.cleanup() }
+
+                    let container = try ModelContainer(
+                        for: BenchmarkUser.self,
+                        configurations: fixture.configuration
+                    )
+                    let context = ModelContext(container)
+
+                    try seedUsers(count: existingCount, in: context)
+                    let payload = makeUserPayload(count: existingCount, namePrefix: "batch-updated")
+                    return try await measureDuration {
+                        try await SwiftSync.sync(payload: payload, as: BenchmarkUser.self, in: context)
+                    }
                 }
 
                 emit(result)
@@ -141,22 +142,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
 
         for storeKind in environment.storeKinds {
             for existingCount in environment.datasetTiers {
-                let fixture = try makeStoreFixture(storeKind: storeKind)
-                defer { fixture.cleanup() }
-
-                let container = try ModelContainer(
-                    for: BenchmarkUser.self,
-                    configurations: fixture.configuration
-                )
-                let context = ModelContext(container)
-
-                try seedUsers(count: existingCount, in: context)
-                let payload: [String: Any] = [
-                    "id": existingCount,
-                    "full_name": "single-item-updated-\(existingCount)"
-                ]
-
-                let result = try await measureCase(
+                let result = try await measureRepeatedAsyncCase(
                     name: "single-item-sync",
                     storeKind: storeKind,
                     totalRows: existingCount,
@@ -164,7 +150,23 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                     scopeRows: nil,
                     relationRows: nil
                 ) {
-                    try await SwiftSync.sync(item: payload, as: BenchmarkUser.self, in: context)
+                    let fixture = try makeStoreFixture(storeKind: storeKind)
+                    defer { fixture.cleanup() }
+
+                    let container = try ModelContainer(
+                        for: BenchmarkUser.self,
+                        configurations: fixture.configuration
+                    )
+                    let context = ModelContext(container)
+
+                    try seedUsers(count: existingCount, in: context)
+                    let payload: [String: Any] = [
+                        "id": existingCount,
+                        "full_name": "single-item-updated-\(existingCount)"
+                    ]
+                    return try await measureDuration {
+                        try await SwiftSync.sync(item: payload, as: BenchmarkUser.self, in: context)
+                    }
                 }
 
                 emit(result)
@@ -178,22 +180,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
         for storeKind in environment.storeKinds {
             for existingCount in environment.datasetTiers {
                 let scopeCount = min(environment.scopeSize, existingCount)
-                let fixture = try makeStoreFixture(storeKind: storeKind)
-                defer { fixture.cleanup() }
-
-                let container = try ModelContainer(
-                    for: BenchmarkProject.self, BenchmarkScopedTask.self,
-                    configurations: fixture.configuration
-                )
-                let context = ModelContext(container)
-                let targetProject = try seedParentScopedTasks(
-                    totalTaskCount: existingCount,
-                    targetScopeCount: scopeCount,
-                    in: context
-                )
-                let payload = makeScopedTaskPayload(count: scopeCount)
-
-                let result = try await measureCase(
+                let result = try await measureRepeatedAsyncCase(
                     name: "parent-scoped-batch-sync",
                     storeKind: storeKind,
                     totalRows: existingCount,
@@ -201,13 +188,29 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                     scopeRows: scopeCount,
                     relationRows: nil
                 ) {
-                    try await SwiftSync.sync(
-                        payload: payload,
-                        as: BenchmarkScopedTask.self,
-                        in: context,
-                        parent: targetProject,
-                        relationship: \BenchmarkScopedTask.project
+                    let fixture = try makeStoreFixture(storeKind: storeKind)
+                    defer { fixture.cleanup() }
+
+                    let container = try ModelContainer(
+                        for: BenchmarkProject.self, BenchmarkScopedTask.self,
+                        configurations: fixture.configuration
                     )
+                    let context = ModelContext(container)
+                    let targetProject = try seedParentScopedTasks(
+                        totalTaskCount: existingCount,
+                        targetScopeCount: scopeCount,
+                        in: context
+                    )
+                    let payload = makeScopedTaskPayload(count: scopeCount)
+                    return try await measureDuration {
+                        try await SwiftSync.sync(
+                            payload: payload,
+                            as: BenchmarkScopedTask.self,
+                            in: context,
+                            parent: targetProject,
+                            relationship: \BenchmarkScopedTask.project
+                        )
+                    }
                 }
 
                 emit(result)
@@ -220,24 +223,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
 
         for storeKind in environment.storeKinds {
             for relatedCount in environment.datasetTiers {
-                let fixture = try makeStoreFixture(storeKind: storeKind)
-                defer { fixture.cleanup() }
-
-                let container = try ModelContainer(
-                    for: BenchmarkUser.self, BenchmarkWorkItem.self,
-                    configurations: fixture.configuration
-                )
-                let context = ModelContext(container)
-
-                try seedUsers(count: relatedCount, in: context)
-                try seedWorkItem(id: 1, in: context)
-                let payload: [String: Any] = [
-                    "id": 1,
-                    "title": "to-one-benchmark",
-                    "assignee_id": relatedCount
-                ]
-
-                let result = try await measureCase(
+                let result = try await measureRepeatedAsyncCase(
                     name: "to-one-fk-resolution",
                     storeKind: storeKind,
                     totalRows: 1,
@@ -245,7 +231,25 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                     scopeRows: nil,
                     relationRows: relatedCount
                 ) {
-                    try await SwiftSync.sync(item: payload, as: BenchmarkWorkItem.self, in: context)
+                    let fixture = try makeStoreFixture(storeKind: storeKind)
+                    defer { fixture.cleanup() }
+
+                    let container = try ModelContainer(
+                        for: BenchmarkUser.self, BenchmarkWorkItem.self,
+                        configurations: fixture.configuration
+                    )
+                    let context = ModelContext(container)
+
+                    try seedUsers(count: relatedCount, in: context)
+                    try seedWorkItem(id: 1, in: context)
+                    let payload: [String: Any] = [
+                        "id": 1,
+                        "title": "to-one-benchmark",
+                        "assignee_id": relatedCount
+                    ]
+                    return try await measureDuration {
+                        try await SwiftSync.sync(item: payload, as: BenchmarkWorkItem.self, in: context)
+                    }
                 }
 
                 emit(result)
@@ -259,24 +263,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
         for storeKind in environment.storeKinds {
             for relatedCount in environment.datasetTiers {
                 for linkCount in environment.relationshipCounts where linkCount <= relatedCount {
-                    let fixture = try makeStoreFixture(storeKind: storeKind)
-                    defer { fixture.cleanup() }
-
-                    let container = try ModelContainer(
-                        for: BenchmarkTag.self, BenchmarkWorkItem.self,
-                        configurations: fixture.configuration
-                    )
-                    let context = ModelContext(container)
-
-                    try seedTags(count: relatedCount, in: context)
-                    try seedWorkItem(id: 1, in: context)
-                    let payload: [String: Any] = [
-                        "id": 1,
-                        "title": "to-many-fk-benchmark",
-                        "tag_ids": Array(1...linkCount)
-                    ]
-
-                    let result = try await measureCase(
+                    let result = try await measureRepeatedAsyncCase(
                         name: "to-many-fk-resolution",
                         storeKind: storeKind,
                         totalRows: 1,
@@ -285,7 +272,25 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                         relationRows: relatedCount,
                         relationshipCount: linkCount
                     ) {
-                        try await SwiftSync.sync(item: payload, as: BenchmarkWorkItem.self, in: context)
+                        let fixture = try makeStoreFixture(storeKind: storeKind)
+                        defer { fixture.cleanup() }
+
+                        let container = try ModelContainer(
+                            for: BenchmarkTag.self, BenchmarkWorkItem.self,
+                            configurations: fixture.configuration
+                        )
+                        let context = ModelContext(container)
+
+                        try seedTags(count: relatedCount, in: context)
+                        try seedWorkItem(id: 1, in: context)
+                        let payload: [String: Any] = [
+                            "id": 1,
+                            "title": "to-many-fk-benchmark",
+                            "tag_ids": Array(1...linkCount)
+                        ]
+                        return try await measureDuration {
+                            try await SwiftSync.sync(item: payload, as: BenchmarkWorkItem.self, in: context)
+                        }
                     }
 
                     emit(result)
@@ -300,24 +305,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
         for storeKind in environment.storeKinds {
             for relatedCount in environment.datasetTiers {
                 for linkCount in environment.relationshipCounts where linkCount <= relatedCount {
-                    let fixture = try makeStoreFixture(storeKind: storeKind)
-                    defer { fixture.cleanup() }
-
-                    let container = try ModelContainer(
-                        for: BenchmarkReviewer.self, BenchmarkWorkItem.self,
-                        configurations: fixture.configuration
-                    )
-                    let context = ModelContext(container)
-
-                    try seedReviewers(count: relatedCount, in: context)
-                    try seedWorkItem(id: 1, in: context)
-                    let payload: [String: Any] = [
-                        "id": 1,
-                        "title": "to-many-nested-benchmark",
-                        "reviewers": Array(1...linkCount).map { ["id": $0, "full_name": "Reviewer \($0) updated"] }
-                    ]
-
-                    let result = try await measureCase(
+                    let result = try await measureRepeatedAsyncCase(
                         name: "to-many-nested-resolution",
                         storeKind: storeKind,
                         totalRows: 1,
@@ -326,7 +314,25 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                         relationRows: relatedCount,
                         relationshipCount: linkCount
                     ) {
-                        try await SwiftSync.sync(item: payload, as: BenchmarkWorkItem.self, in: context)
+                        let fixture = try makeStoreFixture(storeKind: storeKind)
+                        defer { fixture.cleanup() }
+
+                        let container = try ModelContainer(
+                            for: BenchmarkReviewer.self, BenchmarkWorkItem.self,
+                            configurations: fixture.configuration
+                        )
+                        let context = ModelContext(container)
+
+                        try seedReviewers(count: relatedCount, in: context)
+                        try seedWorkItem(id: 1, in: context)
+                        let payload: [String: Any] = [
+                            "id": 1,
+                            "title": "to-many-nested-benchmark",
+                            "reviewers": Array(1...linkCount).map { ["id": $0, "full_name": "Reviewer \($0) updated"] }
+                        ]
+                        return try await measureDuration {
+                            try await SwiftSync.sync(item: payload, as: BenchmarkWorkItem.self, in: context)
+                        }
                     }
 
                     emit(result)
@@ -340,16 +346,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
 
         for storeKind in environment.storeKinds {
             for existingCount in environment.datasetTiers {
-                let fixture = try makeStoreFixture(storeKind: storeKind)
-                defer { fixture.cleanup() }
-
-                let syncContainer = try SyncContainer(
-                    for: BenchmarkUser.self,
-                    configurations: fixture.configuration
-                )
-                try seedUsers(count: existingCount, in: syncContainer.mainContext)
-
-                let result = try measureCase(
+                let result = try measureRepeatedCase(
                     name: "export-all",
                     storeKind: storeKind,
                     totalRows: existingCount,
@@ -357,7 +354,17 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                     scopeRows: nil,
                     relationRows: nil
                 ) {
-                    _ = try syncContainer.export(as: BenchmarkUser.self)
+                    let fixture = try makeStoreFixture(storeKind: storeKind)
+                    defer { fixture.cleanup() }
+
+                    let syncContainer = try SyncContainer(
+                        for: BenchmarkUser.self,
+                        configurations: fixture.configuration
+                    )
+                    try seedUsers(count: existingCount, in: syncContainer.mainContext)
+                    return try measureDuration {
+                        _ = try syncContainer.export(as: BenchmarkUser.self)
+                    }
                 }
 
                 emit(result)
@@ -371,20 +378,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
         for storeKind in environment.storeKinds {
             for existingCount in environment.datasetTiers {
                 let scopeCount = min(environment.scopeSize, existingCount)
-                let fixture = try makeStoreFixture(storeKind: storeKind)
-                defer { fixture.cleanup() }
-
-                let syncContainer = try SyncContainer(
-                    for: BenchmarkProject.self, BenchmarkScopedTask.self,
-                    configurations: fixture.configuration
-                )
-                let targetProject = try seedParentScopedTasks(
-                    totalTaskCount: existingCount,
-                    targetScopeCount: scopeCount,
-                    in: syncContainer.mainContext
-                )
-
-                let result = try measureCase(
+                let result = try measureRepeatedCase(
                     name: "export-parent-scope",
                     storeKind: storeKind,
                     totalRows: existingCount,
@@ -392,7 +386,99 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                     scopeRows: scopeCount,
                     relationRows: nil
                 ) {
-                    _ = try syncContainer.export(as: BenchmarkScopedTask.self, parent: targetProject)
+                    let fixture = try makeStoreFixture(storeKind: storeKind)
+                    defer { fixture.cleanup() }
+
+                    let syncContainer = try SyncContainer(
+                        for: BenchmarkProject.self, BenchmarkScopedTask.self,
+                        configurations: fixture.configuration
+                    )
+                    let targetProject = try seedParentScopedTasks(
+                        totalTaskCount: existingCount,
+                        targetScopeCount: scopeCount,
+                        in: syncContainer.mainContext
+                    )
+                    return try measureDuration {
+                        _ = try syncContainer.export(as: BenchmarkScopedTask.self, parent: targetProject)
+                    }
+                }
+
+                emit(result)
+            }
+        }
+    }
+
+    func testMixedWorkloadBenchmarks() async throws {
+        try requireBenchmarksEnabled()
+
+        for storeKind in environment.storeKinds {
+            for existingCount in environment.datasetTiers {
+                let scopeCount = min(environment.scopeSize, existingCount)
+                let relatedCount = existingCount
+                let relationshipCount = min(10, relatedCount)
+
+                let result = try await measureRepeatedAsyncCase(
+                    name: "mixed-session-workload",
+                    storeKind: storeKind,
+                    totalRows: existingCount,
+                    payloadRows: scopeCount + 2,
+                    scopeRows: scopeCount,
+                    relationRows: relatedCount,
+                    relationshipCount: relationshipCount,
+                    workload: "mixed"
+                ) {
+                    let fixture = try makeStoreFixture(storeKind: storeKind)
+                    defer { fixture.cleanup() }
+
+                    let container = try ModelContainer(
+                        for: BenchmarkUser.self,
+                        BenchmarkTag.self,
+                        BenchmarkReviewer.self,
+                        BenchmarkProject.self,
+                        BenchmarkScopedTask.self,
+                        BenchmarkWorkItem.self,
+                        configurations: fixture.configuration
+                    )
+                    let context = ModelContext(container)
+                    let syncContainer = SyncContainer(container)
+
+                    try seedUsers(count: relatedCount, in: context)
+                    try seedTags(count: relatedCount, in: context)
+                    try seedReviewers(count: relatedCount, in: context)
+                    let targetProject = try seedParentScopedTasks(
+                        totalTaskCount: existingCount,
+                        targetScopeCount: scopeCount,
+                        in: context
+                    )
+                    try seedWorkItem(id: 1, in: context)
+
+                    let scopedPayload = makeScopedTaskPayload(count: scopeCount)
+                    let userPayload: [String: Any] = [
+                        "id": relatedCount,
+                        "full_name": "Mixed User \(relatedCount)"
+                    ]
+                    let workItemPayload: [String: Any] = [
+                        "id": 1,
+                        "title": "Mixed Work Item",
+                        "assignee_id": relatedCount,
+                        "tag_ids": Array(1...relationshipCount),
+                        "reviewers": Array(1...relationshipCount).map {
+                            ["id": $0, "full_name": "Reviewer \($0) mixed"]
+                        }
+                    ]
+
+                    return try await measureDuration {
+                        try await SwiftSync.sync(item: userPayload, as: BenchmarkUser.self, in: context)
+                        try await SwiftSync.sync(
+                            payload: scopedPayload,
+                            as: BenchmarkScopedTask.self,
+                            in: context,
+                            parent: targetProject,
+                            relationship: \BenchmarkScopedTask.project
+                        )
+                        try await SwiftSync.sync(item: workItemPayload, as: BenchmarkWorkItem.self, in: context)
+                        _ = try syncContainer.export(as: BenchmarkScopedTask.self, parent: targetProject)
+                    }
                 }
 
                 emit(result)
@@ -502,7 +588,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
         }
     }
 
-    private func measureCase(
+    private func measureRepeatedCase(
         name: String,
         storeKind: BenchmarkStoreKind,
         totalRows: Int,
@@ -510,51 +596,75 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
         scopeRows: Int?,
         relationRows: Int?,
         relationshipCount: Int? = nil,
+        workload: String = "isolated",
+        operation: () throws -> Duration
+    ) throws -> BenchmarkSummary {
+        var samples: [Duration] = []
+        samples.reserveCapacity(environment.sampleCount)
+        for _ in 0..<environment.sampleCount {
+            samples.append(try operation())
+        }
+        return BenchmarkSummary(
+            name: name,
+            storeKind: storeKind,
+            totalRows: totalRows,
+            payloadRows: payloadRows,
+            scopeRows: scopeRows,
+            relationRows: relationRows,
+            relationshipCount: relationshipCount,
+            workload: workload,
+            durations: samples
+        )
+    }
+
+    private func measureRepeatedAsyncCase(
+        name: String,
+        storeKind: BenchmarkStoreKind,
+        totalRows: Int,
+        payloadRows: Int?,
+        scopeRows: Int?,
+        relationRows: Int?,
+        relationshipCount: Int? = nil,
+        workload: String = "isolated",
+        operation: @MainActor () async throws -> Duration
+    ) async throws -> BenchmarkSummary {
+        var samples: [Duration] = []
+        samples.reserveCapacity(environment.sampleCount)
+        for _ in 0..<environment.sampleCount {
+            samples.append(try await operation())
+        }
+        return BenchmarkSummary(
+            name: name,
+            storeKind: storeKind,
+            totalRows: totalRows,
+            payloadRows: payloadRows,
+            scopeRows: scopeRows,
+            relationRows: relationRows,
+            relationshipCount: relationshipCount,
+            workload: workload,
+            durations: samples
+        )
+    }
+
+    private func measureDuration(
         operation: () throws -> Void
-    ) throws -> BenchmarkResult {
+    ) throws -> Duration {
         let clock = ContinuousClock()
         let start = clock.now
         try operation()
-        let duration = start.duration(to: clock.now)
-        return BenchmarkResult(
-            name: name,
-            storeKind: storeKind,
-            totalRows: totalRows,
-            payloadRows: payloadRows,
-            scopeRows: scopeRows,
-            relationRows: relationRows,
-            relationshipCount: relationshipCount,
-            duration: duration
-        )
+        return start.duration(to: clock.now)
     }
 
-    private func measureCase(
-        name: String,
-        storeKind: BenchmarkStoreKind,
-        totalRows: Int,
-        payloadRows: Int?,
-        scopeRows: Int?,
-        relationRows: Int?,
-        relationshipCount: Int? = nil,
+    private func measureDuration(
         operation: @MainActor () async throws -> Void
-    ) async throws -> BenchmarkResult {
+    ) async throws -> Duration {
         let clock = ContinuousClock()
         let start = clock.now
         try await operation()
-        let duration = start.duration(to: clock.now)
-        return BenchmarkResult(
-            name: name,
-            storeKind: storeKind,
-            totalRows: totalRows,
-            payloadRows: payloadRows,
-            scopeRows: scopeRows,
-            relationRows: relationRows,
-            relationshipCount: relationshipCount,
-            duration: duration
-        )
+        return start.duration(to: clock.now)
     }
 
-    private func emit(_ result: BenchmarkResult) {
+    private func emit(_ result: BenchmarkSummary) {
         print(result.rendered)
     }
 }
@@ -575,6 +685,7 @@ private struct BenchmarkEnvironment {
     let datasetTiers: [Int]
     let relationshipCounts: [Int]
     let scopeSize: Int
+    let sampleCount: Int
 
     static var current: BenchmarkEnvironment {
         let environment = ProcessInfo.processInfo.environment
@@ -583,7 +694,8 @@ private struct BenchmarkEnvironment {
             storeKinds: parseStoreKinds(environment["SWIFTSYNC_BENCHMARK_STORES"]) ?? [.memory],
             datasetTiers: parseIntegers(environment["SWIFTSYNC_BENCHMARK_TIERS"]) ?? [1_000],
             relationshipCounts: parseIntegers(environment["SWIFTSYNC_BENCHMARK_RELATIONSHIP_COUNTS"]) ?? [1, 10, 50],
-            scopeSize: parseIntegers(environment["SWIFTSYNC_BENCHMARK_SCOPE_SIZE"])?.first ?? 100
+            scopeSize: parseIntegers(environment["SWIFTSYNC_BENCHMARK_SCOPE_SIZE"])?.first ?? 100,
+            sampleCount: max(1, parseIntegers(environment["SWIFTSYNC_BENCHMARK_SAMPLES"])?.first ?? 3)
         )
     }
 
@@ -604,7 +716,7 @@ private struct BenchmarkEnvironment {
     }
 }
 
-private struct BenchmarkResult {
+private struct BenchmarkSummary {
     let name: String
     let storeKind: BenchmarkStoreKind
     let totalRows: Int
@@ -612,7 +724,8 @@ private struct BenchmarkResult {
     let scopeRows: Int?
     let relationRows: Int?
     let relationshipCount: Int?
-    let duration: Duration
+    let workload: String
+    let durations: [Duration]
 
     var rendered: String {
         var parts: [String] = [
@@ -620,7 +733,10 @@ private struct BenchmarkResult {
             "case=\(name)",
             "store=\(storeKind.rawValue)",
             "totalRows=\(totalRows)",
-            "durationMs=\(duration.inMilliseconds)"
+            "workload=\(workload)",
+            "samples=\(durations.count)",
+            "medianMs=\(median.inMilliseconds)",
+            "maxMs=\(max.inMilliseconds)"
         ]
         if let payloadRows {
             parts.append("payloadRows=\(payloadRows)")
@@ -636,13 +752,28 @@ private struct BenchmarkResult {
         }
         return parts.joined(separator: " ")
     }
+
+    private var sortedDurations: [Duration] {
+        durations.sorted { $0.millisecondsValue < $1.millisecondsValue }
+    }
+
+    private var median: Duration {
+        sortedDurations[sortedDurations.count / 2]
+    }
+
+    private var max: Duration {
+        sortedDurations.last ?? .zero
+    }
 }
 
 private extension Duration {
     var inMilliseconds: String {
+        String(format: "%.3f", millisecondsValue)
+    }
+
+    var millisecondsValue: Double {
         let components = self.components
-        let milliseconds = Double(components.seconds) * 1_000
+        return Double(components.seconds) * 1_000
             + Double(components.attoseconds) / 1_000_000_000_000_000
-        return String(format: "%.3f", milliseconds)
     }
 }

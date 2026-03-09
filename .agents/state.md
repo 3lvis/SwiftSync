@@ -8,10 +8,11 @@
 - [x] Run the benchmark suite at least once in its reduced default configuration to verify it works end to end.
 - [x] Update the planning doc with the implemented harness details and any practical constraints discovered during implementation.
 - [x] Run Milestone 1 SQLite-backed baseline benchmarks at 1k, 10k, and 50k tiers and summarize the main hotspots.
+- [~] Add Milestone 2 repeated-run reporting and a mixed-workload benchmark that is more representative than isolated path timings — reduced sqlite/1k verification completed; larger repeated runs still pending.
 
 ## Last known state
 
-Milestone 1 SQLite baseline complete; results show table-wide fetch cost dominates global sync, single-item sync, parent-scoped paths, and relationship resolution as row counts grow
+Milestone 2 partially implemented; benchmark summaries now report samples/median/max and include a mixed-session workload; reduced sqlite/1k verification passed
 
 ## Decisions (don't revisit)
 

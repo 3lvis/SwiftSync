@@ -91,6 +91,7 @@ Implemented harness:
   - `SWIFTSYNC_BENCHMARK_TIERS=1000,10000,50000`
   - `SWIFTSYNC_BENCHMARK_RELATIONSHIP_COUNTS=1,10,50`
   - `SWIFTSYNC_BENCHMARK_SCOPE_SIZE=100`
+  - `SWIFTSYNC_BENCHMARK_SAMPLES=3`
 
 Default enabled configuration is intentionally reduced:
 
@@ -107,6 +108,7 @@ The benchmark harness should report:
 - row counts for total table size, scoped slice size, and payload size
 - store kind (`inMemory` or `sqlite`)
 - the specific code path under test
+- workload type (`isolated` or `mixed`)
 
 The external-facing benchmark phase should additionally report:
 
@@ -165,6 +167,7 @@ without adding much signal. Add 100,000 only if the 50,000-row results are still
 - To-many nested-object sync for 10 and 50 related objects against related tables of 1k / 10k / 50k rows
 - Export of all rows for a model with 1k / 10k / 50k rows
 - Parent-scoped export where the exported slice is 100 rows but the full child table is much larger
+- Mixed session workload that combines incremental sync, parent-scoped sync, relationship-heavy sync, and scoped export
 
 ### Cases needed for third-party confidence
 
@@ -285,6 +288,31 @@ What these results do not yet prove:
 - stable median and tail behavior across repeated runs
 - mixed-workload behavior under more realistic app sessions
 - whether a third party should treat the library as production-ready at higher dataset tiers
+
+## Milestone 2 early findings
+
+Reduced verification run completed for `sqlite + 1k` with repeated samples:
+
+`SWIFTSYNC_RUN_BENCHMARKS=1 SWIFTSYNC_BENCHMARK_STORES=sqlite SWIFTSYNC_BENCHMARK_TIERS=1000 swift test --filter FetchStrategyBenchmarkTests`
+
+What changed in the harness:
+
+- isolated benchmark cases now emit `samples`, `medianMs`, and `maxMs`
+- a new `mixed-session-workload` case exercises:
+  - one incremental user sync
+  - one parent-scoped task sync for the target project slice
+  - one relationship-heavy work-item sync
+  - one scoped export
+
+Early signal from the repeated `1k` SQLite run:
+
+- median and max were close for the isolated cases, which suggests the harness is stable enough for larger repeated runs
+- the mixed workload landed at about `130 ms` median and `135 ms` max at `1k`, which is already more representative than quoting isolated-path timings alone
+
+What still remains for Milestone 2:
+
+- repeated SQLite runs at `10k` and `50k`
+- deciding whether the mixed workload is representative enough or still needs a richer model graph
 
 ## Candidate focus areas
 
