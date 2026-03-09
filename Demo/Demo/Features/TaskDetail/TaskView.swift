@@ -41,6 +41,9 @@ struct TaskView: View {
         .task {
             machine.send(.onAppear)
         }
+        .animation(.snappy(duration: 0.2), value: itemIDs)
+        .animation(.snappy(duration: 0.2), value: reviewerIDs)
+        .animation(.snappy(duration: 0.2), value: watcherIDs)
         .sheet(isPresented: $showingEditSheet) {
             if let taskModel = machine.task {
                 TaskFormSheet(
@@ -57,6 +60,18 @@ struct TaskView: View {
 }
 
 extension TaskView {
+    var itemIDs: [String] {
+        machine.items.map(\.id)
+    }
+
+    var reviewerIDs: [String] {
+        machine.task?.reviewers.map(\.id).sorted() ?? []
+    }
+
+    var watcherIDs: [String] {
+        machine.task?.watchers.map(\.id).sorted() ?? []
+    }
+
     @ViewBuilder
     var loadErrorSection: some View {
         if let presentation = machine.loadState.errorPresentation {

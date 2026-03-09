@@ -95,6 +95,7 @@ struct TaskFormSheet: View {
         .task(id: "\(machine.taskStateOptions.map(\.id).joined(separator: ","))|\(machine.users.map(\.id).joined(separator: ","))") {
             machine.applyDefaultsIfNeeded(to: draft)
         }
+        .animation(.snappy(duration: 0.2), value: machine.sortedItems(in: draft).map(\.id))
         .alert(
             "Save Failed",
             isPresented: Binding(

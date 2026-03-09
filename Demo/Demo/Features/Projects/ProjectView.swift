@@ -101,6 +101,7 @@ struct ProjectView: View {
                 syncEngine: syncEngine
             )
         }
+        .animation(.snappy(duration: 0.2), value: machine.tasks.map(\.id))
         .alert(
             "Delete Task?",
             isPresented: Binding(
