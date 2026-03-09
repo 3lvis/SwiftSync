@@ -314,6 +314,34 @@ What still remains for Milestone 2:
 - repeated SQLite runs at `10k` and `50k`
 - deciding whether the mixed workload is representative enough or still needs a richer model graph
 
+Expanded repeated SQLite run completed for `10k` and `50k` tiers with:
+
+`SWIFTSYNC_RUN_BENCHMARKS=1 SWIFTSYNC_BENCHMARK_STORES=sqlite SWIFTSYNC_BENCHMARK_TIERS=10000,50000 swift test --filter FetchStrategyBenchmarkTests`
+
+Additional findings:
+
+- median/max spread stayed relatively tight across the published cases, even at `50k`
+- that suggests the current hotspot pattern is stable and structural, not just an artifact of one noisy run
+- mixed workload scaled in line with the isolated table-wide hotspots:
+  about `1151 ms` median at `10k`
+  about `5759 ms` median at `50k`
+- isolated-path medians remained consistent with Milestone 1:
+  - global batch sync: about `788 ms` at `10k`, `4178 ms` at `50k`
+  - single-item sync: about `141 ms` at `10k`, `699 ms` at `50k`
+  - parent-scoped batch sync: about `223 ms` at `10k`, `1070 ms` at `50k`
+  - parent-scoped export: about `211 ms` at `10k`, `1023 ms` at `50k`
+  - to-one FK resolution: about `170 ms` at `10k`, `906 ms` at `50k`
+
+Milestone 2 interpretation so far:
+
+- repeated samples improved confidence in the measurements
+- the mixed workload confirms that the same table-wide fetch costs dominate when several operations are combined
+- the benchmark evidence is now stronger than a pure microbenchmark suite, but it is still based on a relatively simple model graph
+
+Remaining Milestone 2 question:
+
+- whether we need one richer, less synthetic graph benchmark before treating the results as strong enough for third-party guidance
+
 ## Candidate focus areas
 
 - Batch sync of a model with a large existing table.

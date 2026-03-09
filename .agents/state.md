@@ -8,11 +8,11 @@
 - [x] Run the benchmark suite at least once in its reduced default configuration to verify it works end to end.
 - [x] Update the planning doc with the implemented harness details and any practical constraints discovered during implementation.
 - [x] Run Milestone 1 SQLite-backed baseline benchmarks at 1k, 10k, and 50k tiers and summarize the main hotspots.
-- [~] Add Milestone 2 repeated-run reporting and a mixed-workload benchmark that is more representative than isolated path timings — reduced sqlite/1k verification completed; larger repeated runs still pending.
+- [~] Add Milestone 2 repeated-run reporting and a mixed-workload benchmark that is more representative than isolated path timings — repeated sqlite 10k/50k runs completed; deciding whether a richer graph benchmark is still needed.
 
 ## Last known state
 
-Milestone 2 partially implemented; benchmark summaries now report samples/median/max and include a mixed-session workload; reduced sqlite/1k verification passed
+Milestone 2 repeated sqlite runs complete through 50k; median/max spread is tight and mixed workload confirms the same table-wide hotspots; only the richer-graph question remains
 
 ## Decisions (don't revisit)
 
