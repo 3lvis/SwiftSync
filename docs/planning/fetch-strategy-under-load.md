@@ -251,6 +251,41 @@ If the goal is to help a third party decide whether to adopt SwiftSync for a lar
 
 If the benchmark package cannot answer those questions yet, it should be presented as internal profiling evidence, not as an adoption proof point.
 
+## Milestone 1 findings
+
+Initial SQLite-backed baseline run completed for `1k`, `10k`, and `50k` tiers with:
+
+`SWIFTSYNC_RUN_BENCHMARKS=1 SWIFTSYNC_BENCHMARK_STORES=sqlite SWIFTSYNC_BENCHMARK_TIERS=1000,10000,50000 swift test --filter FetchStrategyBenchmarkTests`
+
+High-level findings:
+
+- global batch sync scales roughly with total table size:
+  about `74 ms` at `1k`, `741 ms` at `10k`, `3919 ms` at `50k`
+- single-item sync also scales strongly with total table size:
+  about `16 ms` at `1k`, `143 ms` at `10k`, `694 ms` at `50k`
+- parent-scoped batch sync scales with total child-table size even though the scoped slice stays fixed at `100` rows:
+  about `29 ms` at `1k`, `212 ms` at `10k`, `1099 ms` at `50k`
+- parent-scoped export shows the same pattern:
+  about `28 ms` at `1k`, `211 ms` at `10k`, `1073 ms` at `50k`
+- relationship resolution cost is dominated by related-table size, not relationship membership count:
+  to-one FK resolution is about `17 ms` at `1k`, `161 ms` at `10k`, `860 ms` at `50k`
+  to-many FK and nested-object resolution track the same related-table growth curve, while `1`, `10`, and `50` linked rows stay relatively close to each other
+- full export is one of the most obviously table-wide paths:
+  about `93 ms` at `1k`, `874 ms` at `10k`, `4917 ms` at `50k`
+
+What these results mean:
+
+- the current main hotspots are table-wide fetch patterns, not relationship fan-out
+- parent-scoped sync and parent-scoped export are paying for global child-table size rather than scoped-slice size
+- single-item sync is too sensitive to total table size for a path that should represent incremental work
+- relationship helpers are paying almost entirely for fetching the full related table
+
+What these results do not yet prove:
+
+- stable median and tail behavior across repeated runs
+- mixed-workload behavior under more realistic app sessions
+- whether a third party should treat the library as production-ready at higher dataset tiers
+
 ## Candidate focus areas
 
 - Batch sync of a model with a large existing table.

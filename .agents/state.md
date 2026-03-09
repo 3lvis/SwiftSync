@@ -7,10 +7,11 @@
 - [x] Add a benchmark runner/documentation path so the suite can be executed intentionally without slowing normal tests.
 - [x] Run the benchmark suite at least once in its reduced default configuration to verify it works end to end.
 - [x] Update the planning doc with the implemented harness details and any practical constraints discovered during implementation.
+- [x] Run Milestone 1 SQLite-backed baseline benchmarks at 1k, 10k, and 50k tiers and summarize the main hotspots.
 
 ## Last known state
 
-benchmark harness implemented and verified in reduced mode; default suite skips unless SWIFTSYNC_RUN_BENCHMARKS=1; reduced memory/1k run completed successfully
+Milestone 1 SQLite baseline complete; results show table-wide fetch cost dominates global sync, single-item sync, parent-scoped paths, and relationship resolution as row counts grow
 
 ## Decisions (don't revisit)
 
