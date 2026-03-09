@@ -2,52 +2,83 @@
 
 ## Goal
 
-Define the next high-leverage optimization step for the remaining fetch-strategy bottlenecks, using the benchmark findings already captured in `docs/project/fetch-strategy-under-load.md`.
+Start Milestone 3 with the highest-leverage retained optimization target from the benchmark findings in `docs/project/fetch-strategy-under-load.md`.
 
-## Priority framing
+## Starting point
 
-From the remaining work, the optimization options split into three groups.
+Begin with a parent-scoped authoritative sync experiment that diffs within the requested scope instead of reconciling against the full child table.
 
-### High-value, must-try
+This is the best first bet because the retained benchmark story still shows the same structural problem in the scoped paths:
 
-- Parent-scoped authoritative sync around scope-level diffing instead of full-table reconciliation.
-  This is the strongest candidate. The realistic benchmark is project-scoped, and parent-scoped paths still scale with total child-table size instead of scope size. If one thing can move the headline number materially, it is this.
-  Feasibility is promising but not fully proven, so this should start as a short experiment rather than a full commitment.
+- parent-scoped batch sync with a fixed `100`-row scope still grows from about `29 ms` at `1k` to about `1099 ms` at `50k`
+- parent-scoped export follows the same full-table growth pattern
+- the realistic mixed project/task scenario is project-scoped, so wins here have the clearest path to improving the headline number
 
-- Sync-pass identity index for target model rows, not just related rows.
-  This is also worth trying. The same optimization class already produced a large win for relationship rows. Applying it to target rows could cut single-item sync and batch matching costs without adding public API surface.
-  Feasibility is high and does not need a separate spike before implementation.
+## What this experiment needs to prove
 
-- Delete planning without full row materialization.
-  High upside, but a bit riskier. If authoritative sync can decide insert/update/delete from compact identity sets first, global sync could drop a lot.
-  Feasibility is high enough to try directly, but this is probably the third thing to try, not the first.
+The experiment is worth keeping only if it demonstrates all of the following:
 
-### Worth trying, but secondary
+- the scoped authoritative path can fetch and diff only rows for the requested parent scope
+- the implementation does not require public API expansion or model-authored fetch hooks
+- the scoped path stays correct for inserts, updates, and deletions when the payload is authoritative within that scope
+- the headline project/task scenario moves enough to justify carrying the extra implementation complexity
 
-- Parent-scoped export narrowing by scope-first ordering instead of fetch-all-then-filter.
-  Probably useful, but not the biggest product win unless export is on a hot path for users. Good cleanup after parent-scoped sync, not the main bet.
-  Feasibility is reasonable, but it should follow the higher-impact sync-path work.
+If any of those fail early, the next step should be a sync-pass identity index for target model rows.
 
-### Low-confidence / probably not worth trying early
+## Current trace
 
-- Revisit parent-scoped strategy at the API level.
-  This should not be the starting point. API changes are expensive, and there are still internal implementation paths with bigger expected upside.
-  This only becomes worth discussing if the internal options fail.
+The current parent-scoped path still expands into full-table work before it ever applies the parent scope.
 
-## Priority order
+- `SwiftSync.sync(item:parent:relationship:)` fetches `FetchDescriptor<Model>()` and then filters the full result in memory to `scopeRows`.
+- `SwiftSync.sync(payload:parent:relationship:)` does the same full-table fetch, then filters to `scopeRows`, and in the `isGlobal` branch it builds the duplicate-detection index from the full table instead of the parent scope.
+- Authoritative delete planning is scope-local only after that full-table fetch, because deletions iterate `scopeRows` produced from the in-memory filter.
+- `resolveParent` also fetches all `Parent` rows and then finds the one matching `persistentModelID`.
+- Parent-scoped export follows the same pattern: fetch all `Model` rows, then filter in memory by `parentRelationship`.
 
-1. Start with a short experiment for parent-scoped authoritative sync around scope-level diffing.
-2. If that path looks brittle or low-yield, move next to a sync-pass identity index for target model rows.
-3. Try delete planning that operates on compact identity sets before full row materialization.
-4. Follow with parent-scoped export narrowing if the main sync-path work still leaves obvious scope-related waste.
-5. Only consider API-level parent-scoped strategy changes if the internal implementation paths fail to produce large enough gains.
+That means the first experiment does not need a broad search for hidden complexity. The current starting boundary is clear: replace the fetch-all-then-filter stages in scoped sync and scoped export with scope-first fetches or a SwiftData-compatible equivalent.
+
+## Design constraint
+
+The current optimization target is not purely mechanical.
+
+- `ParentScopedModel` exposes a static `parentRelationship`, which could support a specialized internal scoped-fetch path.
+- The existing parent-scoped sync APIs are more generic than that protocol surface, because they accept arbitrary `ReferenceWritableKeyPath<Model, Parent?>` values.
+- Earlier work already established that generic SwiftData predicate construction around arbitrary key paths is not a reliable path in this codebase.
+
+So the first code experiment should begin by deciding between two implementation shapes:
+
+1. Special-case the internal fast path for models where the requested relationship is the model's declared `ParentScopedModel.parentRelationship`.
+2. Treat the generic key-path API as the blocker and fall back to the next Milestone 3 optimization instead of forcing more API or model complexity.
+
+That decision is now made for this branch: SwiftData rejects `row[keyPath: ...]` inside `#Predicate`, even in the specialized `ParentScopedModel` helper shape, so the scope-first parent fetch path is blocked without broader API or model changes.
+
+## Current active path
+
+Milestone 3 briefly moved to the fallback target-row optimization:
+
+- keep a context-local cache of fetched target rows keyed by `ModelContext` and model type
+- reuse those rows across sequential sync operations in the same context
+- update the cache after creates and authoritative deletes so later syncs in the same context do not refetch the full table immediately
+
+That experiment was measured and then removed because the headline gain was too small:
+
+- demo-shaped scenario, `sqlite + 1k`: about `664 ms` median versus the documented `713 ms` baseline
+- demo-shaped scenario, `sqlite + 10k`: about `6638 ms` median versus the documented `6943 ms` baseline
+
+The `10k` gain is about `4.4%`, which is below the bar for carrying additional cache state and coherence risk, so this path should be treated as another rejected optimization.
+
+## Fallback order
+
+If the parent-scoped experiment is brittle or low-yield, continue in this order:
+
+1. Build a sync-pass identity index for target model rows.
+2. Separate delete planning from full row materialization.
+3. Narrow parent-scoped export by scope-first ordering.
+4. Revisit API-level parent-scoped strategy changes only if the internal paths fail.
 
 ## Open items
 
-- [ ] Start with a short experiment for parent-scoped authoritative sync to confirm whether scope-level diffing is cleanly achievable in SwiftData.
-- [ ] If the parent-scoped experiment looks brittle or low-yield, move next to a sync-pass identity index for target model rows.
-- [ ] Try delete planning that operates on compact identity sets before full row materialization if the first chosen path does not move the headline scenario enough.
-- [ ] Choose the next optimization target for Milestone 3 from the documented alternatives.
-- [ ] Design the implementation shape for the chosen path before touching library code.
-- [ ] Re-run the headline scenario and the supporting isolated benchmarks after the next optimization pass.
-- [ ] Turn the post-optimization results into either a supported operating-envelope statement or explicit documented limits.
+- [ ] Switch the active Milestone 3 plan to delete planning without full row materialization.
+- [ ] Define the smallest delete-planning experiment that can avoid full row materialization while preserving authoritative semantics.
+- [ ] Re-run the headline project/task scenario and at least one supporting isolated benchmark after the delete-planning experiment.
+- [ ] Convert the post-optimization measurements into an updated operating-envelope statement or documented limits.
