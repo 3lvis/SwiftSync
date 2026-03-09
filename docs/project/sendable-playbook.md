@@ -27,9 +27,10 @@ When `@unchecked Sendable` is required, verify all of the following:
 
 - `SwiftSync` package uses Swift 6 language mode and strict concurrency compiler flags.
 - `DemoBackend` package uses Swift 6 language mode and strict concurrency compiler flags.
-- `DemoCore` package uses Swift 6 language mode and strict concurrency compiler flags.
+- `DemoCore` currently remains Swift 5 mode with minimal strict concurrency while non-Sendable payload APIs are still `[String: Any]`-based.
 
-## Current direction
+## Migration Path for DemoCore
 
-- Prefer `SyncPayloadConvertible` wrappers for typed payload boundaries.
-- Avoid introducing new raw `[String: Any]` payload surfaces when a typed Sendable wrapper is possible.
+- Introduce Sendable DTOs for API payloads instead of `[String: Any]`.
+- Update sync boundaries to accept Sendable payload models.
+- Move `DemoCore` to Swift 6 mode once DTO boundaries are complete.

@@ -94,13 +94,7 @@ final class User {
 ### Sync
 
 ```swift
-let syncContainer = try SyncContainer(
-  for: User.self,
-  keyStyle: .snakeCase,
-  configurations: ModelConfiguration(isStoredInMemoryOnly: true)
-)
-
-try await syncContainer.sync(payload: payload, as: User.self)
+try await SwiftSync.sync(payload: payload, as: User.self, in: context)
 ```
 
 That single call will insert, update, and delete based on identity diffing.
@@ -108,9 +102,10 @@ That single call will insert, update, and delete based on identity diffing.
 You can also tune behavior per call:
 
 ```swift
-try await syncContainer.sync(
+try await SwiftSync.sync(
   payload: payload,
   as: User.self,
+  in: context,
   relationshipOperations: .all
 )
 ```
@@ -118,9 +113,10 @@ try await syncContainer.sync(
 To update a single item without touching other rows, use `sync(item:)`:
 
 ```swift
-try await syncContainer.sync(
+try await SwiftSync.sync(
   item: taskDict,
-  as: Task.self
+  as: Task.self,
+  in: context
 )
 ```
 
@@ -171,7 +167,7 @@ Relationship-scoped query (to-one):
 ```swift
 @SyncQuery(
   Task.self,
-  relationship: \Task.project,
+  relationship: \.project,
   relationshipID: projectID,
   in: syncContainer,
   sortBy: [SortDescriptor(\Task.id)]
@@ -184,7 +180,7 @@ Relationship-scoped query (to-many):
 ```swift
 @SyncQuery(
   Project.self,
-  relationship: \Project.tasks,
+  relationship: \.tasks,
   relationshipID: taskID,
   in: syncContainer,
   sortBy: [SortDescriptor(\Project.id)]
@@ -199,40 +195,34 @@ Keep using `predicate` when relationship-scoped `relationship/relationshipID` is
 
 ### UIKit (SyncQueryPublisher)
 
-SwiftUI is first class. `SyncQueryPublisher` exists for UIKit screens where property wrappers are not available.
+SwiftUI is first class. `SyncQueryPublisher` exists for UIKit screens where `@SyncQuery` is not available — it covers the same reactive contract using Combine.
 
 ```swift
-@MainActor
-final class ProjectsController {
-  let publisher: SyncQueryPublisher<Project>
+let publisher = SyncQueryPublisher(
+    Project.self,
+    in: syncContainer,
+    sortBy: [SortDescriptor(\Project.name)]
+)
 
-  init(syncContainer: SyncContainer) {
-    publisher = SyncQueryPublisher(
-      Project.self,
-      in: syncContainer,
-      sortBy: [SortDescriptor(\Project.name)]
-    )
-  }
-
-  func snapshot() -> [Project] {
-    publisher.rows
-  }
-}
+publisher.$rows
+    .receive(on: DispatchQueue.main)
+    .sink { [weak self] projects in self?.applySnapshot(projects) }
+    .store(in: &cancellables)
 ```
 
 Relationship-scoped variant (to-one):
 
 ```swift
 let publisher = SyncQueryPublisher(
-  Task.self,
-  relationship: \Task.assignee,
-  relationshipID: userID,
-  in: syncContainer,
-  sortBy: [SortDescriptor(\Task.title)]
+    Task.self,
+    relationship: \Task.assignee,
+    relationshipID: userID,
+    in: syncContainer,
+    sortBy: [SortDescriptor(\Task.title)]
 )
 ```
 
-`SyncQueryPublisher` reloads automatically after sync saves and exposes the latest rows through `rows`.
+`SyncQueryPublisher` reloads automatically after every sync, using the same internal mechanism as `@SyncQuery`.
 
 ## Scenario -> Way of Use
 
@@ -273,8 +263,10 @@ final class Note {
   @Relationship var user: User?
 }
 
+// Keep this extension when you want scoped identity by default for this model.
+// `parentRelationship` provides the default parent scope relationship for this model.
 extension Note: ParentScopedModel {
-  static var parentRelationship: ReferenceWritableKeyPath<Note, User?> { \Note.user }
+  static var parentRelationship: ReferenceWritableKeyPath<Note, User?> { \.user }
 }
 ```
 
@@ -288,17 +280,19 @@ API:
 ```swift
 let user = try context.fetch(FetchDescriptor<User>()).first { $0.id == 6 }!
 
-try await syncContainer.sync(
+try await SwiftSync.sync(
   payload: payload,
   as: Note.self,
+  in: context,
   parent: user,
   relationship: \Note.user
 )
 ```
 
 Notes:
-- parent-scoped sync requires an explicit `relationship:` key path
-- for models conforming to `ParentScopedModel`, default identity policy remains scoped-by-parent
+- This example keeps `ParentScopedModel`, so scoped identity is the default for `Note`.
+- Parent-scoped sync requires an explicit `relationship:` key path.
+- For models conforming to `ParentScopedModel`, the default identity policy remains scoped-by-parent.
 
 ### Scenario: to-one relationship by nested object
 
@@ -341,7 +335,7 @@ final class Employee {
 API:
 
 ```swift
-try await syncContainer.sync(payload: payload, as: Employee.self)
+try await SwiftSync.sync(payload: payload, as: Employee.self, in: context)
 ```
 
 ### Scenario: to-one relationship by `*_id`
@@ -384,7 +378,7 @@ final class Employee {
 API:
 
 ```swift
-try await syncContainer.sync(payload: payload, as: Employee.self)
+try await SwiftSync.sync(payload: payload, as: Employee.self, in: context)
 ```
 
 ### Scenario: to-many relationship by objects
@@ -456,7 +450,7 @@ final class Chat {
 API:
 
 ```swift
-try await syncContainer.sync(payload: payload, as: Chat.self)
+try await SwiftSync.sync(payload: payload, as: Chat.self, in: context)
 ```
 
 ### Scenario: to-many relationship by `*_ids`
@@ -507,7 +501,7 @@ final class User {
 API:
 
 ```swift
-try await syncContainer.sync(payload: payload, as: User.self)
+try await SwiftSync.sync(payload: payload, as: User.self, in: context)
 ```
 
 ### Scenario: export local rows to API JSON
@@ -551,7 +545,6 @@ let rows = try syncContainer.export(as: User.self)
 `@Syncable` generates:
 - `SyncUpdatableModel` conformance (make/apply + relationship sync)
 - export support via `exportObject(keyStyle:dateFormatter:)`
-
 Built-in relationship sync behavior:
 - to-one by `*_id` (strict typed FK lookup)
 - to-many by `*_ids` (unordered membership updates)
@@ -618,9 +611,9 @@ final class Account {
 ```
 
 Notes:
-- `@RemoteKey` affects inbound sync mapping and export mapping
-- `@RemoteKey("a.b.c")` reads/writes nested payload paths
-- deep paths are resolved from nested dictionaries and keep normal missing/null semantics
+- `@RemoteKey` affects inbound sync mapping and export mapping.
+- `@RemoteKey("a.b.c")` reads/writes nested payload paths.
+- Deep paths are resolved from nested dictionaries and keep normal missing/null semantics.
 
 ## Exporting JSON
 
@@ -631,12 +624,13 @@ let rows = try syncContainer.export(as: User.self)
 ```
 
 Defaults:
-- key style follows container `keyStyle`
+- snake_case keys
 - relationships included as inline arrays/objects
-- dates use UTC format `yyyy-MM-dd'T'HH:mm:ss.SSSXXXXX`
+- ISO-style UTC dates
 - nils exported as `null`
 
-To exclude a specific relationship from exports, apply `@NotExport` to that property.
+To exclude a specific relationship from all exports, apply `@NotExport` to the property
+in your model.
 
 ### Camel case
 
@@ -653,7 +647,7 @@ let rows = try syncContainer.export(as: Note.self, parent: user)
 
 ## Date Handling
 
-SwiftSync uses a custom inbound date parser (`SyncDateParser`).
+SwiftSync uses a custom high-performance inbound date parser (`SyncDateParser`).
 
 Supported inputs:
 - ISO8601 variants (`Z`, `+00:00`, `+0000`, no-timezone)
@@ -662,48 +656,22 @@ Supported inputs:
 - fractional seconds (deci/centi/milli/micro)
 - unix timestamps (seconds and microseconds-like)
 
-Invalid date handling is best-effort and non-crashing.
+Invalid date behavior is best-effort and non-crashing.
+
+our policy is honestly we do our best without affecting performance.
 
 ## API Reference
 
 ```swift
 public final class SyncContainer {
-  @MainActor
-  init(
-    for modelTypes: any PersistentModel.Type...,
-    keyStyle: KeyStyle = .snakeCase,
-    dateFormatter: DateFormatter? = nil,
-    recoverOnFailure: Bool = false,
-    configurations: ModelConfiguration...
-  ) throws
-
-  @MainActor
-  init(
-    _ modelContainer: ModelContainer,
-    keyStyle: KeyStyle = .snakeCase,
-    dateFormatter: DateFormatter? = nil
-  )
-
   func sync<Model: SyncUpdatableModel>(
     payload: [Any],
     as model: Model.Type,
     relationshipOperations: SyncRelationshipOperations = .all
   ) async throws
 
-  func sync<Model: SyncUpdatableModel, Payload: SyncPayloadConvertible>(
-    payload: [Payload],
-    as model: Model.Type,
-    relationshipOperations: SyncRelationshipOperations = .all
-  ) async throws
-
   func sync<Model: SyncUpdatableModel>(
     item: [String: Any],
-    as model: Model.Type,
-    relationshipOperations: SyncRelationshipOperations = .all
-  ) async throws
-
-  func sync<Model: SyncUpdatableModel, Payload: SyncPayloadConvertible>(
-    item: Payload,
     as model: Model.Type,
     relationshipOperations: SyncRelationshipOperations = .all
   ) async throws
@@ -725,12 +693,12 @@ public final class SyncContainer {
   ) async throws
 
   func export<Model: SyncUpdatableModel>(
-    as model: Model.Type
+    as model: Model.Type,
   ) throws -> [[String: Any]]
 
   func export<Model: SyncUpdatableModel & ParentScopedModel>(
     as model: Model.Type,
-    parent: Model.SyncParent
+    parent: Model.SyncParent,
   ) throws -> [[String: Any]]
 }
 
@@ -744,10 +712,5 @@ public struct SyncRelationshipOperations: OptionSet, Sendable {
   public static let update: SyncRelationshipOperations
   public static let delete: SyncRelationshipOperations
   public static let all: SyncRelationshipOperations
-}
-
-public enum KeyStyle: Sendable {
-  case snakeCase
-  case camelCase
 }
 ```

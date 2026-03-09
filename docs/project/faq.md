@@ -134,6 +134,8 @@ SwiftSync serializes sync calls per store/container.
 - same `ModelContainer` => queued, no overlap
 - different stores => can run concurrently
 
+More implementation/test-planning detail lives in `docs/planning/swiftdata-concurrency-edge-cases.md`.
+
 ## 18) How do I cancel a sync?
 
 Use Swift Concurrency task cancellation (`task.cancel()`).

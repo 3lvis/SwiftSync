@@ -104,7 +104,7 @@ Export key precedence:
 
 Defaults:
 - export key style defaults to snake_case
-- relationships are exported inline (to-one object / to-many array)
+- relationship export mode defaults to array mode
 
 Round-trip expectation:
 - if import/export use matching conventions and no divergent overrides, exported keys match expected API keys.

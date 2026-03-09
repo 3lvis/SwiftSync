@@ -107,11 +107,11 @@ We previously added an `@Syncable` warning for all missing to-many inverses.
 
 That rule was too broad and produced the wrong guidance (including for one-to-many relationships that work fine), so it was removed.
 
-Current guardrail targets the real risk:
+If we add guardrails again, they should target the real risk:
 
 - many-to-many pairs with zero explicit inverse anchors
 
-`SyncContainer` now performs schema validation at initialization and throws when a many-to-many pair has zero explicit inverse anchors. This keeps the guardrail at runtime schema level instead of a broad local macro warning.
+That likely belongs in a runtime schema validator (cross-model validation), not a broad local macro warning.
 
 ## Recommended Team Wording (copy/paste)
 
