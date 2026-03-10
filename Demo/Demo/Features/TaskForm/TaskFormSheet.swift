@@ -54,75 +54,71 @@ struct TaskFormSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                loadErrorSection
-                titleSection
-                descriptionSection
-                itemsSection
-                stateSection
-                assigneeSection
-                if case .create = mode { authorSection }
-                reviewersSection
-                watchersSection
-            }
-            .environment(\.editMode, $itemEditMode)
-            .navigationTitle(navigationTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                        .disabled(machine.saveState == .submitting)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        machine.send(.save(mode: mode, draft: draft, onSuccess: {
-                            dismiss()
-                        }))
-                    } label: {
-                        HStack(spacing: 6) {
-                            if machine.saveState == .submitting { ProgressView().controlSize(.small) }
-                            Text(confirmLabel)
-                        }
-                    }
-                    .disabled(isSaveDisabled)
-                }
-            }
-        }
-        .task {
-            machine.send(.metadata(.onAppear))
-        }
-        .task(id: "\(machine.taskStateOptions.map(\.id).joined(separator: ","))|\(machine.users.map(\.id).joined(separator: ","))") {
-            machine.applyDefaultsIfNeeded(to: draft)
-        }
-        .animation(.snappy(duration: 0.2), value: machine.sortedItems(in: draft).map(\.id))
-        .alert(
-            "Save Failed",
-            isPresented: Binding(
-                get: {
-                    if case .failed = machine.saveState { return true }
-                    return false
-                },
-                set: { isPresented in
-                    if !isPresented {
-                        machine.send(.dismissSaveError)
-                    }
-                }
-            )
-        ) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            if case .failed(let error) = machine.saveState {
-                Text(error.message)
-            } else {
-                Text("Unknown error")
-            }
-        }
-        .presentationDetents([.large])
+        screen
     }
 }
 
 extension TaskFormSheet {
+    private var screen: some View {
+        NavigationStack {
+            formContent
+        }
+        .task(loadMetadata)
+        .task(id: defaultsTaskID, applyDefaults)
+        .animation(.snappy(duration: 0.2), value: itemIDs)
+        .alert("Save Failed", isPresented: saveFailureIsPresented) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(saveFailureMessage)
+        }
+        .presentationDetents([.large])
+    }
+
+    private var formContent: some View {
+        Form {
+            content
+        }
+        .environment(\.editMode, $itemEditMode)
+        .navigationTitle(navigationTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { toolbarContent }
+    }
+
+    @ViewBuilder
+    var content: some View {
+        loadErrorSection
+        titleSection
+        descriptionSection
+        itemsSection
+        stateSection
+        assigneeSection
+        if case .create = mode { authorSection }
+        reviewersSection
+        watchersSection
+    }
+
+    private var defaultsTaskID: String {
+        "\(machine.taskStateOptions.map(\.id).joined(separator: ","))|\(machine.users.map(\.id).joined(separator: ","))"
+    }
+
+    private var itemIDs: [String] {
+        machine.sortedItems(in: draft).map(\.id)
+    }
+
+    @ToolbarContentBuilder
+    var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button("Cancel") { dismiss() }
+                .disabled(machine.saveState == .submitting)
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            Button(action: save) {
+                saveButtonLabel
+            }
+            .disabled(isSaveDisabled)
+        }
+    }
+
     var navigationTitle: String {
         switch mode {
         case .create: "New Task"
@@ -145,6 +141,51 @@ extension TaskFormSheet {
             return draft.state.isEmpty || draft.authorID.isEmpty
         }
         return false
+    }
+
+    @ViewBuilder
+    var saveButtonLabel: some View {
+        HStack(spacing: 6) {
+            if machine.saveState == .submitting {
+                ProgressView().controlSize(.small)
+            }
+            Text(confirmLabel)
+        }
+    }
+
+    var saveFailureIsPresented: Binding<Bool> {
+        Binding(
+            get: {
+                if case .failed = machine.saveState { return true }
+                return false
+            },
+            set: { isPresented in
+                if !isPresented {
+                    machine.send(.dismissSaveError)
+                }
+            }
+        )
+    }
+
+    var saveFailureMessage: String {
+        if case .failed(let error) = machine.saveState {
+            return error.message
+        }
+        return "Unknown error"
+    }
+
+    func save() {
+        machine.send(.save(mode: mode, draft: draft, onSuccess: {
+            dismiss()
+        }))
+    }
+
+    func loadMetadata() {
+        machine.send(.metadata(.onAppear))
+    }
+
+    func applyDefaults() {
+        machine.applyDefaultsIfNeeded(to: draft)
     }
 
     func itemTitleBinding(for item: Item) -> Binding<String> {

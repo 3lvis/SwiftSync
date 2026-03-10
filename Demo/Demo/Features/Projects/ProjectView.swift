@@ -22,76 +22,29 @@ struct ProjectView: View {
     }
 
     var body: some View {
-        List {
-            screenStateSections
-        }
+        List { content }
         .listStyle(.plain)
         .navigationTitle("Project")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    isShowingCreateTaskSheet = true
-                } label: {
-                    Label("New Task", systemImage: "plus")
-                }
-            }
-        }
-        .task {
-            machine.send(.onAppear)
-        }
-        .sheet(isPresented: $isShowingCreateTaskSheet) {
-            TaskFormSheet(
-                mode: .create(projectID: projectID),
-                syncContainer: syncContainer,
-                syncEngine: syncEngine
-            )
-        }
+        .toolbar { toolbarContent }
+        .task { machine.send(.onAppear) }
+        .sheet(isPresented: $isShowingCreateTaskSheet) { createTaskSheet }
         .animation(.snappy(duration: 0.2), value: machine.tasks.map(\.id))
-        .alert(
-            "Delete Task?",
-            isPresented: Binding(
-                get: { taskPendingDelete != nil },
-                set: { if !$0 { taskPendingDelete = nil } }
-            ),
-            presenting: taskPendingDelete
-        ) { prompt in
-            Button("Delete", role: .destructive) {
-                machine.sendDelete(.request(taskID: prompt.id))
-                taskPendingDelete = nil
-            }
+        .alert("Delete Task?", isPresented: deletePromptIsPresented, presenting: taskPendingDelete) { prompt in
+            Button("Delete", role: .destructive) { confirmDelete(prompt) }
             Button("Cancel", role: .cancel) { taskPendingDelete = nil }
         } message: { prompt in
             Text("Delete \"\(prompt.title)\" from this project?")
         }
-        .alert(
-            "Delete Failed",
-            isPresented: Binding(
-                get: {
-                    if case .failed = machine.deleteState { return true }
-                    return false
-                },
-                set: { isPresented in
-                    if !isPresented {
-                        machine.sendDelete(.dismissError)
-                    }
-                }
-            )
-        ) {
-            Button("OK", role: .cancel) {
-                machine.sendDelete(.dismissError)
-            }
+        .alert("Delete Failed", isPresented: deleteFailureIsPresented) {
+            Button("OK", role: .cancel) { machine.sendDelete(.dismissError) }
         } message: {
-            if case .failed(let presentation) = machine.deleteState {
-                Text(presentation.message)
-            } else {
-                Text("Could not delete this task.")
-            }
+            Text(deleteFailureMessage)
         }
     }
 
     @ViewBuilder
-    private var screenStateSections: some View {
+    private var content: some View {
         if let presentation = machine.loadErrorPresentation {
             errorSection(presentation)
         }
@@ -112,6 +65,58 @@ struct ProjectView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            Button {
+                isShowingCreateTaskSheet = true
+            } label: {
+                Label("New Task", systemImage: "plus")
+            }
+        }
+    }
+
+    private var createTaskSheet: some View {
+        TaskFormSheet(
+            mode: .create(projectID: projectID),
+            syncContainer: syncContainer,
+            syncEngine: syncEngine
+        )
+    }
+
+    private var deletePromptIsPresented: Binding<Bool> {
+        Binding(
+            get: { taskPendingDelete != nil },
+            set: { if !$0 { taskPendingDelete = nil } }
+        )
+    }
+
+    private var deleteFailureIsPresented: Binding<Bool> {
+        Binding(
+            get: {
+                if case .failed = machine.deleteState { return true }
+                return false
+            },
+            set: { isPresented in
+                if !isPresented {
+                    machine.sendDelete(.dismissError)
+                }
+            }
+        )
+    }
+
+    private var deleteFailureMessage: String {
+        if case .failed(let presentation) = machine.deleteState {
+            return presentation.message
+        }
+        return "Could not delete this task."
+    }
+
+    private func confirmDelete(_ prompt: TaskDeletePrompt) {
+        machine.sendDelete(.request(taskID: prompt.id))
+        taskPendingDelete = nil
     }
 
     @ViewBuilder

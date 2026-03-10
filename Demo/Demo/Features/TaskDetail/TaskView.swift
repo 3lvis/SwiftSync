@@ -22,51 +22,20 @@ struct TaskView: View {
     }
 
     var body: some View {
-        List {
-            screenStateSections
-        }
+        List { content }
         .navigationTitle("Task")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Edit") {
-                    showingEditSheet = true
-                }
-                .disabled(machine.task == nil)
-            }
-        }
-        .task {
-            machine.send(.onAppear)
-        }
+        .toolbar { toolbarContent }
+        .task { machine.send(.onAppear) }
         .animation(.snappy(duration: 0.2), value: itemIDs)
         .animation(.snappy(duration: 0.2), value: reviewerIDs)
         .animation(.snappy(duration: 0.2), value: watcherIDs)
-        .sheet(isPresented: $showingEditSheet) {
-            if let taskModel = machine.task {
-                TaskFormSheet(
-                    mode: .edit(task: taskModel),
-                    syncContainer: syncContainer,
-                    syncEngine: syncEngine
-                )
-            }
-        }
+        .sheet(isPresented: $showingEditSheet) { editTaskSheet }
     }
 }
 
 extension TaskView {
-    var itemIDs: [String] {
-        machine.items.map(\.id)
-    }
-
-    var reviewerIDs: [String] {
-        machine.task?.reviewers.map(\.id).sorted() ?? []
-    }
-
-    var watcherIDs: [String] {
-        machine.task?.watchers.map(\.id).sorted() ?? []
-    }
-
     @ViewBuilder
-    var screenStateSections: some View {
+    var content: some View {
         if let presentation = machine.loadErrorPresentation {
             errorSection(presentation)
         }
@@ -89,6 +58,39 @@ extension TaskView {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    @ToolbarContentBuilder
+    var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            Button("Edit") {
+                showingEditSheet = true
+            }
+            .disabled(machine.task == nil)
+        }
+    }
+
+    @ViewBuilder
+    var editTaskSheet: some View {
+        if let taskModel = machine.task {
+            TaskFormSheet(
+                mode: .edit(task: taskModel),
+                syncContainer: syncContainer,
+                syncEngine: syncEngine
+            )
+        }
+    }
+
+    var itemIDs: [String] {
+        machine.items.map(\.id)
+    }
+
+    var reviewerIDs: [String] {
+        machine.task?.reviewers.map(\.id).sorted() ?? []
+    }
+
+    var watcherIDs: [String] {
+        machine.task?.watchers.map(\.id).sorted() ?? []
     }
 
     @ViewBuilder
