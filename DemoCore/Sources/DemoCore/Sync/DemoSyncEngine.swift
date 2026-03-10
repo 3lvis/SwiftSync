@@ -121,6 +121,10 @@ public final class DemoSyncEngine {
             "projectID=\(projectID) tasks=\(payload.count) userRowsBeforeSync=\(userRowsBeforeSync)"
         )
 
+        if userRowsBeforeSync == 0 {
+            try await syncUsersData()
+        }
+
         if try project(withID: projectID) == nil {
             let projectsPayload = try await apiClient.getProjects()
             try await syncContainer.sync(payload: projectsPayload, as: Project.self)
@@ -139,8 +143,14 @@ public final class DemoSyncEngine {
 
     private func syncTaskDetailData(taskID: String) async throws {
         guard let payload = try await apiClient.getTaskDetail(taskID: taskID) else { return }
-        let payloadSnapshot = taskPayloadSnapshot(payload, userRowsBeforeSync: try localUserCount())
+        let userRowsBeforeSync = try localUserCount()
+        let payloadSnapshot = taskPayloadSnapshot(payload, userRowsBeforeSync: userRowsBeforeSync)
         DemoDebugLog.emit("sync.taskDetail.payload", payloadSnapshot)
+
+        if userRowsBeforeSync == 0 {
+            try await syncUsersData()
+        }
+
         try await syncTaskDetailItem(payload)
         try await syncItemsIfPresent(in: payload, taskID: taskID)
         let localSnapshot = try taskSnapshot(taskID: taskID)
