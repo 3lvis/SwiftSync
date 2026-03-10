@@ -129,9 +129,13 @@ public final class DemoSyncEngine {
             let projectsPayload = try await apiClient.getProjects()
             try await syncContainer.sync(payload: projectsPayload, as: Project.self)
         }
+        guard let resolvedProject = try project(withID: projectID) else { return }
+        nonisolated(unsafe) let project = resolvedProject
         try await syncContainer.sync(
             payload: payload,
-            as: Task.self
+            as: Task.self,
+            parent: project,
+            relationship: \Task.project
         )
         let snapshots = try taskSnapshots(inProjectID: projectID)
         DemoDebugLog.emit(
