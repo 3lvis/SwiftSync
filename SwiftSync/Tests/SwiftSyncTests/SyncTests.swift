@@ -3512,6 +3512,47 @@ final class SyncTests: XCTestCase {
     }
 
     @MainActor
+    func testSequentialSyncsInSameContextStayCoherentAcrossUpdateDeleteAndRecreate() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: User.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "full_name": "One"],
+                ["id": 2, "full_name": "Two"]
+            ],
+            as: User.self,
+            in: context
+        )
+
+        try await SwiftSync.sync(
+            item: ["id": 1, "full_name": "One Updated"],
+            as: User.self,
+            in: context
+        )
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 2, "full_name": "Two"]
+            ],
+            as: User.self,
+            in: context
+        )
+
+        try await SwiftSync.sync(
+            item: ["id": 1, "full_name": "One Recreated"],
+            as: User.self,
+            in: context
+        )
+
+        let rows = try context.fetch(FetchDescriptor<User>())
+        XCTAssertEqual(Set(rows.map(\.id)), Set([1, 2]))
+        XCTAssertEqual(rows.first(where: { $0.id == 1 })?.fullName, "One Recreated")
+        XCTAssertEqual(rows.first(where: { $0.id == 2 })?.fullName, "Two")
+    }
+
+    @MainActor
     func testUniqueAttributeOnSyncIdentityImpliesGlobalPolicy() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: NoteFolder.self, UniqueIDNote.self, configurations: configuration)

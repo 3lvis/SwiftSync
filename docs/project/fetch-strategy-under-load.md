@@ -126,11 +126,58 @@ It improved the headline scenario only modestly:
 
 That `10k` gain was about `5.8%`, which was too small to justify the extra API surface and model complexity, so that path was removed from the library.
 
-## Next likely wins
+## Follow-up experiments that were also rejected
 
-The remaining promising directions are:
+Several Milestone 3 follow-ups were tried after the fetch-descriptor path and were also removed.
+
+Parent-scoped scope-first diffing remains the highest-upside idea in theory, but it is currently blocked by SwiftData limits:
+
+- the current scoped sync APIs accept arbitrary relationship key paths
+- SwiftData rejects the generic `row[keyPath: ...]` predicate shape needed to turn those into scope-first fetches
+
+So that path is not currently implementable as a clean internal optimization without broader API or model changes.
+
+The next internal experiments were measured and rejected:
+
+- context-local target-row cache for repeated syncs in one `ModelContext`
+  `sqlite + 1k`: about `713 ms` -> about `664 ms`
+  `sqlite + 10k`: about `6943 ms` -> about `6638 ms`
+  Result: about `4.4%` gain at `10k`, too small to justify the added cache state and coherence risk.
+
+- delete-planning fetch shaping via `propertiesToFetch`
+  `sqlite + 1k`: about `713 ms` -> about `719 ms`
+  `sqlite + 10k`: about `6943 ms` -> about `7379 ms`
+  Result: regression, rejected.
+
+- identifier-first delete planning with targeted model rehydration
+  `sqlite + 1k`: about `713 ms` -> about `736 ms`
+  `sqlite + 10k`: about `6943 ms` -> about `7174 ms`
+  Result: regression, rejected.
+
+These trials matter because they narrow the remaining space:
+
+- the obvious internal fetch-narrowing variants have now either been blocked by SwiftData or measured as low-yield
+- the retained performance story is still the relationship-cache improvement, not a broader table-scaling fix
+
+## Current status
+
+The honest status on this branch is:
+
+- SwiftSync has a strong retained improvement for realistic relationship-heavy workloads because of the sync-pass-local relationship lookup cache
+- SwiftSync still has structural table-wide costs in parent-scoped sync, single-item lookup, and scoped export
+- the most obvious internal Milestone 3 follow-ups have now been tried and rejected
+
+That means the next meaningful gain likely requires one of:
+
+- broader API or model changes that make scoped predicates expressible
+- a much narrower specialized fast path tied to `ParentScopedModel.parentRelationship`
+- or accepting the current operating envelope as the product boundary and documenting it clearly
+
+## Next likely wins
+The remaining directions that still look conceptually promising are:
 
 - special-case parent-scoped authoritative sync around scope-level diffing instead of full-table reconciliation
-- build a sync-pass identity index for target model rows, not just related rows
 - separate delete planning from full row materialization
 - narrow parent-scoped export by scope-first ordering instead of fetch-all-then-filter
+
+But after the rejected experiments above, none of these should be treated as a straightforward internal optimization. They now look like higher-risk work items that need either a new enabling mechanism from SwiftData or a willingness to narrow or evolve the library API.
