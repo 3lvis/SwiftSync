@@ -240,20 +240,33 @@ extension SwiftSync {
                         reason: "Parent must be resolved in the same ModelContext used for sync."
                     )
                 }
-                let existing = try syncProfile("fetch-existing") {
-                    try context.fetch(FetchDescriptor<Model>())
-                }
-                let scopeRows = syncProfile("filter-scope") {
-                    existing.filter {
-                        $0[keyPath: relationship]?.persistentModelID == resolvedParent.persistentModelID
+                var changed = false
+                let matchingRow: Model?
+                if syncIdentityHasUniqueAttribute(Model.self),
+                   Model.syncIdentityPredicate(matching: identity) != nil {
+                    matchingRow = try syncProfile("fetch-existing-by-identity") {
+                        try fetchUniqueRow(matching: identity, as: Model.self, in: context)
+                    }
+                } else {
+                    let existing = try syncProfile("fetch-existing") {
+                        try context.fetch(FetchDescriptor<Model>())
+                    }
+                    let scopeRows = syncProfile("filter-scope") {
+                        existing.filter {
+                            $0[keyPath: relationship]?.persistentModelID == resolvedParent.persistentModelID
+                        }
+                    }
+                    matchingRow = syncProfile("find-existing") {
+                        scopeRows.first(where: { identityKey(from: $0[keyPath: Model.syncIdentity]) == key })
                     }
                 }
-                var changed = false
-
-                let matchingRow = syncProfile("find-existing") {
-                    scopeRows.first(where: { identityKey(from: $0[keyPath: Model.syncIdentity]) == key })
-                }
                 if let row = matchingRow {
+                    syncProfile("apply-parent") {
+                        if row[keyPath: relationship]?.persistentModelID != resolvedParent.persistentModelID {
+                            row[keyPath: relationship] = resolvedParent
+                            changed = true
+                        }
+                    }
                     let didApplyFields = try syncProfile("apply-fields") {
                         try row.apply(payloadModel)
                     }
@@ -272,7 +285,9 @@ extension SwiftSync {
                     let created = try syncProfile("create-model") {
                         try Model.make(from: payloadModel)
                     }
-                    created[keyPath: relationship] = resolvedParent
+                    syncProfile("apply-parent") {
+                        created[keyPath: relationship] = resolvedParent
+                    }
                     context.insert(created)
                     if relationshipOperations.contains(.insert) {
                         try throwIfCancelled()

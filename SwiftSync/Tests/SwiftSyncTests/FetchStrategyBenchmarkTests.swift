@@ -246,6 +246,56 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
         }
     }
 
+    func testParentScopedSingleItemSyncBenchmarks() async throws {
+        try requireBenchmarksEnabled()
+
+        for storeKind in environment.storeKinds {
+            for existingCount in environment.datasetTiers {
+                let scopeCount = min(environment.scopeSize, existingCount)
+                let result = try await measureRepeatedAsyncCase(
+                    name: "parent-scoped-single-item-sync",
+                    storeKind: storeKind,
+                    totalRows: existingCount,
+                    payloadRows: 1,
+                    scopeRows: scopeCount,
+                    relationRows: nil
+                ) {
+                    let fixture = try makeStoreFixture(storeKind: storeKind)
+                    defer { fixture.cleanup() }
+
+                    let container = try ModelContainer(
+                        for: BenchmarkProject.self,
+                        BenchmarkScopedTask.self,
+                        configurations: fixture.configuration
+                    )
+                    let context = ModelContext(container)
+
+                    let targetProject = try seedParentScopedTasks(
+                        totalTaskCount: existingCount,
+                        targetScopeCount: scopeCount,
+                        in: context
+                    )
+
+                    let payload: [String: Any] = [
+                        "id": 1,
+                        "title": "Scoped Item Updated"
+                    ]
+                    return try await measureDuration {
+                        try await SwiftSync.sync(
+                            item: payload,
+                            as: BenchmarkScopedTask.self,
+                            in: context,
+                            parent: targetProject,
+                            relationship: \BenchmarkScopedTask.project
+                        )
+                    }
+                }
+
+                emit(result)
+            }
+        }
+    }
+
     func testParentScopedBatchSyncBenchmarks() async throws {
         try requireBenchmarksEnabled()
 

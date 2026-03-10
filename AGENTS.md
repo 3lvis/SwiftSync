@@ -35,6 +35,7 @@
 - Keep changes minimal and behavior-driven.
 - Avoid inferring behavior from implementation details in tests; test expected contract.
 - Keep diagnostics explicit and actionable when behavior cannot be resolved safely.
+- For performance work, always record a before-change baseline on the same benchmark or profiling command before implementing the optimization, then re-run the same measurement after the change.
 
 ## docs/planning Rules
 
