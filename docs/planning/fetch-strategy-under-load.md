@@ -80,5 +80,6 @@ If the parent-scoped experiment is brittle or low-yield, continue in this order:
 
 - [ ] Switch the active Milestone 3 plan to delete planning without full row materialization.
 - [ ] Define the smallest delete-planning experiment that can avoid full row materialization while preserving authoritative semantics.
+- [ ] Avoid the rejected `propertiesToFetch` fetch-shaping path for delete planning; it regressed the headline benchmark to about `719 ms` at `sqlite + 1k` and `7379 ms` at `sqlite + 10k`.
 - [ ] Re-run the headline project/task scenario and at least one supporting isolated benchmark after the delete-planning experiment.
 - [ ] Convert the post-optimization measurements into an updated operating-envelope statement or documented limits.

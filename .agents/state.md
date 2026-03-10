@@ -13,14 +13,15 @@
 - [x] Re-run the headline scenario at reduced tiers and decide whether the target-row cache is worth pursuing at `10k`.
 - [x] Remove the low-yield target-row cache after measuring it.
 - [x] Shift the Milestone 3 plan to delete planning without full row materialization.
-- [~] Trace the authoritative batch sync delete path and identify the minimum data it needs before deletion.
-- [ ] Add focused coverage for any delete-planning refactor risk that is not already tested.
-- [ ] Implement the smallest delete-planning optimization that reduces full-row work without changing behavior.
-- [ ] Re-run focused tests and at least one headline benchmark slice to measure the delete-planning pass.
+- [x] Trace the authoritative batch sync delete path and identify the minimum data it needs before deletion.
+- [x] Add focused coverage for the sequential-sync coherence risk while exploring delete-planning changes.
+- [x] Implement and measure a minimal-properties fetch variant for delete planning.
+- [x] Remove the minimal-properties fetch variant after it regressed the headline benchmark.
+- [~] Shift the Milestone 3 plan to a different delete-planning experiment without full row materialization.
 
 ## Last known state
 
-Scoped parent-fetch optimization is compiler-blocked because SwiftData rejects `row[keyPath: ...]` inside `#Predicate`. The context-local target-row cache was measured and removed as low-yield: about `664 ms` at `sqlite + 1k` and `6638 ms` at `sqlite + 10k` versus documented baselines of `713 ms` and `6943 ms`. Active work has moved to delete planning in the authoritative batch sync path.
+Scoped parent-fetch optimization is compiler-blocked because SwiftData rejects `row[keyPath: ...]` inside `#Predicate`. The context-local target-row cache was measured and removed as low-yield, and the minimal-properties fetch variant for delete planning was also rejected after regressing the headline benchmark to about `719 ms` at `sqlite + 1k` and `7379 ms` at `sqlite + 10k`. Focused parent/sync tests are green on the cleaned-up code.
 
 ## Decisions (don't revisit)
 
@@ -31,6 +32,7 @@ Scoped parent-fetch optimization is compiler-blocked because SwiftData rejects `
 - The scope-first parent-fetch experiment is blocked for now because SwiftData predicates do not support `subscript(keyPath:)` in the required generic form.
 - The target-row cache is not worth keeping as a retained optimization because the headline `10k` gain is only about `4.4%`.
 - The delete-planning pass should stay behavior-preserving and target only the data needed to decide deletions before touching broader sync structure.
+- The `propertiesToFetch` fetch-shaping variant is not worth revisiting for delete planning because it regressed the headline benchmark at both `1k` and `10k`.
 
 ## Files touched
 
