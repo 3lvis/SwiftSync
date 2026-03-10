@@ -146,13 +146,20 @@ extension SwiftSync {
                     return
                 }
                 let key = identityKey(from: identity)
-                let existing = try syncProfile("fetch-existing") {
-                    try context.fetch(FetchDescriptor<Model>())
-                }
                 var changed = false
-
-                let matchingRow = syncProfile("find-existing") {
-                    existing.first(where: { identityKey(from: $0[keyPath: Model.syncIdentity]) == key })
+                let matchingRow: Model?
+                if syncIdentityHasUniqueAttribute(Model.self),
+                   Model.syncIdentityPredicate(matching: identity) != nil {
+                    matchingRow = try syncProfile("fetch-existing-by-identity") {
+                        try fetchUniqueRow(matching: identity, as: Model.self, in: context)
+                    }
+                } else {
+                    let existing = try syncProfile("fetch-existing") {
+                        try context.fetch(FetchDescriptor<Model>())
+                    }
+                    matchingRow = syncProfile("find-existing") {
+                        existing.first(where: { identityKey(from: $0[keyPath: Model.syncIdentity]) == key })
+                    }
                 }
                 if let row = matchingRow {
                     let didApplyFields = try syncProfile("apply-fields") {
@@ -562,6 +569,19 @@ extension SwiftSync {
         parentPersistentID: PersistentIdentifier
     ) -> String {
         "\(String(reflecting: ID.self))|\(String(describing: parentPersistentID))|\(identityKey(from: identity))"
+    }
+
+    private static func fetchUniqueRow<Model: SyncModelable>(
+        matching identity: Model.SyncID,
+        as _: Model.Type,
+        in context: ModelContext
+    ) throws -> Model? {
+        guard let predicate = Model.syncIdentityPredicate(matching: identity) else {
+            return nil
+        }
+        var descriptor = FetchDescriptor<Model>(predicate: predicate)
+        descriptor.fetchLimit = 1
+        return try context.fetch(descriptor).first
     }
 
     private static func throwIfCancelled() throws {

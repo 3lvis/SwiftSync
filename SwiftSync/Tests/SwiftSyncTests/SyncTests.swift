@@ -3325,6 +3325,90 @@ final class SyncTests: XCTestCase {
     }
 
     @MainActor
+    func testSyncItemUsesIdentityTargetedFetchWhenIdentityIsUnique() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: User.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "full_name": "One"],
+                ["id": 2, "full_name": "Two"]
+            ],
+            as: User.self,
+            in: context
+        )
+
+        let (_, profile) = try await SwiftSync.withMainActorPerformanceProfiling {
+            try await SwiftSync.sync(
+                item: ["id": 1, "full_name": "One Updated"],
+                as: User.self,
+                in: context
+            )
+        }
+
+        XCTAssertNotNil(profile.totalsByPhase["fetch-existing-by-identity"])
+        XCTAssertNil(profile.totalsByPhase["fetch-existing"])
+        XCTAssertNil(profile.totalsByPhase["find-existing"])
+    }
+
+    @MainActor
+    func testSyncItemFallsBackToTableFetchWhenIdentityIsNotUnique() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: LooseUser.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "full_name": "One"],
+                ["id": 2, "full_name": "Two"]
+            ],
+            as: LooseUser.self,
+            in: context
+        )
+
+        let (_, profile) = try await SwiftSync.withMainActorPerformanceProfiling {
+            try await SwiftSync.sync(
+                item: ["id": 1, "full_name": "One Updated"],
+                as: LooseUser.self,
+                in: context
+            )
+        }
+
+        XCTAssertNotNil(profile.totalsByPhase["fetch-existing"])
+        XCTAssertNotNil(profile.totalsByPhase["find-existing"])
+        XCTAssertNil(profile.totalsByPhase["fetch-existing-by-identity"])
+    }
+
+    @MainActor
+    func testSyncItemFallsBackToTableFetchForManualUniqueConformerWithoutPredicate() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: Team.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "name": "One"],
+                ["id": 2, "name": "Two"]
+            ],
+            as: Team.self,
+            in: context
+        )
+
+        let (_, profile) = try await SwiftSync.withMainActorPerformanceProfiling {
+            try await SwiftSync.sync(
+                item: ["id": 1, "name": "One Updated"],
+                as: Team.self,
+                in: context
+            )
+        }
+
+        XCTAssertNotNil(profile.totalsByPhase["fetch-existing"])
+        XCTAssertNotNil(profile.totalsByPhase["find-existing"])
+        XCTAssertNil(profile.totalsByPhase["fetch-existing-by-identity"])
+    }
+
+    @MainActor
     func testSyncItemWithParentUpdatesExistingRowWithoutDeletingOthers() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: SuperUser.self, SuperNote.self, configurations: configuration)

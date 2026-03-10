@@ -2,18 +2,19 @@
 
 ## Plan
 
-- [x] Add benchmark-reporting tests that pin the new phase breakdown output and profiler enablement behavior
-- [x] Implement benchmark phase profiling and os_signpost instrumentation across sync and export paths
-- [x] Document how to profile the benchmark test process with Instruments and the new signposts
-- [x] Run focused SwiftSync tests to verify the new profiler output and instrumentation wiring
+- [x] Add tests that pin the single-item sync fast path for unique identities and fallback path for non-unique identities
+- [x] Implement an identity-targeted fetch path for single-item sync where the sync identity is unique
+- [x] Run focused tests and the single-item benchmark with phase profiling to verify the fetch phase changes
 
 ## Last known state
 
-`swift test --filter BenchmarkProfilingSupportTests` green; `swift test --filter SyncTests` green; benchmark verification command with `SWIFTSYNC_RUN_BENCHMARKS=1 SWIFTSYNC_BENCHMARK_PROFILE_PHASES=1 ... swift test --filter FetchStrategyBenchmarkTests/testSingleItemSyncBenchmarks` green and emits phase medians
+`swift test --filter SyncTests` green; profiled benchmark command green and changed single-item phase output from `fetch-existing` to `fetch-existing-by-identity`, with total median dropping from about `14.298 ms` to about `1.898 ms` in the verified `memory + 1k + 1 sample` run
 
 ## Decisions (don't revisit)
 
 - Use os_signpost in the library and keep the benchmark harness responsible for emitting aggregate phase totals so Instruments and CLI output stay aligned
+- The first optimization needs macro support for a concrete identity predicate because generic SwiftData key-path predicates are blocked under strict concurrency
+- This branch touches `Core.swift` and `MacrosImplementation/`; iOS regression will run on merge
 
 ## Files touched
 
@@ -25,3 +26,6 @@
 - SwiftSync/Tests/SwiftSyncTests/FetchStrategyBenchmarkTests.swift
 - docs/project/fetch-strategy-under-load.md
 - docs/planning/performance-attribution-follow-ups.md
+- SwiftSync/Sources/MacrosImplementation/SyncableMacro.swift
+- SwiftSync/Sources/SwiftSync/SyncableMacro.swift
+- SwiftSync/Tests/SwiftSyncTests/SyncTests.swift
