@@ -196,9 +196,22 @@ public final class DemoSyncEngine {
         try syncContainer.mainContext.fetch(FetchDescriptor<Project>()).first { $0.id == projectID }
     }
 
-    private func syncItemsIfPresent(in payload: DemoSyncPayload, taskID _: String) async throws {
+    private func task(withID taskID: String) throws -> Task? {
+        try syncContainer.mainContext.fetch(
+            FetchDescriptor<Task>(predicate: #Predicate { $0.id == taskID })
+        ).first
+    }
+
+    private func syncItemsIfPresent(in payload: DemoSyncPayload, taskID: String) async throws {
         guard let itemPayload = payload.objectArray("items") else { return }
-        try await syncContainer.sync(payload: itemPayload, as: Item.self)
+        guard let resolvedTask = try task(withID: taskID) else { return }
+        nonisolated(unsafe) let task = resolvedTask
+        try await syncContainer.sync(
+            payload: itemPayload,
+            as: Item.self,
+            parent: task,
+            relationship: \Item.task
+        )
     }
 
     private func localUserCount() throws -> Int {
