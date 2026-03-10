@@ -223,15 +223,12 @@ extension TaskFormSheet {
 
     var stateSection: some View {
         Section("State") {
-            if machine.taskStateOptions.isEmpty {
+            switch machine.taskStateOptionsState {
+            case .loading:
                 LabeledContent("State") {
-                    if machine.metadataLoadState.isLoading {
-                        ProgressView()
-                    } else {
-                        Text("Unavailable").foregroundStyle(.secondary)
-                    }
+                    ProgressView("Loading states...")
                 }
-            } else {
+            case .available:
                 ForEach(machine.taskStateOptions, id: \.id) { option in
                     Button {
                         draft.state = option.id
@@ -246,104 +243,148 @@ extension TaskFormSheet {
                         }
                     }
                 }
+            case .unavailable:
+                LabeledContent("State") {
+                    Text("Unavailable").foregroundStyle(.secondary)
+                }
             }
         }
     }
 
     var assigneeSection: some View {
         Section("Assignee") {
-            Button {
-                draft.assigneeID = nil
-            } label: {
-                HStack {
-                    Text("Unassigned").foregroundStyle(.primary)
-                    Spacer()
-                    if draft.assigneeID == nil {
-                        Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
-                    }
+            switch machine.userOptionsState {
+            case .loading:
+                LabeledContent("People") {
+                    ProgressView("Loading people...")
                 }
-            }
-            ForEach(machine.users, id: \.id) { user in
+            case .available:
                 Button {
-                    draft.assigneeID = user.id
+                    draft.assigneeID = nil
                 } label: {
                     HStack {
-                        Text(user.displayName).foregroundStyle(.primary)
+                        Text("Unassigned").foregroundStyle(.primary)
                         Spacer()
-                        if draft.assigneeID == user.id {
+                        if draft.assigneeID == nil {
                             Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
                         }
                     }
                 }
+                ForEach(machine.users, id: \.id) { user in
+                    Button {
+                        draft.assigneeID = user.id
+                    } label: {
+                        HStack {
+                            Text(user.displayName).foregroundStyle(.primary)
+                            Spacer()
+                            if draft.assigneeID == user.id {
+                                Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
+                            }
+                        }
+                    }
+                }
+            case .unavailable:
+                Text("Unavailable")
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
     var authorSection: some View {
         Section("Author") {
-            ForEach(machine.users, id: \.id) { user in
-                Button {
-                    draft.authorID = user.id
-                } label: {
-                    HStack {
-                        Text(user.displayName).foregroundStyle(.primary)
-                        Spacer()
-                        if draft.authorID == user.id {
-                            Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
+            switch machine.userOptionsState {
+            case .loading:
+                LabeledContent("People") {
+                    ProgressView("Loading people...")
+                }
+            case .available:
+                ForEach(machine.users, id: \.id) { user in
+                    Button {
+                        draft.authorID = user.id
+                    } label: {
+                        HStack {
+                            Text(user.displayName).foregroundStyle(.primary)
+                            Spacer()
+                            if draft.authorID == user.id {
+                                Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
+                            }
                         }
                     }
                 }
+            case .unavailable:
+                Text("Unavailable")
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
     var reviewersSection: some View {
         Section("Reviewers") {
-            ForEach(machine.users, id: \.id) { user in
-                Button {
-                    if draft.reviewers.contains(where: { $0.id == user.id }) {
-                        draft.reviewers.removeAll(where: { $0.id == user.id })
-                    } else {
-                        draft.reviewers.append(user)
-                    }
-                } label: {
-                    HStack {
-                        Text(user.displayName).foregroundStyle(.primary)
-                        Spacer()
+            switch machine.userOptionsState {
+            case .loading:
+                LabeledContent("People") {
+                    ProgressView("Loading people...")
+                }
+            case .available:
+                ForEach(machine.users, id: \.id) { user in
+                    Button {
                         if draft.reviewers.contains(where: { $0.id == user.id }) {
-                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
+                            draft.reviewers.removeAll(where: { $0.id == user.id })
+                        } else {
+                            draft.reviewers.append(user)
+                        }
+                    } label: {
+                        HStack {
+                            Text(user.displayName).foregroundStyle(.primary)
+                            Spacer()
+                            if draft.reviewers.contains(where: { $0.id == user.id }) {
+                                Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
+                            }
                         }
                     }
                 }
+            case .unavailable:
+                Text("Unavailable")
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
     var watchersSection: some View {
         Section("Watchers") {
-            ForEach(machine.users, id: \.id) { user in
-                Button {
-                    if draft.watchers.contains(where: { $0.id == user.id }) {
-                        draft.watchers.removeAll(where: { $0.id == user.id })
-                    } else {
-                        draft.watchers.append(user)
-                    }
-                } label: {
-                    HStack {
-                        Text(user.displayName).foregroundStyle(.primary)
-                        Spacer()
+            switch machine.userOptionsState {
+            case .loading:
+                LabeledContent("People") {
+                    ProgressView("Loading people...")
+                }
+            case .available:
+                ForEach(machine.users, id: \.id) { user in
+                    Button {
                         if draft.watchers.contains(where: { $0.id == user.id }) {
-                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
+                            draft.watchers.removeAll(where: { $0.id == user.id })
+                        } else {
+                            draft.watchers.append(user)
+                        }
+                    } label: {
+                        HStack {
+                            Text(user.displayName).foregroundStyle(.primary)
+                            Spacer()
+                            if draft.watchers.contains(where: { $0.id == user.id }) {
+                                Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
+                            }
                         }
                     }
                 }
+            case .unavailable:
+                Text("Unavailable")
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
     @ViewBuilder
     var loadErrorSection: some View {
-        if let metadataError = machine.metadataLoadState.errorPresentation {
+        if let metadataError = machine.metadataErrorPresentation {
             Section {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(metadataError.message)

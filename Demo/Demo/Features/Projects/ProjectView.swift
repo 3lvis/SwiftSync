@@ -23,62 +23,7 @@ struct ProjectView: View {
 
     var body: some View {
         List {
-            loadErrorSection
-
-            Section {
-                if let projectModel = machine.project {
-                    Text(projectModel.name)
-                        .font(.headline)
-                        .lineLimit(3)
-
-                    LabeledContent("Tasks", value: projectModel.taskCount == 1 ? "1 task" : "\(projectModel.taskCount) tasks")
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("Project not found")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Section("Tasks") {
-                ForEach(machine.tasks, id: \.id) { task in
-                    NavigationLink {
-                        TaskView(taskID: task.id, syncContainer: syncContainer, syncEngine: syncEngine)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(task.title)
-                                .font(.headline)
-                                .lineLimit(3)
-
-                            HStack(spacing: 8) {
-                                Text(task.stateLabel)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-
-                                if let assignee = task.assignee?.displayName {
-                                    Text("Assignee: \(assignee)")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                }
-
-                                if !task.items.isEmpty {
-                                    Text("\(task.items.count) items")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button {
-                            taskPendingDelete = TaskDeletePrompt(id: task.id, title: task.title)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                        .tint(.red)
-                    }
-                }
-            }
+            screenStateSections
         }
         .listStyle(.plain)
         .navigationTitle("Project")
@@ -143,32 +88,105 @@ struct ProjectView: View {
                 Text("Could not delete this task.")
             }
         }
-        .overlay {
-            loadOverlay
-        }
     }
 
     @ViewBuilder
-    private var loadErrorSection: some View {
-        if let presentation = machine.loadState.errorPresentation {
+    private var screenStateSections: some View {
+        if let presentation = machine.loadErrorPresentation {
+            errorSection(presentation)
+        }
+
+        switch machine.contentState {
+        case .loading:
             Section {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(presentation.message)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                LabeledContent("Status") {
+                    ProgressView("Loading project...")
                 }
-                .padding(.vertical, 4)
+            }
+        case .content:
+            projectSection
+            tasksSection
+        case .notFound:
+            Section {
+                Text("Project not found")
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
     @ViewBuilder
-    private var loadOverlay: some View {
-        if machine.loadState.isLoading {
-            ProgressView("Loading project...")
-                .padding(14)
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    private func errorSection(_ presentation: ErrorPresentationState) -> some View {
+        Section {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(presentation.message)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
+    private var projectSection: some View {
+        Section {
+            if let projectModel = machine.project {
+                Text(projectModel.name)
+                    .font(.headline)
+                    .lineLimit(3)
+
+                LabeledContent("Tasks", value: projectModel.taskCount == 1 ? "1 task" : "\(projectModel.taskCount) tasks")
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Project details unavailable")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var tasksSection: some View {
+        Section("Tasks") {
+            if machine.tasks.isEmpty {
+                Text("No tasks yet")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(machine.tasks, id: \.id) { task in
+                    NavigationLink {
+                        TaskView(taskID: task.id, syncContainer: syncContainer, syncEngine: syncEngine)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(task.title)
+                                .font(.headline)
+                                .lineLimit(3)
+
+                            HStack(spacing: 8) {
+                                Text(task.stateLabel)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+
+                                if let assignee = task.assignee?.displayName {
+                                    Text("Assignee: \(assignee)")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+
+                                if !task.items.isEmpty {
+                                    Text("\(task.items.count) items")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button {
+                            taskPendingDelete = TaskDeletePrompt(id: task.id, title: task.title)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                        .tint(.red)
+                    }
+                }
+            }
         }
     }
 }

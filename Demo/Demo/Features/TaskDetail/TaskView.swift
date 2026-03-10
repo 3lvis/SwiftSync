@@ -23,11 +23,7 @@ struct TaskView: View {
 
     var body: some View {
         List {
-            loadErrorSection
-            taskSection
-            descriptionSection
-            itemsSection
-            peopleSection
+            screenStateSections
         }
         .navigationTitle("Task")
         .toolbar {
@@ -53,9 +49,6 @@ struct TaskView: View {
                 )
             }
         }
-        .overlay {
-            loadOverlay
-        }
     }
 }
 
@@ -73,26 +66,40 @@ extension TaskView {
     }
 
     @ViewBuilder
-    var loadErrorSection: some View {
-        if let presentation = machine.loadState.errorPresentation {
+    var screenStateSections: some View {
+        if let presentation = machine.loadErrorPresentation {
+            errorSection(presentation)
+        }
+
+        switch machine.contentState {
+        case .loading:
             Section {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(presentation.message)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                LabeledContent("Status") {
+                    ProgressView("Loading task...")
                 }
-                .padding(.vertical, 4)
+            }
+        case .content:
+            taskSection
+            descriptionSection
+            itemsSection
+            peopleSection
+        case .notFound:
+            Section {
+                Text("Task not found")
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
     @ViewBuilder
-    var loadOverlay: some View {
-        if machine.loadState.isLoading {
-            ProgressView("Loading task...")
-                .padding(14)
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    func errorSection(_ presentation: ErrorPresentationState) -> some View {
+        Section {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(presentation.message)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 4)
         }
     }
 
@@ -124,16 +131,19 @@ extension TaskView {
                 }
                 .padding(.vertical, 4)
             } else {
-                Text("Task not found")
+                Text("Task details unavailable")
                     .foregroundStyle(.secondary)
             }
         }
     }
 
+    @ViewBuilder
     var descriptionSection: some View {
-        Section("Description") {
-            Text(machine.task?.descriptionText ?? "")
-                .font(.body)
+        if let taskModel = machine.task {
+            Section("Description") {
+                Text(taskModel.descriptionText)
+                    .font(.body)
+            }
         }
     }
 
