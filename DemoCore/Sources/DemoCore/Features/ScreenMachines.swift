@@ -8,11 +8,77 @@ public enum TaskFormMode {
     case edit(task: Task)
 }
 
+public enum ProjectsListStatusState: Equatable {
+    case hidden
+    case loading
+    case empty
+    case error(ErrorPresentationState)
+}
+
+public enum ProjectDetailContentState: Equatable {
+    case loading
+    case content
+    case notFound
+}
+
+public enum TaskDetailContentState: Equatable {
+    case loading
+    case content
+    case notFound
+}
+
+public enum TaskFormOptionsState: Equatable {
+    case loading
+    case available
+    case unavailable
+}
+
+func resolveProjectsListStatusState(loadState: ScreenLoadState, hasRows: Bool) -> ProjectsListStatusState {
+    switch loadState {
+    case .idle:
+        return .hidden
+    case .loading:
+        return hasRows ? .hidden : .loading
+    case .loaded:
+        return hasRows ? .hidden : .empty
+    case .error(let presentation):
+        return .error(presentation)
+    }
+}
+
+func resolveProjectDetailContentState(
+    loadState: ScreenLoadState,
+    hasProject: Bool,
+    hasTasks: Bool
+) -> ProjectDetailContentState {
+    if hasProject || hasTasks {
+        return .content
+    }
+    return loadState.isLoading ? .loading : .notFound
+}
+
+func resolveTaskDetailContentState(loadState: ScreenLoadState, hasTask: Bool) -> TaskDetailContentState {
+    if hasTask {
+        return .content
+    }
+    return loadState.isLoading ? .loading : .notFound
+}
+
+func resolveTaskFormOptionsState(loadState: ScreenLoadState, hasOptions: Bool) -> TaskFormOptionsState {
+    if hasOptions {
+        return .available
+    }
+    return loadState.isLoading ? .loading : .unavailable
+}
+
 @MainActor
 @Observable
 public final class ProjectsListMachine {
     public private(set) var loadState: ScreenLoadState = .idle
     public private(set) var rows: [Project] = []
+    public var statusState: ProjectsListStatusState {
+        resolveProjectsListStatusState(loadState: loadState, hasRows: !rows.isEmpty)
+    }
 
     private let syncEngine: DemoSyncEngine
     private let rowsPublisher: SyncQueryPublisher<Project>
@@ -51,6 +117,16 @@ public final class ProjectDetailMachine {
     public private(set) var deleteState: SubmissionState = .idle
     public private(set) var project: Project?
     public private(set) var tasks: [Task] = []
+    public var contentState: ProjectDetailContentState {
+        resolveProjectDetailContentState(
+            loadState: loadState,
+            hasProject: project != nil,
+            hasTasks: !tasks.isEmpty
+        )
+    }
+    public var loadErrorPresentation: ErrorPresentationState? {
+        loadState.errorPresentation
+    }
 
     private let projectID: String
     private let syncEngine: DemoSyncEngine
@@ -165,6 +241,12 @@ public final class TaskDetailMachine {
     public private(set) var loadState: ScreenLoadState = .idle
     public private(set) var task: Task?
     public private(set) var items: [Item] = []
+    public var contentState: TaskDetailContentState {
+        resolveTaskDetailContentState(loadState: loadState, hasTask: task != nil)
+    }
+    public var loadErrorPresentation: ErrorPresentationState? {
+        loadState.errorPresentation
+    }
 
     private let taskID: String
     private let syncEngine: DemoSyncEngine
@@ -241,6 +323,15 @@ public final class TaskFormMachine {
     public private(set) var taskStateOptions: [TaskStateOption] = []
     public private(set) var metadataLoadState: ScreenLoadState = .idle
     public private(set) var saveState: SubmissionState = .idle
+    public var taskStateOptionsState: TaskFormOptionsState {
+        resolveTaskFormOptionsState(loadState: metadataLoadState, hasOptions: !taskStateOptions.isEmpty)
+    }
+    public var userOptionsState: TaskFormOptionsState {
+        resolveTaskFormOptionsState(loadState: metadataLoadState, hasOptions: !users.isEmpty)
+    }
+    public var metadataErrorPresentation: ErrorPresentationState? {
+        metadataLoadState.errorPresentation
+    }
 
     private let syncContainer: SyncContainer
     private let syncEngine: DemoSyncEngine

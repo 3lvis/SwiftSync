@@ -68,7 +68,7 @@ final class ProjectsViewController: UITableViewController {
         }
         observeContinuously { [weak self] in
             guard let self else { return }
-            renderLoadState(machine.loadState)
+            renderStatusState(machine.statusState)
         }
         machine.send(.onAppear)
     }
@@ -79,9 +79,9 @@ final class ProjectsViewController: UITableViewController {
         onSelect(projectID)
     }
 
-    private func renderLoadState(_ state: ScreenLoadState) {
+    private func renderStatusState(_ state: ProjectsListStatusState) {
         switch state {
-        case .idle:
+        case .hidden:
             statusIndicator.stopAnimating()
             statusLabel.text = nil
             tableView.backgroundView?.isHidden = true
@@ -89,10 +89,10 @@ final class ProjectsViewController: UITableViewController {
             statusIndicator.startAnimating()
             statusLabel.text = "Loading projects..."
             tableView.backgroundView?.isHidden = false
-        case .loaded:
+        case .empty:
             statusIndicator.stopAnimating()
-            statusLabel.text = machine.rows.isEmpty ? "No projects yet." : nil
-            tableView.backgroundView?.isHidden = !machine.rows.isEmpty
+            statusLabel.text = "No projects yet."
+            tableView.backgroundView?.isHidden = false
         case .error(let presentation):
             statusIndicator.stopAnimating()
             statusLabel.text = presentation.message

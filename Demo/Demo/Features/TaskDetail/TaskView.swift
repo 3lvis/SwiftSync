@@ -22,44 +22,65 @@ struct TaskView: View {
     }
 
     var body: some View {
-        List {
-            loadErrorSection
-            taskSection
-            descriptionSection
-            itemsSection
-            peopleSection
-        }
+        List { content }
         .navigationTitle("Task")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Edit") {
-                    showingEditSheet = true
-                }
-                .disabled(machine.task == nil)
-            }
-        }
-        .task {
-            machine.send(.onAppear)
-        }
+        .toolbar { toolbarContent }
+        .task { machine.send(.onAppear) }
         .animation(.snappy(duration: 0.2), value: itemIDs)
         .animation(.snappy(duration: 0.2), value: reviewerIDs)
         .animation(.snappy(duration: 0.2), value: watcherIDs)
-        .sheet(isPresented: $showingEditSheet) {
-            if let taskModel = machine.task {
-                TaskFormSheet(
-                    mode: .edit(task: taskModel),
-                    syncContainer: syncContainer,
-                    syncEngine: syncEngine
-                )
-            }
-        }
-        .overlay {
-            loadOverlay
-        }
+        .sheet(isPresented: $showingEditSheet) { editTaskSheet }
     }
 }
 
 extension TaskView {
+    @ViewBuilder
+    var content: some View {
+        if let presentation = machine.loadErrorPresentation {
+            errorSection(presentation)
+        }
+
+        switch machine.contentState {
+        case .loading:
+            Section {
+                LabeledContent("Status") {
+                    ProgressView("Loading task...")
+                }
+            }
+        case .content:
+            taskSection
+            descriptionSection
+            itemsSection
+            peopleSection
+        case .notFound:
+            Section {
+                Text("Task not found")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ToolbarContentBuilder
+    var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            Button("Edit") {
+                showingEditSheet = true
+            }
+            .disabled(machine.task == nil)
+        }
+    }
+
+    @ViewBuilder
+    var editTaskSheet: some View {
+        if let taskModel = machine.task {
+            TaskFormSheet(
+                mode: .edit(task: taskModel),
+                syncContainer: syncContainer,
+                syncEngine: syncEngine
+            )
+        }
+    }
+
     var itemIDs: [String] {
         machine.items.map(\.id)
     }
@@ -73,26 +94,14 @@ extension TaskView {
     }
 
     @ViewBuilder
-    var loadErrorSection: some View {
-        if let presentation = machine.loadState.errorPresentation {
-            Section {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(presentation.message)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, 4)
+    func errorSection(_ presentation: ErrorPresentationState) -> some View {
+        Section {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(presentation.message)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
-        }
-    }
-
-    @ViewBuilder
-    var loadOverlay: some View {
-        if machine.loadState.isLoading {
-            ProgressView("Loading task...")
-                .padding(14)
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .padding(.vertical, 4)
         }
     }
 
@@ -124,16 +133,19 @@ extension TaskView {
                 }
                 .padding(.vertical, 4)
             } else {
-                Text("Task not found")
+                Text("Task details unavailable")
                     .foregroundStyle(.secondary)
             }
         }
     }
 
+    @ViewBuilder
     var descriptionSection: some View {
-        Section("Description") {
-            Text(machine.task?.descriptionText ?? "")
-                .font(.body)
+        if let taskModel = machine.task {
+            Section("Description") {
+                Text(taskModel.descriptionText)
+                    .font(.body)
+            }
         }
     }
 

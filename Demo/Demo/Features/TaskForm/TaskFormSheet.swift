@@ -55,74 +55,59 @@ struct TaskFormSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                loadErrorSection
-                titleSection
-                descriptionSection
-                itemsSection
-                stateSection
-                assigneeSection
-                if case .create = mode { authorSection }
-                reviewersSection
-                watchersSection
-            }
+            Form { content }
             .environment(\.editMode, $itemEditMode)
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                        .disabled(machine.saveState == .submitting)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        machine.send(.save(mode: mode, draft: draft, onSuccess: {
-                            dismiss()
-                        }))
-                    } label: {
-                        HStack(spacing: 6) {
-                            if machine.saveState == .submitting { ProgressView().controlSize(.small) }
-                            Text(confirmLabel)
-                        }
-                    }
-                    .disabled(isSaveDisabled)
-                }
-            }
+            .toolbar { toolbarContent }
         }
-        .task {
-            machine.send(.metadata(.onAppear))
-        }
-        .task(id: "\(machine.taskStateOptions.map(\.id).joined(separator: ","))|\(machine.users.map(\.id).joined(separator: ","))") {
-            machine.applyDefaultsIfNeeded(to: draft)
-        }
-        .animation(.snappy(duration: 0.2), value: machine.sortedItems(in: draft).map(\.id))
-        .alert(
-            "Save Failed",
-            isPresented: Binding(
-                get: {
-                    if case .failed = machine.saveState { return true }
-                    return false
-                },
-                set: { isPresented in
-                    if !isPresented {
-                        machine.send(.dismissSaveError)
-                    }
-                }
-            )
-        ) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            if case .failed(let error) = machine.saveState {
-                Text(error.message)
-            } else {
-                Text("Unknown error")
-            }
-        }
+        .task(loadMetadata)
+        .task(id: defaultsTaskID, applyDefaults)
+        .animation(.snappy(duration: 0.2), value: itemIDs)
+        .taskFormPresentations(
+            saveFailureIsPresented: saveFailureIsPresented,
+            saveFailureMessage: saveFailureMessage
+        )
         .presentationDetents([.large])
     }
 }
 
 extension TaskFormSheet {
+    @ViewBuilder
+    var content: some View {
+        loadErrorSection
+        titleSection
+        descriptionSection
+        itemsSection
+        stateSection
+        assigneeSection
+        if case .create = mode { authorSection }
+        reviewersSection
+        watchersSection
+    }
+
+    private var defaultsTaskID: String {
+        "\(machine.taskStateOptions.map(\.id).joined(separator: ","))|\(machine.users.map(\.id).joined(separator: ","))"
+    }
+
+    private var itemIDs: [String] {
+        machine.sortedItems(in: draft).map(\.id)
+    }
+
+    @ToolbarContentBuilder
+    var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button("Cancel") { dismiss() }
+                .disabled(machine.saveState == .submitting)
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            Button(action: save) {
+                saveButtonLabel
+            }
+            .disabled(isSaveDisabled)
+        }
+    }
+
     var navigationTitle: String {
         switch mode {
         case .create: "New Task"
@@ -147,6 +132,51 @@ extension TaskFormSheet {
         return false
     }
 
+    @ViewBuilder
+    var saveButtonLabel: some View {
+        HStack(spacing: 6) {
+            if machine.saveState == .submitting {
+                ProgressView().controlSize(.small)
+            }
+            Text(confirmLabel)
+        }
+    }
+
+    var saveFailureIsPresented: Binding<Bool> {
+        Binding(
+            get: {
+                if case .failed = machine.saveState { return true }
+                return false
+            },
+            set: { isPresented in
+                if !isPresented {
+                    machine.send(.dismissSaveError)
+                }
+            }
+        )
+    }
+
+    var saveFailureMessage: String {
+        if case .failed(let error) = machine.saveState {
+            return error.message
+        }
+        return "Unknown error"
+    }
+
+    func save() {
+        machine.send(.save(mode: mode, draft: draft, onSuccess: {
+            dismiss()
+        }))
+    }
+
+    func loadMetadata() {
+        machine.send(.metadata(.onAppear))
+    }
+
+    func applyDefaults() {
+        machine.applyDefaultsIfNeeded(to: draft)
+    }
+
     func itemTitleBinding(for item: Item) -> Binding<String> {
         Binding(
             get: { item.title },
@@ -154,6 +184,19 @@ extension TaskFormSheet {
                 _ = machine.mutateItems(.updateTitle(item: item, title: newValue), in: draft)
             }
         )
+    }
+}
+
+private extension View {
+    func taskFormPresentations(
+        saveFailureIsPresented: Binding<Bool>,
+        saveFailureMessage: String
+    ) -> some View {
+        self.alert("Save Failed", isPresented: saveFailureIsPresented) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(saveFailureMessage)
+        }
     }
 }
 
@@ -223,15 +266,12 @@ extension TaskFormSheet {
 
     var stateSection: some View {
         Section("State") {
-            if machine.taskStateOptions.isEmpty {
+            switch machine.taskStateOptionsState {
+            case .loading:
                 LabeledContent("State") {
-                    if machine.metadataLoadState.isLoading {
-                        ProgressView()
-                    } else {
-                        Text("Unavailable").foregroundStyle(.secondary)
-                    }
+                    ProgressView("Loading states...")
                 }
-            } else {
+            case .available:
                 ForEach(machine.taskStateOptions, id: \.id) { option in
                     Button {
                         draft.state = option.id
@@ -246,104 +286,148 @@ extension TaskFormSheet {
                         }
                     }
                 }
+            case .unavailable:
+                LabeledContent("State") {
+                    Text("Unavailable").foregroundStyle(.secondary)
+                }
             }
         }
     }
 
     var assigneeSection: some View {
         Section("Assignee") {
-            Button {
-                draft.assigneeID = nil
-            } label: {
-                HStack {
-                    Text("Unassigned").foregroundStyle(.primary)
-                    Spacer()
-                    if draft.assigneeID == nil {
-                        Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
-                    }
+            switch machine.userOptionsState {
+            case .loading:
+                LabeledContent("People") {
+                    ProgressView("Loading people...")
                 }
-            }
-            ForEach(machine.users, id: \.id) { user in
+            case .available:
                 Button {
-                    draft.assigneeID = user.id
+                    draft.assigneeID = nil
                 } label: {
                     HStack {
-                        Text(user.displayName).foregroundStyle(.primary)
+                        Text("Unassigned").foregroundStyle(.primary)
                         Spacer()
-                        if draft.assigneeID == user.id {
+                        if draft.assigneeID == nil {
                             Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
                         }
                     }
                 }
+                ForEach(machine.users, id: \.id) { user in
+                    Button {
+                        draft.assigneeID = user.id
+                    } label: {
+                        HStack {
+                            Text(user.displayName).foregroundStyle(.primary)
+                            Spacer()
+                            if draft.assigneeID == user.id {
+                                Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
+                            }
+                        }
+                    }
+                }
+            case .unavailable:
+                Text("Unavailable")
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
     var authorSection: some View {
         Section("Author") {
-            ForEach(machine.users, id: \.id) { user in
-                Button {
-                    draft.authorID = user.id
-                } label: {
-                    HStack {
-                        Text(user.displayName).foregroundStyle(.primary)
-                        Spacer()
-                        if draft.authorID == user.id {
-                            Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
+            switch machine.userOptionsState {
+            case .loading:
+                LabeledContent("People") {
+                    ProgressView("Loading people...")
+                }
+            case .available:
+                ForEach(machine.users, id: \.id) { user in
+                    Button {
+                        draft.authorID = user.id
+                    } label: {
+                        HStack {
+                            Text(user.displayName).foregroundStyle(.primary)
+                            Spacer()
+                            if draft.authorID == user.id {
+                                Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
+                            }
                         }
                     }
                 }
+            case .unavailable:
+                Text("Unavailable")
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
     var reviewersSection: some View {
         Section("Reviewers") {
-            ForEach(machine.users, id: \.id) { user in
-                Button {
-                    if draft.reviewers.contains(where: { $0.id == user.id }) {
-                        draft.reviewers.removeAll(where: { $0.id == user.id })
-                    } else {
-                        draft.reviewers.append(user)
-                    }
-                } label: {
-                    HStack {
-                        Text(user.displayName).foregroundStyle(.primary)
-                        Spacer()
+            switch machine.userOptionsState {
+            case .loading:
+                LabeledContent("People") {
+                    ProgressView("Loading people...")
+                }
+            case .available:
+                ForEach(machine.users, id: \.id) { user in
+                    Button {
                         if draft.reviewers.contains(where: { $0.id == user.id }) {
-                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
+                            draft.reviewers.removeAll(where: { $0.id == user.id })
+                        } else {
+                            draft.reviewers.append(user)
+                        }
+                    } label: {
+                        HStack {
+                            Text(user.displayName).foregroundStyle(.primary)
+                            Spacer()
+                            if draft.reviewers.contains(where: { $0.id == user.id }) {
+                                Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
+                            }
                         }
                     }
                 }
+            case .unavailable:
+                Text("Unavailable")
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
     var watchersSection: some View {
         Section("Watchers") {
-            ForEach(machine.users, id: \.id) { user in
-                Button {
-                    if draft.watchers.contains(where: { $0.id == user.id }) {
-                        draft.watchers.removeAll(where: { $0.id == user.id })
-                    } else {
-                        draft.watchers.append(user)
-                    }
-                } label: {
-                    HStack {
-                        Text(user.displayName).foregroundStyle(.primary)
-                        Spacer()
+            switch machine.userOptionsState {
+            case .loading:
+                LabeledContent("People") {
+                    ProgressView("Loading people...")
+                }
+            case .available:
+                ForEach(machine.users, id: \.id) { user in
+                    Button {
                         if draft.watchers.contains(where: { $0.id == user.id }) {
-                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
+                            draft.watchers.removeAll(where: { $0.id == user.id })
+                        } else {
+                            draft.watchers.append(user)
+                        }
+                    } label: {
+                        HStack {
+                            Text(user.displayName).foregroundStyle(.primary)
+                            Spacer()
+                            if draft.watchers.contains(where: { $0.id == user.id }) {
+                                Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
+                            }
                         }
                     }
                 }
+            case .unavailable:
+                Text("Unavailable")
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
     @ViewBuilder
     var loadErrorSection: some View {
-        if let metadataError = machine.metadataLoadState.errorPresentation {
+        if let metadataError = machine.metadataErrorPresentation {
             Section {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(metadataError.message)
