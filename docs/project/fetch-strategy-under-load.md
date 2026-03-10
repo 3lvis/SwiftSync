@@ -75,6 +75,18 @@ On the verified `memory + 1k + 1 sample` benchmark:
 
 That change matters because it confirmed the instrumentation was pointing at a real bottleneck, not just noise: when the full-table fetch was replaced by an identity-targeted fetch, the single-item path dropped by about `87%` in the measured run.
 
+The next retained follow-up extended the same macro-driven idea to parent-scoped paths.
+
+On the verified `memory + 1k + 1 sample` parent-scoped batch benchmark:
+
+- before: about `30.872 ms`, dominated by `fetch-existing: 13.759 ms`
+- after: about `14.155 ms`, with `fetch-existing-by-parent: 2.006 ms`
+
+That change mattered for two reasons:
+
+- it cut the measured parent-scoped batch path by about `54%`
+- it showed that macro-generated concrete parent predicates can remove full-table fetch plus in-memory scope filtering from the retained path, not just single-item lookup
+
 The main conclusion is straightforward:
 
 - SwiftSync is much faster now on realistic relationship-heavy workloads than it was before optimization
@@ -151,6 +163,7 @@ The library now emits `OSSignposter` intervals for the major hot-path phases, in
 
 - `fetch-existing`
 - `fetch-existing-by-identity`
+- `fetch-existing-by-parent`
 - `filter-scope`
 - `build-index`
 - `find-existing`
@@ -228,12 +241,15 @@ That changes the optimization strategy going forward:
 - broader generic predicate shaping is still constrained by SwiftData
 - parent-scoped and export fast paths may need the same style of model-generated hook or narrowly specialized API surface
 
+That is no longer just a theory. A retained parent-scoped batch optimization now uses a macro-generated concrete parent predicate to fetch the current scope directly, and only falls back to identity-targeted lookup when a globally unique row is missing from that scope.
+
 ## Current status
 
 The honest status on this branch is:
 
 - SwiftSync has a strong retained improvement for realistic relationship-heavy workloads because of the sync-pass-local relationship lookup cache
-- SwiftSync still has structural table-wide costs in parent-scoped sync, single-item lookup, and scoped export
+- SwiftSync now also has retained fetch-narrowing wins for single-item sync and parent-scoped batch sync on macro-backed models
+- SwiftSync still has structural table-wide costs in other parent-scoped paths and scoped export
 - the most obvious internal Milestone 3 follow-ups have now been tried and rejected
 
 That means the next meaningful gain likely requires one of:

@@ -2,15 +2,13 @@
 
 ## Open items
 
-- [ ] Replace full-table fetch plus in-memory scope filtering in parent-scoped single-item sync with a parent-plus-identity targeted fetch path where SwiftData allows it
-- [ ] Prototype a scope-targeted fetch path for parent-scoped batch sync so delete planning and index construction operate on scope rows instead of the full child table
 - [ ] Re-run the `sqlite + 10k` demo-shaped benchmark with phase profiling enabled and capture the top 3 phases by median time
 - [ ] Run the profiled `sqlite + 10k` benchmark under Instruments Time Profiler with Points of Interest and record the hottest SwiftData call stacks inside `fetch-existing`
 - [ ] Compare `memory` vs `sqlite` phase output at `1k`, `10k`, and `50k` to separate SwiftData table-scan cost from persistence cost
 - [ ] Evaluate whether scoped export can avoid fetch-all-then-filter by introducing a narrower parent-scoped export fetch path
 - [ ] Evaluate whether repeated `context.save()` calls are materially expensive after fetch narrowing and only then consider save batching or save elision
 - [ ] Document the current product boundary if scoped predicate fast paths remain blocked by generic SwiftData predicate limitations
-- [ ] Decide whether parent-scoped optimizations should use the same macro-generated concrete predicate approach as the single-item fast path
+- [ ] Evaluate whether parent-scoped export should use the same macro-generated concrete parent predicate approach as the retained batch optimization
 
 ## Current bottlenecks
 
@@ -45,14 +43,20 @@ The verified post-change benchmark signal for the same `memory + 1k + 1 sample` 
 
 The remaining structural issue is that several other sync and export paths still fetch the whole table and then filter or search in memory.
 
+The next verified retained benchmark signal is the parent-scoped batch path on the same `memory + 1k + 1 sample` shape:
+
+- before: about `30.872 ms`
+- after: about `14.155 ms`
+- retained phase shift: `fetch-existing` -> `fetch-existing-by-parent`
+
+That means the next likely wins are no longer the parent-scoped item or parent-scoped batch paths. They are the remaining scoped fetch-all paths, especially export and larger SQLite-backed scenarios.
+
 ## Improvement direction
 
 The first retained improvement was fetch narrowing through a macro-generated identity predicate, not micro-optimizing field application.
 
 That means:
 
-- parent-scoped single-item sync should fetch by parent plus identity instead of fetch-all-then-filter-then-scan
-- parent-scoped batch sync should operate on scope rows instead of the full child table whenever SwiftData can express the predicate
 - scoped export should avoid fetch-all-then-filter if a safe scoped fetch path is possible
 
 Only after fetch narrowing should we spend time on `save-context`, because the current measurement says fetch dominates by a wide margin.

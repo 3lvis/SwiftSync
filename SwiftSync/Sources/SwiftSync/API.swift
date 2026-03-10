@@ -364,12 +364,23 @@ extension SwiftSync {
                         reason: "Parent must be resolved in the same ModelContext used for sync."
                     )
                 }
-                let existing = try syncProfile("fetch-existing") {
-                    try context.fetch(FetchDescriptor<Model>())
-                }
-                let scopeRows = syncProfile("filter-scope") {
-                    existing.filter {
-                        $0[keyPath: parentRelationship]?.persistentModelID == resolvedParent.persistentModelID
+                let parentPredicate = Model.syncParentPredicate(
+                    parentPersistentID: resolvedParent.persistentModelID,
+                    relationship: parentRelationship
+                )
+                let scopeRows: [Model]
+                if let parentPredicate {
+                    scopeRows = try syncProfile("fetch-existing-by-parent") {
+                        try context.fetch(FetchDescriptor<Model>(predicate: parentPredicate))
+                    }
+                } else {
+                    let fetchedExisting = try syncProfile("fetch-existing") {
+                        try context.fetch(FetchDescriptor<Model>())
+                    }
+                    scopeRows = syncProfile("filter-scope") {
+                        fetchedExisting.filter {
+                            $0[keyPath: parentRelationship]?.persistentModelID == resolvedParent.persistentModelID
+                        }
                     }
                 }
 
@@ -377,7 +388,7 @@ extension SwiftSync {
                 var duplicates: [Model] = []
                 syncProfile("build-index") {
                     if isGlobal {
-                        for row in existing {
+                        for row in scopeRows {
                             let key = identityKey(from: row[keyPath: Model.syncIdentity])
                             if index[key] != nil {
                                 duplicates.append(row)
@@ -458,6 +469,42 @@ extension SwiftSync {
                             try throwIfCancelled()
                         }
                         continue
+                    }
+
+                    if isGlobal {
+                        let movedRow = try syncProfile("fetch-existing-by-identity", operation: {
+                            try fetchUniqueRow(matching: identity, as: Model.self, in: context)
+                        })
+                        if let movedRow {
+                            syncProfile("apply-parent") {
+                                if movedRow[keyPath: parentRelationship]?.persistentModelID != resolvedParent.persistentModelID {
+                                    movedRow[keyPath: parentRelationship] = resolvedParent
+                                    changed = true
+                                }
+                            }
+                            let didApplyFields = try syncProfile("apply-fields") {
+                                try movedRow.apply(payloadModel)
+                            }
+                            if didApplyFields {
+                                changed = true
+                            }
+                            if !relationshipOperations.isDisjoint(with: [.update, .delete]) {
+                                try throwIfCancelled()
+                                let didApplyRelationships = try await syncProfile("apply-relationships") {
+                                    try await movedRow.applyRelationships(
+                                        payloadModel,
+                                        in: context,
+                                        operations: relationshipOperations
+                                    )
+                                }
+                                if didApplyRelationships {
+                                    changed = true
+                                }
+                                try throwIfCancelled()
+                            }
+                            index[key] = movedRow
+                            continue
+                        }
                     }
 
                     let created = try syncProfile("create-model") {

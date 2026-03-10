@@ -51,6 +51,10 @@ public protocol SyncModelable: PersistentModel {
     associatedtype SyncID: Hashable & Codable & Sendable
     static var syncIdentity: KeyPath<Self, SyncID> { get }
     static func syncIdentityPredicate(matching identity: SyncID) -> Predicate<Self>?
+    static func syncParentPredicate(
+        parentPersistentID: PersistentIdentifier,
+        relationship: PartialKeyPath<Self>
+    ) -> Predicate<Self>?
     static var syncIdentityRemoteKeys: [String] { get }
     static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] { get }
     static func syncRelatedModelType(for keyPath: PartialKeyPath<Self>) -> (any PersistentModel.Type)?
@@ -60,6 +64,10 @@ public protocol SyncModelable: PersistentModel {
 public extension SyncModelable {
     static var syncIdentityRemoteKeys: [String] { ["id", "remote_id", "remoteID"] }
     static func syncIdentityPredicate(matching _: SyncID) -> Predicate<Self>? { nil }
+    static func syncParentPredicate(
+        parentPersistentID _: PersistentIdentifier,
+        relationship _: PartialKeyPath<Self>
+    ) -> Predicate<Self>? { nil }
     static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] { [] }
 
     static func syncRelatedModelType(for keyPath: PartialKeyPath<Self>) -> (any PersistentModel.Type)? {

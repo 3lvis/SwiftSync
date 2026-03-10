@@ -91,6 +91,7 @@ public struct SyncableMacro: ExtensionMacro {
         let relatedModelTypeBody = relatedModelTypeBlock(for: properties, typeName: typeName)
         let relationshipSchemaDescriptorsBody = relationshipSchemaDescriptorsBlock(for: properties)
         let relationshipApplyBody = relationshipApplyBlock(for: properties, typeName: typeName)
+        let parentPredicateBody = syncParentPredicateBlock(for: properties, typeName: typeName)
 
         return [
             try ExtensionDeclSyntax(
@@ -109,6 +110,12 @@ public struct SyncableMacro: ExtensionMacro {
                                 rhs: PredicateExpressions.build_Arg(identity)
                             )
                         }
+                    }
+                    \(raw: memberAccessModifier)static func syncParentPredicate(
+                        parentPersistentID: PersistentIdentifier,
+                        relationship: PartialKeyPath<\(raw: typeName)>
+                    ) -> Predicate<\(raw: typeName)>? {
+                        \(raw: parentPredicateBody)
                     }
                     \(raw: needsCustomRemoteIdentityKeys ? "\(memberAccessModifier)static var syncIdentityRemoteKeys: [String] { [\"\(generatedRemoteIdentityKey)\"] }" : "")
                     \(raw: memberAccessModifier)static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] { \(raw: defaultRefreshModelTypesBody) }
@@ -594,6 +601,28 @@ public struct SyncableMacro: ExtensionMacro {
         }
 
         return blocks.joined(separator: "\n\n")
+    }
+
+    private static func syncParentPredicateBlock(for properties: [SyncedProperty], typeName: String) -> String {
+        let toOneRelationships = properties.filter { $0.isRelationship && !$0.isToManyRelationship }
+        guard !toOneRelationships.isEmpty else {
+            return "return nil"
+        }
+
+        let cases = toOneRelationships.map { property in
+            """
+            if relationship == \\.\(property.name) {
+                return #Predicate<\(typeName)> { row in
+                    row.\(property.name)?.persistentModelID == parentPersistentID
+                }
+            }
+            """
+        }.joined(separator: "\n")
+
+        return """
+        \(cases)
+        return nil
+        """
     }
 
     private static func relationshipForeignKeyInputKeys(for property: SyncedProperty) -> [String] {

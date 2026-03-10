@@ -2,13 +2,14 @@
 
 ## Plan
 
-- [x] Add tests that pin the parent-scoped single-item fast path for unique identities, fallback behavior for non-unique/manual conformers, and move-across-parent semantics
-- [x] Implement an identity-targeted fetch path for parent-scoped single-item sync where the sync identity is unique
-- [x] Run focused tests and the parent-scoped single-item benchmark with phase profiling to verify the fetch phase changes
+- [x] Record the before-change baseline for parent-scoped batch sync with phase profiling
+- [x] Add tests that pin the parent-scoped batch fast path for macro-backed models and fallback behavior for manual conformers
+- [x] Implement a parent-targeted fetch path for parent-scoped batch sync using a macro-generated concrete parent predicate and identity fallback for global rows
+- [x] Run focused tests, `swift test --filter SyncTests`, and the same parent-scoped batch benchmark command to verify the before/after delta
 
 ## Last known state
 
-`swift test --filter SyncTests` green; new `testParentScopedSingleItemSyncBenchmarks` benchmark green with phase output showing `fetch-existing-by-identity: 0.365 ms` and total `2.404 ms` on the verified `memory + 1k + 1 sample` run
+parent-scoped batch baseline recorded at `30.872 ms` with `fetch-existing: 13.759 ms`; after the macro-driven parent predicate change the same benchmark measures `14.155 ms` with `fetch-existing-by-parent: 2.006 ms`; `swift test --filter SyncTests` green
 
 ## Decisions (don't revisit)
 
@@ -16,6 +17,7 @@
 - The first optimization needs macro support for a concrete identity predicate because generic SwiftData key-path predicates are blocked under strict concurrency
 - This branch touches `Core.swift` and `MacrosImplementation/`; iOS regression will run on merge
 - Parent-scoped single-item optimization should follow global-identity semantics: if identity is unique, the row can be fetched by identity and moved across parents
+- Parent-scoped batch optimization should fetch the current scope via a macro-generated parent predicate and only use identity-targeted fallback fetches for payload rows missing from that scope
 
 ## Files touched
 
@@ -31,3 +33,4 @@
 - SwiftSync/Sources/SwiftSync/SyncableMacro.swift
 - SwiftSync/Tests/SwiftSyncTests/SyncTests.swift
 - SwiftSync/Tests/SwiftSyncTests/FetchStrategyBenchmarkTests.swift
+- AGENTS.md
