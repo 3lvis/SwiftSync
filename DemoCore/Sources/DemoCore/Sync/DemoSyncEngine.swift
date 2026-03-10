@@ -39,9 +39,11 @@ public final class DemoSyncEngine {
     }
 
     public func syncProjectTasks(projectID: String) async throws {
+        DemoDebugLog.emit("sync.projectTasks.call", "projectID=\(projectID) begin")
         try await runOperation("projectTasks-\(projectID)") {
             try await syncProjectTasksData(projectID: projectID)
         }
+        DemoDebugLog.emit("sync.projectTasks.call", "projectID=\(projectID) success")
     }
 
     public func syncTaskDetail(taskID: String) async throws {
@@ -193,7 +195,15 @@ public final class DemoSyncEngine {
             isSyncing = !inFlightOperations.isEmpty
         }
 
-        try await operation()
+        do {
+            try await operation()
+        } catch {
+            DemoDebugLog.emit(
+                "sync.operation.error",
+                "key=\(key) error=\((error as? LocalizedError)?.errorDescription ?? String(describing: error))"
+            )
+            throw error
+        }
     }
 
     private func project(withID projectID: String) throws -> Project? {

@@ -90,12 +90,24 @@ public final class ProjectDetailMachine {
 
         observeContinuously {
             self.project = self.projectPublisher.rows.first(where: { $0.id == self.projectID })
+            DemoDebugLog.emit(
+                "projectDetail.publisher.project",
+                "projectID=\(self.projectID) project=\(self.project?.id ?? "nil") taskCount=\(self.project?.taskCount ?? -1)"
+            )
         }
         observeContinuously {
             self.tasks = self.taskPublisher.rows
+            DemoDebugLog.emit(
+                "projectDetail.publisher.tasks",
+                "projectID=\(self.projectID) tasks=\(self.tasks.map(\.id).sorted())"
+            )
         }
         observeContinuously {
             self.loadState = self.loadMachine.state
+            DemoDebugLog.emit(
+                "projectDetail.loadState",
+                "projectID=\(self.projectID) state=\(self.debugLoadState(self.loadState))"
+            )
         }
         observeContinuously {
             self.deleteState = self.deleteMachine.state
@@ -103,6 +115,7 @@ public final class ProjectDetailMachine {
     }
 
     public func send(_ event: ScreenLoadEvent) {
+        DemoDebugLog.emit("projectDetail.event", "projectID=\(projectID) event=\(String(describing: event))")
         loadMachine.send(event, run: { [syncEngine, projectID] in
             try await syncEngine.syncProjectTasks(projectID: projectID)
         })
@@ -128,6 +141,19 @@ public final class ProjectDetailMachine {
 
         case .dismissError:
             _ = deleteMachine.send(.dismissError)
+        }
+    }
+
+    private func debugLoadState(_ state: ScreenLoadState) -> String {
+        switch state {
+        case .idle:
+            return "idle"
+        case .loading:
+            return "loading"
+        case .loaded:
+            return "loaded"
+        case .error(let presentation):
+            return "error(\(presentation.message))"
         }
     }
 

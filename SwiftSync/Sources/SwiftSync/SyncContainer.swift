@@ -123,6 +123,22 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         )
     }
 
+    public func sync<Model: SyncUpdatableModel, Payload: SyncPayloadConvertible, Parent: PersistentModel>(
+        payload: [Payload],
+        as model: Model.Type,
+        parent: Parent,
+        relationship: ReferenceWritableKeyPath<Model, Parent?>,
+        relationshipOperations: SyncRelationshipOperations = .all
+    ) async throws {
+        try await sync(
+            payload: payload.map { $0.toSyncPayloadDictionary() },
+            as: model,
+            parent: parent,
+            relationship: relationship,
+            relationshipOperations: relationshipOperations
+        )
+    }
+
     public func sync<Model: SyncUpdatableModel>(
         item: [String: Any],
         as model: Model.Type,
@@ -165,6 +181,22 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             parent: parent,
             relationship: relationship,
             keyStyle: keyStyle,
+            relationshipOperations: relationshipOperations
+        )
+    }
+
+    public func sync<Model: SyncUpdatableModel, Payload: SyncPayloadConvertible, Parent: PersistentModel>(
+        item: Payload,
+        as model: Model.Type,
+        parent: Parent,
+        relationship: ReferenceWritableKeyPath<Model, Parent?>,
+        relationshipOperations: SyncRelationshipOperations = .all
+    ) async throws {
+        try await sync(
+            item: item.toSyncPayloadDictionary(),
+            as: model,
+            parent: parent,
+            relationship: relationship,
             relationshipOperations: relationshipOperations
         )
     }
