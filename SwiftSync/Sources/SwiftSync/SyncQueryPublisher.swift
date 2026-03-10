@@ -37,9 +37,12 @@ public final class SyncQueryPublisher<Model: PersistentModel> {
             forName: SyncContainer.didSaveChangesNotification,
             object: syncContainer,
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] notification in
             guard let self else { return }
+            let changedTypeNames = syncQueryChangedModelTypeNames(from: notification.userInfo)
+            let changedIDs = syncQueryChangedIdentifiers(from: notification.userInfo)
             MainActor.assumeIsolated {
+                guard self.shouldReload(changedTypeNames: changedTypeNames, changedIDs: changedIDs) else { return }
                 self.reload()
             }
         }
@@ -108,12 +111,12 @@ public final class SyncQueryPublisher<Model: PersistentModel> {
 
     // MARK: - Private
 
-    private func shouldReload(for userInfo: [AnyHashable: Any]?) -> Bool {
-        let changedTypeNames = syncQueryChangedModelTypeNames(from: userInfo)
+    private func shouldReload(
+        changedTypeNames: Set<String>,
+        changedIDs: Set<PersistentIdentifier>
+    ) -> Bool {
         if changedTypeNames.isEmpty { return true }
         if !observedModelTypeNames.isDisjoint(with: changedTypeNames) { return true }
-
-        let changedIDs = syncQueryChangedIdentifiers(from: userInfo)
         if changedIDs.isEmpty { return false }
         return !Set(rows.map(\.persistentModelID)).isDisjoint(with: changedIDs)
     }

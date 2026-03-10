@@ -168,16 +168,16 @@ public final class TaskDetailMachine {
 
     private let taskID: String
     private let syncEngine: DemoSyncEngine
-    private let taskPublisher: SyncQueryPublisher<Task>
+    private let taskPublisher: SyncModelPublisher<Task>
     private let itemPublisher: SyncQueryPublisher<Item>
     private let loadMachine: ScreenLoadMachine
     public init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.taskID = taskID
         self.syncEngine = syncEngine
-        self.taskPublisher = SyncQueryPublisher(
+        self.taskPublisher = SyncModelPublisher(
             Task.self,
+            id: taskID,
             in: syncContainer,
-            sortBy: [SortDescriptor(\Task.updatedAt, order: .reverse), SortDescriptor(\Task.id)]
         )
         self.itemPublisher = SyncQueryPublisher(
             Item.self,
@@ -191,7 +191,7 @@ public final class TaskDetailMachine {
         }
 
         observeContinuously {
-            self.task = self.taskPublisher.rows.first(where: { $0.id == self.taskID })
+            self.task = self.taskPublisher.row
             DemoDebugLog.emit(
                 "taskDetail.publisher.task",
                 self.debugTaskSnapshot(self.task)

@@ -301,4 +301,65 @@ final class SyncQueryPublisherTests: XCTestCase {
         await Task.yield()
         XCTAssertEqual(publisher.rows.map(\.id), ["t1"])
     }
+
+    @MainActor
+    func testModelPublisherRefreshesSingleRowAfterBackgroundContextUpdate() async throws {
+        let syncContainer = try makeContainer(modelTypes: PubTask.self, PubUser.self)
+
+        try await syncContainer.sync(
+            payload: [
+                ["id": "u1", "display_name": "Alice", "role": ["id": "eng", "label": "Engineer"]],
+                ["id": "u2", "display_name": "Bob", "role": ["id": "eng", "label": "Engineer"]]
+            ],
+            as: PubUser.self
+        )
+        try await syncContainer.sync(
+            payload: [["id": "t1", "title": "Original", "assignee_id": NSNull()]],
+            as: PubTask.self
+        )
+
+        let publisher = SyncModelPublisher(
+            PubTask.self,
+            id: "t1",
+            in: syncContainer
+        )
+
+        XCTAssertEqual(publisher.row?.id, "t1")
+        XCTAssertNil(publisher.row?.assigneeID)
+
+        let backgroundContext = ModelContext(syncContainer.modelContainer)
+        let backgroundTask = try XCTUnwrap(
+            backgroundContext.fetch(FetchDescriptor<PubTask>(predicate: #Predicate { $0.id == "t1" })).first
+        )
+        let backgroundAssignee = try XCTUnwrap(
+            backgroundContext.fetch(FetchDescriptor<PubUser>(predicate: #Predicate { $0.id == "u2" })).first
+        )
+        backgroundTask.assigneeID = backgroundAssignee.id
+        backgroundTask.assignee = backgroundAssignee
+        try backgroundContext.save()
+
+        try await waitUntil("single-row publisher refreshes changed assignee") {
+            publisher.row?.assigneeID == "u2" && publisher.row?.assignee?.id == "u2"
+        }
+
+        XCTAssertEqual(publisher.row?.assigneeID, "u2")
+        XCTAssertEqual(publisher.row?.assignee?.id, "u2")
+    }
+
+    @MainActor
+    private func waitUntil(
+        _ description: String,
+        timeoutNanoseconds: UInt64 = 2_000_000_000,
+        pollNanoseconds: UInt64 = 20_000_000,
+        condition: @escaping @MainActor () -> Bool
+    ) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .nanoseconds(Int64(timeoutNanoseconds)))
+        while ContinuousClock.now < deadline {
+            if condition() {
+                return
+            }
+            try await _Concurrency.Task.sleep(nanoseconds: pollNanoseconds)
+        }
+        XCTFail("Timed out waiting for condition: \(description)")
+    }
 }
