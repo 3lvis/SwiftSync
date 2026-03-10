@@ -4,12 +4,12 @@
 
 - [x] Add DemoCore tests for machine-owned render state across all machine-backed screens
 - [x] Refactor DemoCore machines to expose explicit render state for list, detail, and form metadata screens
-- [x] Refine `TaskFormSheet` into explicit screen/form/content layers with named lifecycle hooks
-- [x] Re-run DemoCore tests and build the Demo scheme
+- [x] Merge `TaskFormSheet` body with the form shell and move save-failure presentation into a dedicated view modifier
+- [x] Re-run the Demo scheme build
 
 ## Last known state
 
-TaskFormSheet layering complete; DemoCore tests green and Demo build succeeded
+TaskFormSheet body merged with form shell; save-failure presentation extracted; Demo build succeeded
 
 ## Decisions (don't revisit)
 

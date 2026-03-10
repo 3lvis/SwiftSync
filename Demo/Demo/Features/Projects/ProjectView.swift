@@ -27,20 +27,23 @@ struct ProjectView: View {
         .navigationTitle("Project")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
-        .task { machine.send(.onAppear) }
-        .sheet(isPresented: $isShowingCreateTaskSheet) { createTaskSheet }
-        .animation(.snappy(duration: 0.2), value: machine.tasks.map(\.id))
-        .alert("Delete Task?", isPresented: deletePromptIsPresented, presenting: taskPendingDelete) { prompt in
-            Button("Delete", role: .destructive) { confirmDelete(prompt) }
-            Button("Cancel", role: .cancel) { taskPendingDelete = nil }
-        } message: { prompt in
-            Text("Delete \"\(prompt.title)\" from this project?")
-        }
-        .alert("Delete Failed", isPresented: deleteFailureIsPresented) {
-            Button("OK", role: .cancel) { machine.sendDelete(.dismissError) }
-        } message: {
-            Text(deleteFailureMessage)
-        }
+        .task(loadProject)
+        .animation(.snappy(duration: 0.2), value: taskIDs)
+        .projectPresentations(
+            createTaskSheetIsPresented: $isShowingCreateTaskSheet,
+            createTaskSheet: { createTaskSheet },
+            deletePromptIsPresented: deletePromptIsPresented,
+            taskPendingDelete: taskPendingDelete,
+            onConfirmDelete: confirmDelete,
+            onCancelDelete: { taskPendingDelete = nil },
+            deleteFailureIsPresented: deleteFailureIsPresented,
+            deleteFailureMessage: deleteFailureMessage,
+            onDismissDeleteFailure: { machine.sendDelete(.dismissError) }
+        )
+    }
+
+    private var taskIDs: [String] {
+        machine.tasks.map(\.id)
     }
 
     @ViewBuilder
@@ -112,6 +115,10 @@ struct ProjectView: View {
             return presentation.message
         }
         return "Could not delete this task."
+    }
+
+    private func loadProject() {
+        machine.send(.onAppear)
     }
 
     private func confirmDelete(_ prompt: TaskDeletePrompt) {
@@ -199,4 +206,34 @@ struct ProjectView: View {
 private struct TaskDeletePrompt: Equatable {
     let id: String
     let title: String
+}
+
+private extension View {
+    func projectPresentations<SheetContent: View>(
+        createTaskSheetIsPresented: Binding<Bool>,
+        @ViewBuilder createTaskSheet: @escaping () -> SheetContent,
+        deletePromptIsPresented: Binding<Bool>,
+        taskPendingDelete: TaskDeletePrompt?,
+        onConfirmDelete: @escaping (TaskDeletePrompt) -> Void,
+        onCancelDelete: @escaping () -> Void,
+        deleteFailureIsPresented: Binding<Bool>,
+        deleteFailureMessage: String,
+        onDismissDeleteFailure: @escaping () -> Void
+    ) -> some View {
+        self
+            .sheet(isPresented: createTaskSheetIsPresented) {
+                createTaskSheet()
+            }
+            .alert("Delete Task?", isPresented: deletePromptIsPresented, presenting: taskPendingDelete) { prompt in
+                Button("Delete", role: .destructive) { onConfirmDelete(prompt) }
+                Button("Cancel", role: .cancel) { onCancelDelete() }
+            } message: { prompt in
+                Text("Delete \"\(prompt.title)\" from this project?")
+            }
+            .alert("Delete Failed", isPresented: deleteFailureIsPresented) {
+                Button("OK", role: .cancel) { onDismissDeleteFailure() }
+            } message: {
+                Text(deleteFailureMessage)
+            }
+    }
 }

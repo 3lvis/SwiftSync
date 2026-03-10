@@ -54,36 +54,25 @@ struct TaskFormSheet: View {
     }
 
     var body: some View {
-        screen
-    }
-}
-
-extension TaskFormSheet {
-    private var screen: some View {
         NavigationStack {
-            formContent
+            Form { content }
+            .environment(\.editMode, $itemEditMode)
+            .navigationTitle(navigationTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { toolbarContent }
         }
         .task(loadMetadata)
         .task(id: defaultsTaskID, applyDefaults)
         .animation(.snappy(duration: 0.2), value: itemIDs)
-        .alert("Save Failed", isPresented: saveFailureIsPresented) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(saveFailureMessage)
-        }
+        .taskFormPresentations(
+            saveFailureIsPresented: saveFailureIsPresented,
+            saveFailureMessage: saveFailureMessage
+        )
         .presentationDetents([.large])
     }
+}
 
-    private var formContent: some View {
-        Form {
-            content
-        }
-        .environment(\.editMode, $itemEditMode)
-        .navigationTitle(navigationTitle)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar { toolbarContent }
-    }
-
+extension TaskFormSheet {
     @ViewBuilder
     var content: some View {
         loadErrorSection
@@ -195,6 +184,19 @@ extension TaskFormSheet {
                 _ = machine.mutateItems(.updateTitle(item: item, title: newValue), in: draft)
             }
         )
+    }
+}
+
+private extension View {
+    func taskFormPresentations(
+        saveFailureIsPresented: Binding<Bool>,
+        saveFailureMessage: String
+    ) -> some View {
+        self.alert("Save Failed", isPresented: saveFailureIsPresented) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(saveFailureMessage)
+        }
     }
 }
 
