@@ -12,10 +12,10 @@ It focuses on the current retained performance story, not every implementation i
 
 ## Current headline
 
-For the current library code on this branch, the strongest benchmark signal is the demo-shaped SQLite scenario:
+For the current library code on this branch, the strongest benchmark signal is still the demo-shaped SQLite scenario:
 
 - `sqlite + 1k` total rows: about `713 ms` median
-- `sqlite + 10k` total rows: about `6943 ms` median
+- `sqlite + 10k` total rows: about `5029 ms` median in the latest profiled run
 
 That scenario simulates a realistic app session:
 
@@ -38,7 +38,7 @@ Before that optimization, the same demo-shaped scenario measured:
 After the optimization, the current retained numbers are:
 
 - `sqlite + 1k`: about `713 ms`
-- `sqlite + 10k`: about `6943 ms`
+- `sqlite + 10k`: about `5029 ms` in the latest profiled run
 
 That is the important story:
 
@@ -119,7 +119,7 @@ That confirmation changes the remaining bottleneck picture:
 The main conclusion is straightforward:
 
 - SwiftSync is much faster now on realistic relationship-heavy workloads than it was before optimization
-- the remaining bottlenecks are now tied to larger SQLite-backed global paths, save/materialization cost after fetch narrowing, and export object construction
+- the remaining bottlenecks are now tied to relationship application in realistic workloads, plus save/materialization cost in broader global paths after fetch narrowing
 
 ## What this means for adopters
 
@@ -215,6 +215,21 @@ For the retained scoped wins, the next Instruments targets should no longer be b
 - `export-map` inside parent-scoped export
 - whichever phase dominates the still-broad global batch and demo-shaped SQLite scenarios
 
+The broader SQLite confirmation now makes the next target explicit.
+
+On verified `sqlite + 10k + 1 sample` broader workloads:
+
+- `global-batch-sync`: about `797.134 ms`
+  with `save-context: 436.818 ms`, `fetch-existing: 115.286 ms`, and `apply-fields: 103.761 ms`
+- `demo-shaped-project-session`: about `5029.438 ms`
+  with `apply-relationships: 4883.392 ms`, `relationship-fetch: 512.707 ms`, and `save-context: 73.667 ms`
+
+That means:
+
+- the realistic product bottleneck is now `apply-relationships`, not fetch
+- `save-context` is still large in isolated global batch sync, but it is not the next optimization target
+- the next retained performance work should go one level deeper inside relationship application and find which specific helper or relationship mode is consuming the `4.8s`
+
 ## Rejected experiment
 
 One follow-up experiment added model-provided identity and scoped fetch-descriptor hooks.
@@ -285,8 +300,9 @@ The honest status on this branch is:
 
 - SwiftSync has a strong retained improvement for realistic relationship-heavy workloads because of the sync-pass-local relationship lookup cache
 - SwiftSync now also has retained fetch-narrowing wins for single-item sync and parent-scoped batch sync on macro-backed models
-- SwiftSync still has structural table-wide costs in larger SQLite-backed global paths and demo-shaped workloads
+- SwiftSync still has structural costs in larger SQLite-backed global paths and demo-shaped workloads
 - the optimized scoped paths now point at second-order costs such as `save-context` and `export-map`
+- the highest-value remaining work is inside `apply-relationships` for the realistic demo-shaped workload
 - the most obvious internal Milestone 3 follow-ups have now been tried and rejected
 
 That means the next meaningful gain likely requires one of:

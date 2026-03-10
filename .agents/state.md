@@ -2,13 +2,13 @@
 
 ## Plan
 
-- [x] Re-run the retained `single-item sync`, `parent-scoped batch sync`, and `parent-scoped export` benchmarks on `sqlite + 10k` with phase profiling
-- [x] Compare the resulting phase breakdowns and identify the dominant remaining bottleneck under SQLite
-- [x] Update the project and planning docs with the SQLite confirmation results and the next recommended experiment
+- [x] Run `global batch sync` and `demo-shaped scenario` benchmarks on `sqlite + 10k` with phase profiling
+- [x] Compare the resulting phase breakdowns and identify the dominant remaining bottleneck under realistic broader workloads
+- [x] Update the project and planning docs with the broader SQLite results and the next recommended experiment
 
 ## Last known state
 
-SQLite confirmation complete at `10k + 1 sample`: `single-item-sync` `13.765 ms` (`fetch-existing-by-identity: 1.797 ms`), `parent-scoped-batch-sync` `16.458 ms` (`save-context: 6.648 ms`, `fetch-existing-by-parent: 2.333 ms`), `export-parent-scope` `14.510 ms` (`export-map: 8.293 ms`, `export-fetch-by-parent: 2.677 ms`); docs updated, next likely target is the still-broad global or demo-shaped SQLite path rather than more scoped fetch narrowing
+broader SQLite profiling complete at `10k + 1 sample`: `global-batch-sync` `797.134 ms` with `save-context: 436.818 ms`, `fetch-existing: 115.286 ms`, `apply-fields: 103.761 ms`; `demo-shaped-project-session` `5029.438 ms` with `apply-relationships: 4883.392 ms`, `relationship-fetch: 512.707 ms`, `save-context: 73.667 ms`; docs updated, and the next retained optimization target is `apply-relationships`, not `save-context`
 
 ## Decisions (don't revisit)
 
@@ -19,6 +19,7 @@ SQLite confirmation complete at `10k + 1 sample`: `single-item-sync` `13.765 ms`
 - Parent-scoped batch optimization should fetch the current scope via a macro-generated parent predicate and only use identity-targeted fallback fetches for payload rows missing from that scope
 - Parent-scoped export should use the same macro-generated parent predicate strategy as the retained batch optimization and keep the fetch-all fallback for manual conformers without the synthesized predicate hook
 - Performance follow-ups must capture the same benchmark command before and after any optimization; this SQLite pass is measurement-only and should not change code until the dominant post-optimization bottleneck is clear
+- The optimization sequence ends with relationship application work: do not spend the next cycle on `save-context`; finish the performance work by reducing `apply-relationships` in the realistic demo-shaped workload
 
 ## Files touched
 
