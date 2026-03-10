@@ -2,13 +2,15 @@
 
 ## Plan
 
-- [x] Run `global batch sync` and `demo-shaped scenario` benchmarks on `sqlite + 10k` with phase profiling
-- [x] Compare the resulting phase breakdowns and identify the dominant remaining bottleneck under realistic broader workloads
-- [x] Update the project and planning docs with the broader SQLite results and the next recommended experiment
+- [x] Add deeper profiling inside `apply-relationships` for the demo-shaped workload and record the before baseline on the same `sqlite + 10k` benchmark command
+- [x] Add or update focused tests for the chosen relationship-path optimization and confirm the expected failure if behavior changes
+- [x] Implement the highest-yield `apply-relationships` optimization for the demo-shaped workload
+- [x] Run focused tests, `swift test --filter SyncTests`, and the same `sqlite + 10k` demo-shaped benchmark command to verify the before/after delta
+- [x] Update project and planning docs with the retained relationship-optimization result
 
 ## Last known state
 
-broader SQLite profiling complete at `10k + 1 sample`: `global-batch-sync` `797.134 ms` with `save-context: 436.818 ms`, `fetch-existing: 115.286 ms`, `apply-fields: 103.761 ms`; `demo-shaped-project-session` `5029.438 ms` with `apply-relationships: 4883.392 ms`, `relationship-fetch: 512.707 ms`, `save-context: 73.667 ms`; docs updated, and the next retained optimization target is `apply-relationships`, not `save-context`
+relationship optimization retained on `experiment/demo-shaped-apply-relationships`: baseline `demo-shaped-project-session` was `5029.438 ms` with `apply-relationships: 4883.392 ms`; after adding helper-level profiling plus per-sync-pass identity-map caching in relationship helpers, the same `sqlite + 10k + 1 sample` command measures `802.906 ms` with `apply-relationships: 638.976 ms`, `relationship-apply-to-one-foreign-key: 319.857 ms`, `relationship-apply-to-many-foreign-keys: 314.975 ms`, `relationship-fetch: 547.230 ms`, `relationship-index-by-id: 72.033 ms`; focused profiler test and `swift test --filter SyncTests` are green
 
 ## Decisions (don't revisit)
 
@@ -20,6 +22,8 @@ broader SQLite profiling complete at `10k + 1 sample`: `global-batch-sync` `797.
 - Parent-scoped export should use the same macro-generated parent predicate strategy as the retained batch optimization and keep the fetch-all fallback for manual conformers without the synthesized predicate hook
 - Performance follow-ups must capture the same benchmark command before and after any optimization; this SQLite pass is measurement-only and should not change code until the dominant post-optimization bottleneck is clear
 - The optimization sequence ends with relationship application work: do not spend the next cycle on `save-context`; finish the performance work by reducing `apply-relationships` in the realistic demo-shaped workload
+- This branch is scoped to demo-shaped relationship optimization only; do not divert into `save-context` or additional fetch-path work unless the new deeper profiling disproves the current hotspot
+- The highest-yield relationship optimization on this branch is per-sync-pass identity-map caching for related rows; fetched-row caching alone was not enough because the hot helpers kept rebuilding identity dictionaries on every call
 
 ## Files touched
 

@@ -43,7 +43,7 @@ After the optimization, the current retained numbers are:
 That is the important story:
 
 - a realistic `1k` session moved from multi-second to sub-second
-- a realistic `10k` session moved from nearly `50s` to about `6.9s`
+- a realistic `10k` session moved from nearly `50s` to about `5.0s`
 
 This is the performance work that actually stayed in the library because it produced a large, user-visible gain.
 
@@ -230,6 +230,31 @@ That means:
 - `save-context` is still large in isolated global batch sync, but it is not the next optimization target
 - the next retained performance work should go one level deeper inside relationship application and find which specific helper or relationship mode is consuming the `4.8s`
 
+That deeper relationship attribution and optimization has now also been retained.
+
+On the same verified `sqlite + 10k + 1 sample` demo-shaped benchmark:
+
+- before relationship optimization: about `5029.438 ms`
+  with `apply-relationships: 4883.392 ms`
+- after relationship optimization: about `802.906 ms`
+  with `apply-relationships: 638.976 ms`
+
+The retained change was narrow and pragmatic:
+
+- add helper-level profiling inside relationship application
+- keep the existing per-sync-pass fetched-row cache
+- add a per-sync-pass identity-map cache so relationship helpers stop rebuilding `[id: row]` dictionaries on every call
+
+The resulting phase picture is much healthier:
+
+- `relationship-fetch: 547.230 ms`
+- `relationship-apply-to-one-foreign-key: 319.857 ms`
+- `relationship-apply-to-many-foreign-keys: 314.975 ms`
+- `relationship-index-by-id: 72.033 ms`
+- `save-context: 85.592 ms`
+
+That means the realistic `10k` session is no longer dominated by repeated relationship lookup work. The largest remaining relationship costs are now the one-time related-row fetches plus the actual foreign-key application work.
+
 ## Rejected experiment
 
 One follow-up experiment added model-provided identity and scoped fetch-descriptor hooks.
@@ -302,7 +327,7 @@ The honest status on this branch is:
 - SwiftSync now also has retained fetch-narrowing wins for single-item sync and parent-scoped batch sync on macro-backed models
 - SwiftSync still has structural costs in larger SQLite-backed global paths and demo-shaped workloads
 - the optimized scoped paths now point at second-order costs such as `save-context` and `export-map`
-- the highest-value remaining work is inside `apply-relationships` for the realistic demo-shaped workload
+- the realistic demo-shaped workload is no longer dominated by `apply-relationships`; the remaining work is more evenly split across relationship fetch, save, export mapping, and global batch costs
 - the most obvious internal Milestone 3 follow-ups have now been tried and rejected
 
 That means the next meaningful gain likely requires one of:

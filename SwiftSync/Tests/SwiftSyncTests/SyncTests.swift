@@ -3428,6 +3428,53 @@ final class SyncTests: XCTestCase {
     }
 
     @MainActor
+    func testRelationshipProfilingEmitsToOneAndToManyForeignKeyPhases() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: AutoCompany.self,
+            AutoEmployee.self,
+            AutoTag.self,
+            AutoTask.self,
+            configurations: configuration
+        )
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [["id": 10, "name": "Acme"]],
+            as: AutoCompany.self,
+            in: context
+        )
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "name": "Tag 1"],
+                ["id": 2, "name": "Tag 2"]
+            ],
+            as: AutoTag.self,
+            in: context
+        )
+
+        let (_, toOneProfile) = try await SwiftSync.withMainActorPerformanceProfiling {
+            try await SwiftSync.sync(
+                item: ["id": 1, "name": "Ava", "company_id": 10],
+                as: AutoEmployee.self,
+                in: context
+            )
+        }
+
+        XCTAssertNotNil(toOneProfile.totalsByPhase["relationship-apply-to-one-foreign-key"])
+
+        let (_, toManyProfile) = try await SwiftSync.withMainActorPerformanceProfiling {
+            try await SwiftSync.sync(
+                item: ["id": 10, "title": "Task 10", "tag_ids": [1, 2]],
+                as: AutoTask.self,
+                in: context
+            )
+        }
+
+        XCTAssertNotNil(toManyProfile.totalsByPhase["relationship-apply-to-many-foreign-keys"])
+    }
+
+    @MainActor
     func testParentScopedBatchSyncUsesParentTargetedFetchWhenPredicateExists() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: NoteFolder.self, MacroScopedNote.self, configurations: configuration)

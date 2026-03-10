@@ -2,10 +2,8 @@
 
 ## Open items
 
-- [ ] Split `apply-relationships` into deeper profiled sub-phases in the demo-shaped workload so the dominant relationship helper is explicit
-- [ ] Run the profiled `sqlite + 10k` demo-shaped benchmark under Instruments Time Profiler with Points of Interest and record the hottest SwiftData and Swift call stacks inside `apply-relationships`
-- [ ] Identify which relationship mode in the demo-shaped scenario dominates `apply-relationships` cost: to-one foreign keys, to-many foreign keys, to-one nested objects, or to-many nested objects
-- [ ] Prototype the highest-yield `apply-relationships` optimization on the demo-shaped path and compare it against the same `sqlite + 10k` benchmark command
+- [ ] Run the optimized `sqlite + 10k` demo-shaped benchmark under Instruments Time Profiler with Points of Interest and record the hottest SwiftData and Swift call stacks inside `relationship-fetch`
+- [ ] Re-run the optimized demo-shaped benchmark with multiple samples to confirm the retained relationship win is stable and not a single-run outlier
 - [ ] Compare `memory` vs `sqlite` phase output at `1k`, `10k`, and `50k` for the remaining broad global paths to separate SwiftData table-scan cost from persistence cost
 - [ ] Document the current product boundary if relationship application remains the dominant `10k+` cost after the next retained optimization
 
@@ -84,6 +82,19 @@ That changes the priority order decisively:
 - `save-context` is explicitly not the next optimization target, even though it is large in isolated global batch sync
 - further fetch narrowing is now lower value than deeper relationship-work attribution in the realistic workload
 
+The retained relationship optimization run is now also in hand on the same `sqlite + 10k + 1 sample` demo-shaped benchmark:
+
+- before: about `5029.438 ms`
+  phases: `apply-relationships: 4883.392 ms`, `relationship-fetch: 512.707 ms`, `save-context: 73.667 ms`
+- after: about `802.906 ms`
+  phases: `apply-relationships: 638.976 ms`, `relationship-fetch: 547.230 ms`, `relationship-apply-to-one-foreign-key: 319.857 ms`, `relationship-apply-to-many-foreign-keys: 314.975 ms`, `relationship-index-by-id: 72.033 ms`, `save-context: 85.592 ms`
+
+That changes the priority order again:
+
+- the dominant realistic bottleneck is no longer broad relationship application
+- the retained win came from per-sync-pass identity-map caching on top of the existing related-row fetch cache
+- the next useful attribution target is `relationship-fetch` itself, not `save-context`
+
 ## Improvement direction
 
 The first retained improvement was fetch narrowing through a macro-generated identity predicate, not micro-optimizing field application.
@@ -93,8 +104,8 @@ That means:
 - retained macro-generated concrete predicates should be preferred for any remaining hot path where the generic SwiftData predicate form is blocked
 - the next work should be driven by fresh `sqlite + 10k` phase data rather than more memory-only fetch narrowing on already-optimized scoped paths
 - once a path is no longer dominated by broad fetch cost, the next experiment should target the new top phase only if that phase is material in the larger SQLite-backed workload the product actually cares about
-- for the current branch, the realistic workload says that next top phase is `apply-relationships`, so that is where the optimization work should finish
-- do not spend the next optimization cycle on `save-context`; it is not the dominant real-workload bottleneck
+- the retained relationship win came from removing repeated identity-map rebuilds inside relationship helpers
+- do not spend the next optimization cycle on `save-context`; it is still not the dominant real-workload bottleneck
 
 The important implementation lesson from the first experiment is:
 
@@ -108,7 +119,7 @@ There may be SQLite-related gains, but they are secondary until we prove the mai
 In scope for this repo:
 
 - verifying whether SQLite magnifies the same `fetch-existing` bottleneck seen in memory
-- using Instruments to see whether the hot stacks under `apply-relationships` are SwiftData relationship fetches, nested sync work, repeated lookups, or other Swift overhead
+- using Instruments to see whether the hot stacks under `relationship-fetch` are SwiftData relationship fetches, SQLite reads, or model materialization overhead
 - reducing SQLite work indirectly by narrowing fetches, reducing row materialization, and avoiding fetch-all patterns
 
 Probably out of scope for now:
