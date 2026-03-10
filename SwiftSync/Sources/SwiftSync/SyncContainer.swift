@@ -192,11 +192,21 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         parent: Model.SyncParent
     ) throws -> [[String: Any]] {
         let context = ModelContext(modelContainer)
-        let allRows = try syncProfile("export-fetch") {
-            try context.fetch(FetchDescriptor<Model>())
-        }
-        let rows = syncProfile("export-filter-scope") {
-            allRows.filter { $0[keyPath: Model.parentRelationship]?.persistentModelID == parent.persistentModelID }
+        let rows: [Model]
+        if let predicate = Model.syncParentPredicate(
+            parentPersistentID: parent.persistentModelID,
+            relationship: Model.parentRelationship
+        ) {
+            rows = try syncProfile("export-fetch-by-parent") {
+                try context.fetch(FetchDescriptor<Model>(predicate: predicate))
+            }
+        } else {
+            let allRows = try syncProfile("export-fetch") {
+                try context.fetch(FetchDescriptor<Model>())
+            }
+            rows = syncProfile("export-filter-scope") {
+                allRows.filter { $0[keyPath: Model.parentRelationship]?.persistentModelID == parent.persistentModelID }
+            }
         }
         let sorted = syncProfile("export-sort") {
             rows.sorted { lhs, rhs in

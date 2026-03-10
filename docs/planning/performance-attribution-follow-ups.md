@@ -5,10 +5,10 @@
 - [ ] Re-run the `sqlite + 10k` demo-shaped benchmark with phase profiling enabled and capture the top 3 phases by median time
 - [ ] Run the profiled `sqlite + 10k` benchmark under Instruments Time Profiler with Points of Interest and record the hottest SwiftData call stacks inside `fetch-existing`
 - [ ] Compare `memory` vs `sqlite` phase output at `1k`, `10k`, and `50k` to separate SwiftData table-scan cost from persistence cost
-- [ ] Evaluate whether scoped export can avoid fetch-all-then-filter by introducing a narrower parent-scoped export fetch path
 - [ ] Evaluate whether repeated `context.save()` calls are materially expensive after fetch narrowing and only then consider save batching or save elision
 - [ ] Document the current product boundary if scoped predicate fast paths remain blocked by generic SwiftData predicate limitations
-- [ ] Evaluate whether parent-scoped export should use the same macro-generated concrete parent predicate approach as the retained batch optimization
+- [ ] Re-run the retained single-item, parent-scoped batch, and parent-scoped export wins on `sqlite + 10k` to confirm they still materially reduce end-to-end wall time under persistence cost
+- [ ] Identify the next highest-yield non-export path that still performs fetch-all-then-filter after the retained macro-driven optimizations
 
 ## Current bottlenecks
 
@@ -49,7 +49,13 @@ The next verified retained benchmark signal is the parent-scoped batch path on t
 - after: about `14.155 ms`
 - retained phase shift: `fetch-existing` -> `fetch-existing-by-parent`
 
-That means the next likely wins are no longer the parent-scoped item or parent-scoped batch paths. They are the remaining scoped fetch-all paths, especially export and larger SQLite-backed scenarios.
+The next verified retained benchmark signal is the parent-scoped export path on the same `memory + 1k + 1 sample` shape:
+
+- before: about `32.289 ms`
+- after: about `14.229 ms`
+- retained phase shift: `export-fetch` + `export-filter-scope` -> `export-fetch-by-parent`
+
+That means the next likely wins are no longer the parent-scoped item, parent-scoped batch, or parent-scoped export paths. The focus should now move to larger SQLite-backed scenarios and whichever remaining paths still perform broad fetches.
 
 ## Improvement direction
 
@@ -57,7 +63,8 @@ The first retained improvement was fetch narrowing through a macro-generated ide
 
 That means:
 
-- scoped export should avoid fetch-all-then-filter if a safe scoped fetch path is possible
+- retained macro-generated concrete predicates should be preferred for any remaining hot path where the generic SwiftData predicate form is blocked
+- the next work should be driven by fresh `sqlite + 10k` phase data rather than more memory-only fetch narrowing on already-optimized scoped paths
 
 Only after fetch narrowing should we spend time on `save-context`, because the current measurement says fetch dominates by a wide margin.
 

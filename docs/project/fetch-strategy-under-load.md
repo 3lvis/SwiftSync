@@ -87,10 +87,22 @@ That change mattered for two reasons:
 - it cut the measured parent-scoped batch path by about `54%`
 - it showed that macro-generated concrete parent predicates can remove full-table fetch plus in-memory scope filtering from the retained path, not just single-item lookup
 
+The next retained follow-up applied the same macro-generated parent predicate to parent-scoped export.
+
+On the verified `memory + 1k + 1 sample` parent-scoped export benchmark:
+
+- before: about `32.289 ms`, dominated by `export-fetch: 16.154 ms`
+- after: about `14.229 ms`, with `export-fetch-by-parent: 2.062 ms`
+
+That change mattered for two reasons:
+
+- it cut the measured parent-scoped export path by about `56%`
+- it removed the retained `export-fetch` plus `export-filter-scope` pattern for macro-backed parent-scoped models
+
 The main conclusion is straightforward:
 
 - SwiftSync is much faster now on realistic relationship-heavy workloads than it was before optimization
-- the remaining bottlenecks are still tied to table-wide work in parent-scoped sync, single-item lookup, and export behavior
+- the remaining bottlenecks are still tied to table-wide work in larger SQLite-backed scenarios, remaining global paths, and relationship/materialization cost after fetch narrowing
 
 ## What this means for adopters
 
@@ -173,6 +185,7 @@ The library now emits `OSSignposter` intervals for the major hot-path phases, in
 - `delete-missing`
 - `save-context`
 - `export-fetch`
+- `export-fetch-by-parent`
 - `export-filter-scope`
 - `export-sort`
 - `export-map`
@@ -249,7 +262,7 @@ The honest status on this branch is:
 
 - SwiftSync has a strong retained improvement for realistic relationship-heavy workloads because of the sync-pass-local relationship lookup cache
 - SwiftSync now also has retained fetch-narrowing wins for single-item sync and parent-scoped batch sync on macro-backed models
-- SwiftSync still has structural table-wide costs in other parent-scoped paths and scoped export
+- SwiftSync still has structural table-wide costs in larger SQLite-backed scenarios and unfocused global paths
 - the most obvious internal Milestone 3 follow-ups have now been tried and rejected
 
 That means the next meaningful gain likely requires one of:
