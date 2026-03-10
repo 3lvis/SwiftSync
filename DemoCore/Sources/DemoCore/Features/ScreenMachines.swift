@@ -166,24 +166,12 @@ public final class ProjectDetailMachine {
 
         observeContinuously {
             self.project = self.projectPublisher.rows.first(where: { $0.id == self.projectID })
-            DemoDebugLog.emit(
-                "projectDetail.publisher.project",
-                "projectID=\(self.projectID) project=\(self.project?.id ?? "nil") taskCount=\(self.project?.taskCount ?? -1)"
-            )
         }
         observeContinuously {
             self.tasks = self.taskPublisher.rows
-            DemoDebugLog.emit(
-                "projectDetail.publisher.tasks",
-                "projectID=\(self.projectID) tasks=\(self.tasks.map(\.id).sorted())"
-            )
         }
         observeContinuously {
             self.loadState = self.loadMachine.state
-            DemoDebugLog.emit(
-                "projectDetail.loadState",
-                "projectID=\(self.projectID) state=\(self.debugLoadState(self.loadState))"
-            )
         }
         observeContinuously {
             self.deleteState = self.deleteMachine.state
@@ -191,7 +179,6 @@ public final class ProjectDetailMachine {
     }
 
     public func send(_ event: ScreenLoadEvent) {
-        DemoDebugLog.emit("projectDetail.event", "projectID=\(projectID) event=\(String(describing: event))")
         loadMachine.send(event, run: { [syncEngine, projectID] in
             try await syncEngine.syncProjectTasks(projectID: projectID)
         })
@@ -217,19 +204,6 @@ public final class ProjectDetailMachine {
 
         case .dismissError:
             _ = deleteMachine.send(.dismissError)
-        }
-    }
-
-    private func debugLoadState(_ state: ScreenLoadState) -> String {
-        switch state {
-        case .idle:
-            return "idle"
-        case .loading:
-            return "loading"
-        case .loaded:
-            return "loaded"
-        case .error(let presentation):
-            return "error(\(presentation.message))"
         }
     }
 
@@ -274,17 +248,9 @@ public final class TaskDetailMachine {
 
         observeContinuously {
             self.task = self.taskPublisher.row
-            DemoDebugLog.emit(
-                "taskDetail.publisher.task",
-                self.debugTaskSnapshot(self.task)
-            )
         }
         observeContinuously {
             self.items = self.itemPublisher.rows
-            DemoDebugLog.emit(
-                "taskDetail.publisher.items",
-                "taskID=\(self.taskID) items=\(self.items.map(\.id).sorted())"
-            )
         }
         observeContinuously {
             self.loadState = self.loadMachine.state
@@ -292,28 +258,10 @@ public final class TaskDetailMachine {
     }
 
     public func send(_ event: ScreenLoadEvent) {
-        DemoDebugLog.emit("taskDetail.event", "taskID=\(taskID) event=\(String(describing: event))")
         loadMachine.send(event, run: { [syncEngine, taskID] in
             try await syncEngine.syncTaskDetail(taskID: taskID)
         })
     }
-
-    private func debugTaskSnapshot(_ task: Task?) -> String {
-        guard let task else {
-            return "taskID=\(taskID) task=nil"
-        }
-        return [
-            "taskID=\(task.id)",
-            "authorID=\(task.authorID)",
-            "author=\(task.author?.id ?? "nil")",
-            "assigneeID=\(task.assigneeID ?? "nil")",
-            "assignee=\(task.assignee?.id ?? "nil")",
-            "reviewers=\(task.reviewers.map(\.id).sorted())",
-            "watchers=\(task.watchers.map(\.id).sorted())",
-            "items=\(task.items.map(\.id).sorted())"
-        ].joined(separator: " ")
-    }
-
 }
 
 @MainActor

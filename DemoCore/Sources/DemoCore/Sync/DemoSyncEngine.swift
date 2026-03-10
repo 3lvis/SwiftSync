@@ -39,11 +39,9 @@ public final class DemoSyncEngine {
     }
 
     public func syncProjectTasks(projectID: String) async throws {
-        DemoDebugLog.emit("sync.projectTasks.call", "projectID=\(projectID) begin")
         try await runOperation("projectTasks-\(projectID)") {
             try await syncProjectTasksData(projectID: projectID)
         }
-        DemoDebugLog.emit("sync.projectTasks.call", "projectID=\(projectID) success")
     }
 
     public func syncTaskDetail(taskID: String) async throws {
@@ -104,10 +102,7 @@ public final class DemoSyncEngine {
 
     private func syncUsersData() async throws {
         let payload = try await apiClient.getUsers()
-        DemoDebugLog.emit("sync.users.payload", "users=\(payload.count)")
         try await syncContainer.sync(payload: payload, as: User.self)
-        let userRowsAfterSync = try localUserCount()
-        DemoDebugLog.emit("sync.users.after", "userRowsAfterSync=\(userRowsAfterSync)")
     }
 
     private func syncTaskStatesData() async throws {
@@ -118,10 +113,6 @@ public final class DemoSyncEngine {
     private func syncProjectTasksData(projectID: String) async throws {
         let payload = try await apiClient.getProjectTasks(projectID: projectID)
         let userRowsBeforeSync = try localUserCount()
-        DemoDebugLog.emit(
-            "sync.projectTasks.payload",
-            "projectID=\(projectID) tasks=\(payload.count) userRowsBeforeSync=\(userRowsBeforeSync)"
-        )
 
         if userRowsBeforeSync == 0 {
             try await syncUsersData()
@@ -139,19 +130,12 @@ public final class DemoSyncEngine {
             parent: project,
             relationship: \Task.project
         )
-        let snapshots = try taskSnapshots(inProjectID: projectID)
-        DemoDebugLog.emit(
-            "sync.projectTasks.after",
-            "projectID=\(projectID) taskSnapshots=\(snapshots)"
-        )
         try await syncProjectsData()
     }
 
     private func syncTaskDetailData(taskID: String) async throws {
         guard let payload = try await apiClient.getTaskDetail(taskID: taskID) else { return }
         let userRowsBeforeSync = try localUserCount()
-        let payloadSnapshot = taskPayloadSnapshot(payload, userRowsBeforeSync: userRowsBeforeSync)
-        DemoDebugLog.emit("sync.taskDetail.payload", payloadSnapshot)
 
         if userRowsBeforeSync == 0 {
             try await syncUsersData()
@@ -159,12 +143,6 @@ public final class DemoSyncEngine {
 
         try await syncTaskDetailItem(payload)
         try await syncItemsIfPresent(in: payload, taskID: taskID)
-        let localSnapshot = try taskSnapshot(taskID: taskID)
-        let userRowsAfterSync = try localUserCount()
-        DemoDebugLog.emit(
-            "sync.taskDetail.after",
-            "taskID=\(taskID) localSnapshot=\(localSnapshot) userRowsAfterSync=\(userRowsAfterSync)"
-        )
     }
 
     private func syncTaskDetailItem(_ payload: DemoSyncPayload) async throws {
@@ -195,15 +173,7 @@ public final class DemoSyncEngine {
             isSyncing = !inFlightOperations.isEmpty
         }
 
-        do {
-            try await operation()
-        } catch {
-            DemoDebugLog.emit(
-                "sync.operation.error",
-                "key=\(key) error=\((error as? LocalizedError)?.errorDescription ?? String(describing: error))"
-            )
-            throw error
-        }
+        try await operation()
     }
 
     private func project(withID projectID: String) throws -> Project? {
@@ -230,69 +200,5 @@ public final class DemoSyncEngine {
 
     private func localUserCount() throws -> Int {
         try syncContainer.mainContext.fetch(FetchDescriptor<User>()).count
-    }
-
-    private func taskSnapshots(inProjectID projectID: String) throws -> String {
-        let tasks = try syncContainer.mainContext.fetch(
-            FetchDescriptor<Task>(
-                predicate: #Predicate { $0.projectID == projectID },
-                sortBy: [SortDescriptor(\Task.updatedAt, order: .reverse), SortDescriptor(\Task.id)]
-            )
-        )
-        return tasks.map(taskDebugSummary).joined(separator: " | ")
-    }
-
-    private func taskSnapshot(taskID: String) throws -> String {
-        let tasks = try syncContainer.mainContext.fetch(
-            FetchDescriptor<Task>(predicate: #Predicate { $0.id == taskID })
-        )
-        guard let task = tasks.first else {
-            return "missing"
-        }
-        return taskDebugSummary(task)
-    }
-
-    private func taskDebugSummary(_ task: Task) -> String {
-        let reviewerIDs = task.reviewers.map(\.id).sorted().joined(separator: ",")
-        let watcherIDs = task.watchers.map(\.id).sorted().joined(separator: ",")
-        let itemIDs = task.items.map(\.id).sorted().joined(separator: ",")
-        return [
-            "id=\(task.id)",
-            "authorID=\(task.authorID)",
-            "author=\(task.author?.id ?? "nil")",
-            "assigneeID=\(task.assigneeID ?? "nil")",
-            "assignee=\(task.assignee?.id ?? "nil")",
-            "reviewers=[\(reviewerIDs)]",
-            "watchers=[\(watcherIDs)]",
-            "items=[\(itemIDs)]"
-        ].joined(separator: " ")
-    }
-
-    private func taskPayloadSnapshot(_ payload: DemoSyncPayload, userRowsBeforeSync: Int) -> String {
-        let taskID = payload.string("id") ?? "nil"
-        let projectID = payload.string("project_id") ?? "nil"
-        let authorID = payload.string("author_id") ?? "nil"
-        let assigneeID = payload.string("assignee_id") ?? "nil"
-        let reviewerIDs = stringArray(payload.values["reviewer_ids"])
-        let watcherIDs = stringArray(payload.values["watcher_ids"])
-        let itemCount = payload.objectArray("items")?.count ?? 0
-        return [
-            "taskID=\(taskID)",
-            "projectID=\(projectID)",
-            "authorID=\(authorID)",
-            "assigneeID=\(assigneeID)",
-            "reviewerIDs=\(reviewerIDs)",
-            "watcherIDs=\(watcherIDs)",
-            "itemCount=\(itemCount)",
-            "userRowsBeforeSync=\(userRowsBeforeSync)"
-        ].joined(separator: " ")
-    }
-
-    private func stringArray(_ value: DemoSyncValue?) -> [String] {
-        guard case let .array(items) = value else { return [] }
-        return items.compactMap { item in
-            guard case let .string(string) = item else { return nil }
-            return string
-        }
     }
 }
