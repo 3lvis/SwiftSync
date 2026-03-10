@@ -114,6 +114,47 @@ Optional selectors:
 - `SWIFTSYNC_BENCHMARK_RELATIONSHIP_COUNTS=1,10,50`
 - `SWIFTSYNC_BENCHMARK_SCOPE_SIZE=100`
 - `SWIFTSYNC_BENCHMARK_SAMPLES=3`
+- `SWIFTSYNC_BENCHMARK_PROFILE_PHASES=1`
+
+When phase profiling is enabled, each benchmark line also emits `phaseMedianMs=...` so you can see where the wall time is going before opening Instruments.
+
+## Instruments workflow
+
+You do not need an iOS app target to use Instruments here. `swift test` runs the benchmark suite as a macOS process, and Instruments can profile that process directly.
+
+Recommended command for the current headline scenario:
+
+```bash
+SWIFTSYNC_RUN_BENCHMARKS=1 \
+SWIFTSYNC_BENCHMARK_STORES=sqlite \
+SWIFTSYNC_BENCHMARK_TIERS=10000 \
+SWIFTSYNC_BENCHMARK_PROFILE_PHASES=1 \
+swift test --filter FetchStrategyBenchmarkTests/testDemoShapedScenarioBenchmarks
+```
+
+Recommended Instruments setup:
+
+- template: `Time Profiler`
+- enable: `Points of Interest`
+- profile the `swift test` process launched by the command above
+
+The library now emits `OSSignposter` intervals for the major hot-path phases, including:
+
+- `fetch-existing`
+- `filter-scope`
+- `build-index`
+- `find-existing`
+- `apply-fields`
+- `apply-relationships`
+- `relationship-fetch`
+- `delete-missing`
+- `save-context`
+- `export-fetch`
+- `export-filter-scope`
+- `export-sort`
+- `export-map`
+
+Use the benchmark output to identify which phase grows at `10k+`, then use Time Profiler inside that signposted interval to see the exact SwiftData or Swift standard library call stacks consuming the time.
 
 ## Rejected experiment
 

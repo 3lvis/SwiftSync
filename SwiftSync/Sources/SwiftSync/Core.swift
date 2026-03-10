@@ -155,7 +155,9 @@ final class SyncRelationshipLookupCache: @unchecked Sendable {
             return cached
         }
 
-        let fetched = try context.fetch(FetchDescriptor<Model>())
+        let fetched = try syncProfile("relationship-fetch") {
+            try context.fetch(FetchDescriptor<Model>())
+        }
         rowsByType[key] = fetched
         return fetched
     }
@@ -598,7 +600,9 @@ private func syncFetchRelatedRows<Model: PersistentModel>(
     if let cache = SyncRelationshipLookupState.current {
         return try cache.rows(for: modelType, in: context)
     }
-    return try context.fetch(FetchDescriptor<Model>())
+    return try syncProfile("relationship-fetch") {
+        try context.fetch(FetchDescriptor<Model>())
+    }
 }
 
 private func syncRelationshipLookupCacheAppend<Model: PersistentModel>(
