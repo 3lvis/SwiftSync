@@ -57,6 +57,23 @@ final class SyncableMacroDiagnosticsTests: XCTestCase {
                 public static var syncIdentity: KeyPath<Ticket, String> {
                     \\.id
                 }
+                public static func syncIdentityPredicate(matching identity: String) -> Predicate<Ticket>? {
+                    Predicate<Ticket> { row in
+                        PredicateExpressions.build_Equal(
+                            lhs: PredicateExpressions.build_KeyPath(
+                                root: row,
+                                keyPath: \\.id
+                            ),
+                            rhs: PredicateExpressions.build_Arg(identity)
+                        )
+                    }
+                }
+                public static func syncParentPredicate(
+                    parentPersistentID: PersistentIdentifier,
+                    relationship: PartialKeyPath<Ticket>
+                ) -> Predicate<Ticket>? {
+                    return nil
+                }
 
                 public static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] {
                     []

@@ -246,6 +246,56 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
         }
     }
 
+    func testParentScopedSingleItemSyncBenchmarks() async throws {
+        try requireBenchmarksEnabled()
+
+        for storeKind in environment.storeKinds {
+            for existingCount in environment.datasetTiers {
+                let scopeCount = min(environment.scopeSize, existingCount)
+                let result = try await measureRepeatedAsyncCase(
+                    name: "parent-scoped-single-item-sync",
+                    storeKind: storeKind,
+                    totalRows: existingCount,
+                    payloadRows: 1,
+                    scopeRows: scopeCount,
+                    relationRows: nil
+                ) {
+                    let fixture = try makeStoreFixture(storeKind: storeKind)
+                    defer { fixture.cleanup() }
+
+                    let container = try ModelContainer(
+                        for: BenchmarkProject.self,
+                        BenchmarkScopedTask.self,
+                        configurations: fixture.configuration
+                    )
+                    let context = ModelContext(container)
+
+                    let targetProject = try seedParentScopedTasks(
+                        totalTaskCount: existingCount,
+                        targetScopeCount: scopeCount,
+                        in: context
+                    )
+
+                    let payload: [String: Any] = [
+                        "id": 1,
+                        "title": "Scoped Item Updated"
+                    ]
+                    return try await measureDuration {
+                        try await SwiftSync.sync(
+                            item: payload,
+                            as: BenchmarkScopedTask.self,
+                            in: context,
+                            parent: targetProject,
+                            relationship: \BenchmarkScopedTask.project
+                        )
+                    }
+                }
+
+                emit(result)
+            }
+        }
+    }
+
     func testParentScopedBatchSyncBenchmarks() async throws {
         try requireBenchmarksEnabled()
 
@@ -635,7 +685,9 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
         guard environment.isEnabled else {
             throw XCTSkip(
                 "Set SWIFTSYNC_RUN_BENCHMARKS=1 to run fetch-strategy benchmarks. " +
-                "Optional: SWIFTSYNC_BENCHMARK_STORES=memory,sqlite SWIFTSYNC_BENCHMARK_TIERS=1000,10000,50000"
+                "Optional: SWIFTSYNC_BENCHMARK_STORES=memory,sqlite " +
+                "SWIFTSYNC_BENCHMARK_TIERS=1000,10000,50000 " +
+                "SWIFTSYNC_BENCHMARK_PROFILE_PHASES=1"
             )
         }
     }
@@ -795,12 +847,12 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
         relationRows: Int?,
         relationshipCount: Int? = nil,
         workload: String = "isolated",
-        operation: () throws -> Duration
+        operation: () throws -> BenchmarkMeasurement
     ) throws -> BenchmarkSummary {
-        var samples: [Duration] = []
-        samples.reserveCapacity(environment.sampleCount)
+        var measurements: [BenchmarkMeasurement] = []
+        measurements.reserveCapacity(environment.sampleCount)
         for _ in 0..<environment.sampleCount {
-            samples.append(try operation())
+            measurements.append(try operation())
         }
         return BenchmarkSummary(
             name: name,
@@ -811,7 +863,8 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
             relationRows: relationRows,
             relationshipCount: relationshipCount,
             workload: workload,
-            durations: samples
+            durations: measurements.map(\.duration),
+            phaseProfiles: BenchmarkPhaseProfile.build(from: measurements)
         )
     }
 
@@ -824,12 +877,12 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
         relationRows: Int?,
         relationshipCount: Int? = nil,
         workload: String = "isolated",
-        operation: @MainActor () async throws -> Duration
+        operation: @MainActor () async throws -> BenchmarkMeasurement
     ) async throws -> BenchmarkSummary {
-        var samples: [Duration] = []
-        samples.reserveCapacity(environment.sampleCount)
+        var measurements: [BenchmarkMeasurement] = []
+        measurements.reserveCapacity(environment.sampleCount)
         for _ in 0..<environment.sampleCount {
-            samples.append(try await operation())
+            measurements.append(try await operation())
         }
         return BenchmarkSummary(
             name: name,
@@ -840,26 +893,51 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
             relationRows: relationRows,
             relationshipCount: relationshipCount,
             workload: workload,
-            durations: samples
+            durations: measurements.map(\.duration),
+            phaseProfiles: BenchmarkPhaseProfile.build(from: measurements)
         )
     }
 
     private func measureDuration(
         operation: () throws -> Void
-    ) throws -> Duration {
+    ) throws -> BenchmarkMeasurement {
         let clock = ContinuousClock()
         let start = clock.now
+        if environment.phaseProfilingEnabled {
+            let (_, profile) = try SwiftSync.withPerformanceProfiling {
+                try operation()
+            }
+            return BenchmarkMeasurement(
+                duration: start.duration(to: clock.now),
+                phaseTotals: profile.totalsByPhase
+            )
+        }
         try operation()
-        return start.duration(to: clock.now)
+        return BenchmarkMeasurement(
+            duration: start.duration(to: clock.now),
+            phaseTotals: [:]
+        )
     }
 
     private func measureDuration(
         operation: @MainActor () async throws -> Void
-    ) async throws -> Duration {
+    ) async throws -> BenchmarkMeasurement {
         let clock = ContinuousClock()
         let start = clock.now
+        if environment.phaseProfilingEnabled {
+            let (_, profile) = try await SwiftSync.withMainActorPerformanceProfiling {
+                try await operation()
+            }
+            return BenchmarkMeasurement(
+                duration: start.duration(to: clock.now),
+                phaseTotals: profile.totalsByPhase
+            )
+        }
         try await operation()
-        return start.duration(to: clock.now)
+        return BenchmarkMeasurement(
+            duration: start.duration(to: clock.now),
+            phaseTotals: [:]
+        )
     }
 
     private func emit(_ result: BenchmarkSummary) {
@@ -884,16 +962,21 @@ private struct BenchmarkEnvironment {
     let relationshipCounts: [Int]
     let scopeSize: Int
     let sampleCount: Int
+    let phaseProfilingEnabled: Bool
 
     static var current: BenchmarkEnvironment {
-        let environment = ProcessInfo.processInfo.environment
+        from(ProcessInfo.processInfo.environment)
+    }
+
+    static func from(_ environment: [String: String]) -> BenchmarkEnvironment {
         return BenchmarkEnvironment(
             isEnabled: environment["SWIFTSYNC_RUN_BENCHMARKS"] == "1",
             storeKinds: parseStoreKinds(environment["SWIFTSYNC_BENCHMARK_STORES"]) ?? [.memory],
             datasetTiers: parseIntegers(environment["SWIFTSYNC_BENCHMARK_TIERS"]) ?? [1_000],
             relationshipCounts: parseIntegers(environment["SWIFTSYNC_BENCHMARK_RELATIONSHIP_COUNTS"]) ?? [1, 10, 50],
             scopeSize: parseIntegers(environment["SWIFTSYNC_BENCHMARK_SCOPE_SIZE"])?.first ?? 100,
-            sampleCount: max(1, parseIntegers(environment["SWIFTSYNC_BENCHMARK_SAMPLES"])?.first ?? 3)
+            sampleCount: max(1, parseIntegers(environment["SWIFTSYNC_BENCHMARK_SAMPLES"])?.first ?? 3),
+            phaseProfilingEnabled: environment["SWIFTSYNC_BENCHMARK_PROFILE_PHASES"] == "1"
         )
     }
 
@@ -924,6 +1007,7 @@ private struct BenchmarkSummary {
     let relationshipCount: Int?
     let workload: String
     let durations: [Duration]
+    let phaseProfiles: [BenchmarkPhaseProfile]
 
     var rendered: String {
         var parts: [String] = [
@@ -948,6 +1032,13 @@ private struct BenchmarkSummary {
         if let relationshipCount {
             parts.append("relationshipCount=\(relationshipCount)")
         }
+        if !phaseProfiles.isEmpty {
+            let medians = phaseProfiles
+                .sorted { $0.name < $1.name }
+                .map { "\($0.name):\($0.median.inMilliseconds)" }
+                .joined(separator: ",")
+            parts.append("phaseMedianMs=\(medians)")
+        }
         return parts.joined(separator: " ")
     }
 
@@ -964,7 +1055,37 @@ private struct BenchmarkSummary {
     }
 }
 
+private struct BenchmarkMeasurement {
+    let duration: Duration
+    let phaseTotals: [String: Duration]
+}
+
+private struct BenchmarkPhaseProfile {
+    let name: String
+    let durations: [Duration]
+
+    var median: Duration {
+        durations.sorted { $0.millisecondsValue < $1.millisecondsValue }[durations.count / 2]
+    }
+
+    static func build(from measurements: [BenchmarkMeasurement]) -> [BenchmarkPhaseProfile] {
+        var durationsByPhase: [String: [Duration]] = [:]
+        for measurement in measurements {
+            for (phase, duration) in measurement.phaseTotals {
+                durationsByPhase[phase, default: []].append(duration)
+            }
+        }
+        return durationsByPhase
+            .map { BenchmarkPhaseProfile(name: $0.key, durations: $0.value) }
+            .sorted { $0.name < $1.name }
+    }
+}
+
 private extension Duration {
+    static func milliseconds(_ value: Double) -> Duration {
+        .seconds(value / 1_000)
+    }
+
     var inMilliseconds: String {
         String(format: "%.3f", millisecondsValue)
     }
@@ -973,5 +1094,45 @@ private extension Duration {
         let components = self.components
         return Double(components.seconds) * 1_000
             + Double(components.attoseconds) / 1_000_000_000_000_000
+    }
+}
+
+final class BenchmarkProfilingSupportTests: XCTestCase {
+    func testEnvironmentParsesPhaseProfilingFlag() {
+        let environment = BenchmarkEnvironment.from(
+            [
+                "SWIFTSYNC_RUN_BENCHMARKS": "1",
+                "SWIFTSYNC_BENCHMARK_PROFILE_PHASES": "1"
+            ]
+        )
+
+        XCTAssertTrue(environment.isEnabled)
+        XCTAssertTrue(environment.phaseProfilingEnabled)
+    }
+
+    func testRenderedSummaryIncludesPhaseMedianBreakdown() {
+        let summary = BenchmarkSummary(
+            name: "demo-shaped-project-session",
+            storeKind: .sqlite,
+            totalRows: 10_000,
+            payloadRows: 102,
+            scopeRows: 100,
+            relationRows: 10_000,
+            relationshipCount: 10,
+            workload: "mixed",
+            durations: [.milliseconds(7000), .milliseconds(7100), .milliseconds(7200)],
+            phaseProfiles: [
+                BenchmarkPhaseProfile(
+                    name: "fetch-existing",
+                    durations: [.milliseconds(1000), .milliseconds(1100), .milliseconds(1200)]
+                ),
+                BenchmarkPhaseProfile(
+                    name: "apply-relationships",
+                    durations: [.milliseconds(3000), .milliseconds(3200), .milliseconds(3100)]
+                )
+            ]
+        )
+
+        XCTAssertTrue(summary.rendered.contains("phaseMedianMs=apply-relationships:3100.000,fetch-existing:1100.000"))
     }
 }

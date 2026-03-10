@@ -165,6 +165,64 @@ extension ExportChild: ParentScopedModel {
     static var parentRelationship: ReferenceWritableKeyPath<ExportChild, ExportParent?> { \.parent }
 }
 
+@Model
+final class ManualExportParent {
+    @Attribute(.unique) var id: Int
+    var name: String
+    var children: [ManualExportChild]
+
+    init(id: Int, name: String, children: [ManualExportChild] = []) {
+        self.id = id
+        self.name = name
+        self.children = children
+    }
+}
+
+@Model
+final class ManualExportChild {
+    @Attribute(.unique) var id: Int
+    var text: String
+    @Relationship(inverse: \ManualExportParent.children) var parent: ManualExportParent?
+
+    init(id: Int, text: String, parent: ManualExportParent? = nil) {
+        self.id = id
+        self.text = text
+        self.parent = parent
+    }
+}
+
+extension ManualExportChild: SyncUpdatableModel {
+    typealias SyncID = Int
+
+    static var syncIdentity: KeyPath<ManualExportChild, Int> { \.id }
+
+    static func make(from payload: SyncPayload) throws -> ManualExportChild {
+        ManualExportChild(
+            id: try payload.required(for: "id"),
+            text: try payload.required(for: "text")
+        )
+    }
+
+    func apply(_ payload: SyncPayload) throws -> Bool {
+        let nextText: String = try payload.required(for: "text")
+        guard text != nextText else { return false }
+        text = nextText
+        return true
+    }
+
+    func exportObject(keyStyle _: KeyStyle, dateFormatter _: DateFormatter) -> [String: Any] {
+        [
+            "id": id,
+            "text": text
+        ]
+    }
+}
+
+extension ManualExportChild: ParentScopedModel {
+    typealias SyncParent = ManualExportParent
+    static var parentRelationship: ReferenceWritableKeyPath<ManualExportChild, ManualExportParent?> { \.parent }
+}
+
 @Syncable
 @Model
 final class CycleNode {
@@ -450,6 +508,50 @@ final class ExportTests: XCTestCase {
         let rows = try syncContainer.export(as: ExportChild.self, parent: parentA)
         XCTAssertEqual(rows.count, 2)
         XCTAssertEqual(Set(rows.compactMap { $0["id"] as? Int }), Set([0, 1]))
+    }
+
+    @MainActor
+    func testExportParentScopedUsesParentTargetedFetchWhenPredicateExists() throws {
+        let syncContainer = try makeSyncContainer(for: ExportParent.self, ExportChild.self)
+        let context = syncContainer.mainContext
+        let parentA = ExportParent(id: 6, name: "A")
+        let parentB = ExportParent(id: 7, name: "B")
+        context.insert(parentA)
+        context.insert(parentB)
+        context.insert(ExportChild(id: 0, text: "a0", parent: parentA))
+        context.insert(ExportChild(id: 1, text: "a1", parent: parentA))
+        context.insert(ExportChild(id: 2, text: "b2", parent: parentB))
+        try context.save()
+
+        let (_, profile) = try SwiftSync.withPerformanceProfiling {
+            try syncContainer.export(as: ExportChild.self, parent: parentA)
+        }
+
+        XCTAssertNotNil(profile.totalsByPhase["export-fetch-by-parent"])
+        XCTAssertNil(profile.totalsByPhase["export-fetch"])
+        XCTAssertNil(profile.totalsByPhase["export-filter-scope"])
+    }
+
+    @MainActor
+    func testExportParentScopedFallsBackToTableFetchForManualConformerWithoutPredicate() throws {
+        let syncContainer = try makeSyncContainer(for: ManualExportParent.self, ManualExportChild.self)
+        let context = syncContainer.mainContext
+        let parentA = ManualExportParent(id: 6, name: "A")
+        let parentB = ManualExportParent(id: 7, name: "B")
+        context.insert(parentA)
+        context.insert(parentB)
+        context.insert(ManualExportChild(id: 0, text: "a0", parent: parentA))
+        context.insert(ManualExportChild(id: 1, text: "a1", parent: parentA))
+        context.insert(ManualExportChild(id: 2, text: "b2", parent: parentB))
+        try context.save()
+
+        let (_, profile) = try SwiftSync.withPerformanceProfiling {
+            try syncContainer.export(as: ManualExportChild.self, parent: parentA)
+        }
+
+        XCTAssertNotNil(profile.totalsByPhase["export-fetch"])
+        XCTAssertNotNil(profile.totalsByPhase["export-filter-scope"])
+        XCTAssertNil(profile.totalsByPhase["export-fetch-by-parent"])
     }
 
     @MainActor

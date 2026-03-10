@@ -812,6 +812,25 @@ final class StatusItem {
     }
 }
 
+@Syncable
+@Model
+final class MacroScopedNote {
+    @Attribute(.unique) var id: Int
+    var text: String
+    var folder: NoteFolder?
+
+    init(id: Int, text: String, folder: NoteFolder? = nil) {
+        self.id = id
+        self.text = text
+        self.folder = folder
+    }
+}
+
+extension MacroScopedNote: ParentScopedModel {
+    typealias SyncParent = NoteFolder
+    static var parentRelationship: ReferenceWritableKeyPath<MacroScopedNote, NoteFolder?> { \.folder }
+}
+
 @Model
 final class ScopedBucket {
     @Attribute(.unique) var id: Int
@@ -3325,6 +3344,214 @@ final class SyncTests: XCTestCase {
     }
 
     @MainActor
+    func testSyncItemUsesIdentityTargetedFetchWhenIdentityIsUnique() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: User.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "full_name": "One"],
+                ["id": 2, "full_name": "Two"]
+            ],
+            as: User.self,
+            in: context
+        )
+
+        let (_, profile) = try await SwiftSync.withMainActorPerformanceProfiling {
+            try await SwiftSync.sync(
+                item: ["id": 1, "full_name": "One Updated"],
+                as: User.self,
+                in: context
+            )
+        }
+
+        XCTAssertNotNil(profile.totalsByPhase["fetch-existing-by-identity"])
+        XCTAssertNil(profile.totalsByPhase["fetch-existing"])
+        XCTAssertNil(profile.totalsByPhase["find-existing"])
+    }
+
+    @MainActor
+    func testSyncItemFallsBackToTableFetchWhenIdentityIsNotUnique() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: LooseUser.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "full_name": "One"],
+                ["id": 2, "full_name": "Two"]
+            ],
+            as: LooseUser.self,
+            in: context
+        )
+
+        let (_, profile) = try await SwiftSync.withMainActorPerformanceProfiling {
+            try await SwiftSync.sync(
+                item: ["id": 1, "full_name": "One Updated"],
+                as: LooseUser.self,
+                in: context
+            )
+        }
+
+        XCTAssertNotNil(profile.totalsByPhase["fetch-existing"])
+        XCTAssertNotNil(profile.totalsByPhase["find-existing"])
+        XCTAssertNil(profile.totalsByPhase["fetch-existing-by-identity"])
+    }
+
+    @MainActor
+    func testSyncItemFallsBackToTableFetchForManualUniqueConformerWithoutPredicate() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: Team.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "name": "One"],
+                ["id": 2, "name": "Two"]
+            ],
+            as: Team.self,
+            in: context
+        )
+
+        let (_, profile) = try await SwiftSync.withMainActorPerformanceProfiling {
+            try await SwiftSync.sync(
+                item: ["id": 1, "name": "One Updated"],
+                as: Team.self,
+                in: context
+            )
+        }
+
+        XCTAssertNotNil(profile.totalsByPhase["fetch-existing"])
+        XCTAssertNotNil(profile.totalsByPhase["find-existing"])
+        XCTAssertNil(profile.totalsByPhase["fetch-existing-by-identity"])
+    }
+
+    @MainActor
+    func testRelationshipProfilingEmitsToOneAndToManyForeignKeyPhases() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: AutoCompany.self,
+            AutoEmployee.self,
+            AutoTag.self,
+            AutoTask.self,
+            configurations: configuration
+        )
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [["id": 10, "name": "Acme"]],
+            as: AutoCompany.self,
+            in: context
+        )
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "name": "Tag 1"],
+                ["id": 2, "name": "Tag 2"]
+            ],
+            as: AutoTag.self,
+            in: context
+        )
+
+        let (_, toOneProfile) = try await SwiftSync.withMainActorPerformanceProfiling {
+            try await SwiftSync.sync(
+                item: ["id": 1, "name": "Ava", "company_id": 10],
+                as: AutoEmployee.self,
+                in: context
+            )
+        }
+
+        XCTAssertNotNil(toOneProfile.totalsByPhase["relationship-apply-to-one-foreign-key"])
+
+        let (_, toManyProfile) = try await SwiftSync.withMainActorPerformanceProfiling {
+            try await SwiftSync.sync(
+                item: ["id": 10, "title": "Task 10", "tag_ids": [1, 2]],
+                as: AutoTask.self,
+                in: context
+            )
+        }
+
+        XCTAssertNotNil(toManyProfile.totalsByPhase["relationship-apply-to-many-foreign-keys"])
+    }
+
+    @MainActor
+    func testParentScopedBatchSyncUsesParentTargetedFetchWhenPredicateExists() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: NoteFolder.self, MacroScopedNote.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let folder = NoteFolder(id: 1, name: "Folder")
+        context.insert(folder)
+        try context.save()
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "text": "First"],
+                ["id": 2, "text": "Second"]
+            ],
+            as: MacroScopedNote.self,
+            in: context,
+            parent: folder,
+            relationship: \MacroScopedNote.folder
+        )
+
+        let (_, profile) = try await SwiftSync.withMainActorPerformanceProfiling {
+            try await SwiftSync.sync(
+                payload: [
+                    ["id": 1, "text": "First Updated"],
+                    ["id": 2, "text": "Second Updated"]
+                ],
+                as: MacroScopedNote.self,
+                in: context,
+                parent: folder,
+                relationship: \MacroScopedNote.folder
+            )
+        }
+
+        XCTAssertNotNil(profile.totalsByPhase["fetch-existing-by-parent"])
+        XCTAssertNil(profile.totalsByPhase["fetch-existing"])
+        XCTAssertNil(profile.totalsByPhase["filter-scope"])
+    }
+
+    @MainActor
+    func testParentScopedBatchSyncFallsBackToTableFetchForManualConformerWithoutPredicate() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: SuperUser.self, SuperNote.self, configurations: configuration)
+        let context = ModelContext(container)
+        let parent = SuperUser(id: 10, name: "Parent")
+        context.insert(parent)
+        try context.save()
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "text": "First"],
+                ["id": 2, "text": "Second"]
+            ],
+            as: SuperNote.self,
+            in: context,
+            parent: parent,
+            relationship: \SuperNote.superUser
+        )
+
+        let (_, profile) = try await SwiftSync.withMainActorPerformanceProfiling {
+            try await SwiftSync.sync(
+                payload: [
+                    ["id": 1, "text": "First Updated"],
+                    ["id": 2, "text": "Second Updated"]
+                ],
+                as: SuperNote.self,
+                in: context,
+                parent: parent,
+                relationship: \SuperNote.superUser
+            )
+        }
+
+        XCTAssertNotNil(profile.totalsByPhase["fetch-existing"])
+        XCTAssertNotNil(profile.totalsByPhase["filter-scope"])
+        XCTAssertNil(profile.totalsByPhase["fetch-existing-by-parent"])
+    }
+
+    @MainActor
     func testSyncItemWithParentUpdatesExistingRowWithoutDeletingOthers() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: SuperUser.self, SuperNote.self, configurations: configuration)
@@ -3360,6 +3587,78 @@ final class SyncTests: XCTestCase {
     }
 
     @MainActor
+    func testSyncItemWithParentUsesIdentityTargetedFetchWhenIdentityIsUnique() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: NoteFolder.self, MacroScopedNote.self, configurations: configuration)
+        let context = ModelContext(container)
+        let folder = NoteFolder(id: 1, name: "Folder")
+        context.insert(folder)
+        try context.save()
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "text": "First"],
+                ["id": 2, "text": "Second"]
+            ],
+            as: MacroScopedNote.self,
+            in: context,
+            parent: folder,
+            relationship: \MacroScopedNote.folder
+        )
+
+        let (_, profile) = try await SwiftSync.withMainActorPerformanceProfiling {
+            try await SwiftSync.sync(
+                item: ["id": 1, "text": "First Updated"],
+                as: MacroScopedNote.self,
+                in: context,
+                parent: folder,
+                relationship: \MacroScopedNote.folder
+            )
+        }
+
+        XCTAssertNotNil(profile.totalsByPhase["fetch-existing-by-identity"])
+        XCTAssertNil(profile.totalsByPhase["fetch-existing"])
+        XCTAssertNil(profile.totalsByPhase["filter-scope"])
+        XCTAssertNil(profile.totalsByPhase["find-existing"])
+    }
+
+    @MainActor
+    func testSyncItemWithParentFallsBackToTableFetchForManualConformerWithoutPredicate() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: SuperUser.self, SuperNote.self, configurations: configuration)
+        let context = ModelContext(container)
+        let parent = SuperUser(id: 10, name: "Parent")
+        context.insert(parent)
+        try context.save()
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "text": "First"],
+                ["id": 2, "text": "Second"]
+            ],
+            as: SuperNote.self,
+            in: context,
+            parent: parent,
+            relationship: \SuperNote.superUser
+        )
+
+        let (_, profile) = try await SwiftSync.withMainActorPerformanceProfiling {
+            try await SwiftSync.sync(
+                item: ["id": 1, "text": "First Updated"],
+                as: SuperNote.self,
+                in: context,
+                parent: parent,
+                relationship: \SuperNote.superUser
+            )
+        }
+
+        XCTAssertNotNil(profile.totalsByPhase["fetch-existing"])
+        XCTAssertNotNil(profile.totalsByPhase["filter-scope"])
+        XCTAssertNotNil(profile.totalsByPhase["find-existing"])
+        XCTAssertNil(profile.totalsByPhase["fetch-existing-by-identity"])
+    }
+
+    @MainActor
     func testSyncItemWithParentInsertsNewRowWhenNotFound() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: SuperUser.self, SuperNote.self, configurations: configuration)
@@ -3389,6 +3688,40 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(notes.count, 2)
         XCTAssertNotNil(notes.first(where: { $0.id == 1 }))
         XCTAssertNotNil(notes.first(where: { $0.id == 2 }))
+    }
+
+    @MainActor
+    func testSyncItemWithParentGlobalIdentityMovesRowAcrossParents() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: NoteFolder.self, UniqueIDNote.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        let folderA = NoteFolder(id: 1, name: "A")
+        let folderB = NoteFolder(id: 2, name: "B")
+        context.insert(folderA)
+        context.insert(folderB)
+        try context.save()
+
+        try await SwiftSync.sync(
+            item: ["id": 10, "text": "original"],
+            as: UniqueIDNote.self,
+            in: context,
+            parent: folderA,
+            relationship: \UniqueIDNote.folder
+        )
+
+        try await SwiftSync.sync(
+            item: ["id": 10, "text": "moved"],
+            as: UniqueIDNote.self,
+            in: context,
+            parent: folderB,
+            relationship: \UniqueIDNote.folder
+        )
+
+        let all = try context.fetch(FetchDescriptor<UniqueIDNote>())
+        XCTAssertEqual(all.count, 1)
+        XCTAssertEqual(all.first?.text, "moved")
+        XCTAssertEqual(all.first?.folder?.id, 2)
     }
 
 
