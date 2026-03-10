@@ -167,20 +167,17 @@ public final class TaskDetailMachine {
     public private(set) var items: [Item] = []
 
     private let taskID: String
-    private let syncContainer: SyncContainer
     private let syncEngine: DemoSyncEngine
-    private let taskPublisher: SyncQueryPublisher<Task>
+    private let taskPublisher: SyncModelPublisher<Task>
     private let itemPublisher: SyncQueryPublisher<Item>
     private let loadMachine: ScreenLoadMachine
-    nonisolated(unsafe) private var saveObserver: NSObjectProtocol?
     public init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.taskID = taskID
-        self.syncContainer = syncContainer
         self.syncEngine = syncEngine
-        self.taskPublisher = SyncQueryPublisher(
+        self.taskPublisher = SyncModelPublisher(
             Task.self,
+            id: taskID,
             in: syncContainer,
-            sortBy: [SortDescriptor(\Task.updatedAt, order: .reverse), SortDescriptor(\Task.id)]
         )
         self.itemPublisher = SyncQueryPublisher(
             Item.self,
@@ -194,7 +191,7 @@ public final class TaskDetailMachine {
         }
 
         observeContinuously {
-            self.task = self.taskPublisher.rows.first(where: { $0.id == self.taskID })
+            self.task = self.taskPublisher.row
             DemoDebugLog.emit(
                 "taskDetail.publisher.task",
                 self.debugTaskSnapshot(self.task)
@@ -209,25 +206,6 @@ public final class TaskDetailMachine {
         }
         observeContinuously {
             self.loadState = self.loadMachine.state
-        }
-        saveObserver = NotificationCenter.default.addObserver(
-            forName: ModelContext.didSave,
-            object: nil,
-            queue: nil
-        ) { [weak self] notification in
-            guard let self else { return }
-            guard let sourceContext = notification.object as? ModelContext else { return }
-            guard sourceContext.container == self.syncContainer.modelContainer else { return }
-            guard sourceContext !== self.syncContainer.mainContext else { return }
-            _Concurrency.Task { @MainActor [weak self] in
-                self?.refreshSnapshotFromMainContext()
-            }
-        }
-    }
-
-    deinit {
-        if let saveObserver {
-            NotificationCenter.default.removeObserver(saveObserver)
         }
     }
 
@@ -252,23 +230,6 @@ public final class TaskDetailMachine {
             "watchers=\(task.watchers.map(\.id).sorted())",
             "items=\(task.items.map(\.id).sorted())"
         ].joined(separator: " ")
-    }
-
-    private func refreshSnapshotFromMainContext() {
-        let taskID = self.taskID
-        let taskDescriptor = FetchDescriptor<Task>(predicate: #Predicate { $0.id == taskID })
-        self.task = (try? self.syncContainer.mainContext.fetch(taskDescriptor))?.first
-
-        let itemDescriptor = FetchDescriptor<Item>(
-            predicate: #Predicate { $0.taskID == taskID },
-            sortBy: [SortDescriptor(\Item.position, order: .forward), SortDescriptor(\Item.id, order: .forward)]
-        )
-        self.items = (try? self.syncContainer.mainContext.fetch(itemDescriptor)) ?? []
-
-        DemoDebugLog.emit(
-            "taskDetail.refresh.mainContext",
-            "\(self.debugTaskSnapshot(self.task)) items=\(self.items.map(\.id).sorted())"
-        )
     }
 
 }
