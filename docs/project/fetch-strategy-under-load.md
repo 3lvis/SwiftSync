@@ -66,6 +66,15 @@ SQLite baseline findings across `1k`, `10k`, and `50k` rows showed:
 
 Repeated SQLite runs at `10k` and `50k` kept median and max relatively close, which means the slowdown pattern looks structural rather than noisy.
 
+After phase profiling was added, the first retained follow-up optimization targeted the single-item path only.
+
+On the verified `memory + 1k + 1 sample` benchmark:
+
+- before: about `14.298 ms`, dominated by `fetch-existing: 11.870 ms`
+- after: about `1.898 ms`, with `fetch-existing-by-identity: 0.774 ms`
+
+That change matters because it confirmed the instrumentation was pointing at a real bottleneck, not just noise: when the full-table fetch was replaced by an identity-targeted fetch, the single-item path dropped by about `87%` in the measured run.
+
 The main conclusion is straightforward:
 
 - SwiftSync is much faster now on realistic relationship-heavy workloads than it was before optimization
@@ -141,6 +150,7 @@ Recommended Instruments setup:
 The library now emits `OSSignposter` intervals for the major hot-path phases, including:
 
 - `fetch-existing`
+- `fetch-existing-by-identity`
 - `filter-scope`
 - `build-index`
 - `find-existing`
@@ -200,6 +210,24 @@ These trials matter because they narrow the remaining space:
 - the obvious internal fetch-narrowing variants have now either been blocked by SwiftData or measured as low-yield
 - the retained performance story is still the relationship-cache improvement, not a broader table-scaling fix
 
+## Retained macro-enabled optimization
+
+The first retained fetch-narrowing win after instrumentation was intentionally narrow:
+
+- optimize `sync(item:as:in:)` for models whose sync identity is globally unique
+- keep the old full-table fallback for non-unique identities and hand-written conformances without an explicit predicate hook
+
+The implementation detail that made this possible is important:
+
+- the generic SwiftData predicate shape using `row[keyPath: ...]` is still blocked in the general case
+- but macro-generated models can synthesize a concrete identity predicate because the macro knows the literal identity property at expansion time
+
+That changes the optimization strategy going forward:
+
+- macro-backed specialization is now a practical tool, not something to avoid
+- broader generic predicate shaping is still constrained by SwiftData
+- parent-scoped and export fast paths may need the same style of model-generated hook or narrowly specialized API surface
+
 ## Current status
 
 The honest status on this branch is:
@@ -212,6 +240,7 @@ That means the next meaningful gain likely requires one of:
 
 - broader API or model changes that make scoped predicates expressible
 - a much narrower specialized fast path tied to `ParentScopedModel.parentRelationship`
+- or more macro-generated concrete predicate hooks for paths where the generic form is blocked
 - or accepting the current operating envelope as the product boundary and documenting it clearly
 
 ## Next likely wins
