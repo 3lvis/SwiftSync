@@ -1197,3 +1197,14 @@ public enum SyncError: Error, Sendable, Equatable {
     case invalidPayload(model: String, reason: String)
     case cancelled
 }
+
+extension SyncError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .invalidPayload(let model, let reason):
+            return "Invalid payload for \(model): \(reason)"
+        case .cancelled:
+            return "Sync was cancelled."
+        }
+    }
+}

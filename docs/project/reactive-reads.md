@@ -172,11 +172,12 @@ UI should refresh from the local store, not directly from the backend response p
 
 The key invariant is stable: views read local reactive state; the domain layer keeps that local state current.
 
-## UIKit: SyncQueryPublisher
+## UIKit / State Machines
 
-For UIKit screens, use `SyncQueryPublisher` when `@SyncQuery` is not available.
+For non-SwiftUI consumers, SwiftSync exposes Observation-based publishers:
 
-It is Observation-based and exposes a reactive `rows` property.
+- `SyncQueryPublisher` for lists via reactive `rows`
+- `SyncModelPublisher` for a single row via reactive `row`
 
 ```swift
 import Observation
@@ -205,11 +206,29 @@ final class ProjectsViewController: UIViewController {
 }
 ```
 
-It supports the same query shapes as `@SyncQuery`:
+Single-row detail/state-machine example:
+
+```swift
+final class TaskDetailMachine {
+    private let taskPublisher: SyncModelPublisher<Task>
+
+    init(taskID: String, syncContainer: SyncContainer) {
+        self.taskPublisher = SyncModelPublisher(
+            Task.self,
+            id: taskID,
+            in: syncContainer
+        )
+    }
+}
+```
+
+`SyncQueryPublisher` supports the same query shapes as `@SyncQuery`:
 - plain fetch with optional predicate
 - `relationship:` + `relationshipID:` for relationship-scoped queries
 
-It reacts to the same internal save notifications as `@SyncQuery` and reloads from the local store after sync-driven save notifications.
+`SyncModelPublisher` matches the single-row contract of `@SyncModel`: observe one row by sync identity and rebind when that row changes.
+
+Both publishers react to the same internal save notifications as `@SyncQuery` / `@SyncModel` and reload from the local store after relevant sync-driven save notifications.
 
 Hold it as a property — it starts observing on init and stops on deinit.
 

@@ -45,16 +45,21 @@ private final class SyncQueryObserver<Model: PersistentModel> {
             forName: SyncContainer.didSaveChangesNotification,
             object: syncContainer,
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] notification in
             guard let self else { return }
+            let changedModelTypeNames = syncQueryChangedModelTypeNames(from: notification.userInfo)
+            let changedIDs = syncQueryChangedIdentifiers(from: notification.userInfo)
             MainActor.assumeIsolated {
+                guard self.shouldReload(changedModelTypeNames: changedModelTypeNames, changedIDs: changedIDs) else { return }
                 self.reload()
             }
         }
     }
 
-    private func shouldReload(for notification: Notification) -> Bool {
-        let changedModelTypeNames = syncQueryChangedModelTypeNames(from: notification.userInfo)
+    private func shouldReload(
+        changedModelTypeNames: Set<String>,
+        changedIDs: Set<PersistentIdentifier>
+    ) -> Bool {
         if changedModelTypeNames.isEmpty {
             return true
         }
@@ -63,7 +68,6 @@ private final class SyncQueryObserver<Model: PersistentModel> {
             return true
         }
 
-        let changedIDs = syncQueryChangedIdentifiers(from: notification.userInfo)
         if changedIDs.isEmpty {
             return false
         }
@@ -364,16 +368,21 @@ private final class SyncModelObserver<Model: PersistentModel & SyncModelable> {
             forName: SyncContainer.didSaveChangesNotification,
             object: syncContainer,
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] notification in
             guard let self else { return }
+            let changedTypeNames = syncQueryChangedModelTypeNames(from: notification.userInfo)
+            let changedIDs = syncQueryChangedIdentifiers(from: notification.userInfo)
             MainActor.assumeIsolated {
+                guard self.shouldReload(changedTypeNames: changedTypeNames, changedIDs: changedIDs) else { return }
                 self.reload()
             }
         }
     }
 
-    private func shouldReload(for notification: Notification) -> Bool {
-        let changedTypeNames = syncQueryChangedModelTypeNames(from: notification.userInfo)
+    private func shouldReload(
+        changedTypeNames: Set<String>,
+        changedIDs: Set<PersistentIdentifier>
+    ) -> Bool {
         if changedTypeNames.isEmpty {
             return true
         }
@@ -382,7 +391,6 @@ private final class SyncModelObserver<Model: PersistentModel & SyncModelable> {
         }
 
         guard let loadedModel = model else { return false }
-        let changedIDs = syncQueryChangedIdentifiers(from: notification.userInfo)
         return changedIDs.contains(loadedModel.persistentModelID)
     }
 

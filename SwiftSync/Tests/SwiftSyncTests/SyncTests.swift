@@ -1349,6 +1349,18 @@ final class SyncTests: XCTestCase {
         }
     }
 
+    private struct SendableCommentPayload: SyncPayloadConvertible {
+        let id: Int
+        let text: String
+
+        func toSyncPayloadDictionary() -> [String: Any] {
+            [
+                "id": id,
+                "text": text
+            ]
+        }
+    }
+
     func testApplyReturnsFalseWhenPayloadMatchesExistingValues() throws {
         let user = User(id: 1, fullName: "Ava Swift")
         let payload = SyncPayload(values: ["id": 1, "full_name": "Ava Swift"])
@@ -3218,6 +3230,46 @@ final class SyncTests: XCTestCase {
         let rows = try syncContainer.mainContext.fetch(FetchDescriptor<InferredComment>())
         XCTAssertEqual(Set(rows.filter { $0.task?.id == 1 }.map(\.id)), Set([1]))
         XCTAssertEqual(Set(rows.filter { $0.task?.id == 2 }.map(\.id)), Set([3]))
+    }
+
+    @MainActor
+    func testSyncContainerParentScopedPayloadConvertibleSyncsRows() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let syncContainer = try SyncContainer(for: InferredTask.self, InferredComment.self, configurations: configuration)
+
+        let taskA = InferredTask(id: 1, title: "A")
+        let taskB = InferredTask(id: 2, title: "B")
+        syncContainer.mainContext.insert(taskA)
+        syncContainer.mainContext.insert(taskB)
+        try syncContainer.mainContext.save()
+
+        try await syncContainer.sync(
+            payload: [
+                SendableCommentPayload(id: 1, text: "A-1"),
+                SendableCommentPayload(id: 2, text: "A-2")
+            ],
+            as: InferredComment.self,
+            parent: taskA,
+            relationship: \InferredComment.task
+        )
+        try await syncContainer.sync(
+            item: SendableCommentPayload(id: 3, text: "B-3"),
+            as: InferredComment.self,
+            parent: taskB,
+            relationship: \InferredComment.task
+        )
+
+        let rows = try syncContainer.mainContext.fetch(FetchDescriptor<InferredComment>())
+        XCTAssertEqual(Set(rows.filter { $0.task?.id == 1 }.map(\.id)), Set([1, 2]))
+        XCTAssertEqual(Set(rows.filter { $0.task?.id == 2 }.map(\.id)), Set([3]))
+    }
+
+    func testSyncErrorInvalidPayloadHasReadableLocalizedDescription() {
+        let error = SyncError.invalidPayload(model: "Task", reason: "Expected array of dictionaries")
+        XCTAssertEqual(
+            error.localizedDescription,
+            "Invalid payload for Task: Expected array of dictionaries"
+        )
     }
 
     @MainActor

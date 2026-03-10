@@ -193,9 +193,12 @@ Keep using `predicate` when relationship-scoped `relationship/relationshipID` is
 - non-parent filters (for example `assigneeID == userID`)
 - compound business filters (for example status + date window + membership)
 
-### UIKit (SyncQueryPublisher)
+### UIKit / State Machines
 
-SwiftUI is first class. `SyncQueryPublisher` exists for UIKit screens where `@SyncQuery` is not available. It is Observation-based and exposes a reactive `rows` property.
+SwiftUI is first class. For non-SwiftUI consumers:
+
+- use `SyncQueryPublisher` for reactive lists
+- use `SyncModelPublisher` for a single reactive row by sync ID
 
 ```swift
 import Observation
@@ -236,7 +239,19 @@ let publisher = SyncQueryPublisher(
 )
 ```
 
-`SyncQueryPublisher` reloads automatically after every sync, using the same internal mechanism as `@SyncQuery`.
+Single-row variant:
+
+```swift
+let publisher = SyncModelPublisher(
+  Task.self,
+  id: taskID,
+  in: syncContainer
+)
+```
+
+Observe `publisher.row` the same way you would observe `publisher.rows`.
+
+Both publishers reload automatically after relevant sync-driven saves, using the same internal invalidation mechanism as `@SyncQuery` / `@SyncModel`.
 
 ## Scenario -> Way of Use
 
