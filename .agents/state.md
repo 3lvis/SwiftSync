@@ -17,11 +17,16 @@
 - [x] Add focused coverage for the sequential-sync coherence risk while exploring delete-planning changes.
 - [x] Implement and measure a minimal-properties fetch variant for delete planning.
 - [x] Remove the minimal-properties fetch variant after it regressed the headline benchmark.
-- [~] Shift the Milestone 3 plan to a different delete-planning experiment without full row materialization.
+- [x] Shift the Milestone 3 plan to a different delete-planning experiment without full row materialization.
+- [x] Probe an identifier-first delete-planning path using `PersistentIdentifier` plus targeted model rehydration.
+- [x] Re-use the focused sync coverage while measuring the identifier-first delete-planning spike.
+- [x] Implement and measure the identifier-first delete-planning spike.
+- [x] Remove the identifier-first delete-planning spike after it regressed the headline benchmark.
+- [~] Decide whether any high-reward internal optimization remains without broader API or SwiftData predicate changes.
 
 ## Last known state
 
-Scoped parent-fetch optimization is compiler-blocked because SwiftData rejects `row[keyPath: ...]` inside `#Predicate`. The context-local target-row cache was measured and removed as low-yield, and the minimal-properties fetch variant for delete planning was also rejected after regressing the headline benchmark to about `719 ms` at `sqlite + 1k` and `7379 ms` at `sqlite + 10k`. Focused parent/sync tests are green on the cleaned-up code.
+Scoped parent-fetch optimization is compiler-blocked because SwiftData rejects `row[keyPath: ...]` inside `#Predicate`. The context-local target-row cache was measured and removed as low-yield, the minimal-properties fetch variant for delete planning regressed to about `719 ms` at `sqlite + 1k` and `7379 ms` at `sqlite + 10k`, and the identifier-first rehydration variant also regressed to about `736 ms` at `sqlite + 1k` and `7174 ms` at `sqlite + 10k`. Focused parent/sync tests are green on the cleaned-up code.
 
 ## Decisions (don't revisit)
 
@@ -33,6 +38,7 @@ Scoped parent-fetch optimization is compiler-blocked because SwiftData rejects `
 - The target-row cache is not worth keeping as a retained optimization because the headline `10k` gain is only about `4.4%`.
 - The delete-planning pass should stay behavior-preserving and target only the data needed to decide deletions before touching broader sync structure.
 - The `propertiesToFetch` fetch-shaping variant is not worth revisiting for delete planning because it regressed the headline benchmark at both `1k` and `10k`.
+- The identifier-first rehydration variant is not worth revisiting for delete planning because it still regressed the headline benchmark at both `1k` and `10k`.
 
 ## Files touched
 
