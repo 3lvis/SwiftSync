@@ -5,7 +5,7 @@
 - [ ] Run the optimized `sqlite + 10k` demo-shaped benchmark under Instruments Time Profiler with Points of Interest and record the hottest SwiftData and Swift call stacks inside `relationship-fetch`
 - [ ] Re-run the optimized demo-shaped benchmark with multiple samples to confirm the retained relationship win is stable and not a single-run outlier
 - [ ] Compare `memory` vs `sqlite` phase output at `1k`, `10k`, and `50k` for the remaining broad global paths to separate SwiftData table-scan cost from persistence cost
-- [ ] Document the current product boundary if relationship application remains the dominant `10k+` cost after the next retained optimization
+- [ ] Document the current product boundary now that the demo-shaped `10k` path is around `803 ms` but broader global paths still have visible `save-context` and materialization costs
 
 ## Current bottlenecks
 

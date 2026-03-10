@@ -15,7 +15,7 @@ It focuses on the current retained performance story, not every implementation i
 For the current library code on this branch, the strongest benchmark signal is still the demo-shaped SQLite scenario:
 
 - `sqlite + 1k` total rows: about `713 ms` median
-- `sqlite + 10k` total rows: about `5029 ms` median in the latest profiled run
+- `sqlite + 10k` total rows: about `803 ms` in the latest profiled run
 
 That scenario simulates a realistic app session:
 
@@ -38,12 +38,12 @@ Before that optimization, the same demo-shaped scenario measured:
 After the optimization, the current retained numbers are:
 
 - `sqlite + 1k`: about `713 ms`
-- `sqlite + 10k`: about `5029 ms` in the latest profiled run
+- `sqlite + 10k`: about `803 ms` in the latest profiled run
 
 That is the important story:
 
 - a realistic `1k` session moved from multi-second to sub-second
-- a realistic `10k` session moved from nearly `50s` to about `5.0s`
+- a realistic `10k` session moved from nearly `50s` to about `0.8s`
 
 This is the performance work that actually stayed in the library because it produced a large, user-visible gain.
 
@@ -119,7 +119,7 @@ That confirmation changes the remaining bottleneck picture:
 The main conclusion is straightforward:
 
 - SwiftSync is much faster now on realistic relationship-heavy workloads than it was before optimization
-- the remaining bottlenecks are now tied to relationship application in realistic workloads, plus save/materialization cost in broader global paths after fetch narrowing
+- the remaining bottlenecks are now tied to relationship fetch plus foreign-key application inside realistic workloads, plus save/materialization cost in broader global paths after fetch narrowing
 
 ## What this means for adopters
 
@@ -137,7 +137,7 @@ Today, the benchmark story is weaker for:
 So the honest external message right now is:
 
 - SwiftSync is no longer in the "realistic workload is catastrophically slow" state
-- SwiftSync is still not ready for a strong "large production cache" performance claim at `10k+`
+- SwiftSync now has a credible realistic-workload story at `10k`, but it is still not ready for a broad "large production cache" performance claim across all paths
 
 ## Benchmark harness
 
@@ -215,7 +215,7 @@ For the retained scoped wins, the next Instruments targets should no longer be b
 - `export-map` inside parent-scoped export
 - whichever phase dominates the still-broad global batch and demo-shaped SQLite scenarios
 
-The broader SQLite confirmation now makes the next target explicit.
+The broader SQLite confirmation made the relationship target explicit before the latest retained optimization.
 
 On verified `sqlite + 10k + 1 sample` broader workloads:
 
@@ -224,9 +224,9 @@ On verified `sqlite + 10k + 1 sample` broader workloads:
 - `demo-shaped-project-session`: about `5029.438 ms`
   with `apply-relationships: 4883.392 ms`, `relationship-fetch: 512.707 ms`, and `save-context: 73.667 ms`
 
-That means:
+At that point, that meant:
 
-- the realistic product bottleneck is now `apply-relationships`, not fetch
+- the realistic product bottleneck was `apply-relationships`, not fetch
 - `save-context` is still large in isolated global batch sync, but it is not the next optimization target
 - the next retained performance work should go one level deeper inside relationship application and find which specific helper or relationship mode is consuming the `4.8s`
 
@@ -327,7 +327,7 @@ The honest status on this branch is:
 - SwiftSync now also has retained fetch-narrowing wins for single-item sync and parent-scoped batch sync on macro-backed models
 - SwiftSync still has structural costs in larger SQLite-backed global paths and demo-shaped workloads
 - the optimized scoped paths now point at second-order costs such as `save-context` and `export-map`
-- the realistic demo-shaped workload is no longer dominated by `apply-relationships`; the remaining work is more evenly split across relationship fetch, save, export mapping, and global batch costs
+- the realistic demo-shaped workload is no longer dominated by repeated relationship dictionary rebuilds; the remaining work is more evenly split across relationship fetch, foreign-key application, save, export mapping, and global batch costs
 - the most obvious internal Milestone 3 follow-ups have now been tried and rejected
 
 That means the next meaningful gain likely requires one of:
