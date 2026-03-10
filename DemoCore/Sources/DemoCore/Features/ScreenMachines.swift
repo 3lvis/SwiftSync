@@ -166,9 +166,17 @@ public final class TaskDetailMachine {
 
         observeContinuously {
             self.task = self.taskPublisher.rows.first(where: { $0.id == self.taskID })
+            DemoDebugLog.emit(
+                "taskDetail.publisher.task",
+                self.debugTaskSnapshot(self.task)
+            )
         }
         observeContinuously {
             self.items = self.itemPublisher.rows
+            DemoDebugLog.emit(
+                "taskDetail.publisher.items",
+                "taskID=\(self.taskID) items=\(self.items.map(\.id).sorted())"
+            )
         }
         observeContinuously {
             self.loadState = self.loadMachine.state
@@ -176,9 +184,26 @@ public final class TaskDetailMachine {
     }
 
     public func send(_ event: ScreenLoadEvent) {
+        DemoDebugLog.emit("taskDetail.event", "taskID=\(taskID) event=\(String(describing: event))")
         loadMachine.send(event, run: { [syncEngine, taskID] in
             try await syncEngine.syncTaskDetail(taskID: taskID)
         })
+    }
+
+    private func debugTaskSnapshot(_ task: Task?) -> String {
+        guard let task else {
+            return "taskID=\(taskID) task=nil"
+        }
+        return [
+            "taskID=\(task.id)",
+            "authorID=\(task.authorID)",
+            "author=\(task.author?.id ?? "nil")",
+            "assigneeID=\(task.assigneeID ?? "nil")",
+            "assignee=\(task.assignee?.id ?? "nil")",
+            "reviewers=\(task.reviewers.map(\.id).sorted())",
+            "watchers=\(task.watchers.map(\.id).sorted())",
+            "items=\(task.items.map(\.id).sorted())"
+        ].joined(separator: " ")
     }
 
 }
