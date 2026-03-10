@@ -2,47 +2,21 @@
 
 ## Plan
 
-- [x] Rewrite `docs/planning/fetch-strategy-under-load.md` so it starts with one concrete Milestone 3 experiment instead of a generic option list.
-- [x] Align the planning doc's open items with the docs/planning format and the retained benchmark findings.
-- [x] Review the rewritten planning doc for consistency with `docs/project/fetch-strategy-under-load.md`.
-- [x] Trace the current parent-scoped authoritative sync path and identify where it expands from scope-local work into full-table reconciliation.
-- [x] Record the scoped-sync findings in the planning doc as the implementation starting point.
-- [x] Decide whether the first Milestone 3 step should stay docs-only or move into code.
-- [x] Add a regression test covering sequential sync coherence in the same `ModelContext`.
-- [x] Add a context-local target-row cache for repeated syncs in the same `ModelContext`.
-- [x] Re-run the headline scenario at reduced tiers and decide whether the target-row cache is worth pursuing at `10k`.
-- [x] Remove the low-yield target-row cache after measuring it.
-- [x] Shift the Milestone 3 plan to delete planning without full row materialization.
-- [x] Trace the authoritative batch sync delete path and identify the minimum data it needs before deletion.
-- [x] Add focused coverage for the sequential-sync coherence risk while exploring delete-planning changes.
-- [x] Implement and measure a minimal-properties fetch variant for delete planning.
-- [x] Remove the minimal-properties fetch variant after it regressed the headline benchmark.
-- [x] Shift the Milestone 3 plan to a different delete-planning experiment without full row materialization.
-- [x] Probe an identifier-first delete-planning path using `PersistentIdentifier` plus targeted model rehydration.
-- [x] Re-use the focused sync coverage while measuring the identifier-first delete-planning spike.
-- [x] Implement and measure the identifier-first delete-planning spike.
-- [x] Remove the identifier-first delete-planning spike after it regressed the headline benchmark.
-- [~] Decide whether any high-reward internal optimization remains without broader API or SwiftData predicate changes.
+- [x] Consolidate the tried Milestone 3 attempts and current status into `docs/project/fetch-strategy-under-load.md`.
+- [x] Remove `docs/planning/fetch-strategy-under-load.md` after the project doc carries the full status.
+- [x] Verify the branch state reflects the docs consolidation cleanly.
 
 ## Last known state
 
-Scoped parent-fetch optimization is compiler-blocked because SwiftData rejects `row[keyPath: ...]` inside `#Predicate`. The context-local target-row cache was measured and removed as low-yield, the minimal-properties fetch variant for delete planning regressed to about `719 ms` at `sqlite + 1k` and `7379 ms` at `sqlite + 10k`, and the identifier-first rehydration variant also regressed to about `736 ms` at `sqlite + 1k` and `7174 ms` at `sqlite + 10k`. Focused parent/sync tests are green on the cleaned-up code.
+Project doc now records the blocked scope-first path, the rejected low-yield follow-ups, and the current performance status. The redundant planning doc has been removed and the branch is in a restart-safe docs-only state.
 
 ## Decisions (don't revisit)
 
-- This task starts in docs only; no library behavior change is planned in this pass.
-- The planning doc should choose a concrete starting experiment, not preserve every previously considered option at equal weight.
-- The first implementation-oriented step is to map the existing scoped sync path precisely before attempting any optimization.
-- Any scope-first implementation must account for the mismatch between `ParentScopedModel.parentRelationship` and the generic sync APIs that accept arbitrary parent relationship key paths.
-- The scope-first parent-fetch experiment is blocked for now because SwiftData predicates do not support `subscript(keyPath:)` in the required generic form.
-- The target-row cache is not worth keeping as a retained optimization because the headline `10k` gain is only about `4.4%`.
-- The delete-planning pass should stay behavior-preserving and target only the data needed to decide deletions before touching broader sync structure.
-- The `propertiesToFetch` fetch-shaping variant is not worth revisiting for delete planning because it regressed the headline benchmark at both `1k` and `10k`.
-- The identifier-first rehydration variant is not worth revisiting for delete planning because it still regressed the headline benchmark at both `1k` and `10k`.
+- The project doc should be the single source of truth for the retained fetch-strategy status and rejected attempts.
+- The planning doc is now redundant and should be removed rather than kept as stale parallel documentation.
 
 ## Files touched
 
 - .agents/state.md
+- docs/project/fetch-strategy-under-load.md
 - docs/planning/fetch-strategy-under-load.md
-- SwiftSync/Sources/SwiftSync/API.swift
-- SwiftSync/Tests/SwiftSyncTests/SyncTests.swift
