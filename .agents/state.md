@@ -2,14 +2,13 @@
 
 ## Plan
 
-- [x] Record the before-change baseline for parent-scoped export with phase profiling
-- [x] Add tests that pin the parent-scoped export fast path for macro-backed models and fallback behavior for manual conformers
-- [x] Implement a parent-targeted fetch path for parent-scoped export using the macro-generated concrete parent predicate
-- [x] Run focused tests, `swift test --filter SyncTests`, and the same parent-scoped export benchmark command to verify the before/after delta
+- [x] Re-run the retained `single-item sync`, `parent-scoped batch sync`, and `parent-scoped export` benchmarks on `sqlite + 10k` with phase profiling
+- [x] Compare the resulting phase breakdowns and identify the dominant remaining bottleneck under SQLite
+- [x] Update the project and planning docs with the SQLite confirmation results and the next recommended experiment
 
 ## Last known state
 
-parent-scoped export fast path retained and verified: baseline `32.289 ms` (`export-fetch: 16.154 ms`, `export-filter-scope: 3.253 ms`, `export-map: 8.750 ms`, `export-sort: 2.978 ms`) -> after `14.229 ms` (`export-fetch-by-parent: 2.062 ms`, `export-map: 8.333 ms`, `export-sort: 3.469 ms`); `swift test --filter ExportTests` and `swift test --filter SyncTests` are green
+SQLite confirmation complete at `10k + 1 sample`: `single-item-sync` `13.765 ms` (`fetch-existing-by-identity: 1.797 ms`), `parent-scoped-batch-sync` `16.458 ms` (`save-context: 6.648 ms`, `fetch-existing-by-parent: 2.333 ms`), `export-parent-scope` `14.510 ms` (`export-map: 8.293 ms`, `export-fetch-by-parent: 2.677 ms`); docs updated, next likely target is the still-broad global or demo-shaped SQLite path rather than more scoped fetch narrowing
 
 ## Decisions (don't revisit)
 
@@ -19,6 +18,7 @@ parent-scoped export fast path retained and verified: baseline `32.289 ms` (`exp
 - Parent-scoped single-item optimization should follow global-identity semantics: if identity is unique, the row can be fetched by identity and moved across parents
 - Parent-scoped batch optimization should fetch the current scope via a macro-generated parent predicate and only use identity-targeted fallback fetches for payload rows missing from that scope
 - Parent-scoped export should use the same macro-generated parent predicate strategy as the retained batch optimization and keep the fetch-all fallback for manual conformers without the synthesized predicate hook
+- Performance follow-ups must capture the same benchmark command before and after any optimization; this SQLite pass is measurement-only and should not change code until the dominant post-optimization bottleneck is clear
 
 ## Files touched
 

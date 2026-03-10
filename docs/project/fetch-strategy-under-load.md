@@ -99,10 +99,27 @@ That change mattered for two reasons:
 - it cut the measured parent-scoped export path by about `56%`
 - it removed the retained `export-fetch` plus `export-filter-scope` pattern for macro-backed parent-scoped models
 
+Those wins also hold under SQLite-backed `10k` runs, which is the more important confirmation for real app caches.
+
+On verified `sqlite + 10k + 1 sample` runs:
+
+- `single-item-sync`: about `13.765 ms`
+  with `fetch-existing-by-identity: 1.797 ms` and `save-context: 0.759 ms`
+- `parent-scoped-batch-sync`: about `16.458 ms`
+  with `fetch-existing-by-parent: 2.333 ms` and `save-context: 6.648 ms`
+- `export-parent-scope`: about `14.510 ms`
+  with `export-fetch-by-parent: 2.677 ms`, `export-map: 8.293 ms`, and `export-sort: 3.134 ms`
+
+That confirmation changes the remaining bottleneck picture:
+
+- the retained scoped fetch narrowing still matters under SQLite
+- parent-scoped batch sync is no longer dominated by broad fetch cost; `save-context` is now heavier
+- parent-scoped export is no longer dominated by broad fetch cost; object mapping and sort now outweigh the scoped fetch
+
 The main conclusion is straightforward:
 
 - SwiftSync is much faster now on realistic relationship-heavy workloads than it was before optimization
-- the remaining bottlenecks are still tied to table-wide work in larger SQLite-backed scenarios, remaining global paths, and relationship/materialization cost after fetch narrowing
+- the remaining bottlenecks are now tied to larger SQLite-backed global paths, save/materialization cost after fetch narrowing, and export object construction
 
 ## What this means for adopters
 
@@ -192,6 +209,12 @@ The library now emits `OSSignposter` intervals for the major hot-path phases, in
 
 Use the benchmark output to identify which phase grows at `10k+`, then use Time Profiler inside that signposted interval to see the exact SwiftData or Swift standard library call stacks consuming the time.
 
+For the retained scoped wins, the next Instruments targets should no longer be broad fetches:
+
+- `save-context` inside parent-scoped batch sync
+- `export-map` inside parent-scoped export
+- whichever phase dominates the still-broad global batch and demo-shaped SQLite scenarios
+
 ## Rejected experiment
 
 One follow-up experiment added model-provided identity and scoped fetch-descriptor hooks.
@@ -262,7 +285,8 @@ The honest status on this branch is:
 
 - SwiftSync has a strong retained improvement for realistic relationship-heavy workloads because of the sync-pass-local relationship lookup cache
 - SwiftSync now also has retained fetch-narrowing wins for single-item sync and parent-scoped batch sync on macro-backed models
-- SwiftSync still has structural table-wide costs in larger SQLite-backed scenarios and unfocused global paths
+- SwiftSync still has structural table-wide costs in larger SQLite-backed global paths and demo-shaped workloads
+- the optimized scoped paths now point at second-order costs such as `save-context` and `export-map`
 - the most obvious internal Milestone 3 follow-ups have now been tried and rejected
 
 That means the next meaningful gain likely requires one of:
