@@ -56,6 +56,7 @@ struct TaskFormSheet: View {
     var body: some View {
         NavigationStack {
             Form { content }
+            .accessibilityIdentifier("task-form")
             .environment(\.editMode, $itemEditMode)
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -98,12 +99,14 @@ extension TaskFormSheet {
     var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
             Button("Cancel") { dismiss() }
+                .accessibilityIdentifier("task-form.cancel")
                 .disabled(machine.saveState == .submitting)
         }
         ToolbarItem(placement: .topBarTrailing) {
             Button(action: save) {
                 saveButtonLabel
             }
+            .accessibilityIdentifier("task-form.save")
             .disabled(isSaveDisabled)
         }
     }
@@ -205,6 +208,7 @@ extension TaskFormSheet {
         Section("Title") {
             TextEditor(text: $draft.title)
                 .frame(minHeight: 60)
+                .accessibilityIdentifier("task-form.title")
         }
     }
 
@@ -212,6 +216,7 @@ extension TaskFormSheet {
         Section("Description") {
             TextEditor(text: $draft.descriptionText)
                 .frame(minHeight: 120)
+                .accessibilityIdentifier("task-form.description")
         }
     }
 
@@ -222,12 +227,14 @@ extension TaskFormSheet {
             HStack(spacing: 8) {
                 TextField("Add item...", text: $newItemTitle)
                     .textInputAutocapitalization(.sentences)
+                    .accessibilityIdentifier("task-form.items.new-title")
 
                 Button("Add") {
                     if machine.mutateItems(.add(title: newItemTitle), in: draft) {
                         newItemTitle = ""
                     }
                 }
+                .accessibilityIdentifier("task-form.items.add")
                 .disabled(newItemTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 
@@ -237,15 +244,17 @@ extension TaskFormSheet {
                         itemEditMode = itemEditMode == .active ? .inactive : .active
                     }
                 }
+                .accessibilityIdentifier("task-form.items.reorder-toggle")
             }
 
             if items.isEmpty {
                 Text("No items")
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(items, id: \.id) { item in
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                     HStack(spacing: 10) {
                         TextField("Item title", text: itemTitleBinding(for: item))
+                            .accessibilityIdentifier("task-form.items.\(index).title")
 
                         Spacer(minLength: 4)
 
@@ -254,6 +263,7 @@ extension TaskFormSheet {
                         } label: {
                             Image(systemName: "trash")
                         }
+                        .accessibilityIdentifier("task-form.items.\(index).delete")
                         .buttonStyle(.borderless)
                     }
                 }
@@ -285,6 +295,7 @@ extension TaskFormSheet {
                             }
                         }
                     }
+                    .accessibilityIdentifier("task-form.state.\(option.id)")
                 }
             case .unavailable:
                 LabeledContent("State") {
@@ -313,6 +324,7 @@ extension TaskFormSheet {
                         }
                     }
                 }
+                .accessibilityIdentifier("task-form.assignee.unassigned")
                 ForEach(machine.users, id: \.id) { user in
                     Button {
                         draft.assigneeID = user.id
@@ -325,6 +337,7 @@ extension TaskFormSheet {
                             }
                         }
                     }
+                    .accessibilityIdentifier("task-form.assignee.\(user.id)")
                 }
             case .unavailable:
                 Text("Unavailable")
@@ -353,6 +366,7 @@ extension TaskFormSheet {
                             }
                         }
                     }
+                    .accessibilityIdentifier("task-form.author.\(user.id)")
                 }
             case .unavailable:
                 Text("Unavailable")
@@ -385,6 +399,7 @@ extension TaskFormSheet {
                             }
                         }
                     }
+                    .accessibilityIdentifier("task-form.reviewer.\(user.id)")
                 }
             case .unavailable:
                 Text("Unavailable")
@@ -417,6 +432,7 @@ extension TaskFormSheet {
                             }
                         }
                     }
+                    .accessibilityIdentifier("task-form.watcher.\(user.id)")
                 }
             case .unavailable:
                 Text("Unavailable")

@@ -2,13 +2,18 @@
 
 ## Plan
 
-- [x] Move the UI automation journey plan into `DemoUITests.swift` as the source of truth
-- [x] Reduce the planning doc to a pointer so it does not compete with the test file
-- [x] Re-run the relevant UI tests and update `.agents/state.md`
+- [x] Add the four real journey tests for title edit, create, item edits, and people edits
+- [x] Add only the accessibility hooks needed to drive those journeys reliably
+- [x] Run the focused UI tests and required Demo app build, then update `.agents/state.md`
 
 ## Last known state
 
-`xcodebuild -project Demo/Demo.xcodeproj -scheme Demo -destination 'platform=iOS Simulator,id=E8A7A5EE-68F6-4C30-952A-B75DF308E8D3' test -only-testing:DemoUITests/DemoUITests/testLaunchFetchesAndShowsSeededProjects -only-testing:DemoUITests/DemoUITests/testProjectAndTaskDetailShowSeededContent` passed after moving the roadmap into `DemoUITests.swift`
+Focused UI tests passed:
+- `xcodebuild -project Demo/Demo.xcodeproj -scheme Demo -destination 'platform=iOS Simulator,id=E8A7A5EE-68F6-4C30-952A-B75DF308E8D3' test -only-testing:DemoUITests/DemoUITests/testCreateTaskInsideProject`
+- `xcodebuild -project Demo/Demo.xcodeproj -scheme Demo -destination 'platform=iOS Simulator,id=E8A7A5EE-68F6-4C30-952A-B75DF308E8D3' test -only-testing:DemoUITests/DemoUITests/testUpdateTaskTitleKeepsProjectAndDetailInSync`
+- `xcodebuild -project Demo/Demo.xcodeproj -scheme Demo -destination 'platform=iOS Simulator,id=E8A7A5EE-68F6-4C30-952A-B75DF308E8D3' test -only-testing:DemoUITests/DemoUITests/testEditTaskItemsFlow`
+- `xcodebuild -project Demo/Demo.xcodeproj -scheme Demo -destination 'platform=iOS Simulator,id=E8A7A5EE-68F6-4C30-952A-B75DF308E8D3' test -only-testing:DemoUITests/DemoUITests/testEditTaskPeopleFlow`
+- `xcodebuild -project Demo/Demo.xcodeproj -scheme Demo -destination 'platform=iOS Simulator,id=E8A7A5EE-68F6-4C30-952A-B75DF308E8D3' build`
 
 ## Decisions (don't revisit)
 
@@ -22,6 +27,7 @@
 - The next planning layer should be user journeys, not screen permutations
 - UI tests should map to user goals, not checkpoints like "screen opened successfully"
 - `DemoUITests.swift` should be the active planning source for UI automation journeys
+- Targeted per-journey UI test runs are more actionable than one large run while the suite is still being stabilized
 
 ## Files touched
 
@@ -34,3 +40,4 @@
 - docs/planning/demo-ui-integration-automation.md
 - Demo/Demo/Features/Projects/ProjectView.swift
 - Demo/Demo/Features/TaskDetail/TaskView.swift
+- Demo/Demo/Features/TaskForm/TaskFormSheet.swift

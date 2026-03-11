@@ -67,6 +67,7 @@ extension TaskView {
             Button("Edit") {
                 showingEditSheet = true
             }
+            .accessibilityIdentifier("task.edit")
             .disabled(machine.task == nil)
         }
     }

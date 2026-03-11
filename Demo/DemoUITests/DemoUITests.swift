@@ -28,6 +28,13 @@ private enum DemoUITestPlan {
      */
 }
 
+private enum DemoSeedUserID {
+    static let noahKim = "C3E7A1B2-2001-0000-0000-000000000002"
+    static let miaPatel = "C3E7A1B2-2001-0000-0000-000000000003"
+    static let sofiaGarcia = "C3E7A1B2-2001-0000-0000-000000000005"
+    static let ethanLee = "C3E7A1B2-2001-0000-0000-000000000006"
+}
+
 final class DemoUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -54,37 +61,108 @@ final class DemoUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Draft implementation plan"].exists)
     }
 
-    // TODO: User journey: update an existing task title and verify list/detail coherence.
-    // Purpose:
-    // - prove an edit survives save through the sync layer
-    // - prove task detail and project list stay coherent after the write
-    //
-    // @MainActor
-    // func testUpdateTaskTitleKeepsProjectAndDetailInSync() throws {}
+    @MainActor
+    func testUpdateTaskTitleKeepsProjectAndDetailInSync() throws {
+        let app = configuredApp()
+        let updatedTitle = uniqueTitle(prefix: "UI Title Update")
 
-    // TODO: User journey: create a task inside an existing project.
-    // Purpose:
-    // - prove parent-scoped creation works through the sync layer
-    // - prove required form state and post-save query refresh
-    //
-    // @MainActor
-    // func testCreateTaskInsideProject() throws {}
+        app.launch()
+        openTaskDetail(
+            app,
+            projectTitle: "Account Security Controls",
+            taskTitle: "Add session timeout controls to account settings"
+        )
 
-    // TODO: User journey: evolve a richer task through checklist item edits.
-    // Purpose:
-    // - prove add/update/delete/reorder item behavior in a realistic edit flow
-    // - prove the saved task detail reflects the edited item set and order
-    //
-    // @MainActor
-    // func testEditTaskItemsFlow() throws {}
+        openEditTaskForm(app)
 
-    // TODO: User journey: evolve a richer task through people relationship edits.
-    // Purpose:
-    // - prove assignee, reviewer, and watcher changes persist through save
-    // - prove task detail reflects updated relationships after sync
-    //
-    // @MainActor
-    // func testEditTaskPeopleFlow() throws {}
+        replaceText(in: app.textViews["task-form.title"], with: updatedTitle, app: app)
+        app.buttons["task-form.save"].tap()
+
+        XCTAssertTrue(app.staticTexts["task.title"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["task.title"].label, updatedTitle)
+
+        goBack(app)
+        XCTAssertTrue(app.staticTexts[updatedTitle].waitForExistence(timeout: 10))
+    }
+
+    @MainActor
+    func testCreateTaskInsideProject() throws {
+        let app = configuredApp()
+        let createdTitle = uniqueTitle(prefix: "UI Created Task")
+
+        app.launch()
+        openProject(app, title: "Account Security Controls")
+
+        openCreateTaskForm(app)
+
+        let saveButton = app.buttons["task-form.save"]
+        XCTAssertFalse(saveButton.isEnabled)
+
+        replaceText(in: app.textViews["task-form.title"], with: createdTitle, app: app)
+        XCTAssertTrue(waitUntilEnabled(saveButton))
+        saveButton.tap()
+
+        XCTAssertTrue(app.staticTexts[createdTitle].waitForExistence(timeout: 10))
+        app.staticTexts[createdTitle].tap()
+
+        XCTAssertTrue(app.staticTexts["task.title"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["task.title"].label, createdTitle)
+    }
+
+    @MainActor
+    func testEditTaskItemsFlow() throws {
+        let app = configuredApp()
+        let addedItemTitle = uniqueTitle(prefix: "UI Added Item")
+        let renamedItemTitle = "Relaunch flow after timeout"
+        let deletedItemTitle = "Offline to online recovery"
+
+        app.launch()
+        openTaskDetail(
+            app,
+            projectTitle: "Account Security Controls",
+            taskTitle: "Write QA item list for forced re-auth scenarios"
+        )
+
+        openEditTaskForm(app)
+
+        replaceText(in: app.textFields["task-form.items.new-title"], with: addedItemTitle, app: app)
+        app.buttons["task-form.items.add"].tap()
+
+        replaceText(in: app.textFields["task-form.items.0.title"], with: renamedItemTitle, app: app)
+        app.buttons["task-form.items.1.delete"].tap()
+        app.buttons["task-form.save"].tap()
+
+        XCTAssertTrue(app.staticTexts[renamedItemTitle].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts[addedItemTitle].exists)
+        XCTAssertFalse(app.staticTexts[deletedItemTitle].exists)
+    }
+
+    @MainActor
+    func testEditTaskPeopleFlow() throws {
+        let app = configuredApp()
+
+        app.launch()
+        openTaskDetail(
+            app,
+            projectTitle: "Team Notifications Reliability",
+            taskTitle: "Fix duplicate push preference sync after reconnect"
+        )
+
+        openEditTaskForm(app)
+
+        tapAfterScrolling(app.buttons["task-form.assignee.\(DemoSeedUserID.miaPatel)"], in: app)
+        tapAfterScrolling(app.buttons["task-form.reviewer.\(DemoSeedUserID.noahKim)"], in: app)
+        tapAfterScrolling(app.buttons["task-form.reviewer.\(DemoSeedUserID.sofiaGarcia)"], in: app)
+        tapAfterScrolling(app.buttons["task-form.watcher.\(DemoSeedUserID.ethanLee)"], in: app)
+        tapAfterScrolling(app.buttons["task-form.watcher.\(DemoSeedUserID.sofiaGarcia)"], in: app)
+        app.buttons["task-form.save"].tap()
+
+        XCTAssertTrue(app.staticTexts["task.assignee"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["task.assignee"].label, "Mia Patel")
+        XCTAssertTrue(app.staticTexts["Sofia Garcia"].exists)
+        XCTAssertFalse(app.staticTexts["Noah Kim"].exists)
+        XCTAssertFalse(app.staticTexts["Ethan Lee"].exists)
+    }
 
     // TODO: User journey: remove work safely.
     // Purpose:
@@ -193,5 +271,77 @@ private extension DemoUITests {
         app.launchEnvironment["SWIFTSYNC_UI_TEST_RUN_ID"] = UUID().uuidString
         app.launchEnvironment["SWIFTSYNC_DEMO_SCENARIO"] = "fastStable"
         return app
+    }
+
+    func uniqueTitle(prefix: String) -> String {
+        "\(prefix) \(UUID().uuidString.prefix(6))"
+    }
+
+    func openProject(_ app: XCUIApplication, title: String) {
+        XCTAssertTrue(app.staticTexts[title].waitForExistence(timeout: 10))
+        app.staticTexts[title].tap()
+    }
+
+    func openTaskDetail(_ app: XCUIApplication, projectTitle: String, taskTitle: String) {
+        openProject(app, title: projectTitle)
+        XCTAssertTrue(app.staticTexts[taskTitle].waitForExistence(timeout: 10))
+        app.staticTexts[taskTitle].tap()
+        XCTAssertTrue(app.staticTexts["task.title"].waitForExistence(timeout: 10))
+    }
+
+    func goBack(_ app: XCUIApplication) {
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+    }
+
+    func openCreateTaskForm(_ app: XCUIApplication) {
+        app.buttons["New Task"].tap()
+        XCTAssertTrue(app.buttons["task-form.save"].waitForExistence(timeout: 10))
+    }
+
+    func openEditTaskForm(_ app: XCUIApplication) {
+        app.buttons["Edit"].tap()
+        XCTAssertTrue(app.buttons["task-form.save"].waitForExistence(timeout: 10))
+    }
+
+    func waitUntilEnabled(_ element: XCUIElement, timeout: TimeInterval = 10) -> Bool {
+        let predicate = NSPredicate(format: "enabled == true")
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    func tapAfterScrolling(_ element: XCUIElement, in app: XCUIApplication, maxSwipes: Int = 6) {
+        for _ in 0..<maxSwipes where !element.isHittable {
+            if app.tables.firstMatch.exists {
+                app.tables.firstMatch.swipeUp()
+            } else if app.scrollViews.firstMatch.exists {
+                app.scrollViews.firstMatch.swipeUp()
+            } else if app.otherElements["task-form"].exists {
+                app.otherElements["task-form"].swipeUp()
+            } else {
+                app.swipeUp()
+            }
+        }
+        XCTAssertTrue(element.exists)
+        element.tap()
+    }
+
+    func replaceText(in element: XCUIElement, with text: String, app: XCUIApplication) {
+        XCTAssertTrue(element.waitForExistence(timeout: 10))
+        element.tap()
+
+        if let currentValue = element.value as? String, !currentValue.isEmpty {
+            element.press(forDuration: 1.0)
+
+            if app.menuItems["Select All"].waitForExistence(timeout: 2) {
+                app.menuItems["Select All"].tap()
+            } else if app.buttons["Select All"].waitForExistence(timeout: 2) {
+                app.buttons["Select All"].tap()
+            } else {
+                let deleteString = String(repeating: XCUIKeyboardKey.delete.rawValue, count: currentValue.count)
+                element.typeText(deleteString)
+            }
+        }
+
+        element.typeText(text)
     }
 }
