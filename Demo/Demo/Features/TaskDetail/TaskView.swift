@@ -23,6 +23,7 @@ struct TaskView: View {
 
     var body: some View {
         List { content }
+        .accessibilityIdentifier("task.detail")
         .navigationTitle("Task")
         .toolbar { toolbarContent }
         .task { machine.send(.onAppear) }
@@ -112,6 +113,7 @@ extension TaskView {
                     Text(taskModel.title)
                         .font(.title2)
                         .fontWeight(.bold)
+                        .accessibilityIdentifier("task.title")
                     HStack(spacing: 8) {
                         Text(taskModel.stateLabel)
                             .font(.caption)
@@ -129,6 +131,7 @@ extension TaskView {
                             .background(Color(.systemGray5))
                             .foregroundStyle(.secondary)
                             .clipShape(Capsule())
+                            .accessibilityIdentifier("task.author")
                     }
                 }
                 .padding(.vertical, 4)
@@ -145,6 +148,7 @@ extension TaskView {
             Section("Description") {
                 Text(taskModel.descriptionText)
                     .font(.body)
+                    .accessibilityIdentifier("task.description")
             }
         }
     }
@@ -172,6 +176,7 @@ extension TaskView {
             Section("Assignee") {
                 Text(taskModel.assignee?.displayName ?? "Unassigned")
                     .foregroundStyle(taskModel.assignee == nil ? .secondary : .primary)
+                    .accessibilityIdentifier("task.assignee")
             }
 
             Section("Reviewers") {

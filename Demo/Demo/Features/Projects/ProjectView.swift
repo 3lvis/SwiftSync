@@ -24,6 +24,7 @@ struct ProjectView: View {
     var body: some View {
         List { content }
         .listStyle(.plain)
+        .accessibilityIdentifier("project.detail")
         .navigationTitle("Project")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
@@ -78,6 +79,7 @@ struct ProjectView: View {
             } label: {
                 Label("New Task", systemImage: "plus")
             }
+            .accessibilityIdentifier("project.new-task")
         }
     }
 
@@ -189,6 +191,7 @@ struct ProjectView: View {
                             }
                         }
                     }
+                    .accessibilityIdentifier("project.task.\(task.id)")
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button {
                             taskPendingDelete = TaskDeletePrompt(id: task.id, title: task.title)
