@@ -18,11 +18,15 @@ public final class DemoRuntime {
     private let apiClient: FakeDemoAPIClient
 
     public init() {
-        self.scenario = .fastStable
-        self.apiClient = FakeDemoAPIClient(scenario: .fastStable)
+        let launchConfiguration = LaunchConfiguration.current()
+        self.scenario = launchConfiguration.scenario
+        self.apiClient = FakeDemoAPIClient(
+            scenario: launchConfiguration.scenario,
+            seedData: launchConfiguration.seedData
+        )
 
         do {
-            self.syncContainer = try Self.makeSyncContainer()
+            self.syncContainer = try Self.makeSyncContainer(storeURL: launchConfiguration.storeURL)
         } catch {
             fatalError(Self.formattedSyncContainerInitializationError(error))
         }
@@ -30,8 +34,8 @@ public final class DemoRuntime {
         self.syncEngine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
     }
 
-    private static func makeSyncContainer() throws -> SyncContainer {
-        let configuration = ModelConfiguration(url: localStoreURL())
+    private static func makeSyncContainer(storeURL: URL) throws -> SyncContainer {
+        let configuration = ModelConfiguration(url: storeURL)
         return try SyncContainer(
             for: Project.self,
             User.self,
@@ -43,7 +47,7 @@ public final class DemoRuntime {
         )
     }
 
-    private static func localStoreURL() -> URL {
+    nonisolated private static func localStoreURL() -> URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         return appSupport
@@ -54,5 +58,38 @@ public final class DemoRuntime {
     private static func formattedSyncContainerInitializationError(_ error: Error) -> String {
         let detail = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
         return "Failed to initialize SyncContainer.\n\(detail)"
+    }
+}
+
+private extension DemoRuntime {
+    struct LaunchConfiguration {
+        let scenario: DemoNetworkScenario
+        let seedData: DemoSeedData?
+        let storeURL: URL
+
+        static func current() -> LaunchConfiguration {
+            let environment = ProcessInfo.processInfo.environment
+            let scenario = DemoNetworkScenario(rawValue: environment["SWIFTSYNC_DEMO_SCENARIO"] ?? "") ?? .fastStable
+
+            guard environment["SWIFTSYNC_UI_TESTING"] == "1" else {
+                return LaunchConfiguration(
+                    scenario: scenario,
+                    seedData: nil,
+                    storeURL: DemoRuntime.localStoreURL()
+                )
+            }
+
+            let runID = environment["SWIFTSYNC_UI_TEST_RUN_ID"] ?? UUID().uuidString
+            let storeURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("SwiftSyncDemoUITests", isDirectory: true)
+                .appendingPathComponent(runID, isDirectory: true)
+                .appendingPathComponent("client-cache.store")
+
+            return LaunchConfiguration(
+                scenario: scenario,
+                seedData: DemoSeedData.generate(),
+                storeURL: storeURL
+            )
+        }
     }
 }

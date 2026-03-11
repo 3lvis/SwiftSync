@@ -37,6 +37,7 @@ final class ProjectsViewController: UITableViewController {
             config.secondaryTextProperties.color = .secondaryLabel
             cell.contentConfiguration = config
             cell.accessoryType = .disclosureIndicator
+            cell.accessibilityIdentifier = "projects.row.\(projectID)"
             return cell
         }
         source.defaultRowAnimation = .fade
@@ -58,6 +59,8 @@ final class ProjectsViewController: UITableViewController {
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "ProjectCell")
         tableView.dataSource = diffableDataSource
         tableView.backgroundView = statusContainer
+        tableView.accessibilityIdentifier = "projects.table"
+        statusLabel.accessibilityIdentifier = "projects.status"
 
         observeContinuously { [weak self] in
             guard let self else { return }
