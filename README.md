@@ -1,5 +1,7 @@
 # SwiftSync
 
+![SwiftSync](Images/logo-v3.png)
+
 SwiftSync is a sync layer for SwiftData apps with JSON backends.
 
 It is the SwiftData-era successor to the old Core Data library `Sync`.
@@ -15,6 +17,20 @@ The promise is simple:
 - your app reads from local SwiftData
 - your backend speaks normal JSON
 - SwiftSync handles the repetitive glue in between
+
+Core features:
+- convention-first JSON -> SwiftData mapping
+- deterministic diffing for inserts, updates, and deletes
+- automatic relationship syncing for nested objects and foreign keys
+- export back into API-ready JSON
+- reactive local reads for SwiftUI and UIKit
+
+Core capabilities:
+- import sync for full payloads or single items
+- parent-scoped sync with explicit relationship paths
+- export for root models and parent-scoped models
+- reactive reads with `@SyncQuery`
+- strict absent-key vs explicit-`null` semantics
 
 SwiftSync is for teams already building on SwiftData who want:
 - deterministic JSON -> local store sync
@@ -172,6 +188,7 @@ If this flow fits your app, the rest of the README covers relationship shapes, p
 ## Table of Contents
 
 - [Why SwiftSync](#why-swiftsync)
+- [Demo App](#demo-app)
 - [Install](#install)
 - [Quick Start](#quick-start)
 - [Migrating From Sync](docs/project/migrating-from-sync.md)
@@ -209,6 +226,30 @@ In practice, that means:
 - one consistent import/export contract
 - a UI that can stay local-first and reactive
 
+Teams usually switch to SwiftSync when they want:
+- one place to define JSON -> model mapping instead of per-endpoint glue code
+- relationship updates to stop being hand-written and fragile
+- local UI reads to stay stable while network mutations happen elsewhere
+- payload semantics that make omission and clearing behave differently on purpose
+
+Pain point -> outcome:
+- repetitive mapping code -> convention-first syncing with explicit overrides only at API boundaries
+- brittle relationship reconciliation -> built-in nested object and `*_id` / `*_ids` handling
+- re-fetch/rebind churn after writes -> local-first reads through SwiftData and `@SyncQuery`
+- ambiguous backend payload semantics -> strict absent-key means ignore, explicit `null` means clear/delete
+
+## Demo App
+
+The demo app lives in [Demo/Demo](/Users/nunez/code/ios/SwiftSync/Demo/Demo) and shows the intended workflow end to end:
+- syncing backend-shaped project and task payloads into SwiftData
+- reading that local state in SwiftUI screens
+- editing tasks while keeping list and detail views in sync
+
+Entry points:
+- app setup: [DemoApp.swift](/Users/nunez/code/ios/SwiftSync/Demo/Demo/DemoApp.swift)
+- main shell: [ContentView.swift](/Users/nunez/code/ios/SwiftSync/Demo/Demo/App/ContentView.swift)
+- feature examples: [ProjectsView.swift](/Users/nunez/code/ios/SwiftSync/Demo/Demo/Features/Projects/ProjectsView.swift), [ProjectView.swift](/Users/nunez/code/ios/SwiftSync/Demo/Demo/Features/Projects/ProjectView.swift), [TaskView.swift](/Users/nunez/code/ios/SwiftSync/Demo/Demo/Features/TaskDetail/TaskView.swift)
+
 ## Property Mapping
 
 Current defaults and behavior:
@@ -228,6 +269,8 @@ Practical usage rules:
 ## Basic Example
 
 ### Model
+
+![Relationship model example](Images/one-to-many-swift.png)
 
 ```swift
 import SwiftData
