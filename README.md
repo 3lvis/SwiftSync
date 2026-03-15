@@ -14,7 +14,7 @@ You define models once, read from local SwiftData, and let SwiftSync handle the 
 
 ## Quick Start
 
-### 1. Define a syncable model
+### Mark your models as @Syncable
 
 ![Relationship model example](Images/one-to-many-swift.png)
 
@@ -55,7 +55,7 @@ final class Note {
 }
 ```
 
-### 3. Fetch and sync server payload
+### JSON
 
 ```json
 [
@@ -78,6 +78,8 @@ final class Note {
 ]
 ```
 
+### Setup SwiftSync and call sync with your JSON
+
 In your root:
 
 ```swift
@@ -91,7 +93,7 @@ let payload = try await getUsers()
 try await syncContainer.sync(payload: payload, as: User.self)
 ```
 
-### 4. Read it reactively in SwiftUI
+### SwiftUI reacts automatically to changes using @SyncQuery
 
 ```swift
 import SwiftUI
@@ -117,12 +119,6 @@ struct UsersView: View {
     }
   }
 }
-```
-
-### 5. Export local state back to JSON
-
-```swift
-let rows = try syncContainer.export(as: User.self)
 ```
 
 ## Install
