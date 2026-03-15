@@ -14,7 +14,7 @@ Define your models once, read from local SwiftData, and let SwiftSync handle the
 
 ## Quick Start
 
-### One-to-many: full child objects
+### One-to-many
 
 ![Relationship model example](Images/one-to-many-swift.png)
 
@@ -123,7 +123,7 @@ struct UsersView: View {
 }
 ```
 
-### One-to-one: full child object
+### One-to-one
 
 ![One-to-one relationship model example](Images/one-to-one-v2.png)
 
@@ -255,7 +255,7 @@ The sections below cover the next cases you are likely to hit in a real app:
 
 Table of contents:
 
-- [One-to-Many by IDs](#one-to-many-by-ids)
+- [One-to-Many w/ child IDs](#one-to-many-w-child-ids)
 - [Parent-Scoped Sync](#parent-scoped-sync)
 - [Single-Item Sync](#single-item-sync)
 - [Property Mapping and Customization](#property-mapping-and-customization)
@@ -266,7 +266,7 @@ Table of contents:
 - [Further Reading](#further-reading)
 - [License](#license)
 
-## One-to-Many by IDs
+## One-to-Many w/ child IDs
 
 Use this shape when the parent JSON does not include full child objects and only sends their IDs.
 
@@ -443,7 +443,7 @@ This keeps the detail flow simple:
 - Update that task's checklist items from the nested array
 - Let both list and detail screens keep reading from the same SwiftData data
 
-## Property Mapping and Customization
+## Property Mapping
 
 Convention-first mapping is the default. Reach for overrides only when local naming intentionally differs from the backend.
 
