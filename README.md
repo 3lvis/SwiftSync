@@ -51,48 +51,64 @@ final class Note {
 }
 ```
 
-### 2. Create a `SyncContainer`
+### 2. Sync nested JSON into SwiftData
 
-```swift
-@MainActor
-func makeSyncContainer() throws -> SyncContainer {
-  try SyncContainer(
-    for: User.self,
-    keyStyle: .snakeCase
-  )
-}
-```
-
-### 3. Sync server JSON into SwiftData
-
-```swift
-let payload: [[String: Any]] = [
-  [
+```json
+[
+  {
     "id": 6,
     "name": "Shawn Merrill",
     "notes": [
-      [
+      {
         "id": 301,
         "text": "Call supplier before Friday"
-      ],
-      [
+      },
+      {
         "id": 302,
         "text": "Prepare Q1 budget review"
+      }
+    ]
+  }
+]
+```
+
+```swift
+@MainActor
+func loadUsers(syncContainer: SyncContainer) async throws {
+  let payload: [[String: Any]] = [
+    [
+      "id": 6,
+      "name": "Shawn Merrill",
+      "notes": [
+        [
+          "id": 301,
+          "text": "Call supplier before Friday"
+        ],
+        [
+          "id": 302,
+          "text": "Prepare Q1 budget review"
+        ]
       ]
     ]
   ]
-]
 
-try await syncContainer.sync(payload: payload, as: User.self)
+  try await syncContainer.sync(payload: payload, as: User.self)
+}
 ```
 
-### 4. Read it reactively in SwiftUI
+Create the container where your app sets up persistence:
+
+```swift
+let syncContainer = try SyncContainer(for: User.self, Note.self)
+```
+
+### 3. Read it reactively in SwiftUI
 
 ```swift
 import SwiftUI
 import SwiftSync
 
-struct UserNotesScreen: View {
+struct UsersView: View {
   let syncContainer: SyncContainer
 
   @SyncQuery(
@@ -114,7 +130,7 @@ struct UserNotesScreen: View {
 }
 ```
 
-### 5. Export local state back to JSON
+### 4. Export local state back to JSON
 
 ```swift
 let rows = try syncContainer.export(as: User.self)
