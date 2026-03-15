@@ -1,5 +1,7 @@
 **Notice: Sync was supported from it's creation back in 2014 until March 2021**
 
+**If you are starting a new SwiftData app, use SwiftSync instead.** This branch preserves the legacy Core Data implementation of Sync. The SwiftData-era successor is a new codebase and not a drop-in upgrade.
+
 Moving forward I won't be able to support this project since I'm no longer active in making iOS apps with Core Data. I'm leaving this repository as a historical reference of what happened during this time. Sync had in total 130 releases with almost 30 contributors. If you still support this project I encourage you to fork it and continue the development. I don't feel comfortable with passing this project to another developer due to the fact that I want to have some involvement in all the projects that live under my account. 7 years was a good run, thank you everyone for using this project and thank you to everyone that has contributed to it. Best of luck in your careers and in what this constantly evolving tech world has for all of us. 
 
 Initial releases: https://github.com/3lvis/Sync/releases?after=0.4.1
