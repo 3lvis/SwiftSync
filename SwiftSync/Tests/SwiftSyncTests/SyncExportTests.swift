@@ -275,11 +275,11 @@ final class ExportTests: XCTestCase {
         context.insert(ExportTask(id: 9, completed: false, createdAt: Date(timeIntervalSince1970: 1_700_000_000)))
         try context.save()
 
-        let rows = try syncContainer.export(as: ExportTask.self)
-        XCTAssertEqual(rows.count, 1)
-        XCTAssertEqual(rows[0]["id"] as? Int, 9)
-        XCTAssertEqual(rows[0]["completed"] as? Bool, false)
-        XCTAssertNotNil(rows[0]["created_at"] as? String)
+        let task = try fetchSingle(ExportTask.self, from: context)
+        let body = task.exportObject(for: syncContainer)
+        XCTAssertEqual(body["id"] as? Int, 9)
+        XCTAssertEqual(body["completed"] as? Bool, false)
+        XCTAssertNotNil(body["created_at"] as? String)
     }
 
     @MainActor
@@ -289,9 +289,10 @@ final class ExportTests: XCTestCase {
         context.insert(ExportTask(id: 1, completed: true, createdAt: Date(timeIntervalSince1970: 0)))
         try context.save()
 
-        let rows = try syncContainer.export(as: ExportTask.self)
-        XCTAssertNotNil(rows[0]["createdAt"])
-        XCTAssertNil(rows[0]["created_at"])
+        let task = try fetchSingle(ExportTask.self, from: context)
+        let body = task.exportObject(for: syncContainer)
+        XCTAssertNotNil(body["createdAt"])
+        XCTAssertNil(body["created_at"])
     }
 
     @MainActor
@@ -301,10 +302,10 @@ final class ExportTests: XCTestCase {
         context.insert(ExportAcronymRecord(id: 1, projectID: "P-100"))
         try context.save()
 
-        let rows = try syncContainer.export(as: ExportAcronymRecord.self)
-        XCTAssertEqual(rows.count, 1)
-        XCTAssertEqual(rows[0]["project_id"] as? String, "P-100")
-        XCTAssertNil(rows[0]["project_i_d"])
+        let record = try fetchSingle(ExportAcronymRecord.self, from: context)
+        let body = record.exportObject(for: syncContainer)
+        XCTAssertEqual(body["project_id"] as? String, "P-100")
+        XCTAssertNil(body["project_i_d"])
     }
 
     @MainActor
@@ -314,9 +315,10 @@ final class ExportTests: XCTestCase {
         context.insert(ExportRemotePrimary(xid: "abc", name: "n"))
         try context.save()
 
-        let rows = try syncContainer.export(as: ExportRemotePrimary.self)
-        XCTAssertEqual(rows[0]["external_id"] as? String, "abc")
-        XCTAssertNil(rows[0]["xid"])
+        let record = try fetchSingle(ExportRemotePrimary.self, from: context)
+        let body = record.exportObject(for: syncContainer)
+        XCTAssertEqual(body["external_id"] as? String, "abc")
+        XCTAssertNil(body["xid"])
     }
 
     @MainActor
@@ -326,9 +328,10 @@ final class ExportTests: XCTestCase {
         context.insert(ExportBarePrimary(externalID: "ext-1", name: "n"))
         try context.save()
 
-        let rows = try syncContainer.export(as: ExportBarePrimary.self)
-        XCTAssertEqual(rows[0]["external_id"] as? String, "ext-1")
-        XCTAssertNil(rows[0]["externalID"])
+        let record = try fetchSingle(ExportBarePrimary.self, from: context)
+        let body = record.exportObject(for: syncContainer)
+        XCTAssertEqual(body["external_id"] as? String, "ext-1")
+        XCTAssertNil(body["externalID"])
     }
 
     @MainActor
@@ -353,9 +356,10 @@ final class ExportTests: XCTestCase {
         context.insert(ExportBinaryDecimalRecord(id: 11, blob: blob, amount: amount))
         try context.save()
 
-        let rows = try syncContainer.export(as: ExportBinaryDecimalRecord.self)
-        XCTAssertEqual(rows[0]["blob"] as? String, blob.base64EncodedString())
-        XCTAssertEqual((rows[0]["amount"] as? NSDecimalNumber)?.decimalValue, amount)
+        let record = try fetchSingle(ExportBinaryDecimalRecord.self, from: context)
+        let body = record.exportObject(for: syncContainer)
+        XCTAssertEqual(body["blob"] as? String, blob.base64EncodedString())
+        XCTAssertEqual((body["amount"] as? NSDecimalNumber)?.decimalValue, amount)
     }
 
     @MainActor
@@ -365,13 +369,13 @@ final class ExportTests: XCTestCase {
         context.insert(ExportMappedFields(id: 2, userType: "admin", email: "a@b.com", localOnly: "secret"))
         try context.save()
 
-        let rows = try syncContainer.export(as: ExportMappedFields.self)
-        let row = rows[0]
-        XCTAssertEqual(row["type"] as? String, "admin")
-        XCTAssertNil(row["user_type"])
-        XCTAssertNil(row["local_only"])
+        let model = try fetchSingle(ExportMappedFields.self, from: context)
+        let body = model.exportObject(for: syncContainer)
+        XCTAssertEqual(body["type"] as? String, "admin")
+        XCTAssertNil(body["user_type"])
+        XCTAssertNil(body["local_only"])
 
-        let profile = row["profile"] as? [String: Any]
+        let profile = body["profile"] as? [String: Any]
         let contact = profile?["contact"] as? [String: Any]
         XCTAssertEqual(contact?["email"] as? String, "a@b.com")
     }
@@ -389,10 +393,10 @@ final class ExportTests: XCTestCase {
         context.insert(ExportUser(id: 1, name: "U", company: company, notes: [note0, note1]))
         try context.save()
 
-        let rows = try syncContainer.export(as: ExportUser.self)
-        let row = rows[0]
-        XCTAssertEqual((row["company"] as? [String: Any])?["id"] as? Int, 7)
-        XCTAssertEqual((row["notes"] as? [[String: Any]])?.count, 2)
+        let user = try fetchSingle(ExportUser.self, from: context)
+        let body = user.exportObject(for: syncContainer)
+        XCTAssertEqual((body["company"] as? [String: Any])?["id"] as? Int, 7)
+        XCTAssertEqual((body["notes"] as? [[String: Any]])?.count, 2)
     }
 
     @MainActor
@@ -402,8 +406,9 @@ final class ExportTests: XCTestCase {
         context.insert(ExportMappedFields(id: 3, userType: "member", email: nil, localOnly: "secret"))
         try context.save()
 
-        let rows = try syncContainer.export(as: ExportMappedFields.self)
-        let profile = rows[0]["profile"] as? [String: Any]
+        let model = try fetchSingle(ExportMappedFields.self, from: context)
+        let body = model.exportObject(for: syncContainer)
+        let profile = body["profile"] as? [String: Any]
         let contact = profile?["contact"] as? [String: Any]
         XCTAssertTrue(contact?["email"] is NSNull, "Nil optional under @RemoteKey nested path must always emit NSNull")
     }
@@ -418,9 +423,9 @@ final class ExportTests: XCTestCase {
         context.insert(child)
         try context.save()
 
-        let rows = try syncContainer.export(as: ExportChild.self)
-        XCTAssertEqual(rows.count, 1)
-        XCTAssertNil(rows[0]["parent"])
+        let model = try fetchSingle(ExportChild.self, from: context)
+        let body = model.exportObject(for: syncContainer)
+        XCTAssertNil(body["parent"])
     }
 
     @MainActor
@@ -430,8 +435,9 @@ final class ExportTests: XCTestCase {
         context.insert(ExportUser(id: 8, name: "NoCompany", company: nil, notes: []))
         try context.save()
 
-        let rows = try syncContainer.export(as: ExportUser.self)
-        XCTAssertTrue(rows[0]["company"] is NSNull, "Nil to-one relationship must always emit NSNull")
+        let user = try fetchSingle(ExportUser.self, from: context)
+        let body = user.exportObject(for: syncContainer)
+        XCTAssertTrue(body["company"] is NSNull, "Nil to-one relationship must always emit NSNull")
     }
 
     @MainActor
@@ -441,8 +447,9 @@ final class ExportTests: XCTestCase {
         context.insert(ExportTask(id: 3, completed: false, createdAt: Date(timeIntervalSince1970: 0), nickname: nil))
         try context.save()
 
-        let rows = try syncContainer.export(as: ExportTask.self)
-        XCTAssertTrue(rows[0]["nickname"] is NSNull, "Nil optional scalar must always emit NSNull")
+        let task = try fetchSingle(ExportTask.self, from: context)
+        let body = task.exportObject(for: syncContainer)
+        XCTAssertTrue(body["nickname"] is NSNull, "Nil optional scalar must always emit NSNull")
     }
 
     /// Scenario A — PATCH with explicit null to clear a field.
@@ -485,73 +492,9 @@ final class ExportTests: XCTestCase {
         context.insert(ExportTask(id: 4, completed: true, createdAt: Date(timeIntervalSince1970: 0)))
         try context.save()
 
-        let rows = try syncContainer.export(as: ExportTask.self)
-        XCTAssertEqual(rows[0]["created_at"] as? String, "1970/01/01")
-    }
-
-    @MainActor
-    func testExportParentScopedOnlyExportsThatParentsChildren() throws {
-        let syncContainer = try makeSyncContainer(for: ExportParent.self, ExportChild.self)
-        let context = syncContainer.mainContext
-        let parentA = ExportParent(id: 6, name: "A")
-        let parentB = ExportParent(id: 7, name: "B")
-        let a0 = ExportChild(id: 0, text: "a0", parent: parentA)
-        let a1 = ExportChild(id: 1, text: "a1", parent: parentA)
-        let b2 = ExportChild(id: 2, text: "b2", parent: parentB)
-        context.insert(parentA)
-        context.insert(parentB)
-        context.insert(a0)
-        context.insert(a1)
-        context.insert(b2)
-        try context.save()
-
-        let rows = try syncContainer.export(as: ExportChild.self, parent: parentA)
-        XCTAssertEqual(rows.count, 2)
-        XCTAssertEqual(Set(rows.compactMap { $0["id"] as? Int }), Set([0, 1]))
-    }
-
-    @MainActor
-    func testExportParentScopedUsesParentTargetedFetchWhenPredicateExists() throws {
-        let syncContainer = try makeSyncContainer(for: ExportParent.self, ExportChild.self)
-        let context = syncContainer.mainContext
-        let parentA = ExportParent(id: 6, name: "A")
-        let parentB = ExportParent(id: 7, name: "B")
-        context.insert(parentA)
-        context.insert(parentB)
-        context.insert(ExportChild(id: 0, text: "a0", parent: parentA))
-        context.insert(ExportChild(id: 1, text: "a1", parent: parentA))
-        context.insert(ExportChild(id: 2, text: "b2", parent: parentB))
-        try context.save()
-
-        let (_, profile) = try SwiftSync.withPerformanceProfiling {
-            try syncContainer.export(as: ExportChild.self, parent: parentA)
-        }
-
-        XCTAssertNotNil(profile.totalsByPhase["export-fetch-by-parent"])
-        XCTAssertNil(profile.totalsByPhase["export-fetch"])
-        XCTAssertNil(profile.totalsByPhase["export-filter-scope"])
-    }
-
-    @MainActor
-    func testExportParentScopedFallsBackToTableFetchForManualConformerWithoutPredicate() throws {
-        let syncContainer = try makeSyncContainer(for: ManualExportParent.self, ManualExportChild.self)
-        let context = syncContainer.mainContext
-        let parentA = ManualExportParent(id: 6, name: "A")
-        let parentB = ManualExportParent(id: 7, name: "B")
-        context.insert(parentA)
-        context.insert(parentB)
-        context.insert(ManualExportChild(id: 0, text: "a0", parent: parentA))
-        context.insert(ManualExportChild(id: 1, text: "a1", parent: parentA))
-        context.insert(ManualExportChild(id: 2, text: "b2", parent: parentB))
-        try context.save()
-
-        let (_, profile) = try SwiftSync.withPerformanceProfiling {
-            try syncContainer.export(as: ManualExportChild.self, parent: parentA)
-        }
-
-        XCTAssertNotNil(profile.totalsByPhase["export-fetch"])
-        XCTAssertNotNil(profile.totalsByPhase["export-filter-scope"])
-        XCTAssertNil(profile.totalsByPhase["export-fetch-by-parent"])
+        let task = try fetchSingle(ExportTask.self, from: context)
+        let body = task.exportObject(for: syncContainer)
+        XCTAssertEqual(body["created_at"] as? String, "1970/01/01")
     }
 
     @MainActor
@@ -565,9 +508,10 @@ final class ExportTests: XCTestCase {
         context.insert(child)
         try context.save()
 
-        let rows = try syncContainer.export(as: CycleNode.self)
-        XCTAssertEqual(rows.count, 2)
-        XCTAssertNotNil(rows.first(where: { ($0["id"] as? Int) == 1 }))
+        let rootBody = root.exportObject(for: syncContainer)
+        let childBody = child.exportObject(for: syncContainer)
+        XCTAssertEqual(rootBody["id"] as? Int, 1)
+        XCTAssertEqual(childBody["id"] as? Int, 2)
     }
 
     // MARK: - Update body via export
@@ -703,5 +647,12 @@ final class ExportTests: XCTestCase {
         let schema = Schema(models)
         let modelContainer = try ModelContainer(for: schema, configurations: configuration)
         return SyncContainer(modelContainer, keyStyle: keyStyle, dateFormatter: dateFormatter)
+    }
+
+    @MainActor
+    private func fetchSingle<Model: PersistentModel>(_ modelType: Model.Type, from context: ModelContext) throws -> Model {
+        let rows = try context.fetch(FetchDescriptor<Model>())
+        XCTAssertEqual(rows.count, 1)
+        return try XCTUnwrap(rows.first)
     }
 }

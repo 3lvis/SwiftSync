@@ -201,58 +201,6 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         )
     }
 
-    public func export<Model: SyncUpdatableModel>(as _: Model.Type) throws -> [[String: Any]] {
-        let context = ModelContext(modelContainer)
-        let rows = try syncProfile("export-fetch") {
-            try context.fetch(FetchDescriptor<Model>())
-        }
-        let sorted = syncProfile("export-sort") {
-            rows.sorted { lhs, rhs in
-                String(describing: lhs[keyPath: Model.syncIdentity]) < String(describing: rhs[keyPath: Model.syncIdentity])
-            }
-        }
-
-        return syncProfile("export-map") {
-            sorted.map { row in
-                row.exportObject(keyStyle: keyStyle, dateFormatter: dateFormatter)
-            }
-        }
-    }
-
-    public func export<Model: SyncUpdatableModel & ParentScopedModel>(
-        as _: Model.Type,
-        parent: Model.SyncParent
-    ) throws -> [[String: Any]] {
-        let context = ModelContext(modelContainer)
-        let rows: [Model]
-        if let predicate = Model.syncParentPredicate(
-            parentPersistentID: parent.persistentModelID,
-            relationship: Model.parentRelationship
-        ) {
-            rows = try syncProfile("export-fetch-by-parent") {
-                try context.fetch(FetchDescriptor<Model>(predicate: predicate))
-            }
-        } else {
-            let allRows = try syncProfile("export-fetch") {
-                try context.fetch(FetchDescriptor<Model>())
-            }
-            rows = syncProfile("export-filter-scope") {
-                allRows.filter { $0[keyPath: Model.parentRelationship]?.persistentModelID == parent.persistentModelID }
-            }
-        }
-        let sorted = syncProfile("export-sort") {
-            rows.sorted { lhs, rhs in
-                String(describing: lhs[keyPath: Model.syncIdentity]) < String(describing: rhs[keyPath: Model.syncIdentity])
-            }
-        }
-
-        return syncProfile("export-map") {
-            sorted.map { row in
-                row.exportObject(keyStyle: keyStyle, dateFormatter: dateFormatter)
-            }
-        }
-    }
-
     private func installDidSaveObserver() {
         NotificationCenter.default.addObserver(
             self,

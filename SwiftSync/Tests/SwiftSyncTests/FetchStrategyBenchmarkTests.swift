@@ -463,73 +463,6 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
         }
     }
 
-    func testExportBenchmarks() throws {
-        try requireBenchmarksEnabled()
-
-        for storeKind in environment.storeKinds {
-            for existingCount in environment.datasetTiers {
-                let result = try measureRepeatedCase(
-                    name: "export-all",
-                    storeKind: storeKind,
-                    totalRows: existingCount,
-                    payloadRows: nil,
-                    scopeRows: nil,
-                    relationRows: nil
-                ) {
-                    let fixture = try makeStoreFixture(storeKind: storeKind)
-                    defer { fixture.cleanup() }
-
-                    let syncContainer = try SyncContainer(
-                        for: BenchmarkUser.self,
-                        configurations: fixture.configuration
-                    )
-                    try seedUsers(count: existingCount, in: syncContainer.mainContext)
-                    return try measureDuration {
-                        _ = try syncContainer.export(as: BenchmarkUser.self)
-                    }
-                }
-
-                emit(result)
-            }
-        }
-    }
-
-    func testParentScopedExportBenchmarks() throws {
-        try requireBenchmarksEnabled()
-
-        for storeKind in environment.storeKinds {
-            for existingCount in environment.datasetTiers {
-                let scopeCount = min(environment.scopeSize, existingCount)
-                let result = try measureRepeatedCase(
-                    name: "export-parent-scope",
-                    storeKind: storeKind,
-                    totalRows: existingCount,
-                    payloadRows: nil,
-                    scopeRows: scopeCount,
-                    relationRows: nil
-                ) {
-                    let fixture = try makeStoreFixture(storeKind: storeKind)
-                    defer { fixture.cleanup() }
-
-                    let syncContainer = try SyncContainer(
-                        for: BenchmarkProject.self, BenchmarkScopedTask.self,
-                        configurations: fixture.configuration
-                    )
-                    let targetProject = try seedParentScopedTasks(
-                        totalTaskCount: existingCount,
-                        targetScopeCount: scopeCount,
-                        in: syncContainer.mainContext
-                    )
-                    return try measureDuration {
-                        _ = try syncContainer.export(as: BenchmarkScopedTask.self, parent: targetProject)
-                    }
-                }
-
-                emit(result)
-            }
-        }
-    }
-
     func testMixedWorkloadBenchmarks() async throws {
         try requireBenchmarksEnabled()
 
@@ -562,7 +495,6 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                         configurations: fixture.configuration
                     )
                     let context = ModelContext(container)
-                    let syncContainer = SyncContainer(container)
 
                     try seedUsers(count: relatedCount, in: context)
                     try seedTags(count: relatedCount, in: context)
@@ -599,7 +531,6 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                             relationship: \BenchmarkScopedTask.project
                         )
                         try await SwiftSync.sync(item: workItemPayload, as: BenchmarkWorkItem.self, in: context)
-                        _ = try syncContainer.export(as: BenchmarkScopedTask.self, parent: targetProject)
                     }
                 }
 
@@ -637,7 +568,6 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                         configurations: fixture.configuration
                     )
                     let context = ModelContext(container)
-                    let syncContainer = SyncContainer(container)
 
                     let targetProject = try seedScenarioWorkspace(
                         totalTaskCount: existingCount,
@@ -672,7 +602,6 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                         )
                         try await SwiftSync.sync(item: taskDetailPayload, as: ScenarioTask.self, in: context)
                         try await SwiftSync.sync(item: userPresencePayload, as: ScenarioUser.self, in: context)
-                        _ = try syncContainer.export(as: ScenarioTask.self, parent: targetProject)
                     }
                 }
 

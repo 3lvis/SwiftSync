@@ -2,20 +2,26 @@
 
 ## Plan
 
-- [x] Rewrite README `## Date Handling` to explain the default parsing and export behavior more clearly
-- [x] Review the updated `Date Handling` section for clarity, markdown formatting, and API accuracy
+- [x] Inspect the export APIs, tests, and call sites to choose a safe cleanup order
+- [x] Implement the export API cleanup in `SwiftSync/**` by removing bulk export and deleting bulk-only tests/benchmarks
+- [~] Update docs and planning notes to match the remaining export surface
+- [x] Run relevant SwiftSync tests and review the final diff
 
 ## Last known state
 
-README date handling section rewritten and reviewed in context; no tests run
+bulk export removed from `SyncContainer`; export tests pass with single-object coverage; remaining follow-up is object-export naming/docs
 
 ## Decisions (don't revisit)
 
-- Limit this pass to the `## Date Handling` section in `README.md`
-- Keep the explanation practical: what works by default, then when to configure a formatter
-- Match the tone and structure of the updated `Reactive Reads` and `Exporting JSON` sections
+- Work on a feature branch because implementation on `master` is disallowed
+- Follow library TDD for changes in `SwiftSync/**`
+- Decide cleanup order from current code and test usage rather than renaming surfaces blindly
+- Remove the bulk export API entirely rather than preserving an internal helper
 
 ## Files touched
 
 - .agents/state.md
-- README.md
+- docs/planning/export-api-cleanup.md
+- SwiftSync/Sources/SwiftSync/SyncContainer.swift
+- SwiftSync/Tests/SwiftSyncTests/FetchStrategyBenchmarkTests.swift
+- SwiftSync/Tests/SwiftSyncTests/SyncExportTests.swift
