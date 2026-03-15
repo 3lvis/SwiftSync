@@ -182,12 +182,9 @@ Use parent-scoped sync when an endpoint returns the children for one parent, lik
 @Model
 public final class Task {
   @Attribute(.unique) public var id: String
+  public var title: String
   public var projectID: String
   public var assigneeID: String?
-  public var authorID: String
-  public var title: String
-  public var createdAt: Date
-  public var updatedAt: Date
 
   @NotExport
   public var project: Project?
@@ -200,21 +197,18 @@ public final class Task {
 [
   {
     "id": "C3E7A1B2-3001-0000-0000-000000000001",
+    "title": "Add session timeout controls to account settings",
     "project_id": "C3E7A1B2-1001-0000-0000-000000000001",
-    "author_id": "C3E7A1B2-2001-0000-0000-000000000004",
     "assignee_id": "C3E7A1B2-2001-0000-0000-000000000001",
     "reviewer_ids": ["C3E7A1B2-2001-0000-0000-000000000004"],
     "watcher_ids": [
       "C3E7A1B2-2001-0000-0000-000000000002",
       "C3E7A1B2-2001-0000-0000-000000000005"
     ],
-    "title": "Add session timeout controls to account settings",
     "state": {
       "id": "inProgress",
       "label": "In Progress"
-    },
-    "created_at": "2025-01-01T05:00:00Z",
-    "updated_at": "2025-01-01T05:00:00Z"
+    }
   }
 ]
 ```
@@ -240,14 +234,11 @@ let taskPublisher = SyncQueryPublisher(
   relationship: \Task.project,
   relationshipID: projectID,
   in: syncContainer,
-  sortBy: [
-    SortDescriptor(\Task.updatedAt, order: .reverse),
-    SortDescriptor(\Task.id)
-  ]
+  sortBy: [SortDescriptor(\Task.id)]
 )
 ```
 
-This case is also where you commonly mix relationship payload shapes:
+This is also where payload shapes usually start to mix:
 
 - scalar FK to-one links like `project_id` and `assignee_id`
 - to-many ID lists like `reviewer_ids` and `watcher_ids`
@@ -273,9 +264,8 @@ That becomes more interesting when the same payload also includes a scoped child
 @Model
 public final class Item {
   @Attribute(.unique) public var id: String
-  public var taskID: String
   public var title: String
-  public var position: Int
+  public var taskID: String
 
   @NotExport
   public var task: Task?
@@ -287,7 +277,6 @@ public final class Item {
 ```json
 {
   "id": "C3E7A1B2-3001-0000-0000-000000000001",
-  "project_id": "C3E7A1B2-1001-0000-0000-000000000001",
   "title": "Add session timeout controls to account settings",
   "reviewer_ids": ["C3E7A1B2-2001-0000-0000-000000000004"],
   "watcher_ids": [
@@ -298,8 +287,7 @@ public final class Item {
     {
       "id": "C3E7A1B2-4001-0000-0000-000000000001",
       "task_id": "C3E7A1B2-3001-0000-0000-000000000001",
-      "title": "Document requirements",
-      "position": 0
+      "title": "Document requirements"
     }
   ]
 }
