@@ -16,6 +16,8 @@ You define models once, read from local SwiftData, and let SwiftSync handle the 
 
 ### 1. Define a syncable model
 
+![Relationship model example](Images/one-to-many-swift.png)
+
 ```swift
 import SwiftData
 import SwiftSync
@@ -25,12 +27,26 @@ import SwiftSync
 final class User {
   @Attribute(.unique) var id: Int
   var name: String
-  var createdAt: Date?
+  var notes: [Note]
 
-  init(id: Int, name: String, createdAt: Date? = nil) {
+  init(id: Int, name: String, notes: [Note] = []) {
     self.id = id
     self.name = name
-    self.createdAt = createdAt
+    self.notes = notes
+  }
+}
+
+@Syncable
+@Model
+final class Note {
+  @Attribute(.unique) var id: Int
+  var text: String
+  var user: User?
+
+  init(id: Int, text: String, user: User? = nil) {
+    self.id = id
+    self.text = text
+    self.user = user
   }
 }
 ```
@@ -54,7 +70,16 @@ let payload: [[String: Any]] = [
   [
     "id": 6,
     "name": "Shawn Merrill",
-    "created_at": "2014-02-14T04:30:10+00:00"
+    "notes": [
+      [
+        "id": 301,
+        "text": "Call supplier before Friday"
+      ],
+      [
+        "id": 302,
+        "text": "Prepare Q1 budget review"
+      ]
+    ]
   ]
 ]
 
@@ -67,7 +92,7 @@ try await syncContainer.sync(payload: payload, as: User.self)
 import SwiftUI
 import SwiftSync
 
-struct UsersScreen: View {
+struct UserNotesScreen: View {
   let syncContainer: SyncContainer
 
   @SyncQuery(
@@ -79,7 +104,11 @@ struct UsersScreen: View {
 
   var body: some View {
     List(users) { user in
-      Text(user.name)
+      Section(user.name) {
+        ForEach(user.notes) { note in
+          Text(note.text)
+        }
+      }
     }
   }
 }
@@ -90,6 +119,8 @@ struct UsersScreen: View {
 ```swift
 let rows = try syncContainer.export(as: User.self)
 ```
+
+That one flow shows flat attributes, a to-many relationship, reactive local reads, and export using the same model definitions.
 
 If this fits your app, continue with the full overview.
 
