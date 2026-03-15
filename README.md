@@ -26,12 +26,22 @@ import SwiftSync
 @Model
 final class User {
   @Attribute(.unique) var id: Int
-  var name: String
+  var email: String?
+  var createdAt: Date?
+  var updatedAt: Date?
   var notes: [Note]
 
-  init(id: Int, name: String, notes: [Note] = []) {
+  init(
+    id: Int,
+    email: String? = nil,
+    createdAt: Date? = nil,
+    updatedAt: Date? = nil,
+    notes: [Note] = []
+  ) {
     self.id = id
-    self.name = name
+    self.email = email
+    self.createdAt = createdAt
+    self.updatedAt = updatedAt
     self.notes = notes
   }
 }
@@ -57,7 +67,9 @@ final class Note {
 [
   {
     "id": 6,
-    "name": "Shawn Merrill",
+    "email": "shawn@ovium.com",
+    "created_at": "2014-02-14T04:30:10+00:00",
+    "updated_at": "2014-02-17T10:01:12+00:00",
     "notes": [
       {
         "id": 301,
@@ -78,7 +90,9 @@ func loadUsers(syncContainer: SyncContainer) async throws {
   let payload: [[String: Any]] = [
     [
       "id": 6,
-      "name": "Shawn Merrill",
+      "email": "shawn@ovium.com",
+      "created_at": "2014-02-14T04:30:10+00:00",
+      "updated_at": "2014-02-17T10:01:12+00:00",
       "notes": [
         [
           "id": 301,
@@ -114,13 +128,13 @@ struct UsersView: View {
   @SyncQuery(
     User.self,
     in: syncContainer,
-    sortBy: [SortDescriptor(\User.name)]
+    sortBy: [SortDescriptor(\User.email)]
   )
   private var users: [User]
 
   var body: some View {
     List(users) { user in
-      Section(user.name) {
+      Section(user.email ?? "User \\(user.id)") {
         ForEach(user.notes) { note in
           Text(note.text)
         }
