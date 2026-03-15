@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+
+jobs:
+  macos-tests:
+    name: macOS Swift Test (${{ matrix.package.name }})
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - name: SwiftSync
+            path: .
+          - name: DemoBackend
+            path: DemoBackend
+          - name: DemoCore
+            path: DemoCore
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache SPM
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('Package.resolved', 'DemoBackend/Package.resolved', 'DemoCore/Package.resolved') }}
+          restore-keys: ${{ runner.os }}-spm-
+
+      - name: Xcode Version
+        run: xcodebuild -version && swift --version
+
+      - name: Test package
+        working-directory: ${{ matrix.package.path }}
+        run: swift test -v

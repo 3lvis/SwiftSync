@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="11542" systemVersion="16C32f" minimumToolsVersion="Automatic" sourceLanguage="Objective-C" userDefinedModelVersionIdentifier="">
-    <entity name="TwoLetterEntity" representedClassName="" syncable="YES">
-        <attribute name="twoLetterEntityDescription" attributeType="String" syncable="YES"/>
-    </entity>
-    <elements>
-        <element name="TwoLetterEntity" positionX="-54" positionY="-54" width="128" height="60"/>
-    </elements>
-</model>
