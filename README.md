@@ -7,16 +7,7 @@ SwiftSync is a sync layer for SwiftData apps with JSON backends.
 It is the SwiftData-era successor to the old Core Data library `Sync`.
 If you are coming from legacy `Sync`, start with [Migrating From Sync](docs/project/migrating-from-sync.md).
 
-You define models once, then use one API to:
-- sync server payloads into local SwiftData
-- export local SwiftData back into API-ready JSON
-
-It follows convention over configuration and keeps behavior deterministic.
-
-The promise is simple:
-- your app reads from local SwiftData
-- your backend speaks normal JSON
-- SwiftSync handles the repetitive glue in between
+You define models once, read from local SwiftData, and let SwiftSync handle the repetitive JSON import/export work in between.
 
 Core features:
 - convention-first JSON -> SwiftData mapping
@@ -31,46 +22,6 @@ Core capabilities:
 - export for root models and parent-scoped models
 - reactive reads with `@SyncQuery`
 - strict absent-key vs explicit-`null` semantics
-
-SwiftSync is for teams already building on SwiftData who want:
-- deterministic JSON -> local store sync
-- export back into API-ready payloads
-- reactive local reads for SwiftUI and UIKit
-- explicit, testable backend semantics around missing vs `null`
-
-## What SwiftSync Is
-
-SwiftSync is not a backend, a database replacement, or an opinionated app architecture.
-
-It is the missing sync layer between:
-- a SwiftData model graph in your app
-- a conventional JSON API on your backend
-
-If your current pain is:
-- repetitive mapping code
-- fragile relationship updates
-- unclear `null` vs missing semantics
-- re-fetch/rebind boilerplate after mutations
-
-that is exactly the problem SwiftSync is built to solve.
-
-## Best Fit
-
-SwiftSync is a strong fit when:
-- you already want SwiftData to remain your local source of truth
-- your backend returns normal resource payloads and relationship IDs
-- you want explicit behavior around create, update, clear, and delete
-- you want SwiftUI or UIKit screens to react to local data instead of mutation callbacks
-
-## Not The Goal
-
-SwiftSync is not trying to:
-- replace SwiftData
-- impose a server product or hosted platform
-- hide backend contract details behind magic
-- treat omission and `null` as the same thing
-
-The design goal is boring, reliable sync behavior that fits naturally into an iOS app you already own.
 
 ## Install
 
@@ -206,37 +157,17 @@ If this flow fits your app, the rest of the README covers relationship shapes, p
 
 ## Why SwiftSync
 
-Syncing JSON into a local store is repetitive:
-- map attributes
-- diff inserts/updates/deletes
-- handle relationship updates
-- avoid unnecessary writes
-
-SwiftSync handles that core flow so app code can stay focused on domain behavior.
-
-It is a strong fit when:
-- your app already uses SwiftData
-- your backend can follow stable `id`, `*_id`, and `*_ids` conventions
-- you want strict missing-vs-`null` semantics instead of implicit magic
-- you want the UI to read from local state while mutations sync through a service/domain layer
-
-In practice, that means:
-- less model-mapping boilerplate
-- fewer relationship edge-case bugs
-- one consistent import/export contract
-- a UI that can stay local-first and reactive
-
-Teams usually switch to SwiftSync when they want:
-- one place to define JSON -> model mapping instead of per-endpoint glue code
-- relationship updates to stop being hand-written and fragile
-- local UI reads to stay stable while network mutations happen elsewhere
-- payload semantics that make omission and clearing behave differently on purpose
-
 Pain point -> outcome:
 - repetitive mapping code -> convention-first syncing with explicit overrides only at API boundaries
 - brittle relationship reconciliation -> built-in nested object and `*_id` / `*_ids` handling
 - re-fetch/rebind churn after writes -> local-first reads through SwiftData and `@SyncQuery`
 - ambiguous backend payload semantics -> strict absent-key means ignore, explicit `null` means clear/delete
+
+SwiftSync is a strong fit when:
+- SwiftData stays your local source of truth
+- your backend returns normal resource payloads and relationship IDs
+- you want deterministic sync behavior without hand-written mapping glue
+- your UI should react to local state instead of mutation callbacks
 
 ## Demo App
 
@@ -252,18 +183,14 @@ Entry points:
 
 ## Property Mapping
 
-Current defaults and behavior:
 - convention-first mapping is expected
 - inbound key style is configured once at `SyncContainer` (`.snakeCase` default, `.camelCase` optional)
 - acronym-aware snake mapping (`projectID` -> `project_id`, `remoteURL` -> `remote_url`)
 - deep-path import/export is supported via `@RemoteKey("a.b.c")`
 - scalar coercions are deterministic; relationship FK linking remains strict
-- Demo models in this repo are convention-first, with explicit mapping only where backend keys intentionally differ (for example `description` -> `descriptionText`)
 
-Practical usage rules:
 - remove `@RemoteKey` when convention already matches (for example `projectID` maps to `project_id`)
 - keep `@RemoteKey` when your local property name intentionally differs from the backend key (for example `descriptionText` -> `description`)
-- configure inbound key style once at `SyncContainer` (`.snakeCase` default, `.camelCase` optional)
 - use `@RemoteKey("a.b.c")` for nested payload keys (import and export)
 
 ## Basic Example
@@ -311,7 +238,7 @@ try await SwiftSync.sync(payload: payload, as: User.self, in: context)
 
 That single call will insert, update, and delete based on identity diffing.
 
-You can also tune behavior per call:
+To change relationship behavior per call:
 
 ```swift
 try await SwiftSync.sync(
@@ -322,7 +249,7 @@ try await SwiftSync.sync(
 )
 ```
 
-To update a single item without touching other rows, use `sync(item:)`:
+To update one row without diffing the whole collection, use `sync(item:)`:
 
 ```swift
 try await SwiftSync.sync(
@@ -334,10 +261,10 @@ try await SwiftSync.sync(
 
 ## SyncContainer
 
-`SyncContainer` is a thin SwiftData-based wrapper around `ModelContainer` that:
+`SyncContainer` wraps `ModelContainer` and:
 - exposes a shared `mainContext`
 - creates background contexts for sync work
-- observes background `ModelContext.didSave` and processes main-context pending changes
+- processes background saves for reactive reads
 - configures inbound key style once (`.snakeCase` default, `.camelCase` optional)
 
 ```swift
@@ -352,9 +279,7 @@ let syncContainer = try await MainActor.run {
 try await syncContainer.sync(payload: payload, as: User.self)
 ```
 
-Behavior note:
-- fresh fetches on `mainContext` see background saves
-- retained object references may still need explicit UI rebind/requery
+Fresh fetches on `mainContext` see background saves. Retained object references may still need explicit UI rebind or requery.
 
 ## Reactive Reads
 
@@ -400,15 +325,14 @@ Relationship-scoped query (to-many):
 var projectsContainingTask: [Project]
 ```
 
-Keep using `predicate` when relationship-scoped `relationship/relationshipID` is not the right shape:
+Use `predicate` instead when `relationship/relationshipID` is not the right shape:
 - screens that only have scalar IDs (no related model instance)
 - non-parent filters (for example `assigneeID == userID`)
 - compound business filters (for example status + date window + membership)
 
 ### UIKit / State Machines
 
-SwiftUI is first class. For non-SwiftUI consumers:
-
+For UIKit or state-machine-driven flows:
 - use `SyncQueryPublisher` for reactive lists
 - use `SyncModelPublisher` for a single reactive row by sync ID
 
@@ -462,8 +386,6 @@ let publisher = SyncModelPublisher(
 ```
 
 Observe `publisher.row` the same way you would observe `publisher.rows`.
-
-Both publishers reload automatically after relevant sync-driven saves, using the same internal invalidation mechanism as `@SyncQuery` / `@SyncModel`.
 
 ## Scenario -> Way of Use
 
@@ -854,7 +776,7 @@ final class Account {
 Notes:
 - `@RemoteKey` affects inbound sync mapping and export mapping.
 - `@RemoteKey("a.b.c")` reads/writes nested payload paths.
-- Deep paths are resolved from nested dictionaries and keep normal missing/null semantics.
+- Deep paths preserve normal missing/null semantics.
 
 ## Exporting JSON
 
@@ -898,8 +820,6 @@ Supported inputs:
 - unix timestamps (seconds and microseconds-like)
 
 Invalid date behavior is best-effort and non-crashing.
-
-our policy is honestly we do our best without affecting performance.
 
 ## API Reference
 
