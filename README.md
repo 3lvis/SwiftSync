@@ -31,13 +31,7 @@ final class User {
   var updatedAt: Date?
   var notes: [Note]
 
-  init(
-    id: Int,
-    email: String? = nil,
-    createdAt: Date? = nil,
-    updatedAt: Date? = nil,
-    notes: [Note] = []
-  ) {
+  init(id: Int, email: String? = nil, createdAt: Date? = nil, updatedAt: Date? = nil, notes: [Note] = []) {
     self.id = id
     self.email = email
     self.createdAt = createdAt
@@ -59,12 +53,6 @@ final class Note {
     self.user = user
   }
 }
-```
-
-### 2. Create a `SyncContainer`
-
-```swift
-let syncContainer = try SyncContainer(for: User.self, Note.self)
 ```
 
 ### 3. Fetch and sync server payload
@@ -91,33 +79,12 @@ let syncContainer = try SyncContainer(for: User.self, Note.self)
 ```
 
 ```swift
-func getUsers() async throws -> [[String: Any]] {
-  // Replace this with your real API client.
-  [
-    [
-      "id": 6,
-      "email": "shawn@ovium.com",
-      "created_at": "2014-02-14T04:30:10+00:00",
-      "updated_at": "2014-02-17T10:01:12+00:00",
-      "notes": [
-        [
-          "id": 301,
-          "text": "Call supplier before Friday"
-        ],
-        [
-          "id": 302,
-          "text": "Prepare Q1 budget review"
-        ]
-      ]
-    ]
-  ]
-}
+// In your root:
+let syncContainer = try SyncContainer(for: User.self, Note.self)
 
-@MainActor
-func refreshUsers(syncContainer: SyncContainer) async throws {
-  let payload = try await getUsers()
-  try await syncContainer.sync(payload: payload, as: User.self)
-}
+// In your network layer:
+let payload = try await getUsers()
+try await syncContainer.sync(payload: payload, as: User.self)
 ```
 
 ### 4. Read it reactively in SwiftUI
@@ -153,10 +120,6 @@ struct UsersView: View {
 ```swift
 let rows = try syncContainer.export(as: User.self)
 ```
-
-That one flow shows flat attributes, a to-many relationship, reactive local reads, and export using the same model definitions.
-
-If this fits your app, continue with the full overview.
 
 ## Install
 
@@ -209,26 +172,15 @@ Syncing API payloads into a local store usually means repeating the same work in
 - keep relationships correct when the payload shape changes
 - make local UI reads stay coherent after background sync work
 
-Pain point -> outcome:
-
-- repetitive mapping code -> convention-first syncing with explicit overrides only at API boundaries
-- brittle relationship reconciliation -> built-in nested object and `*_id` / `*_ids` handling
-- re-fetch/rebind churn after writes -> local-first reads through SwiftData and `@SyncQuery`
-- ambiguous backend payload semantics -> strict absent-key means ignore, explicit `null` means clear/delete
-
 ## Demo App
 
-The demo app lives in [Demo/Demo](/Users/nunez/code/ios/SwiftSync/Demo/Demo) and shows the intended workflow end to end:
+SwiftSync includes a Demo app that shows the intended workflow end to end:
 
-- syncing backend-shaped project and task payloads into SwiftData
+- syncing backend-shaped project payloads into SwiftData
 - reading that local state in SwiftUI screens
-- editing tasks while keeping list and detail views in sync
+- editing data while keeping list and detail views in sync
 
-Entry points:
-
-- app setup: [DemoApp.swift](/Users/nunez/code/ios/SwiftSync/Demo/Demo/DemoApp.swift)
-- main shell: [ContentView.swift](/Users/nunez/code/ios/SwiftSync/Demo/Demo/App/ContentView.swift)
-- feature examples: [ProjectsView.swift](/Users/nunez/code/ios/SwiftSync/Demo/Demo/Features/Projects/ProjectsView.swift), [ProjectView.swift](/Users/nunez/code/ios/SwiftSync/Demo/Demo/Features/Projects/ProjectView.swift), [TaskView.swift](/Users/nunez/code/ios/SwiftSync/Demo/Demo/Features/TaskDetail/TaskView.swift)
+To review it's contents and play with it open the `SwiftSync.xcworkspace`.
 
 ## Property Mapping
 
@@ -430,7 +382,6 @@ If your backend sends normal app dates, SwiftSync is built to accept them withou
 
 ## Further Reading
 
-- [Migrating From Sync](docs/project/migrating-from-sync.md)
 - [Reactive Reads](docs/project/reactive-reads.md)
 - [Backend Contract](docs/project/backend-contract.md)
 - [FAQ](docs/project/faq.md)
