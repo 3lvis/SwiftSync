@@ -93,6 +93,63 @@ let payload = try await getUsers()
 try await syncContainer.sync(payload: payload, as: User.self)
 ```
 
+### One-to-one relationships work the same way
+
+![One-to-one relationship model example](Images/one-to-one-v2.png)
+
+```swift
+import SwiftData
+import SwiftSync
+
+@Syncable
+@Model
+final class User {
+  @Attribute(.unique) var id: Int
+  var name: String
+  var company: Company?
+
+  init(id: Int, name: String, company: Company? = nil) {
+    self.id = id
+    self.name = name
+    self.company = company
+  }
+}
+
+@Syncable
+@Model
+final class Company {
+  @Attribute(.unique) var id: Int
+  var name: String
+  var user: User?
+
+  init(id: Int, name: String, user: User? = nil) {
+    self.id = id
+    self.name = name
+    self.user = user
+  }
+}
+```
+
+```json
+[
+  {
+    "id": 6,
+    "name": "Shawn Merrill",
+    "company": {
+      "id": 0,
+      "name": "Facebook"
+    }
+  }
+]
+```
+
+```swift
+let syncContainer = try SyncContainer(for: User.self, Company.self)
+
+let payload = try await getUsers()
+try await syncContainer.sync(payload: payload, as: User.self)
+```
+
 ### SwiftUI reacts automatically to changes using @SyncQuery
 
 ```swift
@@ -347,15 +404,6 @@ try await syncContainer.sync(
 ```swift
 @SyncModel(Task.self, id: taskID, in: syncContainer)
 private var task: Task?
-
-@SyncQuery(
-  Item.self,
-  relationship: \.task,
-  relationshipID: taskID,
-  in: syncContainer,
-  sortBy: [SortDescriptor(\Item.id)]
-)
-private var items: [Item]
 ```
 
 This is useful when the parent row is globally identifiable but one nested child collection is scoped to the detail payload. The result is:
