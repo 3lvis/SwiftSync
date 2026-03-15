@@ -14,7 +14,7 @@ You define models once, read from local SwiftData, and let SwiftSync handle the 
 
 ## Quick Start
 
-### Mark your models as @Syncable
+### One-to-many: full child objects
 
 ![Relationship model example](Images/one-to-many-swift.png)
 
@@ -55,7 +55,7 @@ final class Note {
 }
 ```
 
-### JSON
+#### JSON
 
 ```json
 [
@@ -78,7 +78,7 @@ final class Note {
 ]
 ```
 
-### Setup SwiftSync and call sync with your JSON
+#### Setup SwiftSync and call sync with your JSON
 
 In your root:
 
@@ -93,9 +93,41 @@ let payload = try await getUsers()
 try await syncContainer.sync(payload: payload, as: User.self)
 ```
 
-### One-to-one relationships work the same way
+#### SwiftUI reacts automatically using @SyncQuery
+
+```swift
+import SwiftUI
+import SwiftSync
+
+struct UsersView: View {
+  let syncContainer: SyncContainer
+
+  @SyncQuery(
+    User.self,
+    in: syncContainer,
+    sortBy: [SortDescriptor(\User.id)]
+  )
+  private var users: [User]
+
+  var body: some View {
+    List {
+      ForEach(users) { user in
+        Section(user.email ?? "User \\(user.id)") {
+          ForEach(user.notes) { note in
+            Text(note.text)
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### One-to-one: full child object
 
 ![One-to-one relationship model example](Images/one-to-one-v2.png)
+
+#### Model
 
 ```swift
 import SwiftData
@@ -130,6 +162,8 @@ final class Company {
 }
 ```
 
+#### JSON
+
 ```json
 [
   {
@@ -143,6 +177,8 @@ final class Company {
 ]
 ```
 
+#### Setup SwiftSync and call sync with your JSON
+
 ```swift
 let syncContainer = try SyncContainer(for: User.self, Company.self)
 
@@ -150,7 +186,7 @@ let payload = try await getUsers()
 try await syncContainer.sync(payload: payload, as: User.self)
 ```
 
-### SwiftUI reacts automatically to changes using @SyncQuery
+#### SwiftUI reacts automatically using @SyncQuery
 
 ```swift
 import SwiftUI
@@ -162,16 +198,16 @@ struct UsersView: View {
   @SyncQuery(
     User.self,
     in: syncContainer,
-    sortBy: [SortDescriptor(\User.email)]
+    sortBy: [SortDescriptor(\User.id)]
   )
   private var users: [User]
 
   var body: some View {
     List(users) { user in
-      Section(user.email ?? "User \\(user.id)") {
-        ForEach(user.notes) { note in
-          Text(note.text)
-        }
+      VStack(alignment: .leading, spacing: 4) {
+        Text(user.name)
+        Text(user.company?.name ?? "No company")
+          .foregroundStyle(.secondary)
       }
     }
   }
