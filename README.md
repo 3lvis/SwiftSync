@@ -2,7 +2,7 @@
 
 SwiftSync is a sync layer for SwiftData apps.
 
-You define models once, read from local SwiftData, and let SwiftSync handle the repetitive JSON sync/export work in between.
+Define your models once, read from local SwiftData, and let SwiftSync handle the repetitive sync and export work in between.
 
 ## Features
 
@@ -78,15 +78,15 @@ final class Note {
 ]
 ```
 
-#### Setup SwiftSync and call sync with your JSON
+#### Sync
 
-In your root:
+Create the container:
 
 ```swift
 let syncContainer = try SyncContainer(for: User.self, Note.self)
 ```
 
-In your network layer:
+Then sync the payload:
 
 ```swift
 let payload = try await getUsers()
@@ -177,7 +177,7 @@ final class Company {
 ]
 ```
 
-#### Setup SwiftSync and call sync with your JSON
+#### Sync
 
 ```swift
 let syncContainer = try SyncContainer(for: User.self, Company.self)
@@ -245,7 +245,7 @@ Requirements: Xcode 17+, Swift 6.2, iOS 17+ / macOS 14+
 
 Quick Start already covers the default root-collection path.
 
-Overview should cover the next cases you are likely to need in a real app:
+The sections below cover the next cases you are likely to hit in a real app:
 
 - one-to-many relationships linked by IDs instead of nested child objects
 - parent-scoped sync for child collections returned under one parent
@@ -268,7 +268,7 @@ Table of contents:
 
 ## One-to-Many by IDs
 
-Use this shape when the parent payload does not include full child objects, only child identities.
+Use this shape when the parent JSON does not include full child objects and only sends their IDs.
 
 ### Model
 
@@ -313,7 +313,7 @@ public final class Task {
 try await syncContainer.sync(payload: payload, as: Project.self)
 ```
 
-This works when the referenced tasks already exist locally or are synced separately. SwiftSync links the relationship from the `*_ids` list without needing nested task objects in the same payload.
+This works when those tasks already exist in SwiftData, or are synced elsewhere. SwiftSync links the relationship from the `*_ids` list without needing nested task objects in the same JSON.
 
 ### Read
 
@@ -322,11 +322,11 @@ This works when the referenced tasks already exist locally or are synced separat
 private var project: Project?
 ```
 
-Use `null` to clear the relationship and an absent key to leave it unchanged.
+Use `null` to clear the relationship. Leave the key out to keep the current value unchanged.
 
 ## Parent-Scoped Sync
 
-Use parent-scoped sync when an endpoint returns the children for one parent, like `/projects/{id}/tasks`.
+Use parent-scoped sync when an endpoint returns the children for a single parent, such as `/projects/{id}/tasks`.
 
 ### Model
 
@@ -366,7 +366,7 @@ try await syncContainer.sync(
 )
 ```
 
-The explicit `relationship:` key path is required at the API boundary so the scope is unambiguous. SwiftSync diffs only within that parent scope, not across the whole table.
+The explicit `relationship:` key path tells SwiftSync which parent these rows belong to. It compares changes only inside that parent’s set of rows, not across the whole table.
 
 ### Read
 
@@ -379,18 +379,18 @@ let taskPublisher = SyncQueryPublisher(
 )
 ```
 
-Payload semantics remain strict:
+JSON handling stays strict:
 
 - absent key means ignore
 - explicit `null` means clear
 
-See [Parent Scope](docs/project/parent-scope.md) for the full contract.
+See [Parent Scope](docs/project/parent-scope.md) for the full rules.
 
 ## Single-Item Sync
 
-Use `sync(item:)` when the server returns one authoritative row, usually from a detail endpoint or a mutation response.
+Use `sync(item:)` when the server returns one row, usually from a detail endpoint or a save response.
 
-That becomes more interesting when the same payload also includes a scoped child collection.
+It becomes more useful when that same JSON also includes a child collection.
 
 ### Model
 
@@ -442,15 +442,15 @@ try await syncContainer.sync(
 private var task: Task?
 ```
 
-This is useful when the parent row is globally identifiable but one nested child collection is scoped to the detail payload. The result is:
+This is useful when the main row can be found on its own, but one nested child collection still belongs to that detail response. The result is:
 
-- `sync(item:)` updates the one task row without treating the payload as a full collection diff
-- checklist items are diffed only within that task's scope
+- `sync(item:)` updates that one task row without treating the JSON as a full collection refresh
+- checklist items are compared only within that task
 - list screens and detail screens keep reading from the same local SwiftData state
 
 ## Property Mapping and Customization
 
-Convention-first mapping is the default. Add overrides only when local naming intentionally differs from the backend.
+Convention-first mapping is the default. Reach for overrides only when local naming intentionally differs from the backend.
 
 `description` is a backend key, but the local property is named `descriptionText`:
 
@@ -459,7 +459,7 @@ Convention-first mapping is the default. Add overrides only when local naming in
 public var descriptionText: String?
 ```
 
-The task state is also modeled as a nested object in the payload while remaining flat in the local model:
+The task state can also come in as a nested object while staying flat in your local model:
 
 ```swift
 @RemoteKey("state.id")
@@ -469,7 +469,7 @@ public var state: String
 public var stateLabel: String
 ```
 
-Use this section for:
+Use these annotations when you need them:
 
 - rely on convention when names already line up
 - use `@RemoteKey` when the local property name intentionally differs
@@ -477,11 +477,11 @@ Use this section for:
 - use `@PrimaryKey` or `@PrimaryKey(remote:)` when identity is not `id`
 - use `@NotExport` when a property should not be written back out
 
-See [Property Mapping Contract](docs/project/property-mapping-contract.md) for the full rules.
+See [Property Mapping Contract](docs/project/property-mapping-contract.md) for the complete mapping rules.
 
 ## Reactive Reads
 
-SwiftSync is built around local reactive reads: sync updates SwiftData, and the UI reads from the local store.
+SwiftSync is built around local reactive reads: sync updates SwiftData, and the UI renders from that data.
 
 Use `@SyncQuery` for list reads and `@SyncModel` for detail reads.
 
@@ -497,7 +497,7 @@ Use `@SyncQuery` for list reads and `@SyncModel` for detail reads.
 var tasks: [Task]
 ```
 
-For parent-scoped reads, pass `relationship` and `relationshipID`:
+For rows that belong to one parent, pass `relationship` and `relationshipID`:
 
 ```swift
 @SyncQuery(
@@ -510,12 +510,12 @@ For parent-scoped reads, pass `relationship` and `relationshipID`:
 var tasks: [Task]
 ```
 
-UIKit is supported via `SyncQueryPublisher` and `SyncModelPublisher`.
+UIKit is supported through `SyncQueryPublisher` and `SyncModelPublisher`.
 See [Reactive Reads](docs/project/reactive-reads.md) for the full patterns and tradeoffs.
 
 ## Exporting JSON
 
-Use export when local models need to become API payloads again, usually in create/edit flows.
+Use export when local models need to turn back into JSON, usually for create and edit flows.
 
 ```swift
 let body = draft.exportObject(for: syncContainer)
@@ -534,7 +534,7 @@ Defaults:
 - ISO-style UTC dates
 - nils exported as `null`
 
-Use a different key style or date formatter by configuring the container:
+If your backend expects a different key style or date format, configure the container:
 
 ```swift
 let syncContainer = SyncContainer(
@@ -545,7 +545,7 @@ let syncContainer = SyncContainer(
 let rows = try syncContainer.export(as: User.self)
 ```
 
-See [FAQ](docs/project/faq.md) and [Property Mapping Contract](docs/project/property-mapping-contract.md) for export details.
+See [FAQ](docs/project/faq.md) and [Property Mapping Contract](docs/project/property-mapping-contract.md) for more on export.
 
 ## Date Handling
 
@@ -553,7 +553,7 @@ Inbound parsing supports common ISO8601 variants, date-only strings, `YYYY-MM-DD
 
 Export uses an ISO-style UTC formatter by default.
 
-If your backend needs a different outbound date format, pass a custom `DateFormatter` to `SyncContainer`:
+If your backend needs a different date format when you export, pass a custom `DateFormatter` to `SyncContainer`:
 
 ```swift
 let syncContainer = SyncContainer(
@@ -564,7 +564,7 @@ let syncContainer = SyncContainer(
 
 ## Demo App
 
-The demo app is there to show the full workflow end to end, not to teach every concept.
+The demo app shows the full workflow end to end. It is there to show the pieces working together, not to explain every concept in the README.
 
 It includes:
 
@@ -574,7 +574,7 @@ It includes:
 - local reactive reads in SwiftUI and UIKit
 - create/edit flows that export local models back into payloads
 
-Open `SwiftSync.xcworkspace` if you want to see those cases working together in one app.
+Open `SwiftSync.xcworkspace` if you want to see those cases working together in a single app.
 
 ## Further Reading
 
