@@ -61,7 +61,13 @@ final class Note {
 }
 ```
 
-### 2. Sync nested JSON into SwiftData
+### 2. Create a `SyncContainer`
+
+```swift
+let syncContainer = try SyncContainer(for: User.self, Note.self)
+```
+
+### 3. Fetch and sync server payload
 
 ```json
 [
@@ -85,9 +91,9 @@ final class Note {
 ```
 
 ```swift
-@MainActor
-func loadUsers(syncContainer: SyncContainer) async throws {
-  let payload: [[String: Any]] = [
+func getUsers() async throws -> [[String: Any]] {
+  // Replace this with your real API client.
+  [
     [
       "id": 6,
       "email": "shawn@ovium.com",
@@ -105,18 +111,16 @@ func loadUsers(syncContainer: SyncContainer) async throws {
       ]
     ]
   ]
+}
 
+@MainActor
+func refreshUsers(syncContainer: SyncContainer) async throws {
+  let payload = try await getUsers()
   try await syncContainer.sync(payload: payload, as: User.self)
 }
 ```
 
-Create the container where your app sets up persistence:
-
-```swift
-let syncContainer = try SyncContainer(for: User.self, Note.self)
-```
-
-### 3. Read it reactively in SwiftUI
+### 4. Read it reactively in SwiftUI
 
 ```swift
 import SwiftUI
@@ -144,7 +148,7 @@ struct UsersView: View {
 }
 ```
 
-### 4. Export local state back to JSON
+### 5. Export local state back to JSON
 
 ```swift
 let rows = try syncContainer.export(as: User.self)
