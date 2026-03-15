@@ -313,7 +313,7 @@ public final class Task {
 try await syncContainer.sync(payload: payload, as: Project.self)
 ```
 
-This works when those tasks already exist in SwiftData, or are synced elsewhere. SwiftSync links the relationship from the `*_ids` list without needing nested task objects in the same JSON.
+This works when those tasks already exist in SwiftData, or are synced elsewhere. SwiftSync uses the `*_ids` list to connect the relationship without needing full task objects in the same JSON.
 
 ### Read
 
@@ -322,7 +322,7 @@ This works when those tasks already exist in SwiftData, or are synced elsewhere.
 private var project: Project?
 ```
 
-Use `null` to clear the relationship. Leave the key out to keep the current value unchanged.
+This pattern is useful for APIs that return lightweight parent objects and keep the full child records on a separate endpoint.
 
 ## Parent-Scoped Sync
 
@@ -379,18 +379,13 @@ let taskPublisher = SyncQueryPublisher(
 )
 ```
 
-JSON handling stays strict:
-
-- Absent key means ignore
-- Explicit `null` means clear
-
 See [Parent Scope](docs/project/parent-scope.md) for the full rules.
 
 ## Single-Item Sync
 
-Use `sync(item:)` when the server returns one row, usually from a detail endpoint or a save response.
+Use `sync(item:)` when an endpoint returns one model at a time, such as a detail screen or the response from saving an edit.
 
-It becomes more useful when that same JSON also includes a child collection.
+It also works well when that same response includes child data that belongs to that one model.
 
 ### Model
 
@@ -442,24 +437,24 @@ try await syncContainer.sync(
 private var task: Task?
 ```
 
-This is useful when the main row can be found on its own, but one nested child collection still belongs to that detail response. The result is:
+This keeps the detail flow simple:
 
-- `sync(item:)` updates that one task row without treating the JSON as a full collection refresh
-- Checklist items are compared only within that task
-- List screens and detail screens keep reading from the same local SwiftData state
+- Update the task from the single-object response
+- Update that task's checklist items from the nested array
+- Let both list and detail screens keep reading from the same SwiftData data
 
 ## Property Mapping and Customization
 
 Convention-first mapping is the default. Reach for overrides only when local naming intentionally differs from the backend.
 
-`description` is a backend key, but the local property is named `descriptionText`:
+For example, `description` is a backend key, but `description` is not a good property name for a SwiftData model. In that case, give the local property a safer name and map it back to the server key:
 
 ```swift
 @RemoteKey("description")
 public var descriptionText: String?
 ```
 
-The task state can also come in as a nested object while staying flat in your local model:
+For example, a backend might send task state as a nested object like `{ "state": { "id": "todo", "label": "To Do" } }`, while your app would rather keep those values as simple properties on `Task`:
 
 ```swift
 @RemoteKey("state.id")
