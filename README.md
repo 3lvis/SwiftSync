@@ -1,5 +1,3 @@
-# SwiftSync
-
 ![SwiftSync](Images/logo-v3.png)
 
 SwiftSync is a sync layer for SwiftData apps with JSON backends.
