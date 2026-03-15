@@ -4,7 +4,7 @@ SwiftSync is a sync layer for SwiftData apps.
 
 You define models once, read from local SwiftData, and let SwiftSync handle the repetitive JSON sync/export work in between.
 
-Features:
+## Features
 
 - Convention-first JSON -> SwiftData mapping
 - Deterministic diffing for inserts, updates, and deletes
