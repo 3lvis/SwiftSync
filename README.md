@@ -154,6 +154,7 @@ Quick Start already covers the default root-collection path.
 
 Overview should cover the next cases you are likely to need in a real app:
 
+- one-to-many relationships linked by IDs instead of nested child objects
 - parent-scoped sync for child collections returned under one parent
 - single-item sync for detail payloads and mutation responses
 - relationship payload shapes beyond the simple nested to-many example
@@ -161,6 +162,7 @@ Overview should cover the next cases you are likely to need in a real app:
 
 Table of contents:
 
+- [One-to-Many by IDs](#one-to-many-by-ids)
 - [Parent-Scoped Sync](#parent-scoped-sync)
 - [Single-Item Sync](#single-item-sync)
 - [Property Mapping and Customization](#property-mapping-and-customization)
@@ -170,6 +172,64 @@ Table of contents:
 - [Demo App](#demo-app)
 - [Further Reading](#further-reading)
 - [License](#license)
+
+## One-to-Many by IDs
+
+Use this shape when the parent payload does not include full child objects, only child identities.
+
+### Model
+
+```swift
+@Syncable
+@Model
+public final class Project {
+  @Attribute(.unique) public var id: String
+  public var name: String
+  public var tasks: [Task]
+}
+
+@Syncable
+@Model
+public final class Task {
+  @Attribute(.unique) public var id: String
+  public var title: String
+
+  @NotExport
+  public var project: Project?
+}
+```
+
+### JSON
+
+```json
+[
+  {
+    "id": "C3E7A1B2-1001-0000-0000-000000000001",
+    "name": "Account Security Controls",
+    "task_ids": [
+      "C3E7A1B2-3001-0000-0000-000000000001",
+      "C3E7A1B2-3001-0000-0000-000000000002"
+    ]
+  }
+]
+```
+
+### Sync
+
+```swift
+try await syncContainer.sync(payload: payload, as: Project.self)
+```
+
+This works when the referenced tasks already exist locally or are synced separately. SwiftSync links the relationship from the `*_ids` list without needing nested task objects in the same payload.
+
+### Read
+
+```swift
+@SyncModel(Project.self, id: projectID, in: syncContainer)
+private var project: Project?
+```
+
+Use `null` to clear the relationship and an absent key to leave it unchanged.
 
 ## Parent-Scoped Sync
 
@@ -184,7 +244,6 @@ public final class Task {
   @Attribute(.unique) public var id: String
   public var title: String
   public var projectID: String
-  public var assigneeID: String?
 
   @NotExport
   public var project: Project?
@@ -198,17 +257,7 @@ public final class Task {
   {
     "id": "C3E7A1B2-3001-0000-0000-000000000001",
     "title": "Add session timeout controls to account settings",
-    "project_id": "C3E7A1B2-1001-0000-0000-000000000001",
-    "assignee_id": "C3E7A1B2-2001-0000-0000-000000000001",
-    "reviewer_ids": ["C3E7A1B2-2001-0000-0000-000000000004"],
-    "watcher_ids": [
-      "C3E7A1B2-2001-0000-0000-000000000002",
-      "C3E7A1B2-2001-0000-0000-000000000005"
-    ],
-    "state": {
-      "id": "inProgress",
-      "label": "In Progress"
-    }
+    "project_id": "C3E7A1B2-1001-0000-0000-000000000001"
   }
 ]
 ```
@@ -233,16 +282,9 @@ let taskPublisher = SyncQueryPublisher(
   Task.self,
   relationship: \Task.project,
   relationshipID: projectID,
-  in: syncContainer,
-  sortBy: [SortDescriptor(\Task.id)]
+  in: syncContainer
 )
 ```
-
-This is also where payload shapes usually start to mix:
-
-- scalar FK to-one links like `project_id` and `assignee_id`
-- to-many ID lists like `reviewer_ids` and `watcher_ids`
-- nested objects like `state.id` and `state.label`
 
 Payload semantics remain strict:
 
@@ -255,7 +297,7 @@ See [Parent Scope](docs/project/parent-scope.md) for the full contract.
 
 Use `sync(item:)` when the server returns one authoritative row, usually from a detail endpoint or a mutation response.
 
-That becomes more interesting when the same payload also includes a scoped child collection or many-to-many data.
+That becomes more interesting when the same payload also includes a scoped child collection or to-many IDs.
 
 ### Model
 
