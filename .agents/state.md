@@ -14,6 +14,7 @@ docs edited; no tests run
 - Limit this task to `README.md` and keep `## Quick Start` unchanged
 - Use `origin/legacy/core-data` as the reference source because `legacy/core-data` is not a local branch
 - Base the overview on `DemoCore` because it exercises the intended end-to-end SwiftSync workflow
+- Keep `## Full Overview` focused on advanced cases not already covered by Quick Start
 
 ## Files touched
 
