@@ -78,11 +78,15 @@ final class Note {
 ]
 ```
 
-```swift
-// In your root:
-let syncContainer = try SyncContainer(for: User.self, Note.self)
+In your root:
 
-// In your network layer:
+```swift
+let syncContainer = try SyncContainer(for: User.self, Note.self)
+```
+
+In your network layer:
+
+```swift
 let payload = try await getUsers()
 try await syncContainer.sync(payload: payload, as: User.self)
 ```
