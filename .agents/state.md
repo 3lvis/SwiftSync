@@ -2,19 +2,18 @@
 
 ## Plan
 
-- [x] Rework README `## Full Overview` around the demo app's real sync cases instead of a flat reference section
-- [x] Review the rewritten overview for coherence, anchors, and API accuracy
+- [x] Rewrite README `## Date Handling` to explain the default parsing and export behavior more clearly
+- [x] Review the updated `Date Handling` section for clarity, markdown formatting, and API accuracy
 
 ## Last known state
 
-docs edited; no tests run
+README date handling section rewritten and reviewed in context; no tests run
 
 ## Decisions (don't revisit)
 
-- Limit this task to `README.md` and keep `## Quick Start` unchanged
-- Use `origin/legacy/core-data` as the reference source because `legacy/core-data` is not a local branch
-- Base the overview on `DemoCore` because it exercises the intended end-to-end SwiftSync workflow
-- Keep `## Full Overview` focused on advanced cases not already covered by Quick Start
+- Limit this pass to the `## Date Handling` section in `README.md`
+- Keep the explanation practical: what works by default, then when to configure a formatter
+- Match the tone and structure of the updated `Reactive Reads` and `Exporting JSON` sections
 
 ## Files touched
 
