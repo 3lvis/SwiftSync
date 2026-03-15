@@ -9,14 +9,14 @@ If you are coming from legacy `Sync`, start with [Migrating From Sync](docs/proj
 
 You define models once, read from local SwiftData, and let SwiftSync handle the repetitive JSON import/export work in between.
 
-Skimmable overview:
+What it gives you:
 - convention-first JSON -> SwiftData mapping
 - deterministic diffing for inserts, updates, and deletes
 - automatic relationship syncing for nested objects and foreign keys
 - export back into API-ready JSON
 - reactive local reads for SwiftUI and UIKit
 
-What you can do with it:
+Core operations:
 - import sync for full payloads or single items
 - parent-scoped sync with explicit relationship paths
 - export for root models and parent-scoped models
@@ -30,11 +30,6 @@ Best fit:
 - your UI should react to local state instead of mutation callbacks
 
 ## Install
-
-Requirements:
-- Xcode 17+
-- Swift 6.2
-- iOS 17+ / macOS 14+
 
 Add the package in Xcode:
 
@@ -59,9 +54,9 @@ Then import:
 import SwiftSync
 ```
 
-## Quick Start
+Requirements: Xcode 17+, Swift 6.2, iOS 17+ / macOS 14+
 
-This is the shortest end-to-end path from model to live UI.
+## Quick Start
 
 ### 1. Define a syncable model
 
@@ -140,7 +135,7 @@ struct UsersScreen: View {
 let rows = try syncContainer.export(as: User.self)
 ```
 
-If this fits your app, continue with the full overview below.
+If this fits your app, continue with the full overview.
 
 ## Full Overview
 
@@ -158,7 +153,7 @@ Table of contents:
 
 ## Why SwiftSync
 
-Syncing API payloads into a local store is repetitive in the same ways across apps:
+Syncing API payloads into a local store usually means repeating the same work in every app:
 - map JSON keys onto local properties
 - reconcile inserts, updates, and deletions
 - keep relationships correct when the payload shape changes
@@ -230,7 +225,7 @@ Use `predicate` instead when `relationship/relationshipID` is not the right shap
 ### UIKit / State Machines
 
 UIKit is supported via `SyncQueryPublisher` and `SyncModelPublisher`.
-For the full patterns, see [Reactive Reads](docs/project/reactive-reads.md).
+See [Reactive Reads](docs/project/reactive-reads.md) for the full patterns.
 
 ## Supported Payload Shapes
 
@@ -314,7 +309,7 @@ For customization:
 - use `@PrimaryKey(remote: "external_id")` when the remote identity key differs
 - use `@RemoteKey` when your local property name intentionally differs from the payload
 
-One example that combines those cases:
+Combined example:
 
 ```swift
 @Syncable
@@ -352,8 +347,7 @@ Defaults:
 - ISO-style UTC dates
 - nils exported as `null`
 
-To exclude a specific relationship from all exports, apply `@NotExport` to the property
-in your model.
+To exclude a relationship from all exports, apply `@NotExport` to the property.
 
 Use camelCase by configuring the container:
 
