@@ -247,11 +247,11 @@ Quick Start already covers the default root-collection path.
 
 The sections below cover the next cases you are likely to hit in a real app:
 
-- one-to-many relationships linked by IDs instead of nested child objects
-- parent-scoped sync for child collections returned under one parent
-- single-item sync for detail payloads and mutation responses
-- relationship payload shapes beyond the simple nested to-many example
-- customization points for mapping, reads, export, and dates
+- One-to-many relationships linked by IDs instead of nested child objects
+- Parent-scoped sync for child collections returned under one parent
+- Single-item sync for detail payloads and mutation responses
+- Relationship payload shapes beyond the simple nested to-many example
+- Customization points for mapping, reads, export, and dates
 
 Table of contents:
 
@@ -381,8 +381,8 @@ let taskPublisher = SyncQueryPublisher(
 
 JSON handling stays strict:
 
-- absent key means ignore
-- explicit `null` means clear
+- Absent key means ignore
+- Explicit `null` means clear
 
 See [Parent Scope](docs/project/parent-scope.md) for the full rules.
 
@@ -445,8 +445,8 @@ private var task: Task?
 This is useful when the main row can be found on its own, but one nested child collection still belongs to that detail response. The result is:
 
 - `sync(item:)` updates that one task row without treating the JSON as a full collection refresh
-- checklist items are compared only within that task
-- list screens and detail screens keep reading from the same local SwiftData state
+- Checklist items are compared only within that task
+- List screens and detail screens keep reading from the same local SwiftData state
 
 ## Property Mapping and Customization
 
@@ -471,11 +471,11 @@ public var stateLabel: String
 
 Use these annotations when you need them:
 
-- rely on convention when names already line up
-- use `@RemoteKey` when the local property name intentionally differs
-- use deep paths when the backend nests values but your local model should stay flat
-- use `@PrimaryKey` or `@PrimaryKey(remote:)` when identity is not `id`
-- use `@NotExport` when a property should not be written back out
+- Rely on convention when names already line up
+- Use `@RemoteKey` when the local property name intentionally differs
+- Use deep paths when the backend nests values but your local model should stay flat
+- Use `@PrimaryKey` or `@PrimaryKey(remote:)` when identity is not `id`
+- Use `@NotExport` when a property should not be written back out
 
 See [Property Mapping Contract](docs/project/property-mapping-contract.md) for the complete mapping rules.
 
@@ -529,10 +529,10 @@ let rows = try syncContainer.export(as: User.self)
 
 Defaults:
 
-- snake_case keys
-- relationships included as inline arrays/objects
+- Snake_case keys
+- Relationships included as inline arrays/objects
 - ISO-style UTC dates
-- nils exported as `null`
+- Nils exported as `null`
 
 If your backend expects a different key style or date format, configure the container:
 
@@ -568,11 +568,11 @@ The demo app shows the full workflow end to end. It is there to show the pieces 
 
 It includes:
 
-- project-scoped task sync
-- task detail sync with nested items
-- to-one and to-many relationship updates
-- local reactive reads in SwiftUI and UIKit
-- create/edit flows that export local models back into payloads
+- Project-scoped task sync
+- Task detail sync with nested items
+- To-one and to-many relationship updates
+- Local reactive reads in SwiftUI and UIKit
+- Create/edit flows that export local models back into payloads
 
 Open `SwiftSync.xcworkspace` if you want to see those cases working together in a single app.
 
