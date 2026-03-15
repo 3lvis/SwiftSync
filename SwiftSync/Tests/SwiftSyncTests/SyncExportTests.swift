@@ -210,7 +210,7 @@ extension ManualExportChild: SyncUpdatableModel {
         return true
     }
 
-    func exportObject(keyStyle _: KeyStyle, dateFormatter _: DateFormatter) -> [String: Any] {
+    func export(keyStyle _: KeyStyle, dateFormatter _: DateFormatter) -> [String: Any] {
         [
             "id": id,
             "text": text
@@ -237,7 +237,7 @@ final class CycleNode {
     }
 }
 
-/// A Task-like model used to test that update bodies via exportObject
+/// A Task-like model used to test that update bodies via export
 /// correctly honor @RemoteKey("description") and @RemoteKey("state.id/label"),
 /// matching the gap that existed before update adopted the export pattern.
 @Syncable
@@ -256,15 +256,15 @@ final class UpdateTaskLike {
     }
 }
 
-// Compile-time regression: exportObject must be a requirement of SyncUpdatableModel,
-// not a separate ExportModel protocol. This function would not compile if exportObject
+// Compile-time regression: export must be a requirement of SyncUpdatableModel,
+// not a separate ExportModel protocol. This function would not compile if export
 // were missing from SyncUpdatableModel.
-private func _assertExportObjectIsOnSyncUpdatableModel<M: SyncUpdatableModel>(
+private func _assertExportIsOnSyncUpdatableModel<M: SyncUpdatableModel>(
     _ model: M,
     keyStyle: KeyStyle,
     dateFormatter: DateFormatter
 ) -> [String: Any] {
-    model.exportObject(keyStyle: keyStyle, dateFormatter: dateFormatter)
+    model.export(keyStyle: keyStyle, dateFormatter: dateFormatter)
 }
 
 final class ExportTests: XCTestCase {
@@ -276,7 +276,7 @@ final class ExportTests: XCTestCase {
         try context.save()
 
         let task = try fetchSingle(ExportTask.self, from: context)
-        let body = task.exportObject(for: syncContainer)
+        let body = syncContainer.export(task)
         XCTAssertEqual(body["id"] as? Int, 9)
         XCTAssertEqual(body["completed"] as? Bool, false)
         XCTAssertNotNil(body["created_at"] as? String)
@@ -290,7 +290,7 @@ final class ExportTests: XCTestCase {
         try context.save()
 
         let task = try fetchSingle(ExportTask.self, from: context)
-        let body = task.exportObject(for: syncContainer)
+        let body = syncContainer.export(task)
         XCTAssertNotNil(body["createdAt"])
         XCTAssertNil(body["created_at"])
     }
@@ -303,7 +303,7 @@ final class ExportTests: XCTestCase {
         try context.save()
 
         let record = try fetchSingle(ExportAcronymRecord.self, from: context)
-        let body = record.exportObject(for: syncContainer)
+        let body = syncContainer.export(record)
         XCTAssertEqual(body["project_id"] as? String, "P-100")
         XCTAssertNil(body["project_i_d"])
     }
@@ -316,7 +316,7 @@ final class ExportTests: XCTestCase {
         try context.save()
 
         let record = try fetchSingle(ExportRemotePrimary.self, from: context)
-        let body = record.exportObject(for: syncContainer)
+        let body = syncContainer.export(record)
         XCTAssertEqual(body["external_id"] as? String, "abc")
         XCTAssertNil(body["xid"])
     }
@@ -329,7 +329,7 @@ final class ExportTests: XCTestCase {
         try context.save()
 
         let record = try fetchSingle(ExportBarePrimary.self, from: context)
-        let body = record.exportObject(for: syncContainer)
+        let body = syncContainer.export(record)
         XCTAssertEqual(body["external_id"] as? String, "ext-1")
         XCTAssertNil(body["externalID"])
     }
@@ -357,7 +357,7 @@ final class ExportTests: XCTestCase {
         try context.save()
 
         let record = try fetchSingle(ExportBinaryDecimalRecord.self, from: context)
-        let body = record.exportObject(for: syncContainer)
+        let body = syncContainer.export(record)
         XCTAssertEqual(body["blob"] as? String, blob.base64EncodedString())
         XCTAssertEqual((body["amount"] as? NSDecimalNumber)?.decimalValue, amount)
     }
@@ -370,7 +370,7 @@ final class ExportTests: XCTestCase {
         try context.save()
 
         let model = try fetchSingle(ExportMappedFields.self, from: context)
-        let body = model.exportObject(for: syncContainer)
+        let body = syncContainer.export(model)
         XCTAssertEqual(body["type"] as? String, "admin")
         XCTAssertNil(body["user_type"])
         XCTAssertNil(body["local_only"])
@@ -394,7 +394,7 @@ final class ExportTests: XCTestCase {
         try context.save()
 
         let user = try fetchSingle(ExportUser.self, from: context)
-        let body = user.exportObject(for: syncContainer)
+        let body = syncContainer.export(user)
         XCTAssertEqual((body["company"] as? [String: Any])?["id"] as? Int, 7)
         XCTAssertEqual((body["notes"] as? [[String: Any]])?.count, 2)
     }
@@ -407,7 +407,7 @@ final class ExportTests: XCTestCase {
         try context.save()
 
         let model = try fetchSingle(ExportMappedFields.self, from: context)
-        let body = model.exportObject(for: syncContainer)
+        let body = syncContainer.export(model)
         let profile = body["profile"] as? [String: Any]
         let contact = profile?["contact"] as? [String: Any]
         XCTAssertTrue(contact?["email"] is NSNull, "Nil optional under @RemoteKey nested path must always emit NSNull")
@@ -424,7 +424,7 @@ final class ExportTests: XCTestCase {
         try context.save()
 
         let model = try fetchSingle(ExportChild.self, from: context)
-        let body = model.exportObject(for: syncContainer)
+        let body = syncContainer.export(model)
         XCTAssertNil(body["parent"])
     }
 
@@ -436,7 +436,7 @@ final class ExportTests: XCTestCase {
         try context.save()
 
         let user = try fetchSingle(ExportUser.self, from: context)
-        let body = user.exportObject(for: syncContainer)
+        let body = syncContainer.export(user)
         XCTAssertTrue(body["company"] is NSNull, "Nil to-one relationship must always emit NSNull")
     }
 
@@ -448,7 +448,7 @@ final class ExportTests: XCTestCase {
         try context.save()
 
         let task = try fetchSingle(ExportTask.self, from: context)
-        let body = task.exportObject(for: syncContainer)
+        let body = syncContainer.export(task)
         XCTAssertTrue(body["nickname"] is NSNull, "Nil optional scalar must always emit NSNull")
     }
 
@@ -470,7 +470,7 @@ final class ExportTests: XCTestCase {
         let task = try context.fetch(FetchDescriptor<ExportTask>()).first!
 
         // Export produces NSNull for nickname automatically — no manual NSNull() needed
-        let body = task.exportObject(for: syncContainer)
+        let body = syncContainer.export(task)
         XCTAssertTrue(body["nickname"] is NSNull,
                       "Nil optional must appear as NSNull in body so server clears the field")
 
@@ -493,7 +493,7 @@ final class ExportTests: XCTestCase {
         try context.save()
 
         let task = try fetchSingle(ExportTask.self, from: context)
-        let body = task.exportObject(for: syncContainer)
+        let body = syncContainer.export(task)
         XCTAssertEqual(body["created_at"] as? String, "1970/01/01")
     }
 
@@ -508,8 +508,8 @@ final class ExportTests: XCTestCase {
         context.insert(child)
         try context.save()
 
-        let rootBody = root.exportObject(for: syncContainer)
-        let childBody = child.exportObject(for: syncContainer)
+        let rootBody = syncContainer.export(root)
+        let childBody = syncContainer.export(child)
         XCTAssertEqual(rootBody["id"] as? Int, 1)
         XCTAssertEqual(childBody["id"] as? Int, 2)
     }
@@ -531,7 +531,7 @@ final class ExportTests: XCTestCase {
         let model = ExportMappedFields(id: 42, userType: "editor", email: "update@example.com", localOnly: "ignored")
         context.insert(model)
 
-        let body = model.exportObject(
+        let body = model.export(
             keyStyle: .snakeCase,
             dateFormatter: defaultExportDateFormatter()
         )
@@ -570,7 +570,7 @@ final class ExportTests: XCTestCase {
         )
         context.insert(model)
 
-        let body = model.exportObject(
+        let body = model.export(
             keyStyle: .snakeCase,
             dateFormatter: defaultExportDateFormatter()
         )
@@ -593,7 +593,7 @@ final class ExportTests: XCTestCase {
         XCTAssertNil(body["state_label"], "Flat state_label key must not appear")
     }
 
-    // MARK: - exportObject(for:container:) derives keyStyle and dateFormatter from SyncContainer
+    // MARK: - SyncContainer.export(_:) derives keyStyle and dateFormatter from SyncContainer
 
     @MainActor
     func testExportForContainerDerivesKeyStyleFromContainer() throws {
@@ -607,7 +607,7 @@ final class ExportTests: XCTestCase {
         try context.save()
 
         let task = try context.fetch(FetchDescriptor<ExportTask>()).first!
-        let body = task.exportObject(for: syncContainer)
+        let body = syncContainer.export(task)
 
         // camelCase keyStyle from container: createdAt, not created_at
         XCTAssertNotNil(body["createdAt"], "Expected camelCase key from container.keyStyle")
@@ -631,7 +631,7 @@ final class ExportTests: XCTestCase {
         try context.save()
 
         let task = try context.fetch(FetchDescriptor<ExportTask>()).first!
-        let body = task.exportObject(for: syncContainer)
+        let body = syncContainer.export(task)
 
         XCTAssertEqual(body["created_at"] as? String, "1970/01/01",
                        "Expected date formatted using container.dateFormatter")

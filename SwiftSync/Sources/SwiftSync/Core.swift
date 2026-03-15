@@ -118,7 +118,7 @@ public protocol SyncUpdatableModel: SyncModelable {
         in context: ModelContext,
         operations: SyncRelationshipOperations
     ) async throws -> Bool
-    func exportObject(keyStyle: KeyStyle, dateFormatter: DateFormatter) -> [String: Any]
+    func export(keyStyle: KeyStyle, dateFormatter: DateFormatter) -> [String: Any]
 
     /// Forces a scalar write so iOS CoreData marks the owning row dirty after a to-many change.
     /// `@Syncable` generates `self.id = self.id`. Hand-written conformances get a no-op default
@@ -141,15 +141,8 @@ public extension SyncUpdatableModel {
         try await applyRelationships(payload, in: context)
     }
 
-    func exportObject(keyStyle _: KeyStyle, dateFormatter _: DateFormatter) -> [String: Any] {
+    func export(keyStyle _: KeyStyle, dateFormatter _: DateFormatter) -> [String: Any] {
         [:]
-    }
-
-    func exportObject(for container: SyncContainer) -> [String: Any] {
-        exportObject(
-            keyStyle: container.keyStyle,
-            dateFormatter: container.dateFormatter
-        )
     }
 }
 

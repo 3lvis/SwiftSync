@@ -131,7 +131,7 @@ final class SyncableMacroDiagnosticsTests: XCTestCase {
                     try syncApplyGeneratedRelationships(payload, in: context, operations: operations)
                 }
 
-                public func exportObject(keyStyle: KeyStyle, dateFormatter: DateFormatter) -> [String: Any] {
+                public func export(keyStyle: KeyStyle, dateFormatter: DateFormatter) -> [String: Any] {
                     if !ExportState.enter(self) {
                         return [:]
                     }

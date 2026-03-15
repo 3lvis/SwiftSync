@@ -569,7 +569,7 @@ Use export when a local draft needs to become a request body, usually for create
 The main surface is object export:
 
 ```swift
-let body = draft.exportObject(for: syncContainer)
+let body = syncContainer.export(draft)
 ```
 
 That gives you a JSON-ready dictionary using the same key mapping, nested relationship handling, and date formatting rules that sync uses in the other direction.
@@ -592,7 +592,7 @@ let syncContainer = SyncContainer(
   dateFormatter: formatter
 )
 
-let body = draft.exportObject(for: syncContainer)
+let body = syncContainer.export(draft)
 ```
 
 Defaults:

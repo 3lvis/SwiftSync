@@ -201,6 +201,10 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         )
     }
 
+    public func export<Model: SyncUpdatableModel>(_ model: Model) -> [String: Any] {
+        model.export(keyStyle: keyStyle, dateFormatter: dateFormatter)
+    }
+
     private func installDidSaveObserver() {
         NotificationCenter.default.addObserver(
             self,

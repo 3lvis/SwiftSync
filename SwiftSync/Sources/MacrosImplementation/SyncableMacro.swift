@@ -163,7 +163,7 @@ public struct SyncableMacro: ExtensionMacro {
                         try syncApplyGeneratedRelationships(payload, in: context, operations: operations)
                     }
 
-                    \(raw: memberAccessModifier)func exportObject(keyStyle: KeyStyle, dateFormatter: DateFormatter) -> [String: Any] {
+                    \(raw: memberAccessModifier)func export(keyStyle: KeyStyle, dateFormatter: DateFormatter) -> [String: Any] {
                         if !ExportState.enter(self) {
                             return [:]
                         }
@@ -440,7 +440,7 @@ public struct SyncableMacro: ExtensionMacro {
                     let exportedChildren: [[String: Any]] = self.\(property.name).compactMap { child in
                         let anyChild: Any = child
                         guard let exportable = anyChild as? any SyncUpdatableModel else { return nil }
-                        return exportable.exportObject(keyStyle: keyStyle, dateFormatter: dateFormatter)
+                        return exportable.export(keyStyle: keyStyle, dateFormatter: dateFormatter)
                     }
                     exportSetValue(exportedChildren, for: baseKey, into: &result)
                 }
@@ -451,7 +451,7 @@ public struct SyncableMacro: ExtensionMacro {
                 let baseKey = \(keyExpr)
                 let anyChild: Any? = self.\(property.name)
                 if let exportable = anyChild as? any SyncUpdatableModel {
-                    let child = exportable.exportObject(keyStyle: keyStyle, dateFormatter: dateFormatter)
+                    let child = exportable.export(keyStyle: keyStyle, dateFormatter: dateFormatter)
                     exportSetValue(child, for: baseKey, into: &result)
                 } else {
                     exportSetValue(NSNull(), for: baseKey, into: &result)
