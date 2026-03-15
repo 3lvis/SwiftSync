@@ -150,50 +150,341 @@ Requirements: Xcode 17+, Swift 6.2, iOS 17+ / macOS 14+
 
 ## Full Overview
 
+The fastest way to understand SwiftSync is to follow the demo app.
+
+The demo is a small project-tracking app backed by a simulated API. It includes root collections (`projects`, `users`, `task-state-options`), parent-scoped children (`/projects/{id}/tasks`), task detail payloads with nested checklist items, and task editing flows that mutate scalar fields, to-one links, and to-many people relationships.
+
 Table of contents:
 
-- [Why SwiftSync](#why-swiftsync)
 - [Demo App](#demo-app)
-- [Property Mapping](#property-mapping)
+- [Case Study: Projects](#case-study-projects)
+- [Case Study: Project Tasks](#case-study-project-tasks)
+- [Case Study: Task Detail](#case-study-task-detail)
+- [Case Study: Task Form Metadata](#case-study-task-form-metadata)
+- [Property Mapping and Customization](#property-mapping-and-customization)
 - [Reactive Reads](#reactive-reads)
-- [Supported Payload Shapes](#supported-payload-shapes)
-- [Modeling and Mapping](#modeling-and-mapping)
 - [Exporting JSON](#exporting-json)
 - [Date Handling](#date-handling)
 - [Further Reading](#further-reading)
 - [License](#license)
 
-## Why SwiftSync
-
-Syncing API payloads into a local store usually means repeating the same work in every app:
-
-- map JSON keys onto local properties
-- reconcile inserts, updates, and deletions
-- keep relationships correct when the payload shape changes
-- make local UI reads stay coherent after background sync work
-
 ## Demo App
 
-SwiftSync includes a Demo app that shows the intended workflow end to end:
+The demo app is the best overview because it exercises the full intended workflow instead of isolated toy snippets.
 
-- syncing backend-shaped project payloads into SwiftData
-- reading that local state in SwiftUI screens
-- editing data while keeping list and detail views in sync
+It shows:
 
-To review it's contents and play with it open the `SwiftSync.xcworkspace`.
+- a `Project -> Task -> Item` model graph in SwiftData
+- `User` reference data reused across assignee, author, reviewers, and watchers
+- root sync for shared lookup tables and project lists
+- parent-scoped sync for project tasks and task items
+- task creation and editing flows that export local drafts back into API payloads
+- SwiftUI and UIKit reads that stay in sync with the local store
+- network scenario presets (`Fast Stable`, `Slow Network`, `Flaky Network`, `Offline`) so you can see the local-first read model under unstable conditions
 
-## Property Mapping
+To review it, open `SwiftSync.xcworkspace`.
 
-- convention-first mapping is expected
-- inbound key style is configured once at `SyncContainer` (`.snakeCase` default, `.camelCase` optional)
-- acronym-aware snake mapping (`projectID` -> `project_id`, `remoteURL` -> `remote_url`)
-- deep-path import/export is supported via `@RemoteKey("a.b.c")`
-- scalar coercions are deterministic; relationship FK linking remains strict
-- remove `@RemoteKey` when convention already matches (for example `projectID` maps to `project_id`)
-- keep `@RemoteKey` when your local property name intentionally differs from the backend key (for example `descriptionText` -> `description`)
-- use `@RemoteKey("a.b.c")` for nested payload keys (import and export)
+## Case Study: Projects
+
+This is the top-level collection case: one endpoint returns the current list of projects, and SwiftSync diffs that collection into the local store.
+
+### Model
+
+```swift
+@Syncable
+@Model
+public final class Project {
+  @Attribute(.unique) public var id: String
+  public var name: String
+  public var taskCount: Int
+  public var createdAt: Date
+  public var updatedAt: Date
+  public var tasks: [Task]
+}
+```
+
+### JSON
+
+```json
+[
+  {
+    "id": "C3E7A1B2-1001-0000-0000-000000000001",
+    "name": "Account Security Controls",
+    "task_count": 5,
+    "created_at": "2025-01-01T09:00:00Z",
+    "updated_at": "2025-01-01T09:00:00Z"
+  }
+]
+```
+
+### Sync
+
+```swift
+let payload = try await apiClient.getProjects()
+try await syncContainer.sync(payload: payload, as: Project.self)
+```
+
+This is the "replace this collection with the server's current truth" path: insert new rows, update existing ones, and remove rows no longer present.
+
+### Read
+
+```swift
+let rowsPublisher = SyncQueryPublisher(
+  Project.self,
+  in: syncContainer,
+  sortBy: [SortDescriptor(\Project.name), SortDescriptor(\Project.id)]
+)
+```
+
+This is the default SwiftSync shape: stable identity, mostly convention-matched scalar fields, and a relationship filled later by a more specific endpoint.
+
+## Case Study: Project Tasks
+
+The demo does not fetch every task globally. Instead, `/projects/{id}/tasks` returns the tasks for one project, which makes this a parent-scoped sync.
+
+### Model
+
+```swift
+@Syncable
+@Model
+public final class Task {
+  @Attribute(.unique) public var id: String
+  public var projectID: String
+  public var assigneeID: String?
+  public var authorID: String
+  public var title: String
+  public var createdAt: Date
+  public var updatedAt: Date
+
+  @NotExport
+  public var project: Project?
+}
+```
+
+### JSON
+
+```json
+[
+  {
+    "id": "C3E7A1B2-3001-0000-0000-000000000001",
+    "project_id": "C3E7A1B2-1001-0000-0000-000000000001",
+    "author_id": "C3E7A1B2-2001-0000-0000-000000000004",
+    "assignee_id": "C3E7A1B2-2001-0000-0000-000000000001",
+    "title": "Add session timeout controls to account settings",
+    "created_at": "2025-01-01T05:00:00Z",
+    "updated_at": "2025-01-01T05:00:00Z"
+  }
+]
+```
+
+### Sync
+
+```swift
+try await syncContainer.sync(
+  payload: payload,
+  as: Task.self,
+  parent: project,
+  relationship: \Task.project
+)
+```
+
+The explicit `relationship:` key path is required at the API boundary so the scope is unambiguous.
+
+### Read
+
+```swift
+let taskPublisher = SyncQueryPublisher(
+  Task.self,
+  relationship: \Task.project,
+  relationshipID: projectID,
+  in: syncContainer,
+  sortBy: [
+    SortDescriptor(\Task.updatedAt, order: .reverse),
+    SortDescriptor(\Task.id)
+  ]
+)
+```
+
+The quick start already covered the basic nested to-many case. The demo expands that into a more realistic child model where tasks also carry scalar foreign keys like `projectID`, `authorID`, and `assigneeID`, plus related `User` rows loaded from shared reference data.
+
+Payload semantics remain strict:
+
+- absent key means ignore
+- explicit `null` means clear
+
+## Case Study: Task Detail
+
+The task detail screen shows a different pattern: one endpoint returns a single task plus nested checklist items.
+
+### Model
+
+```swift
+@Syncable
+@Model
+public final class Item {
+  @Attribute(.unique) public var id: String
+  public var taskID: String
+  public var title: String
+  public var position: Int
+
+  @NotExport
+  public var task: Task?
+}
+```
+
+### JSON
+
+```json
+{
+  "id": "C3E7A1B2-3001-0000-0000-000000000001",
+  "project_id": "C3E7A1B2-1001-0000-0000-000000000001",
+  "title": "Add session timeout controls to account settings",
+  "items": [
+    {
+      "id": "C3E7A1B2-4001-0000-0000-000000000001",
+      "task_id": "C3E7A1B2-3001-0000-0000-000000000001",
+      "title": "Document requirements",
+      "position": 0
+    }
+  ]
+}
+```
+
+### Sync
+
+```swift
+try await syncContainer.sync(item: payload, as: Task.self)
+try await syncContainer.sync(
+  payload: itemPayload,
+  as: Item.self,
+  parent: task,
+  relationship: \Item.task
+)
+```
+
+### Read
+
+```swift
+public var task: Task? {
+  taskPublisher.row
+}
+
+public var items: [Item] {
+  itemPublisher.rows
+}
+```
+
+This is useful when the parent row is globally identifiable but one nested child collection is scoped to the detail payload. The result is:
+
+- `sync(item:)` updates the one task row without treating the payload as a full collection diff
+- checklist items are diffed only within that task's scope
+- list screens and detail screens keep reading from the same local SwiftData state
+
+## Case Study: Task Form Metadata
+
+The task form combines shared lookup data, scalar fields, and to-many people relationships.
+
+### Model
+
+```swift
+@Syncable
+@Model
+public final class TaskStateOption {
+  @Attribute(.unique) public var id: String
+  public var label: String
+  public var sortOrder: Int
+}
+```
+
+The same form also depends on:
+
+- `User` rows for authors, assignees, reviewers, and watchers
+- `Task` fields like `assigneeID`, `state`, `stateLabel`, `reviewers`, and `watchers`
+
+### JSON
+
+```json
+{
+  "project_id": "C3E7A1B2-1001-0000-0000-000000000001",
+  "title": "Validate security policy PATCH payload",
+  "description": "Protect the API contract for security settings updates.",
+  "state": { "id": "todo" },
+  "assignee_id": "C3E7A1B2-2001-0000-0000-000000000002"
+}
+```
+
+### Sync
+
+```swift
+try await syncUsersData()
+try await syncTaskStatesData()
+```
+
+Then task edits export local form state back into JSON, send it to the backend, and sync the authoritative response back into SwiftData.
+
+### Why this matters
+
+This part of the demo shows several non-trivial cases:
+
+- a to-one relationship represented by a scalar foreign key (`assigneeID`)
+- multiple roles pointing at the same model type (`author`, `assignee`, `reviewers`, `watchers`)
+- to-many relationships maintained by explicit ID replacement endpoints
+- the local UI reading immediately from SwiftData instead of waiting for view-specific DTOs
+
+## Property Mapping and Customization
+
+Most of the demo uses convention-first mapping, but the `Task` model also shows where customization belongs.
+
+### Model
+
+`description` is a backend key, but the local property is named `descriptionText`:
+
+```swift
+@RemoteKey("description")
+public var descriptionText: String?
+```
+
+The task state is also modeled as a nested object in the payload while remaining flat in the local model:
+
+```swift
+@RemoteKey("state.id")
+public var state: String
+
+@RemoteKey("state.label")
+public var stateLabel: String
+```
+
+### JSON
+
+```json
+{
+  "description": "Protect the API contract for security settings updates.",
+  "state": {
+    "id": "todo",
+    "label": "To Do"
+  }
+}
+```
+
+### Mapping
+
+That is the intended shape for customization:
+
+- rely on convention when names already line up
+- use `@RemoteKey` when the local property name intentionally differs
+- use deep paths when the backend nests values but your local model should stay flat
+
+Relationships that should not be exported wholesale back to the server are marked `@NotExport` in the demo. That keeps export focused on the API contract instead of mirroring the entire local object graph.
+
+For identity selection:
+
+1. `@PrimaryKey` or `@PrimaryKey(remote: ...)`
+2. `id`
+3. `remoteID`
 
 ## Reactive Reads
+
+The demo reads everything from local SwiftData using reactive queries. That is the key architectural shift: sync writes into the local store, and screens observe the store instead of binding directly to network responses.
 
 Use `@SyncQuery` for list reads and `@SyncModel` for detail reads.
 
@@ -202,7 +493,7 @@ Use `@SyncQuery` for list reads and `@SyncModel` for detail reads.
   Task.self,
   in: syncContainer,
   sortBy: [
-    SortDescriptor(\Task.priority, order: .reverse),
+    SortDescriptor(\Task.updatedAt, order: .reverse),
     SortDescriptor(\Task.id)
   ]
 )
@@ -233,121 +524,15 @@ Use `predicate` instead when `relationship/relationshipID` is not the right shap
 UIKit is supported via `SyncQueryPublisher` and `SyncModelPublisher`.
 See [Reactive Reads](docs/project/reactive-reads.md) for the full patterns.
 
-## Supported Payload Shapes
-
-SwiftSync supports the shapes most JSON APIs actually send:
-
-- root collections for insert/update/delete diffing
-- single-item updates with `sync(item:)`
-- to-one relationships as nested objects or `*_id`
-- to-many relationships as nested arrays or `*_ids`
-- parent-scoped sync when an endpoint only returns children for one parent
-- export back to API-ready JSON
-
-Relationship shape example:
-
-![Relationship model example](Images/one-to-many-swift.png)
-
-That same model can be synced from nested objects:
-
-```json
-[
-  {
-    "id": 77,
-    "title": "Launch Planning",
-    "messages": [
-      {
-        "id": 101,
-        "text": "Draft kickoff agenda"
-      },
-      {
-        "id": 102,
-        "text": "Share timeline v1"
-      }
-    ]
-  }
-]
-```
-
-Or from relationship IDs when the children already exist:
-
-```json
-[
-  {
-    "id": 6,
-    "notes_ids": [301, 302]
-  }
-]
-```
-
-Parent-scoped sync requires an explicit `relationship:` key path:
-
-```swift
-try await SwiftSync.sync(
-  payload: payload,
-  as: Note.self,
-  in: context,
-  parent: user,
-  relationship: \Note.user
-)
-```
-
-## Modeling and Mapping
-
-### `@Syncable`
-
-`@Syncable` generates:
-
-- `SyncUpdatableModel` conformance (make/apply + relationship sync)
-- export support via `exportObject(keyStyle:dateFormatter:)`
-
-It supports:
-
-- to-one by `*_id` (strict typed FK lookup)
-- to-many by `*_ids` (unordered membership updates)
-- nested to-one by relationship key (for example `company`)
-- nested to-many by relationship key (for example `members`)
-
-Identity selection order:
-
-1. property marked with `@PrimaryKey` (or `@PrimaryKey(remote: ...)`)
-2. `id`
-3. `remoteID`
-
-For customization:
-
-- use `@PrimaryKey` when identity is not `id`
-- use `@PrimaryKey(remote: "external_id")` when the remote identity key differs
-- use `@RemoteKey` when your local property name intentionally differs from the payload
-
-Combined example:
-
-```swift
-@Syncable
-@Model
-final class ExternalAccount {
-  @PrimaryKey(remote: "external_id")
-  @Attribute(.unique) var xid: String
-  @RemoteKey("type") var accountType: String
-  @RemoteKey("profile.contact.email") var email: String?
-  @NotExport var localOnly: String
-
-  init(xid: String, accountType: String, email: String?, localOnly: String) {
-    self.xid = xid
-    self.accountType = accountType
-    self.email = email
-    self.localOnly = localOnly
-  }
-}
-```
-
-Notes:
-
-- `@RemoteKey` affects inbound sync mapping and export mapping.
-- `@RemoteKey("a.b.c")` reads/writes nested payload paths.
-- Deep paths preserve normal missing/null semantics.
-
 ## Exporting JSON
+
+The demo form flow exports local draft state back into request payloads before sending mutations:
+
+```swift
+let body = draft.exportObject(for: syncContainer)
+```
+
+For bulk export, use:
 
 ```swift
 let rows = try syncContainer.export(as: User.self)
@@ -372,13 +557,14 @@ let rows = try syncContainer.export(as: User.self)
 Export only the children for one parent:
 
 ```swift
-let rows = try syncContainer.export(as: Note.self, parent: user)
+let rows = try syncContainer.export(as: Item.self, parent: task)
 ```
 
 ## Date Handling
 
-Inbound date parsing supports common ISO8601 variants, date-only strings, `YYYY-MM-DD HH:mm:ss`, fractional seconds, and unix timestamps.
-If your backend sends normal app dates, SwiftSync is built to accept them without extra formatter plumbing.
+The demo uses normal API timestamps on every model (`createdAt`, `updatedAt`) so you can see date parsing in a realistic setup instead of an isolated test model.
+
+Inbound parsing supports common ISO8601 variants, date-only strings, `YYYY-MM-DD HH:mm:ss`, fractional seconds, and unix timestamps. In practice, if your backend sends ordinary app timestamps, SwiftSync is designed to accept them without extra formatter plumbing.
 
 ## Further Reading
 
