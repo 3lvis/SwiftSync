@@ -297,7 +297,7 @@ See [Parent Scope](docs/project/parent-scope.md) for the full contract.
 
 Use `sync(item:)` when the server returns one authoritative row, usually from a detail endpoint or a mutation response.
 
-That becomes more interesting when the same payload also includes a scoped child collection or to-many IDs.
+That becomes more interesting when the same payload also includes a scoped child collection.
 
 ### Model
 
@@ -320,11 +320,6 @@ public final class Item {
 {
   "id": "C3E7A1B2-3001-0000-0000-000000000001",
   "title": "Add session timeout controls to account settings",
-  "reviewer_ids": ["C3E7A1B2-2001-0000-0000-000000000004"],
-  "watcher_ids": [
-    "C3E7A1B2-2001-0000-0000-000000000002",
-    "C3E7A1B2-2001-0000-0000-000000000005"
-  ],
   "items": [
     {
       "id": "C3E7A1B2-4001-0000-0000-000000000001",
@@ -350,20 +345,23 @@ try await syncContainer.sync(
 ### Read
 
 ```swift
-public var task: Task? {
-  taskPublisher.row
-}
+@SyncModel(Task.self, id: taskID, in: syncContainer)
+private var task: Task?
 
-public var items: [Item] {
-  itemPublisher.rows
-}
+@SyncQuery(
+  Item.self,
+  relationship: \.task,
+  relationshipID: taskID,
+  in: syncContainer,
+  sortBy: [SortDescriptor(\Item.id)]
+)
+private var items: [Item]
 ```
 
 This is useful when the parent row is globally identifiable but one nested child collection is scoped to the detail payload. The result is:
 
 - `sync(item:)` updates the one task row without treating the payload as a full collection diff
 - checklist items are diffed only within that task's scope
-- many-to-many relationships like reviewers/watchers can still come from `*_ids` in that same item payload
 - list screens and detail screens keep reading from the same local SwiftData state
 
 ## Property Mapping and Customization
