@@ -1,58 +1,16 @@
 ![SwiftSync](Images/logo-v3.png)
 
-SwiftSync is a sync layer for SwiftData apps with JSON backends.
+SwiftSync is a sync layer for SwiftData apps.
 
-It is the SwiftData-era successor to the old Core Data library `Sync`.
-If you are coming from legacy `Sync`, start with [Migrating From Sync](docs/project/migrating-from-sync.md).
+You define models once, read from local SwiftData, and let SwiftSync handle the repetitive JSON sync/export work in between.
 
-You define models once, read from local SwiftData, and let SwiftSync handle the repetitive JSON import/export work in between.
+Features:
 
-What it gives you:
-- convention-first JSON -> SwiftData mapping
-- deterministic diffing for inserts, updates, and deletes
-- automatic relationship syncing for nested objects and foreign keys
-- export back into API-ready JSON
-- reactive local reads for SwiftUI and UIKit
-
-Core operations:
-- import sync for full payloads or single items
-- parent-scoped sync with explicit relationship paths
-- export for root models and parent-scoped models
-- reactive reads with `@SyncQuery`
-- strict absent-key vs explicit-`null` semantics
-
-Best fit:
-- SwiftData is your local source of truth
-- your backend returns normal resource payloads and relationship IDs
-- you want deterministic sync behavior without hand-written mapping glue
-- your UI should react to local state instead of mutation callbacks
-
-## Install
-
-Add the package in Xcode:
-
-1. `File` -> `Add Package Dependencies...`
-2. Use this URL:
-
-```text
-https://github.com/3lvis/SwiftSync.git
-```
-
-3. Add the `SwiftSync` library product to your app target.
-
-If you use `Package.swift` directly:
-
-```swift
-.package(url: "https://github.com/3lvis/SwiftSync.git", from: "1.0.0")
-```
-
-Then import:
-
-```swift
-import SwiftSync
-```
-
-Requirements: Xcode 17+, Swift 6.2, iOS 17+ / macOS 14+
+- Convention-first JSON -> SwiftData mapping
+- Deterministic diffing for inserts, updates, and deletes
+- Automatic relationship syncing for nested objects and foreign keys
+- Export back into API-ready JSON
+- Reactive local reads for SwiftUI and UIKit
 
 ## Quick Start
 
@@ -135,9 +93,37 @@ let rows = try syncContainer.export(as: User.self)
 
 If this fits your app, continue with the full overview.
 
+## Install
+
+Add the package in Xcode:
+
+1. `File` -> `Add Package Dependencies...`
+2. Use this URL:
+
+```text
+https://github.com/3lvis/SwiftSync.git
+```
+
+3. Add the `SwiftSync` library product to your app target.
+
+If you use `Package.swift` directly:
+
+```swift
+.package(url: "https://github.com/3lvis/SwiftSync.git", from: "1.0.0")
+```
+
+Then import:
+
+```swift
+import SwiftSync
+```
+
+Requirements: Xcode 17+, Swift 6.2, iOS 17+ / macOS 14+
+
 ## Full Overview
 
 Table of contents:
+
 - [Why SwiftSync](#why-swiftsync)
 - [Demo App](#demo-app)
 - [Property Mapping](#property-mapping)
@@ -152,12 +138,14 @@ Table of contents:
 ## Why SwiftSync
 
 Syncing API payloads into a local store usually means repeating the same work in every app:
+
 - map JSON keys onto local properties
 - reconcile inserts, updates, and deletions
 - keep relationships correct when the payload shape changes
 - make local UI reads stay coherent after background sync work
 
 Pain point -> outcome:
+
 - repetitive mapping code -> convention-first syncing with explicit overrides only at API boundaries
 - brittle relationship reconciliation -> built-in nested object and `*_id` / `*_ids` handling
 - re-fetch/rebind churn after writes -> local-first reads through SwiftData and `@SyncQuery`
@@ -166,11 +154,13 @@ Pain point -> outcome:
 ## Demo App
 
 The demo app lives in [Demo/Demo](/Users/nunez/code/ios/SwiftSync/Demo/Demo) and shows the intended workflow end to end:
+
 - syncing backend-shaped project and task payloads into SwiftData
 - reading that local state in SwiftUI screens
 - editing tasks while keeping list and detail views in sync
 
 Entry points:
+
 - app setup: [DemoApp.swift](/Users/nunez/code/ios/SwiftSync/Demo/Demo/DemoApp.swift)
 - main shell: [ContentView.swift](/Users/nunez/code/ios/SwiftSync/Demo/Demo/App/ContentView.swift)
 - feature examples: [ProjectsView.swift](/Users/nunez/code/ios/SwiftSync/Demo/Demo/Features/Projects/ProjectsView.swift), [ProjectView.swift](/Users/nunez/code/ios/SwiftSync/Demo/Demo/Features/Projects/ProjectView.swift), [TaskView.swift](/Users/nunez/code/ios/SwiftSync/Demo/Demo/Features/TaskDetail/TaskView.swift)
@@ -216,6 +206,7 @@ var tasks: [Task]
 ```
 
 Use `predicate` instead when `relationship/relationshipID` is not the right shape:
+
 - screens that only have scalar IDs (no related model instance)
 - non-parent filters (for example `assigneeID == userID`)
 - compound business filters (for example status + date window + membership)
@@ -228,6 +219,7 @@ See [Reactive Reads](docs/project/reactive-reads.md) for the full patterns.
 ## Supported Payload Shapes
 
 SwiftSync supports the shapes most JSON APIs actually send:
+
 - root collections for insert/update/delete diffing
 - single-item updates with `sync(item:)`
 - to-one relationships as nested objects or `*_id`
@@ -288,21 +280,25 @@ try await SwiftSync.sync(
 ### `@Syncable`
 
 `@Syncable` generates:
+
 - `SyncUpdatableModel` conformance (make/apply + relationship sync)
 - export support via `exportObject(keyStyle:dateFormatter:)`
 
 It supports:
+
 - to-one by `*_id` (strict typed FK lookup)
 - to-many by `*_ids` (unordered membership updates)
 - nested to-one by relationship key (for example `company`)
 - nested to-many by relationship key (for example `members`)
 
 Identity selection order:
+
 1. property marked with `@PrimaryKey` (or `@PrimaryKey(remote: ...)`)
 2. `id`
 3. `remoteID`
 
 For customization:
+
 - use `@PrimaryKey` when identity is not `id`
 - use `@PrimaryKey(remote: "external_id")` when the remote identity key differs
 - use `@RemoteKey` when your local property name intentionally differs from the payload
@@ -329,6 +325,7 @@ final class ExternalAccount {
 ```
 
 Notes:
+
 - `@RemoteKey` affects inbound sync mapping and export mapping.
 - `@RemoteKey("a.b.c")` reads/writes nested payload paths.
 - Deep paths preserve normal missing/null semantics.
@@ -340,6 +337,7 @@ let rows = try syncContainer.export(as: User.self)
 ```
 
 Defaults:
+
 - snake_case keys
 - relationships included as inline arrays/objects
 - ISO-style UTC dates
