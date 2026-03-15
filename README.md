@@ -1,440 +1,918 @@
-**Notice: Sync was supported from it's creation back in 2014 until March 2021**
+# SwiftSync
 
-Moving forward I won't be able to support this project since I'm no longer active in making iOS apps with Core Data. I'm leaving this repository as a historical reference of what happened during this time. Sync had in total 130 releases with almost 30 contributors. If you still support this project I encourage you to fork it and continue the development. I don't feel comfortable with passing this project to another developer due to the fact that I want to have some involvement in all the projects that live under my account. 7 years was a good run, thank you everyone for using this project and thank you to everyone that has contributed to it. Best of luck in your careers and in what this constantly evolving tech world has for all of us. 
+SwiftSync is a sync layer for SwiftData apps with JSON backends.
 
-Initial releases: https://github.com/3lvis/Sync/releases?after=0.4.1
+It is the SwiftData-era successor to the old Core Data library `Sync`.
+If you are coming from legacy `Sync`, start with [Migrating From Sync](docs/project/migrating-from-sync.md).
 
---------------------------------------------------------------------
+You define models once, then use one API to:
+- sync server payloads into local SwiftData
+- export local SwiftData back into API-ready JSON
 
-![Sync](https://raw.githubusercontent.com/3lvis/Sync/master/Images/logo-v3.png)
+It follows convention over configuration and keeps behavior deterministic.
 
-**Sync** eases your everyday job of parsing a JSON response and syncing it with Core Data. **Sync** is a lightweight Swift library that uses a convention-over-configuration paradigm to facilitate your workflow.
+The promise is simple:
+- your app reads from local SwiftData
+- your backend speaks normal JSON
+- SwiftSync handles the repetitive glue in between
 
-<div align = "center">
-  <a href="https://cocoapods.org/pods/Sync">
-<img src="https://img.shields.io/cocoapods/v/Sync.svg?style=flat" />
-  </a>
-  <a href="https://github.com/3lvis/Sync">
-    <img src="https://img.shields.io/badge/Carthage-compatible-4BC51D.svg?style=flat" />
-  </a>
-  <a href="https://github.com/3lvis/Sync#installation">
-    <img src="https://img.shields.io/badge/compatible-swift%205.0-orange.svg" />
-  </a>
-</div>
+SwiftSync is for teams already building on SwiftData who want:
+- deterministic JSON -> local store sync
+- export back into API-ready payloads
+- reactive local reads for SwiftUI and UIKit
+- explicit, testable backend semantics around missing vs `null`
 
-<div align = "center">
-  <a href="https://cocoapods.org/pods/Sync" target="blank">
-    <img src="https://img.shields.io/cocoapods/p/Sync.svg?style=flat" />
-  </a>
-  <a href="https://cocoapods.org/pods/Sync" target="blank">
-    <img src="https://img.shields.io/cocoapods/l/Sync.svg?style=flat" />
-  </a>
-  <a href="https://gitter.im/3lvis/Sync">
-    <img src="https://img.shields.io/gitter/room/nwjs/nw.js.svg" />
-  </a>
-  <br>
-  <br>
-</div>
+## What SwiftSync Is
 
-Syncing JSON to Core Data is a repetitive tasks that often demands adding a lot of boilerplate code. Mapping attributes, mapping relationships, diffing for inserts, removals and updates are often tasks that don't change between apps. Taking this in account we took the challenge to abstract this into a library. **Sync** uses the knowledge of your Core Data model to infer all the mapping between your JSON and Core Data, once you use it, it feels so obvious that you'll wonder why you weren't doing this before.
+SwiftSync is not a backend, a database replacement, or an opinionated app architecture.
 
-* Automatic mapping of camelCase or snake_case JSON into Core Data
-* Thread-safe saving, we handle retrieving and storing objects in the right threads
-* Diffing of changes, updated, inserted and deleted objects (which are automatically purged for you)
-* Auto-mapping of relationships (one-to-one, one-to-many and many-to-many)
-* Smart-updates, only updates your `NSManagedObject`s if the server values are different from your local ones
-* Uniquing, one Core Data entry per primary key
-* `NSOperation` subclass, any Sync process can be queued and cancelled at any time!
+It is the missing sync layer between:
+- a SwiftData model graph in your app
+- a conventional JSON API on your backend
+
+If your current pain is:
+- repetitive mapping code
+- fragile relationship updates
+- unclear `null` vs missing semantics
+- re-fetch/rebind boilerplate after mutations
+
+that is exactly the problem SwiftSync is built to solve.
+
+## Best Fit
+
+SwiftSync is a strong fit when:
+- you already want SwiftData to remain your local source of truth
+- your backend returns normal resource payloads and relationship IDs
+- you want explicit behavior around create, update, clear, and delete
+- you want SwiftUI or UIKit screens to react to local data instead of mutation callbacks
+
+## Not The Goal
+
+SwiftSync is not trying to:
+- replace SwiftData
+- impose a server product or hosted platform
+- hide backend contract details behind magic
+- treat omission and `null` as the same thing
+
+The design goal is boring, reliable sync behavior that fits naturally into an iOS app you already own.
+
+## Install
+
+Requirements:
+- Xcode 17+
+- Swift 6.2
+- iOS 17+ / macOS 14+
+
+Add the package in Xcode:
+
+1. `File` -> `Add Package Dependencies...`
+2. Use this URL:
+
+```text
+https://github.com/3lvis/SwiftSync.git
+```
+
+3. Add the `SwiftSync` library product to your app target.
+
+If you use `Package.swift` directly:
+
+```swift
+.package(url: "https://github.com/3lvis/SwiftSync.git", from: "1.0.0")
+```
+
+Then import:
+
+```swift
+import SwiftSync
+```
+
+## Quick Start
+
+This is the shortest end-to-end path from model to live UI.
+
+### 1. Define a syncable model
+
+```swift
+import SwiftData
+import SwiftSync
+
+@Syncable
+@Model
+final class User {
+  @Attribute(.unique) var id: Int
+  var name: String
+  var createdAt: Date?
+
+  init(id: Int, name: String, createdAt: Date? = nil) {
+    self.id = id
+    self.name = name
+    self.createdAt = createdAt
+  }
+}
+```
+
+### 2. Create a `SyncContainer`
+
+```swift
+@MainActor
+func makeSyncContainer() throws -> SyncContainer {
+  try SyncContainer(
+    for: User.self,
+    keyStyle: .snakeCase
+  )
+}
+```
+
+### 3. Sync server JSON into SwiftData
+
+```swift
+let payload: [[String: Any]] = [
+  [
+    "id": 6,
+    "name": "Shawn Merrill",
+    "created_at": "2014-02-14T04:30:10+00:00"
+  ]
+]
+
+try await syncContainer.sync(payload: payload, as: User.self)
+```
+
+### 4. Read it reactively in SwiftUI
+
+```swift
+import SwiftUI
+import SwiftSync
+
+struct UsersScreen: View {
+  let syncContainer: SyncContainer
+
+  @SyncQuery(
+    User.self,
+    in: syncContainer,
+    sortBy: [SortDescriptor(\User.name)]
+  )
+  private var users: [User]
+
+  var body: some View {
+    List(users) { user in
+      Text(user.name)
+    }
+  }
+}
+```
+
+### 5. Export local state back to JSON
+
+```swift
+let rows = try syncContainer.export(as: User.self)
+```
+
+If this flow fits your app, the rest of the README covers relationship shapes, parent scope, reactive reads, and backend contract details.
 
 ## Table of Contents
 
-* [Basic example](#basic-example)
-* [Demo project](#demo-project)
-* [Getting Started](#getting-started)
-  * [Core Data Stack](#core-data-stack)
-  * [Primary Key](#primary-key)
-  * [Attribute Mapping](#attribute-mapping)
-  * [Attribute Types](#attribute-types)
-  * [Relationship Mapping](#relationship-mapping)
-    * [One-to-many](#one-to-many)
-    * [One-to-many (simplified)](#one-to-many-simplified)
-    * [One-to-one](#one-to-one)
-    * [One-to-one (simplified)](#one-to-one-simplified)
-  * [JSON Exporting](#json-exporting)
-* [FAQ](#faq)
-* [Installation](#installation)
-* [License](#license)
+- [Why SwiftSync](#why-swiftsync)
+- [Install](#install)
+- [Quick Start](#quick-start)
+- [Migrating From Sync](docs/project/migrating-from-sync.md)
+- [Property Mapping](#property-mapping)
+- [Basic Example](#basic-example)
+- [Reactive Reads](#reactive-reads)
+- [Scenario -> Way of Use](#scenario---way-of-use)
+- [Modeling and Mapping](#modeling-and-mapping)
+- [Exporting JSON](#exporting-json)
+- [Date Handling](#date-handling)
+- [FAQ](docs/project/faq.md)
+- [Backend Contract](docs/project/backend-contract.md)
+- [API Reference](#api-reference)
+- [License](#license)
 
-## Basic example
+## Why SwiftSync
+
+Syncing JSON into a local store is repetitive:
+- map attributes
+- diff inserts/updates/deletes
+- handle relationship updates
+- avoid unnecessary writes
+
+SwiftSync handles that core flow so app code can stay focused on domain behavior.
+
+It is a strong fit when:
+- your app already uses SwiftData
+- your backend can follow stable `id`, `*_id`, and `*_ids` conventions
+- you want strict missing-vs-`null` semantics instead of implicit magic
+- you want the UI to read from local state while mutations sync through a service/domain layer
+
+In practice, that means:
+- less model-mapping boilerplate
+- fewer relationship edge-case bugs
+- one consistent import/export contract
+- a UI that can stay local-first and reactive
+
+## Property Mapping
+
+Current defaults and behavior:
+- convention-first mapping is expected
+- inbound key style is configured once at `SyncContainer` (`.snakeCase` default, `.camelCase` optional)
+- acronym-aware snake mapping (`projectID` -> `project_id`, `remoteURL` -> `remote_url`)
+- deep-path import/export is supported via `@RemoteKey("a.b.c")`
+- scalar coercions are deterministic; relationship FK linking remains strict
+- Demo models in this repo are convention-first, with explicit mapping only where backend keys intentionally differ (for example `description` -> `descriptionText`)
+
+Practical usage rules:
+- remove `@RemoteKey` when convention already matches (for example `projectID` maps to `project_id`)
+- keep `@RemoteKey` when your local property name intentionally differs from the backend key (for example `descriptionText` -> `description`)
+- configure inbound key style once at `SyncContainer` (`.snakeCase` default, `.camelCase` optional)
+- use `@RemoteKey("a.b.c")` for nested payload keys (import and export)
+
+## Basic Example
 
 ### Model
 
-![Model](https://raw.githubusercontent.com/3lvis/Sync/master/Images/one-to-many-swift.png)
+```swift
+import SwiftData
+import SwiftSync
 
-### JSON
+@Syncable
+@Model
+final class User {
+  @Attribute(.unique) var id: Int
+  var name: String
+  var createdAt: Date?
+
+  init(id: Int, name: String, createdAt: Date? = nil) {
+    self.id = id
+    self.name = name
+    self.createdAt = createdAt
+  }
+}
+```
+
+### JSON payload
 
 ```json
 [
   {
     "id": 6,
     "name": "Shawn Merrill",
-    "email": "shawn@ovium.com",
-    "created_at": "2014-02-14T04:30:10+00:00",
-    "updated_at": "2014-02-17T10:01:12+00:00",
-    "notes": [
-      {
-        "id": 0,
-        "text": "Shawn Merril's diary, episode 1",
-        "created_at": "2014-03-11T19:11:00+00:00",
-        "updated_at": "2014-04-18T22:01:00+00:00"
-      }
-    ]
+    "created_at": "2014-02-14T04:30:10+00:00"
   }
 ]
 ```
-
-### DataStack
-
-DataStack is a wrapper on top of the Core Data boilerplate, it encapsulates dealing with NSPersistentStoreCoordinator and NSManageObjectContexts.
-
-```swift
-self.dataStack = DataStack(modelName: "DataModel")
-```
-
-[You can find here more ways of initializing your DataStack](https://github.com/3lvis/Sync/blob/6723c1f9a07014024e0f8f2923d1930789cabb72/Source/DataStack/DataStack.swift#L77-L196).
 
 ### Sync
 
 ```swift
-dataStack.sync(json, inEntityNamed: "User") { error in
-    // New objects have been inserted
-    // Existing objects have been updated
-    // And not found objects have been deleted
-}
+try await SwiftSync.sync(payload: payload, as: User.self, in: context)
 ```
 
-Alternatively, if you only want to sync users that have been created in the last 24 hours, you could do this by using a `NSPredicate`.
+That single call will insert, update, and delete based on identity diffing.
+
+You can also tune behavior per call:
 
 ```swift
-let now = NSDate()
-let yesterday = now.dateByAddingTimeInterval(-24*60*60)
-let predicate = NSPredicate(format:@"createdAt > %@", yesterday)
-
-dataStack.sync(json, inEntityNamed: "User", predicate: predicate) { error in
-    //..
-}
+try await SwiftSync.sync(
+  payload: payload,
+  as: User.self,
+  in: context,
+  relationshipOperations: .all
+)
 ```
 
-## Demo Project
-
-[We have a simple demo project](/iOSDemo) of how to set up and use Sync to fetch data from the network and display it in a UITableView. The demo project features both [Networking](https://github.com/3lvis/networking) and [Alamofire](https://github.com/Alamofire/Alamofire) as the networking libraries.
-
-### DataStack with Storyboards
-
-Configuring a DataStack with Storyboard is different than doing it via dependency injection here you'll find a sample project in how to achieve this setup.
-
-https://github.com/3lvis/StoryboardDemo
-
-## Getting Started
-
-### Core Data Stack
-
-Replace your Core Data stack with an instance of [DataStack](https://github.com/3lvis/Sync/blob/master/docs/DataStack.md).
+To update a single item without touching other rows, use `sync(item:)`:
 
 ```swift
-self.dataStack = DataStack(modelName: "Demo")
+try await SwiftSync.sync(
+  item: taskDict,
+  as: Task.self,
+  in: context
+)
 ```
 
-### Primary key
+## SyncContainer
 
-Sync requires your entities to have a primary key, this is important for diffing, otherwise Sync doesn’t know how to differentiate between entries.
+`SyncContainer` is a thin SwiftData-based wrapper around `ModelContainer` that:
+- exposes a shared `mainContext`
+- creates background contexts for sync work
+- observes background `ModelContext.didSave` and processes main-context pending changes
+- configures inbound key style once (`.snakeCase` default, `.camelCase` optional)
 
-By default **Sync** uses `id` from the JSON and `id` (or `remoteID`) from Core Data as the primary key.
+```swift
+let syncContainer = try await MainActor.run {
+  try SyncContainer(
+    for: User.self,
+    keyStyle: .snakeCase, // default
+    configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+  )
+}
 
-You can mark any attribute as primary key by adding `sync.isPrimaryKey` and the value `true` (or `YES`). For example, in our [Designer News](https://github.com/3lvis/DesignerNewsDemo) project we have a `Comment` entity that uses `body` as the primary key.
+try await syncContainer.sync(payload: payload, as: User.self)
+```
 
-![Custom primary key](https://raw.githubusercontent.com/3lvis/Sync/master/Images/custom-primary-key-v3.png)
+Behavior note:
+- fresh fetches on `mainContext` see background saves
+- retained object references may still need explicit UI rebind/requery
 
-If you add the flag `sync.isPrimaryKey` to the attribute `contractID` then:
+## Reactive Reads
 
-- Local primary key will be: `contractID`
-- Remote primary key will be: `contract_id`
+SwiftUI is the primary integration path. Use `@SyncQuery` for list reads and `@SyncModel` for detail reads.
 
-If you want to use `id` for the remote primary key you also have to add the flag `sync.remoteKey` and write `id` as the value.
+Sort order (ascending or mixed/descending):
 
-- Local primary key will be: `articleBody`
-- Remote primary key will be: `id`
-
-### Attribute Mapping
-
-Your attributes should match their JSON counterparts in `camelCase` notation instead of `snake_case`. For example `first_name` in the JSON maps to `firstName` in Core Data and `address` in the JSON maps to `address` in Core Data.
-
-There are some exception to this rule:
-
-* Reserved attributes should be prefixed with the `entityName` (`type` becomes `userType`, `description` becomes `userDescription` and so on). In the JSON they don't need to change, you can keep `type` and `description` for example. A full list of reserved attributes can be found [here](https://github.com/3lvis/Sync/blob/master/Source/PropertyMapper/NSManagedObject%2BPropertyMapperHelpers.m#L282-L284)
-* Attributes with acronyms will be normalized (`id`, `pdf`, `url`, `png`, `jpg`, `uri`, `json`, `xml`). For example `user_id` will be mapped to `userID` and so on. You can find the entire list of supported acronyms [here](https://github.com/3lvis/Sync/blob/master/Source/Inflections/Inflections.m#L204-L206).
-
-If you want to map your Core Data attribute with a JSON attribute that has different naming, you can do by adding `sync.remoteKey` in the user info box with the value you want to map.
-
-![Custom remote key](https://raw.githubusercontent.com/3lvis/Sync/master/Images/custom-remote-key-v2.png)
-
-### Attribute Types
-
-#### Array/Dictionary
-
-To map **arrays** or **dictionaries** just set attributes as `Binary Data` on the Core Data modeler.
-
-![screen shot 2015-04-02 at 11 10 11 pm](https://cloud.githubusercontent.com/assets/1088217/6973785/7d3767dc-d98d-11e4-8add-9c9421b5ed47.png)
-
-#### Retrieving mapped arrays
-
-```json
-{
-  "hobbies": [
-    "football",
-    "soccer",
-    "code"
+```swift
+@SyncQuery(
+  Task.self,
+  in: syncContainer,
+  sortBy: [
+    SortDescriptor(\Task.priority, order: .reverse),
+    SortDescriptor(\Task.id)
   ]
-}
+)
+var tasks: [Task]
 ```
+
+Relationship-scoped query (to-one):
 
 ```swift
-let hobbies = NSKeyedUnarchiver.unarchiveObjectWithData(managedObject.hobbies) as? [String]
-// ==> "football", "soccer", "code"
+@SyncQuery(
+  Task.self,
+  relationship: \.project,
+  relationshipID: projectID,
+  in: syncContainer,
+  sortBy: [SortDescriptor(\Task.id)]
+)
+var tasks: [Task]
 ```
 
-#### Retrieving mapped dictionaries
-```json
-{
-  "expenses" : {
-    "cake" : 12.50,
-    "juice" : 0.50
+Relationship-scoped query (to-many):
+
+```swift
+@SyncQuery(
+  Project.self,
+  relationship: \.tasks,
+  relationshipID: taskID,
+  in: syncContainer,
+  sortBy: [SortDescriptor(\Project.id)]
+)
+var projectsContainingTask: [Project]
+```
+
+Keep using `predicate` when relationship-scoped `relationship/relationshipID` is not the right shape:
+- screens that only have scalar IDs (no related model instance)
+- non-parent filters (for example `assigneeID == userID`)
+- compound business filters (for example status + date window + membership)
+
+### UIKit / State Machines
+
+SwiftUI is first class. For non-SwiftUI consumers:
+
+- use `SyncQueryPublisher` for reactive lists
+- use `SyncModelPublisher` for a single reactive row by sync ID
+
+```swift
+import Observation
+
+final class ProjectsViewController: UIViewController {
+  private var projectsObserver: SyncQueryPublisher<Project>?
+
+  func bindProjects() {
+    let observer = SyncQueryPublisher(
+      Project.self,
+      in: syncContainer,
+      sortBy: [SortDescriptor(\Project.name)]
+    )
+    projectsObserver = observer
+
+    func track() {
+      withObservationTracking {
+        applySnapshot(observer.rows)
+      } onChange: {
+        Task { @MainActor in track() }
+      }
+    }
+
+    track()
   }
 }
 ```
 
-```swift
-let expenses = NSKeyedUnarchiver.unarchiveObjectWithData(managedObject.expenses) as? [String: Double]
-// ==> "cake" : 12.50, "juice" : 0.50
-```
-
-#### Dates
-
-We went for supporting [ISO8601](http://en.wikipedia.org/wiki/ISO_8601) and unix timestamp out of the box because those are the most common formats when parsing dates, also we have a [quite performant way to parse this strings](https://github.com/3lvis/Sync/blob/master/Source/DateParser/NSDate%2BPropertyMapper.m) which overcomes the [performance issues of using `NSDateFormatter`](http://blog.soff.es/how-to-drastically-improve-your-app-with-an-afternoon-and-instruments/).
+Relationship-scoped variant (to-one):
 
 ```swift
-let values = ["created_at" : "2014-01-01T00:00:00+00:00",
-              "updated_at" : "2014-01-02",
-              "published_at": "1441843200"
-              "number_of_attendes": 20]
-
-managedObject.fill(values)
-
-let createdAt = managedObject.value(forKey: "createdAt")
-// ==> "2014-01-01 00:00:00 +00:00"
-
-let updatedAt = managedObject.value(forKey: "updatedAt")
-// ==> "2014-01-02 00:00:00 +00:00"
-
-let publishedAt = managedObject.value(forKey: "publishedAt")
-// ==> "2015-09-10 00:00:00 +00:00"
+let publisher = SyncQueryPublisher(
+  Task.self,
+  relationship: \Task.assignee,
+  relationshipID: userID,
+  in: syncContainer,
+  sortBy: [SortDescriptor(\Task.title)]
+)
 ```
 
-### Relationship mapping
+Single-row variant:
 
-**Sync** will map your relationships to their JSON counterparts. In the [Example](#example-with-snake_case-in-swift) presented at the beginning of this document you can see a very basic example of relationship mapping.
+```swift
+let publisher = SyncModelPublisher(
+  Task.self,
+  id: taskID,
+  in: syncContainer
+)
+```
 
-#### One-to-many
+Observe `publisher.row` the same way you would observe `publisher.rows`.
 
-Lets consider the following Core Data model.
+Both publishers reload automatically after relevant sync-driven saves, using the same internal invalidation mechanism as `@SyncQuery` / `@SyncModel`.
 
-![One-to-many](https://raw.githubusercontent.com/3lvis/Sync/master/Images/one-to-many-swift.png)
+## Scenario -> Way of Use
 
-This model has a one-to-many relationship between `User` and `Note`, so in other words a user has many notes. Here can also find an inverse relationship to user on the Note model. This is required for Sync to have more context on how your models are presented. Finally, in the Core Data model there is a cascade relationship between user and note, so when a user is deleted all the notes linked to that user are also removed (you can specify any delete rule).
+### Scenario: payload only contains children for one parent
 
-So when Sync, looks into the following JSON, it will sync all the notes for that specific user, doing the necessary inverse relationship dance.
+You have a user details screen, and the backend endpoint `/users/6/notes` returns only that user's notes. Each note comes without a `user_id`, because the endpoint itself is already scoped.
+
+JSON:
 
 ```json
 [
   {
-    "id": 6,
-    "name": "Shawn Merrill",
-    "notes": [
+    "id": 301,
+    "text": "Call supplier before Friday"
+  },
+  {
+    "id": 302,
+    "text": "Prepare Q1 budget review"
+  }
+]
+```
+
+Model:
+
+```swift
+@Syncable
+@Model
+final class User {
+  @Attribute(.unique) var id: Int
+  var name: String
+}
+
+@Syncable
+@Model
+final class Note {
+  var id: Int
+  var text: String
+  @Relationship var user: User?
+}
+
+// Keep this extension when you want scoped identity by default for this model.
+// `parentRelationship` provides the default parent scope relationship for this model.
+extension Note: ParentScopedModel {
+  static var parentRelationship: ReferenceWritableKeyPath<Note, User?> { \.user }
+}
+```
+
+Why `id` is not unique in this example:
+- `ParentScopedModel` defaults to scoped identity (`(parent, id)` semantics).
+- This allows the same remote child ID under different parents.
+- If you add `@Attribute(.unique)` on `id`, SwiftData enforces global uniqueness and scoped duplicates cannot exist.
+
+API:
+
+```swift
+let user = try context.fetch(FetchDescriptor<User>()).first { $0.id == 6 }!
+
+try await SwiftSync.sync(
+  payload: payload,
+  as: Note.self,
+  in: context,
+  parent: user,
+  relationship: \Note.user
+)
+```
+
+Notes:
+- This example keeps `ParentScopedModel`, so scoped identity is the default for `Note`.
+- Parent-scoped sync requires an explicit `relationship:` key path.
+- For models conforming to `ParentScopedModel`, the default identity policy remains scoped-by-parent.
+
+### Scenario: to-one relationship by nested object
+
+You have a list of employees, each employee has one company. The backend sends that company as an inline object in each employee row.
+
+JSON:
+
+```json
+[
+  {
+    "id": 44,
+    "full_name": "Ariana Patel",
+    "company": {
+      "id": 10,
+      "name": "Apple"
+    }
+  }
+]
+```
+
+Model:
+
+```swift
+@Syncable
+@Model
+final class Company {
+  @Attribute(.unique) var id: Int
+  var name: String
+}
+
+@Syncable
+@Model
+final class Employee {
+  @Attribute(.unique) var id: Int
+  var fullName: String
+  var company: Company?
+}
+```
+
+API:
+
+```swift
+try await SwiftSync.sync(payload: payload, as: Employee.self, in: context)
+```
+
+### Scenario: to-one relationship by `*_id`
+
+You have employees and companies already synced. For employee updates, the backend sends only `company_id` instead of a nested company object.
+
+JSON:
+
+```json
+[
+  {
+    "id": 44,
+    "company_id": 10
+  }
+]
+```
+
+JSON to clear:
+
+```json
+[
+  {
+    "id": 44,
+    "company_id": null
+  }
+]
+```
+
+Model:
+
+```swift
+@Syncable
+@Model
+final class Employee {
+  @Attribute(.unique) var id: Int
+  var company: Company?
+}
+```
+
+API:
+
+```swift
+try await SwiftSync.sync(payload: payload, as: Employee.self, in: context)
+```
+
+### Scenario: to-many relationship by objects
+
+You have chats and each chat has many messages. The backend sends each chat with an inline `messages` array.
+SwiftSync treats to-many relationship updates as membership updates (unordered) in SwiftData.
+
+JSON A:
+
+```json
+[
+  {
+    "id": 77,
+    "title": "Launch Planning",
+    "messages": [
       {
-        "id": 0,
-        "text": "Shawn Merril's diary, episode 1",
+        "id": 101,
+        "text": "Draft kickoff agenda"
+      },
+      {
+        "id": 102,
+        "text": "Share timeline v1"
       }
     ]
   }
 ]
 ```
 
-#### One-to-many Simplified
-
-As you can see this procedures require the full JSON object to be included, but when working with APIs, sometimes you already have synced all the required items. Sync supports this too.
-
-For example, in the one-to-many example, you have a user, that has many notes. If you already have synced all the notes then your JSON would only need the `notes_ids`, this can be an array of strings or integers. As a side-note only do this if you are 100% sure that all the required items (notes) have been synced, otherwise this relationships will get ignored and an error will be logged. Also if you want to remove all the notes from a user, just provide `"notes_ids": null` and **Sync** will do the clean up for you.
+JSON B:
 
 ```json
 [
   {
-    "id": 6,
-    "name": "Shawn Merrill",
-    "notes_ids": [0, 1, 2]
+    "id": 77,
+    "title": "Launch Planning",
+    "messages": [
+      {
+        "id": 102,
+        "text": "Share timeline v2"
+      },
+      {
+        "id": 103,
+        "text": "Book design review"
+      }
+    ]
   }
 ]
 ```
 
-#### One-to-one
+Model:
 
-A similar procedure is applied to one-to-one relationships. For example lets say you have the following model:
+```swift
+@Syncable
+@Model
+final class Message {
+  @Attribute(.unique) var id: Int
+  var text: String
+}
 
-![one-to-one](https://raw.githubusercontent.com/3lvis/Sync/master/Images/one-to-one-v2.png)
-
-This model is simple, a user as a company. A compatible JSON would look like this:
-
-```json
-[
-  {
-    "id": 6,
-    "name": "Shawn Merrill",
-    "company": {
-      "id": 0,
-      "text": "Facebook",
-    }
-  }
-]
-```
-
-#### One-to-one Simplified
-
-As you can see this procedures require the full JSON object to be included, but when working with APIs, sometimes you already have synced all the required items. Sync supports this too.
-
-For example, in the one-to-one example, you have a user, that has one company. If you already have synced all the companies then your JSON would only need the `company_id`. As a sidenote only do this if you are 100% sure that all the required items (companies) have been synced, otherwise this relationships will get ignored and an error will be logged. Also if you want to remove the company from the user, just provide `"company_id": null` and **Sync** will do the clean up for you.
-
-```json
-[
-  {
-    "id": 6,
-    "name": "Shawn Merrill",
-    "company_id": 0
-  }
-]
-```
-
-## JSON Exporting
-
-Sync provides an easy way to convert your NSManagedObject back into JSON. Just use the `export()` method.
-
-``` objc
-let user = //...
-user.set(value: "John" for: "firstName")
-user.set(value: "Sid" for: "lastName")
-
-let userValues = user.export()
-```
-
-That's it, that's all you have to do, the keys will be magically transformed into a `snake_case` convention.
-
-```json
-{
-  "first_name": "John",
-  "last_name": "Sid"
+@Syncable
+@Model
+final class Chat {
+  @Attribute(.unique) var id: Int
+  var title: String
+  var messages: [Message]
 }
 ```
 
-### Excluding
+API:
 
-If you don't want to export certain attribute or relationship, you can prohibit exporting by adding `sync.nonExportable` in the user info of the excluded attribute or relationship.
+```swift
+try await SwiftSync.sync(payload: payload, as: Chat.self, in: context)
+```
 
-![non-exportable](https://raw.githubusercontent.com/3lvis/Sync/master/Images/pm-non-exportable.png)
+### Scenario: to-many relationship by `*_ids`
 
-### Relationships
+You already synced notes separately, and user payloads now include only `notes_ids` to define membership.
+SwiftSync treats this as membership sync (unordered) and does not guarantee payload order persistence.
 
-It supports exporting relationships too.
+JSON A:
 
 ```json
-"first_name": "John",
-"last_name": "Sid",
-"notes": [
+[
   {
-    "id": 0,
-    "text": "This is the text for the note A"
-  },
+    "id": 6,
+    "notes_ids": [301, 302]
+  }
+]
+```
+
+JSON B:
+
+```json
+[
+  {
+    "id": 6,
+    "notes_ids": [302, 305]
+  }
+]
+```
+
+Model:
+
+```swift
+@Syncable
+@Model
+final class Note {
+  @Attribute(.unique) var id: Int
+}
+
+@Syncable
+@Model
+final class User {
+  @Attribute(.unique) var id: Int
+  var name: String
+  var notes: [Note]
+}
+```
+
+API:
+
+```swift
+try await SwiftSync.sync(payload: payload, as: User.self, in: context)
+```
+
+### Scenario: export local rows to API JSON
+
+You have local SwiftData rows and need to send them to your backend in API format.
+
+JSON output shape (default):
+
+```json
+[
   {
     "id": 1,
-    "text": "This is the text for the note B"
+    "first_name": "Elvis",
+    "last_name": "Nunez"
   }
 ]
 ```
 
-If you don't want relationships you can also ignore relationships:
+Model:
 
 ```swift
-let dictionary = user.export(using: .excludedRelationships)
+@Syncable
+@Model
+final class User {
+  @Attribute(.unique) var id: Int
+  var firstName: String
+  var lastName: String
+}
 ```
 
-```json
-"first_name": "John",
-"last_name": "Sid"
-```
-
-Or get them as nested attributes, something that Ruby on Rails uses (`accepts_nested_attributes_for`), for example for a user that has many notes:
+API:
 
 ```swift
-var exportOptions = ExportOptions()
-exportOptions.relationshipType = .nested
-let dictionary = user.export(using: exportOptions)
+let rows = try syncContainer.export(as: User.self)
 ```
 
-```json
-"first_name": "John",
-"last_name": "Sid",
-"notes_attributes": [
-  {
-    "0": {
-      "id": 0,
-      "text": "This is the text for the note A"
-    },
-    "1": {
-      "id": 1,
-      "text": "This is the text for the note B"
-    }
+## Modeling and Mapping
+
+### `@Syncable`
+
+`@Syncable` generates:
+- `SyncUpdatableModel` conformance (make/apply + relationship sync)
+- export support via `exportObject(keyStyle:dateFormatter:)`
+Built-in relationship sync behavior:
+- to-one by `*_id` (strict typed FK lookup)
+- to-many by `*_ids` (unordered membership updates)
+- nested to-one by relationship key (for example `company`)
+- nested to-many by relationship key (for example `members`)
+
+Identity selection order:
+1. property marked with `@PrimaryKey` (or `@PrimaryKey(remote: ...)`)
+2. `id`
+3. `remoteID`
+
+### Custom primary key
+
+```swift
+@Syncable
+@Model
+final class ExternalUser {
+  @PrimaryKey
+  @Attribute(.unique) var xid: String
+  var name: String
+
+  init(xid: String, name: String) {
+    self.xid = xid
+    self.name = name
   }
-]
+}
 ```
 
-## FAQ
+### Custom remote identity key
 
-[Check our FAQ document.](https://github.com/3lvis/Sync/blob/master/docs/faq.md)
+```swift
+@Syncable
+@Model
+final class ExternalMappedUser {
+  @PrimaryKey(remote: "external_id")
+  @Attribute(.unique) var xid: String
+  var name: String
 
-## Installation
-
-### CocoaPods
-
-```ruby
-pod 'Sync', '~> 6'
+  init(xid: String, name: String) {
+    self.xid = xid
+    self.name = name
+  }
+}
 ```
 
-### Carthage
+### Custom property mapping (import + export)
 
-```ruby
-github "3lvis/Sync" ~> 6.0
+```swift
+@Syncable
+@Model
+final class Account {
+  @Attribute(.unique) var id: Int
+  @RemoteKey("type") var userType: String
+  @RemoteKey("profile.contact.email") var email: String?
+  @NotExport var localOnly: String
+
+  init(id: Int, userType: String, email: String?, localOnly: String) {
+    self.id = id
+    self.userType = userType
+    self.email = email
+    self.localOnly = localOnly
+  }
+}
 ```
 
-### Supported iOS, OS X, watchOS and tvOS Versions
+Notes:
+- `@RemoteKey` affects inbound sync mapping and export mapping.
+- `@RemoteKey("a.b.c")` reads/writes nested payload paths.
+- Deep paths are resolved from nested dictionaries and keep normal missing/null semantics.
 
-- iOS 8 or above
-- OS X 10.10 or above
-- watchOS 2.0 or above
-- tvOS 9.0 or above
+## Exporting JSON
 
-## Backers
+### Default
 
-Finding Sync helpful? Consider supporting further development and support by becoming a sponsor:
-👉  https://github.com/sponsors/3lvis
+```swift
+let rows = try syncContainer.export(as: User.self)
+```
 
+Defaults:
+- snake_case keys
+- relationships included as inline arrays/objects
+- ISO-style UTC dates
+- nils exported as `null`
+
+To exclude a specific relationship from all exports, apply `@NotExport` to the property
+in your model.
+
+### Camel case
+
+```swift
+let syncContainer = SyncContainer(modelContainer, keyStyle: .camelCase)
+let rows = try syncContainer.export(as: User.self)
+```
+
+### Parent-scoped export
+
+```swift
+let rows = try syncContainer.export(as: Note.self, parent: user)
+```
+
+## Date Handling
+
+SwiftSync uses a custom high-performance inbound date parser (`SyncDateParser`).
+
+Supported inputs:
+- ISO8601 variants (`Z`, `+00:00`, `+0000`, no-timezone)
+- date-only (`YYYY-MM-DD`)
+- `YYYY-MM-DD HH:mm:ss`
+- fractional seconds (deci/centi/milli/micro)
+- unix timestamps (seconds and microseconds-like)
+
+Invalid date behavior is best-effort and non-crashing.
+
+our policy is honestly we do our best without affecting performance.
+
+## API Reference
+
+```swift
+public final class SyncContainer {
+  func sync<Model: SyncUpdatableModel>(
+    payload: [Any],
+    as model: Model.Type,
+    relationshipOperations: SyncRelationshipOperations = .all
+  ) async throws
+
+  func sync<Model: SyncUpdatableModel>(
+    item: [String: Any],
+    as model: Model.Type,
+    relationshipOperations: SyncRelationshipOperations = .all
+  ) async throws
+
+  func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
+    payload: [Any],
+    as model: Model.Type,
+    parent: Parent,
+    relationship: ReferenceWritableKeyPath<Model, Parent?>,
+    relationshipOperations: SyncRelationshipOperations = .all
+  ) async throws
+
+  func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
+    item: [String: Any],
+    as model: Model.Type,
+    parent: Parent,
+    relationship: ReferenceWritableKeyPath<Model, Parent?>,
+    relationshipOperations: SyncRelationshipOperations = .all
+  ) async throws
+
+  func export<Model: SyncUpdatableModel>(
+    as model: Model.Type,
+  ) throws -> [[String: Any]]
+
+  func export<Model: SyncUpdatableModel & ParentScopedModel>(
+    as model: Model.Type,
+    parent: Model.SyncParent,
+  ) throws -> [[String: Any]]
+}
+
+public enum SyncError: Error, Sendable, Equatable {
+  case invalidPayload(model: String, reason: String)
+  case cancelled
+}
+
+public struct SyncRelationshipOperations: OptionSet, Sendable {
+  public static let insert: SyncRelationshipOperations
+  public static let update: SyncRelationshipOperations
+  public static let delete: SyncRelationshipOperations
+  public static let all: SyncRelationshipOperations
+}
+```
 
 ## License
 
-**Sync** is available under the MIT license. See the [LICENSE](https://github.com/3lvis/Sync/blob/master/LICENSE.md) file for more info.
+SwiftSync is released under the [MIT License](LICENSE).

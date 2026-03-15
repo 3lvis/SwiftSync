@@ -1,0 +1,31 @@
+name: iOS Regression (post-merge)
+
+# Runs only when a PR is actually merged into main — not on draft closes,
+# not on manual dispatch, not on direct pushes.
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+
+jobs:
+  ios-dirty-tracking:
+    name: iOS Dirty-Tracking Regression
+    if: github.event.pull_request.merged == true
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode Version
+        run: xcodebuild -version && swift --version
+
+      - name: Test — DirtyTrackingGapTests (iOS Simulator)
+        run: |
+          xcodebuild test \
+            -project Demo/Demo.xcodeproj \
+            -scheme Demo \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest' \
+            -only-testing:DemoTests/DirtyTrackingGapTests
