@@ -5,8 +5,8 @@
 Performance-attribution follow-ups (from docs/planning/performance-attribution-follow-ups.md).
 Benchmarks now runnable on Xcode 26.5 / Swift 6.3.2 (test target compiles after the isolation refactor, merged to master in c4973c2).
 
-- [ ] item 2: re-run demo-shaped sqlite+10k SAMPLES=5, confirm the retained relationship win is stable (not a single-run outlier)
-- [ ] item 3: compare memory vs sqlite phase output at 1k/10k/50k for the remaining broad global paths (global-batch-sync, single-item-sync)
+- [x] item 2: demo-shaped sqlite+10k, 5 samples -> median 744ms / max 783ms (vs prior single-run ~803ms). STABLE. apply-relationships 596ms median; relationship-fetch 509ms is the dominant sub-phase -> confirms next target.
+- [~] item 3: compare memory vs sqlite phase output at 1k/10k/50k for the remaining broad global paths (global-batch-sync, single-item-sync) — running
 - [ ] item 1: Instruments Time Profiler + Points of Interest on sqlite+10k demo-shaped; record hottest stacks inside `relationship-fetch` (signposts already emit in SyncPerformanceProfiler.swift via OSSignposter)
 - [ ] item 4: write the product-boundary section into the planning doc from items 1-3 data, then clear/remove the doc
 
