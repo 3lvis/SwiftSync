@@ -355,7 +355,7 @@ public final class TaskFormSheetMachine {
 
             guard saveMachine.send(.submit) else { return }
 
-            let body = draft.exportObject(for: syncContainer)
+            let body = syncContainer.export(draft)
             let capturedReviewerIDs = draft.reviewers.map(\.id).sorted()
             let capturedWatcherIDs = draft.watchers.map(\.id).sorted()
 
