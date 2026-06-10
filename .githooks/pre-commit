@@ -1,0 +1,26 @@
+#!/bin/sh
+# Formats staged Swift files with swift-format before each commit.
+# Enable once per clone: ./scripts/setup.sh (or git config core.hooksPath .githooks)
+set -e
+
+# NUL-delimited so paths with spaces survive. ACM excludes deletions.
+files=$(git diff --cached --name-only --diff-filter=ACM -z -- '*.swift' | tr '\0' '\n')
+[ -z "$files" ] && exit 0
+
+if ! command -v swift >/dev/null 2>&1; then
+    echo "pre-commit: swift toolchain not found; skipping swift-format." >&2
+    exit 0
+fi
+
+echo "$files" | while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    # A file with unstaged changes is partially staged; formatting in place and
+    # re-adding would pull the unstaged hunks into the commit. Skip it — CI's
+    # format check is the backstop for anything the hook can't safely touch.
+    if git diff --quiet -- "$f"; then
+        swift format --in-place "$f"
+        git add -- "$f"
+    else
+        echo "pre-commit: '$f' is partially staged; skipping format (run swift format manually)." >&2
+    fi
+done

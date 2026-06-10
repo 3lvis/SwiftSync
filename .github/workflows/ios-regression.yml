@@ -1,11 +1,11 @@
 name: iOS Regression (post-merge)
 
-# Runs only when a PR is actually merged into main — not on draft closes,
+# Runs only when a PR is actually merged into master — not on draft closes,
 # not on manual dispatch, not on direct pushes.
 on:
   pull_request:
     types: [closed]
-    branches: [main]
+    branches: [master]
 
 env:
   DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
@@ -17,7 +17,7 @@ jobs:
     runs-on: macos-15
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Xcode Version
         run: xcodebuild -version && swift --version

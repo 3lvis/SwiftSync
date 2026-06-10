@@ -1,8 +1,8 @@
-name: Purge .agents on main
+name: Purge .agents on master
 
 on:
   push:
-    branches: ["main"]
+    branches: ["master"]
 
 permissions:
   contents: write
@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Delete .agents folder if present
         run: |
@@ -31,8 +31,8 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git add -A
-            git commit -m "chore: purge .agents from main [skip ci]"
-            git push origin main
+            git commit -m "chore: purge .agents from master [skip ci]"
+            git push origin master
           else
             echo "No changes to commit"
           fi
