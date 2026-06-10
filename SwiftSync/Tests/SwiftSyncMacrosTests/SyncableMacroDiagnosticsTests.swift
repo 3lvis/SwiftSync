@@ -119,14 +119,19 @@ final class SyncableMacroDiagnosticsTests: XCTestCase {
 
                 }
 
-                public func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+                public func applyRelationships(
+                    _ payload: SyncPayload,
+                    in context: ModelContext,
+                    isolation: isolated (any Actor)? = #isolation
+                ) async throws -> Bool {
                     try syncApplyGeneratedRelationships(payload, in: context, operations: .all)
                 }
 
                 public func applyRelationships(
                     _ payload: SyncPayload,
                     in context: ModelContext,
-                    operations: SyncRelationshipOperations
+                    operations: SyncRelationshipOperations,
+                    isolation: isolated (any Actor)? = #isolation
                 ) async throws -> Bool {
                     try syncApplyGeneratedRelationships(payload, in: context, operations: operations)
                 }

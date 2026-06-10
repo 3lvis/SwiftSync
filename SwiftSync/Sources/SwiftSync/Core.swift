@@ -112,11 +112,16 @@ public struct SyncRelationshipSchemaDescriptor: Sendable {
 public protocol SyncUpdatableModel: SyncModelable {
     static func make(from payload: SyncPayload) throws -> Self
     func apply(_ payload: SyncPayload) throws -> Bool
-    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool
     func applyRelationships(
         _ payload: SyncPayload,
         in context: ModelContext,
-        operations: SyncRelationshipOperations
+        isolation: isolated (any Actor)?
+    ) async throws -> Bool
+    func applyRelationships(
+        _ payload: SyncPayload,
+        in context: ModelContext,
+        operations: SyncRelationshipOperations,
+        isolation: isolated (any Actor)?
     ) async throws -> Bool
     func export(keyStyle: KeyStyle, dateFormatter: DateFormatter) -> [String: Any]
 
@@ -129,16 +134,21 @@ public protocol SyncUpdatableModel: SyncModelable {
 public extension SyncUpdatableModel {
     func syncMarkChanged() {}
 
-    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+    func applyRelationships(
+        _ payload: SyncPayload,
+        in context: ModelContext,
+        isolation: isolated (any Actor)? = #isolation
+    ) async throws -> Bool {
         false
     }
 
     func applyRelationships(
         _ payload: SyncPayload,
         in context: ModelContext,
-        operations: SyncRelationshipOperations
+        operations: SyncRelationshipOperations,
+        isolation: isolated (any Actor)? = #isolation
     ) async throws -> Bool {
-        try await applyRelationships(payload, in: context)
+        try await applyRelationships(payload, in: context, isolation: isolation)
     }
 
     func export(keyStyle _: KeyStyle, dateFormatter _: DateFormatter) -> [String: Any] {

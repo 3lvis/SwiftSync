@@ -137,14 +137,19 @@ extension OpsEmployee: SyncUpdatableModel {
 /// API.swift layer (which decides whether to call `applyRelationships`
 /// at all based on the mask and whether the row is new or existing).
 extension OpsEmployee {
-    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+    func applyRelationships(
+        _ payload: SyncPayload,
+        in context: ModelContext,
+        isolation: isolated (any Actor)? = #isolation
+    ) async throws -> Bool {
         try await applyRelationships(payload, in: context, operations: .all)
     }
 
     func applyRelationships(
         _ payload: SyncPayload,
         in context: ModelContext,
-        operations: SyncRelationshipOperations
+        operations: SyncRelationshipOperations,
+        isolation: isolated (any Actor)? = #isolation
     ) async throws -> Bool {
         guard !operations.isDisjoint(with: [.insert, .update, .delete]) else { return false }
         guard payload.contains("company_id") else { return false }

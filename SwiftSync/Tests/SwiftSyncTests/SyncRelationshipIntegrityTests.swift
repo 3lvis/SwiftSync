@@ -111,7 +111,8 @@ extension MissingInverseRegressionTask: SyncUpdatableModel {
 
     func applyRelationships(
         _ payload: SyncPayload,
-        in context: ModelContext
+        in context: ModelContext,
+        isolation: isolated (any Actor)? = #isolation
     ) async throws -> Bool {
         try await applyRelationships(payload, in: context, operations: .all)
     }
@@ -119,7 +120,8 @@ extension MissingInverseRegressionTask: SyncUpdatableModel {
     func applyRelationships(
         _ payload: SyncPayload,
         in context: ModelContext,
-        operations: SyncRelationshipOperations
+        operations: SyncRelationshipOperations,
+        isolation: isolated (any Actor)? = #isolation
     ) async throws -> Bool {
         try syncApplyToManyForeignKeys(
             self,
@@ -181,7 +183,8 @@ extension ExplicitInverseRegressionTask: SyncUpdatableModel {
 
     func applyRelationships(
         _ payload: SyncPayload,
-        in context: ModelContext
+        in context: ModelContext,
+        isolation: isolated (any Actor)? = #isolation
     ) async throws -> Bool {
         try await applyRelationships(payload, in: context, operations: .all)
     }
@@ -189,7 +192,8 @@ extension ExplicitInverseRegressionTask: SyncUpdatableModel {
     func applyRelationships(
         _ payload: SyncPayload,
         in context: ModelContext,
-        operations: SyncRelationshipOperations
+        operations: SyncRelationshipOperations,
+        isolation: isolated (any Actor)? = #isolation
     ) async throws -> Bool {
         try syncApplyToManyForeignKeys(
             self,
@@ -281,14 +285,19 @@ extension OneSidedTask: SyncUpdatableModel {
         return changed
     }
 
-    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+    func applyRelationships(
+        _ payload: SyncPayload,
+        in context: ModelContext,
+        isolation: isolated (any Actor)? = #isolation
+    ) async throws -> Bool {
         try await applyRelationships(payload, in: context, operations: .all)
     }
 
     func applyRelationships(
         _ payload: SyncPayload,
         in context: ModelContext,
-        operations: SyncRelationshipOperations
+        operations: SyncRelationshipOperations,
+        isolation: isolated (any Actor)? = #isolation
     ) async throws -> Bool {
         try syncApplyToManyForeignKeys(
             self,
@@ -374,14 +383,19 @@ extension OneSidedNestedTask: SyncUpdatableModel {
         return changed
     }
 
-    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+    func applyRelationships(
+        _ payload: SyncPayload,
+        in context: ModelContext,
+        isolation: isolated (any Actor)? = #isolation
+    ) async throws -> Bool {
         try await applyRelationships(payload, in: context, operations: .all)
     }
 
     func applyRelationships(
         _ payload: SyncPayload,
         in context: ModelContext,
-        operations: SyncRelationshipOperations
+        operations: SyncRelationshipOperations,
+        isolation: isolated (any Actor)? = #isolation
     ) async throws -> Bool {
         try syncApplyToManyNestedObjects(
             self,

@@ -437,7 +437,11 @@ extension Team: SyncUpdatableModel {
 }
 
 extension Team {
-    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+    func applyRelationships(
+        _ payload: SyncPayload,
+        in context: ModelContext,
+        isolation: isolated (any Actor)? = #isolation
+    ) async throws -> Bool {
         var changed = false
 
         if payload.contains("owner") {
@@ -534,7 +538,11 @@ extension Employee: SyncUpdatableModel {
 }
 
 extension Employee {
-    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+    func applyRelationships(
+        _ payload: SyncPayload,
+        in context: ModelContext,
+        isolation: isolated (any Actor)? = #isolation
+    ) async throws -> Bool {
         // Support to-one by foreign key scalar (company_id).
         guard payload.contains("company_id") else { return false }
 
@@ -602,7 +610,11 @@ extension UserWithNotes: SyncUpdatableModel {
 }
 
 extension UserWithNotes {
-    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+    func applyRelationships(
+        _ payload: SyncPayload,
+        in context: ModelContext,
+        isolation: isolated (any Actor)? = #isolation
+    ) async throws -> Bool {
         // Support to-many by foreign key scalar array (notes_ids).
         guard payload.contains("notes_ids") else { return false }
 
@@ -670,7 +682,11 @@ extension UserTagsByObjects: SyncUpdatableModel {
 }
 
 extension UserTagsByObjects {
-    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+    func applyRelationships(
+        _ payload: SyncPayload,
+        in context: ModelContext,
+        isolation: isolated (any Actor)? = #isolation
+    ) async throws -> Bool {
         guard payload.contains("tags") else { return false }
         let desiredTags: [Tag]
         if let tagPayloads: [[String: Any]] = payload.value(for: "tags") {
@@ -726,7 +742,11 @@ extension UserTagsByIDs: SyncUpdatableModel {
 }
 
 extension UserTagsByIDs {
-    func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+    func applyRelationships(
+        _ payload: SyncPayload,
+        in context: ModelContext,
+        isolation: isolated (any Actor)? = #isolation
+    ) async throws -> Bool {
         guard payload.contains("tags_ids") else { return false }
         let desiredIDs: [Int]
         if let ids: [Int] = payload.value(for: "tags_ids") {
@@ -1327,7 +1347,11 @@ extension ConcurrentRaceUser: SyncUpdatableModel {
         return changed
     }
 
-    func applyRelationships(_: SyncPayload, in _: ModelContext) async throws -> Bool {
+    func applyRelationships(
+        _: SyncPayload,
+        in _: ModelContext,
+        isolation: isolated (any Actor)? = #isolation
+    ) async throws -> Bool {
         if id == 1 {
             await ConcurrentRaceHooks.shared.waitIfInstalled()
             await Task.yield()

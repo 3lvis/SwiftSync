@@ -151,14 +151,19 @@ public struct SyncableMacro: ExtensionMacro {
                         \(raw: relationshipApplyBody.isEmpty ? "" : "return changed")
                     }
 
-                    \(raw: memberAccessModifier)func applyRelationships(_ payload: SyncPayload, in context: ModelContext) async throws -> Bool {
+                    \(raw: memberAccessModifier)func applyRelationships(
+                        _ payload: SyncPayload,
+                        in context: ModelContext,
+                        isolation: isolated (any Actor)? = #isolation
+                    ) async throws -> Bool {
                         try syncApplyGeneratedRelationships(payload, in: context, operations: .all)
                     }
 
                     \(raw: memberAccessModifier)func applyRelationships(
                         _ payload: SyncPayload,
                         in context: ModelContext,
-                        operations: SyncRelationshipOperations
+                        operations: SyncRelationshipOperations,
+                        isolation: isolated (any Actor)? = #isolation
                     ) async throws -> Bool {
                         try syncApplyGeneratedRelationships(payload, in: context, operations: operations)
                     }

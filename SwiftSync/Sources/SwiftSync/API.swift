@@ -7,7 +7,8 @@ extension SwiftSync {
         as _: Model.Type,
         in context: ModelContext,
         keyStyle: KeyStyle = .snakeCase,
-        relationshipOperations: SyncRelationshipOperations = .all
+        relationshipOperations: SyncRelationshipOperations = .all,
+        isolation: isolated (any Actor)? = #isolation
     ) async throws {
         let lease = await acquireSyncLease(for: context)
         do {
@@ -133,7 +134,8 @@ extension SwiftSync {
         as _: Model.Type,
         in context: ModelContext,
         keyStyle: KeyStyle = .snakeCase,
-        relationshipOperations: SyncRelationshipOperations = .all
+        relationshipOperations: SyncRelationshipOperations = .all,
+        isolation: isolated (any Actor)? = #isolation
     ) async throws {
         let lease = await acquireSyncLease(for: context)
         do {
@@ -218,7 +220,8 @@ extension SwiftSync {
         parent: Parent,
         relationship: ReferenceWritableKeyPath<Model, Parent?>,
         keyStyle: KeyStyle = .snakeCase,
-        relationshipOperations: SyncRelationshipOperations = .all
+        relationshipOperations: SyncRelationshipOperations = .all,
+        isolation: isolated (any Actor)? = #isolation
     ) async throws {
         let lease = await acquireSyncLease(for: context)
         do {
@@ -324,7 +327,8 @@ extension SwiftSync {
         parent: Parent,
         relationship: ReferenceWritableKeyPath<Model, Parent?>,
         keyStyle: KeyStyle = .snakeCase,
-        relationshipOperations: SyncRelationshipOperations = .all
+        relationshipOperations: SyncRelationshipOperations = .all,
+        isolation: isolated (any Actor)? = #isolation
     ) async throws {
         try await sync(
             payload: payload,
@@ -346,7 +350,8 @@ extension SwiftSync {
         parentRelationship: ReferenceWritableKeyPath<Model, Parent?>,
         isGlobal: Bool,
         keyStyle: KeyStyle,
-        relationshipOperations: SyncRelationshipOperations
+        relationshipOperations: SyncRelationshipOperations,
+        isolation: isolated (any Actor)? = #isolation
     ) async throws {
         let lease = await acquireSyncLease(for: context)
         do {
@@ -705,6 +710,7 @@ extension SwiftSync {
     private static let syncLeaseRegistry = SyncLeaseRegistry()
 
     private static func withRelationshipLookupCache<T>(
+        isolation: isolated (any Actor)? = #isolation,
         operation: () async throws -> T
     ) async rethrows -> T {
         let cache = SyncRelationshipLookupCache()
@@ -713,7 +719,10 @@ extension SwiftSync {
         }
     }
 
-    private static func acquireSyncLease(for context: ModelContext) async -> SyncLease {
+    private static func acquireSyncLease(
+        for context: ModelContext,
+        isolation: isolated (any Actor)? = #isolation
+    ) async -> SyncLease {
         let scopeID = ObjectIdentifier(context.container)
         return await syncLeaseRegistry.acquire(scopeID: scopeID)
     }
