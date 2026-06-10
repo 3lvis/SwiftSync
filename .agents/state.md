@@ -2,16 +2,12 @@
 
 ## Plan
 
-- [x] Inspect the export APIs, tests, and call sites to choose a safe cleanup order
-- [x] Implement the export API cleanup in `SwiftSync/**` by removing bulk export and deleting bulk-only tests/benchmarks
-- [x] Add tests for container-centric object export naming before changing the library
-- [x] Rename object export to `syncContainer.export(_:)` and align internal naming with `export`
-- [x] Update docs and planning notes to match the remaining export surface
-- [x] Run relevant SwiftSync tests and review the final diff
+- [x] Create a simple planning doc for the Ariadne app that another agent can continue from
+- [x] Review the planning doc for clarity, scope, and handoff usefulness
 
 ## Last known state
 
-bulk export removed; object export renamed to `syncContainer.export(_:)`; export tests pass
+Ariadne planning doc added and reviewed for handoff clarity; no tests run
 
 ## Decisions (don't revisit)
 
@@ -20,15 +16,11 @@ bulk export removed; object export renamed to `syncContainer.export(_:)`; export
 - Decide cleanup order from current code and test usage rather than renaming surfaces blindly
 - Remove the bulk export API entirely rather than preserving an internal helper
 - Make the public object-export API container-centric for consistency with `sync`
+- Keep `REUSABLE_AGENTS.md` generic enough for other iOS/SwiftData repos, with placeholders where projects will need local policy
+- Include reusable process knowledge directly in the file rather than leaving critical guidance in companion docs
+- Keep the Ariadne plan simple, implementation-focused, and easy for another agent to resume
 
 ## Files touched
 
 - .agents/state.md
-- README.md
-- SwiftSync/Sources/MacrosImplementation/SyncableMacro.swift
-- SwiftSync/Sources/SwiftSync/SyncContainer.swift
-- SwiftSync/Sources/SwiftSync/Core.swift
-- SwiftSync/Sources/SwiftSync/SyncableMacro.swift
-- SwiftSync/Tests/SwiftSyncTests/FetchStrategyBenchmarkTests.swift
-- SwiftSync/Tests/SwiftSyncTests/SyncExportTests.swift
-- SwiftSync/Tests/SwiftSyncMacrosTests/SyncableMacroDiagnosticsTests.swift
+- docs/planning/ariadne-app-plan.md
