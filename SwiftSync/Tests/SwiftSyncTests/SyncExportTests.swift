@@ -1,5 +1,6 @@
-import XCTest
 import SwiftData
+import XCTest
+
 @testable import SwiftSync
 
 @Syncable
@@ -213,7 +214,7 @@ extension ManualExportChild: SyncUpdatableModel {
     func export(keyStyle _: KeyStyle, dateFormatter _: DateFormatter) -> [String: Any] {
         [
             "id": id,
-            "text": text
+            "text": text,
         ]
     }
 }
@@ -471,8 +472,9 @@ final class ExportTests: XCTestCase {
 
         // Export produces NSNull for nickname automatically — no manual NSNull() needed
         let body = syncContainer.export(task)
-        XCTAssertTrue(body["nickname"] is NSNull,
-                      "Nil optional must appear as NSNull in body so server clears the field")
+        XCTAssertTrue(
+            body["nickname"] is NSNull,
+            "Nil optional must appear as NSNull in body so server clears the field")
 
         // Caller can still override any key after export (e.g. to set a new value)
         var mutableBody = body
@@ -543,8 +545,9 @@ final class ExportTests: XCTestCase {
         // @RemoteKey("profile.contact.email") must appear nested
         let profile = body["profile"] as? [String: Any]
         let contact = profile?["contact"] as? [String: Any]
-        XCTAssertEqual(contact?["email"] as? String, "update@example.com",
-                       "Expected @RemoteKey(\"profile.contact.email\") to produce nested structure")
+        XCTAssertEqual(
+            contact?["email"] as? String, "update@example.com",
+            "Expected @RemoteKey(\"profile.contact.email\") to produce nested structure")
         XCTAssertNil(body["email"], "Flat key must not appear when nested @RemoteKey overrides it")
 
         // @NotExport field must be absent
@@ -576,19 +579,24 @@ final class ExportTests: XCTestCase {
         )
 
         // descriptionText → @RemoteKey("description") → must appear as "description"
-        XCTAssertEqual(body["description"] as? String, "Updated body text",
-                       "Expected @RemoteKey(\"description\") to map descriptionText → \"description\"")
-        XCTAssertNil(body["description_text"],
-                     "Raw snake_case key must not appear when @RemoteKey overrides it")
-        XCTAssertNil(body["descriptionText"],
-                     "Camel-case key must not appear when @RemoteKey overrides it")
+        XCTAssertEqual(
+            body["description"] as? String, "Updated body text",
+            "Expected @RemoteKey(\"description\") to map descriptionText → \"description\"")
+        XCTAssertNil(
+            body["description_text"],
+            "Raw snake_case key must not appear when @RemoteKey overrides it")
+        XCTAssertNil(
+            body["descriptionText"],
+            "Camel-case key must not appear when @RemoteKey overrides it")
 
         // state → @RemoteKey("state.id") → must appear nested under "state" dict
         let stateDict = body["state"] as? [String: Any]
-        XCTAssertEqual(stateDict?["id"] as? String, "inProgress",
-                       "Expected @RemoteKey(\"state.id\") to produce nested state.id")
-        XCTAssertEqual(stateDict?["label"] as? String, "In Progress",
-                       "Expected @RemoteKey(\"state.label\") to produce nested state.label")
+        XCTAssertEqual(
+            stateDict?["id"] as? String, "inProgress",
+            "Expected @RemoteKey(\"state.id\") to produce nested state.id")
+        XCTAssertEqual(
+            stateDict?["label"] as? String, "In Progress",
+            "Expected @RemoteKey(\"state.label\") to produce nested state.label")
         XCTAssertNil(body["state_id"], "Flat state_id key must not appear")
         XCTAssertNil(body["state_label"], "Flat state_label key must not appear")
     }
@@ -633,8 +641,9 @@ final class ExportTests: XCTestCase {
         let task = try context.fetch(FetchDescriptor<ExportTask>()).first!
         let body = syncContainer.export(task)
 
-        XCTAssertEqual(body["created_at"] as? String, "1970/01/01",
-                       "Expected date formatted using container.dateFormatter")
+        XCTAssertEqual(
+            body["created_at"] as? String, "1970/01/01",
+            "Expected date formatted using container.dateFormatter")
     }
 
     @MainActor
@@ -650,7 +659,9 @@ final class ExportTests: XCTestCase {
     }
 
     @MainActor
-    private func fetchSingle<Model: PersistentModel>(_ modelType: Model.Type, from context: ModelContext) throws -> Model {
+    private func fetchSingle<Model: PersistentModel>(_ modelType: Model.Type, from context: ModelContext) throws
+        -> Model
+    {
         let rows = try context.fetch(FetchDescriptor<Model>())
         XCTAssertEqual(rows.count, 1)
         return try XCTUnwrap(rows.first)

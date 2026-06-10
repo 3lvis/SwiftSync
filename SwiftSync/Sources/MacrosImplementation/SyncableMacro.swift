@@ -1,9 +1,9 @@
 import Foundation
+import SwiftCompilerPlugin
+import SwiftDiagnostics
 import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
-import SwiftDiagnostics
-import SwiftCompilerPlugin
 
 private struct SyncedProperty {
     let name: String
@@ -62,8 +62,9 @@ public struct SyncableMacro: ExtensionMacro {
         }
 
         let explicitPrimaryKey = properties.first(where: \.isPrimaryKey)
-        guard let identityProperty = explicitPrimaryKey ?? properties.first(where: { $0.name == "id" }) ??
-            properties.first(where: { $0.name == "remoteID" })
+        guard
+            let identityProperty = explicitPrimaryKey ?? properties.first(where: { $0.name == "id" })
+                ?? properties.first(where: { $0.name == "remoteID" })
         else {
             return []
         }
@@ -78,12 +79,14 @@ public struct SyncableMacro: ExtensionMacro {
         }
         .joined(separator: ",\n            ")
 
-        let applyBody = properties
+        let applyBody =
+            properties
             .filter { $0.name != identityProperty.name && !$0.isRelationship }
             .map(applyBlock(for:))
             .joined(separator: "\n\n")
 
-        let exportBody = properties
+        let exportBody =
+            properties
             .filter { !$0.isNotExport }
             .map(exportBlock(for:))
             .joined(separator: "\n\n")
@@ -190,7 +193,7 @@ public struct SyncableMacro: ExtensionMacro {
 
     private static let blockedPropertyNameSuggestions: [String: String] = [
         "description": "descriptionText",
-        "hashValue": "hashValueRaw"
+        "hashValue": "hashValueRaw",
     ]
 
     private static func emitBlockedNameDiagnostics(
@@ -261,13 +264,13 @@ public struct SyncableMacro: ExtensionMacro {
             guard property.isRelationship else { return nil }
             guard let relatedType = relationshipModelTypeName(for: property) else { return nil }
             return """
-            SyncRelationshipSchemaDescriptor(
-                propertyName: "\(property.name)",
-                relatedTypeName: String(reflecting: \(relatedType).self),
-                isToMany: \(property.isToManyRelationship ? "true" : "false"),
-                hasExplicitInverseAnchor: \(property.hasExplicitRelationshipInverse ? "true" : "false")
-            )
-            """
+                SyncRelationshipSchemaDescriptor(
+                    propertyName: "\(property.name)",
+                    relatedTypeName: String(reflecting: \(relatedType).self),
+                    isToMany: \(property.isToManyRelationship ? "true" : "false"),
+                    hasExplicitInverseAnchor: \(property.hasExplicitRelationshipInverse ? "true" : "false")
+                )
+                """
         }
 
         guard !descriptors.isEmpty else { return "[]" }
@@ -411,10 +414,10 @@ public struct SyncableMacro: ExtensionMacro {
         let blocks = relationshipProperties.compactMap { property -> String? in
             guard let relationshipType = relationshipModelTypeName(for: property) else { return nil }
             return """
-            if keyPath == \\\(typeName).\(property.name) {
-                return \(relationshipType).self
-            }
-            """
+                if keyPath == \\\(typeName).\(property.name) {
+                    return \(relationshipType).self
+                }
+                """
         }
         guard !blocks.isEmpty else {
             return "return nil"
@@ -440,52 +443,52 @@ public struct SyncableMacro: ExtensionMacro {
         if property.isRelationship {
             if property.isToManyRelationship {
                 return """
-                do {
-                    let baseKey = \(keyExpr)
-                    let exportedChildren: [[String: Any]] = self.\(property.name).compactMap { child in
-                        let anyChild: Any = child
-                        guard let exportable = anyChild as? any SyncUpdatableModel else { return nil }
-                        return exportable.export(keyStyle: keyStyle, dateFormatter: dateFormatter)
+                    do {
+                        let baseKey = \(keyExpr)
+                        let exportedChildren: [[String: Any]] = self.\(property.name).compactMap { child in
+                            let anyChild: Any = child
+                            guard let exportable = anyChild as? any SyncUpdatableModel else { return nil }
+                            return exportable.export(keyStyle: keyStyle, dateFormatter: dateFormatter)
+                        }
+                        exportSetValue(exportedChildren, for: baseKey, into: &result)
                     }
-                    exportSetValue(exportedChildren, for: baseKey, into: &result)
-                }
-                """
+                    """
             }
             return """
-            do {
-                let baseKey = \(keyExpr)
-                let anyChild: Any? = self.\(property.name)
-                if let exportable = anyChild as? any SyncUpdatableModel {
-                    let child = exportable.export(keyStyle: keyStyle, dateFormatter: dateFormatter)
-                    exportSetValue(child, for: baseKey, into: &result)
-                } else {
-                    exportSetValue(NSNull(), for: baseKey, into: &result)
+                do {
+                    let baseKey = \(keyExpr)
+                    let anyChild: Any? = self.\(property.name)
+                    if let exportable = anyChild as? any SyncUpdatableModel {
+                        let child = exportable.export(keyStyle: keyStyle, dateFormatter: dateFormatter)
+                        exportSetValue(child, for: baseKey, into: &result)
+                    } else {
+                        exportSetValue(NSNull(), for: baseKey, into: &result)
+                    }
                 }
-            }
-            """
+                """
         }
 
         if property.isOptional {
             return """
-            if let value = self.\(property.name) {
-                if let encoded = exportEncodeValue(value, dateFormatter: dateFormatter) {
-                    exportSetValue(encoded, for: \(keyExpr), into: &result)
+                if let value = self.\(property.name) {
+                    if let encoded = exportEncodeValue(value, dateFormatter: dateFormatter) {
+                        exportSetValue(encoded, for: \(keyExpr), into: &result)
+                    } else {
+                        exportSetValue(NSNull(), for: \(keyExpr), into: &result)
+                    }
                 } else {
                     exportSetValue(NSNull(), for: \(keyExpr), into: &result)
                 }
+                """
+        }
+
+        return """
+            if let encoded = exportEncodeValue(self.\(property.name), dateFormatter: dateFormatter) {
+                exportSetValue(encoded, for: \(keyExpr), into: &result)
             } else {
                 exportSetValue(NSNull(), for: \(keyExpr), into: &result)
             }
             """
-        }
-
-        return """
-        if let encoded = exportEncodeValue(self.\(property.name), dateFormatter: dateFormatter) {
-            exportSetValue(encoded, for: \(keyExpr), into: &result)
-        } else {
-            exportSetValue(NSNull(), for: \(keyExpr), into: &result)
-        }
-        """
     }
 
     private static func exportKeyLiteral(for property: SyncedProperty) -> String? {
@@ -521,18 +524,19 @@ public struct SyncableMacro: ExtensionMacro {
         if property.isOptional {
             read = "let \(incoming): \(property.typeSource) = payload.value(for: \"\(inputKey)\")"
         } else {
-            read = "let \(incoming): \(property.typeSource) = try payload.required(\(property.typeSource).self, for: \"\(inputKey)\")"
+            read =
+                "let \(incoming): \(property.typeSource) = try payload.required(\(property.typeSource).self, for: \"\(inputKey)\")"
         }
 
         return """
-        if payload.contains("\(inputKey)") {
-            \(read)
-            if self.\(property.name) != \(incoming) {
-                self.\(property.name) = \(incoming)
-                changed = true
+            if payload.contains("\(inputKey)") {
+                \(read)
+                if self.\(property.name) != \(incoming) {
+                    self.\(property.name) = \(incoming)
+                    changed = true
+                }
             }
-        }
-        """
+            """
     }
 
     private static func relationshipApplyBlock(for properties: [SyncedProperty], typeName: String) -> String {
@@ -552,8 +556,35 @@ public struct SyncableMacro: ExtensionMacro {
 
             if property.isToManyRelationship {
                 return """
+                    if \(fkPresence) {
+                        if try syncApplyToManyForeignKeys(
+                            self,
+                            relationship: \\\(typeName).\(property.name),
+                            payload: payload,
+                            keys: [\(fkKeysLiteral)],
+                            in: context,
+                            operations: operations
+                        ) {
+                            changed = true
+                        }
+                    } else if \(nestedPresence) {
+                        if try syncApplyToManyNestedObjects(
+                            self,
+                            relationship: \\\(typeName).\(property.name),
+                            payload: payload,
+                            keys: [\(nestedKeysLiteral)],
+                            in: context,
+                            operations: operations
+                        ) {
+                            changed = true
+                        }
+                    }
+                    """
+            }
+
+            return """
                 if \(fkPresence) {
-                    if try syncApplyToManyForeignKeys(
+                    if try syncApplyToOneForeignKey(
                         self,
                         relationship: \\\(typeName).\(property.name),
                         payload: payload,
@@ -564,7 +595,7 @@ public struct SyncableMacro: ExtensionMacro {
                         changed = true
                     }
                 } else if \(nestedPresence) {
-                    if try syncApplyToManyNestedObjects(
+                    if try syncApplyToOneNestedObject(
                         self,
                         relationship: \\\(typeName).\(property.name),
                         payload: payload,
@@ -576,33 +607,6 @@ public struct SyncableMacro: ExtensionMacro {
                     }
                 }
                 """
-            }
-
-            return """
-            if \(fkPresence) {
-                if try syncApplyToOneForeignKey(
-                    self,
-                    relationship: \\\(typeName).\(property.name),
-                    payload: payload,
-                    keys: [\(fkKeysLiteral)],
-                    in: context,
-                    operations: operations
-                ) {
-                    changed = true
-                }
-            } else if \(nestedPresence) {
-                if try syncApplyToOneNestedObject(
-                    self,
-                    relationship: \\\(typeName).\(property.name),
-                    payload: payload,
-                    keys: [\(nestedKeysLiteral)],
-                    in: context,
-                    operations: operations
-                ) {
-                    changed = true
-                }
-            }
-            """
         }
 
         return blocks.joined(separator: "\n\n")
@@ -625,9 +629,9 @@ public struct SyncableMacro: ExtensionMacro {
         }.joined(separator: "\n")
 
         return """
-        \(cases)
-        return nil
-        """
+            \(cases)
+            return nil
+            """
     }
 
     private static func relationshipForeignKeyInputKeys(for property: SyncedProperty) -> [String] {
@@ -665,8 +669,8 @@ public struct SyncableMacro: ExtensionMacro {
         if value.hasSuffix("ies") {
             return String(value.dropLast(3)) + "y"
         }
-        if value.hasSuffix("ses") || value.hasSuffix("xes") || value.hasSuffix("zes") ||
-            value.hasSuffix("ches") || value.hasSuffix("shes")
+        if value.hasSuffix("ses") || value.hasSuffix("xes") || value.hasSuffix("zes") || value.hasSuffix("ches")
+            || value.hasSuffix("shes")
         {
             return String(value.dropLast(2))
         }
@@ -717,6 +721,6 @@ struct MacroPlugin: CompilerPlugin {
         SyncableMacro.self,
         PrimaryKeyMacro.self,
         NotExportMacro.self,
-        RemoteKeyMacro.self
+        RemoteKeyMacro.self,
     ]
 }

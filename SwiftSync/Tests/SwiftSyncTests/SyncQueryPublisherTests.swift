@@ -1,6 +1,6 @@
-import XCTest
 import SwiftData
 import SwiftSync
+import XCTest
 
 @Syncable
 @Model
@@ -133,7 +133,7 @@ final class SyncQueryPublisherTests: XCTestCase {
         try await syncContainer.sync(
             payload: [
                 ["id": "t1", "title": "Alpha", "assignee_id": "u1"],
-                ["id": "t2", "title": "Beta",  "assignee_id": NSNull()],
+                ["id": "t2", "title": "Beta", "assignee_id": NSNull()],
                 ["id": "t3", "title": "Gamma", "assignee_id": "u1"],
             ],
             as: PubTask.self
@@ -190,7 +190,7 @@ final class SyncQueryPublisherTests: XCTestCase {
         try await syncContainer.sync(
             payload: [
                 ["id": "u1", "display_name": "Alice", "role": ["id": "eng", "label": "Engineer"]],
-                ["id": "u2", "display_name": "Bob",   "role": ["id": "eng", "label": "Engineer"]],
+                ["id": "u2", "display_name": "Bob", "role": ["id": "eng", "label": "Engineer"]],
             ],
             as: PubUser.self
         )
@@ -199,7 +199,7 @@ final class SyncQueryPublisherTests: XCTestCase {
             payload: [
                 ["id": "t1", "title": "Alice Task 1", "assignee_id": "u1"],
                 ["id": "t2", "title": "Alice Task 2", "assignee_id": "u1"],
-                ["id": "t3", "title": "Bob Task",     "assignee_id": "u2"],
+                ["id": "t3", "title": "Bob Task", "assignee_id": "u2"],
             ],
             as: PubTask.self
         )
@@ -309,7 +309,7 @@ final class SyncQueryPublisherTests: XCTestCase {
         try await syncContainer.sync(
             payload: [
                 ["id": "u1", "display_name": "Alice", "role": ["id": "eng", "label": "Engineer"]],
-                ["id": "u2", "display_name": "Bob", "role": ["id": "eng", "label": "Engineer"]]
+                ["id": "u2", "display_name": "Bob", "role": ["id": "eng", "label": "Engineer"]],
             ],
             as: PubUser.self
         )

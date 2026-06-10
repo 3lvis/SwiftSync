@@ -1,5 +1,6 @@
-import XCTest
 import SwiftData
+import XCTest
+
 @testable import SwiftSync
 
 // Opt-in benchmark suite for fetch-strategy profiling.
@@ -234,7 +235,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                     try seedUsers(count: existingCount, in: context)
                     let payload: [String: Any] = [
                         "id": existingCount,
-                        "full_name": "single-item-updated-\(existingCount)"
+                        "full_name": "single-item-updated-\(existingCount)",
                     ]
                     return try await measureDuration {
                         try await SwiftSync.sync(item: payload, as: BenchmarkUser.self, in: context)
@@ -278,7 +279,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
 
                     let payload: [String: Any] = [
                         "id": 1,
-                        "title": "Scoped Item Updated"
+                        "title": "Scoped Item Updated",
                     ]
                     return try await measureDuration {
                         try await SwiftSync.sync(
@@ -367,7 +368,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                     let payload: [String: Any] = [
                         "id": 1,
                         "title": "to-one-benchmark",
-                        "assignee_id": relatedCount
+                        "assignee_id": relatedCount,
                     ]
                     return try await measureDuration {
                         try await SwiftSync.sync(item: payload, as: BenchmarkWorkItem.self, in: context)
@@ -408,7 +409,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                         let payload: [String: Any] = [
                             "id": 1,
                             "title": "to-many-fk-benchmark",
-                            "tag_ids": Array(1...linkCount)
+                            "tag_ids": Array(1...linkCount),
                         ]
                         return try await measureDuration {
                             try await SwiftSync.sync(item: payload, as: BenchmarkWorkItem.self, in: context)
@@ -450,7 +451,9 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                         let payload: [String: Any] = [
                             "id": 1,
                             "title": "to-many-nested-benchmark",
-                            "reviewers": Array(1...linkCount).map { ["id": $0, "full_name": "Reviewer \($0) updated"] }
+                            "reviewers": Array(1...linkCount).map {
+                                ["id": $0, "full_name": "Reviewer \($0) updated"]
+                            },
                         ]
                         return try await measureDuration {
                             try await SwiftSync.sync(item: payload, as: BenchmarkWorkItem.self, in: context)
@@ -509,7 +512,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                     let scopedPayload = makeScopedTaskPayload(count: scopeCount)
                     let userPayload: [String: Any] = [
                         "id": relatedCount,
-                        "full_name": "Mixed User \(relatedCount)"
+                        "full_name": "Mixed User \(relatedCount)",
                     ]
                     let workItemPayload: [String: Any] = [
                         "id": 1,
@@ -518,7 +521,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                         "tag_ids": Array(1...relationshipCount),
                         "reviewers": Array(1...relationshipCount).map {
                             ["id": $0, "full_name": "Reviewer \($0) mixed"]
-                        }
+                        },
                     ]
 
                     return try await measureDuration {
@@ -585,11 +588,11 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                         "title": "Scenario Task 1 Detail Updated",
                         "assignee_id": existingCount,
                         "tag_ids": Array(1...relationshipCount),
-                        "watcher_ids": Array(max(1, existingCount - relationshipCount + 1)...existingCount)
+                        "watcher_ids": Array(max(1, existingCount - relationshipCount + 1)...existingCount),
                     ]
                     let userPresencePayload: [String: Any] = [
                         "id": existingCount,
-                        "full_name": "Scenario User \(existingCount) Active"
+                        "full_name": "Scenario User \(existingCount) Active",
                     ]
 
                     return try await measureDuration {
@@ -613,10 +616,9 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
     private func requireBenchmarksEnabled() throws {
         guard environment.isEnabled else {
             throw XCTSkip(
-                "Set SWIFTSYNC_RUN_BENCHMARKS=1 to run fetch-strategy benchmarks. " +
-                "Optional: SWIFTSYNC_BENCHMARK_STORES=memory,sqlite " +
-                "SWIFTSYNC_BENCHMARK_TIERS=1000,10000,50000 " +
-                "SWIFTSYNC_BENCHMARK_PROFILE_PHASES=1"
+                "Set SWIFTSYNC_RUN_BENCHMARKS=1 to run fetch-strategy benchmarks. "
+                    + "Optional: SWIFTSYNC_BENCHMARK_STORES=memory,sqlite "
+                    + "SWIFTSYNC_BENCHMARK_TIERS=1000,10000,50000 " + "SWIFTSYNC_BENCHMARK_PROFILE_PHASES=1"
             )
         }
     }
@@ -762,7 +764,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                 "title": "Scenario Task \(index) List Updated",
                 "assignee_id": ((index - 1) % max(1, count)) + 1,
                 "tag_ids": Array(1...relationshipCount),
-                "watcher_ids": Array(1...relationshipCount)
+                "watcher_ids": Array(1...relationshipCount),
             ]
         }
     }
@@ -911,7 +913,8 @@ private struct BenchmarkEnvironment {
 
     private static func parseStoreKinds(_ rawValue: String?) -> [BenchmarkStoreKind]? {
         guard let rawValue else { return nil }
-        let values = rawValue
+        let values =
+            rawValue
             .split(separator: ",")
             .compactMap { BenchmarkStoreKind(rawValue: $0.trimmingCharacters(in: .whitespacesAndNewlines)) }
         return values.isEmpty ? nil : values
@@ -919,7 +922,8 @@ private struct BenchmarkEnvironment {
 
     private static func parseIntegers(_ rawValue: String?) -> [Int]? {
         guard let rawValue else { return nil }
-        let values = rawValue
+        let values =
+            rawValue
             .split(separator: ",")
             .compactMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
         return values.isEmpty ? nil : values
@@ -947,7 +951,7 @@ private struct BenchmarkSummary {
             "workload=\(workload)",
             "samples=\(durations.count)",
             "medianMs=\(median.inMilliseconds)",
-            "maxMs=\(max.inMilliseconds)"
+            "maxMs=\(max.inMilliseconds)",
         ]
         if let payloadRows {
             parts.append("payloadRows=\(payloadRows)")
@@ -962,7 +966,8 @@ private struct BenchmarkSummary {
             parts.append("relationshipCount=\(relationshipCount)")
         }
         if !phaseProfiles.isEmpty {
-            let medians = phaseProfiles
+            let medians =
+                phaseProfiles
                 .sorted { $0.name < $1.name }
                 .map { "\($0.name):\($0.median.inMilliseconds)" }
                 .joined(separator: ",")
@@ -1004,22 +1009,23 @@ private struct BenchmarkPhaseProfile {
                 durationsByPhase[phase, default: []].append(duration)
             }
         }
-        return durationsByPhase
+        return
+            durationsByPhase
             .map { BenchmarkPhaseProfile(name: $0.key, durations: $0.value) }
             .sorted { $0.name < $1.name }
     }
 }
 
-private extension Duration {
-    static func milliseconds(_ value: Double) -> Duration {
+extension Duration {
+    fileprivate static func milliseconds(_ value: Double) -> Duration {
         .seconds(value / 1_000)
     }
 
-    var inMilliseconds: String {
+    fileprivate var inMilliseconds: String {
         String(format: "%.3f", millisecondsValue)
     }
 
-    var millisecondsValue: Double {
+    fileprivate var millisecondsValue: Double {
         let components = self.components
         return Double(components.seconds) * 1_000
             + Double(components.attoseconds) / 1_000_000_000_000_000
@@ -1031,7 +1037,7 @@ final class BenchmarkProfilingSupportTests: XCTestCase {
         let environment = BenchmarkEnvironment.from(
             [
                 "SWIFTSYNC_RUN_BENCHMARKS": "1",
-                "SWIFTSYNC_BENCHMARK_PROFILE_PHASES": "1"
+                "SWIFTSYNC_BENCHMARK_PROFILE_PHASES": "1",
             ]
         )
 
@@ -1058,7 +1064,7 @@ final class BenchmarkProfilingSupportTests: XCTestCase {
                 BenchmarkPhaseProfile(
                     name: "apply-relationships",
                     durations: [.milliseconds(3000), .milliseconds(3200), .milliseconds(3100)]
-                )
+                ),
             ]
         )
 

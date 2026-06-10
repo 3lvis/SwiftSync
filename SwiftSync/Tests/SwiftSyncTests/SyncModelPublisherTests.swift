@@ -1,7 +1,7 @@
-import XCTest
+import Observation
 import SwiftData
 import SwiftSync
-import Observation
+import XCTest
 
 @Syncable
 @Model
@@ -122,7 +122,7 @@ final class SyncModelPublisherTests: XCTestCase {
             payload: [
                 ["id": 1, "name": "Alice"],
                 ["id": 2, "name": "Bob"],
-                ["id": 3, "name": "Cara"]
+                ["id": 3, "name": "Cara"],
             ],
             as: OneSidedUser.self
         )

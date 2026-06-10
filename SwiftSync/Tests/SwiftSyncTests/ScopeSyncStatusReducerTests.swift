@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import SwiftSync
 
 struct ScopeSyncStatusReducerTests {
@@ -27,7 +28,8 @@ struct ScopeSyncStatusReducerTests {
 
     @Test("success settles to idle and clears errors")
     func successTransition() {
-        let started = ScopeSyncStatus(phase: .failed, path: .networkFirst, errorMessage: "boom", updatedAt: Date(timeIntervalSince1970: 12))
+        let started = ScopeSyncStatus(
+            phase: .failed, path: .networkFirst, errorMessage: "boom", updatedAt: Date(timeIntervalSince1970: 12))
         let done = ScopeSyncStatusReducer.succeed(previous: started, now: Date(timeIntervalSince1970: 13))
 
         #expect(done.phase == .idle)
@@ -39,7 +41,8 @@ struct ScopeSyncStatusReducerTests {
     @Test("failure preserves path and sets message")
     func failureTransition() {
         let started = ScopeSyncStatusReducer.start(path: .localFirstRefresh, now: Date(timeIntervalSince1970: 20))
-        let failed = ScopeSyncStatusReducer.fail(previous: started, errorMessage: "offline", now: Date(timeIntervalSince1970: 21))
+        let failed = ScopeSyncStatusReducer.fail(
+            previous: started, errorMessage: "offline", now: Date(timeIntervalSince1970: 21))
 
         #expect(failed.phase == .failed)
         #expect(failed.path == .localFirstRefresh)

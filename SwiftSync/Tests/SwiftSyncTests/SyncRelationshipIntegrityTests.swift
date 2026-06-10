@@ -1,7 +1,8 @@
 import Dispatch
 import Observation
-import XCTest
 import SwiftData
+import XCTest
+
 @testable import SwiftSync
 
 @Model
@@ -255,7 +256,10 @@ extension OneSidedUser: SyncUpdatableModel {
         var changed = false
         if payload.contains("name") {
             let incoming: String = try payload.required(String.self, for: "name")
-            if name != incoming { name = incoming; changed = true }
+            if name != incoming {
+                name = incoming
+                changed = true
+            }
         }
         return changed
     }
@@ -280,7 +284,10 @@ extension OneSidedTask: SyncUpdatableModel {
         var changed = false
         if payload.contains("title") {
             let incoming: String = try payload.required(String.self, for: "title")
-            if title != incoming { title = incoming; changed = true }
+            if title != incoming {
+                title = incoming
+                changed = true
+            }
         }
         return changed
     }
@@ -355,7 +362,10 @@ extension OneSidedNestedUser: SyncUpdatableModel {
         var changed = false
         if payload.contains("name") {
             let incoming: String = try payload.required(String.self, for: "name")
-            if name != incoming { name = incoming; changed = true }
+            if name != incoming {
+                name = incoming
+                changed = true
+            }
         }
         return changed
     }
@@ -378,7 +388,10 @@ extension OneSidedNestedTask: SyncUpdatableModel {
         var changed = false
         if payload.contains("title") {
             let incoming: String = try payload.required(String.self, for: "title")
-            if title != incoming { title = incoming; changed = true }
+            if title != incoming {
+                title = incoming
+                changed = true
+            }
         }
         return changed
     }
@@ -463,9 +476,9 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
         // Without the fix this count is 0 — the test fails, reproducing the bug contract.
         XCTAssertEqual(
             OneSidedTask.syncMarkChangedCallCount, 1,
-            "syncApplyToManyForeignKeys must call syncMarkChanged() after a membership change " +
-            "so the owning model's store row is marked dirty on iOS persistent stores. " +
-            "Count was \(OneSidedTask.syncMarkChangedCallCount), expected 1."
+            "syncApplyToManyForeignKeys must call syncMarkChanged() after a membership change "
+                + "so the owning model's store row is marked dirty on iOS persistent stores. "
+                + "Count was \(OneSidedTask.syncMarkChangedCallCount), expected 1."
         )
 
         // Relationship data must also be correct after the sync.
@@ -529,14 +542,16 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
         OneSidedNestedTask.syncMarkChangedCallCount = 0
 
         try await SwiftSync.sync(
-            payload: [[
-                "id": 10,
-                "title": "Task 10",
-                "members": [
-                    ["id": 1, "name": "Alice"],
-                    ["id": 2, "name": "Bob"]
+            payload: [
+                [
+                    "id": 10,
+                    "title": "Task 10",
+                    "members": [
+                        ["id": 1, "name": "Alice"],
+                        ["id": 2, "name": "Bob"],
+                    ],
                 ]
-            ]],
+            ],
             as: OneSidedNestedTask.self,
             in: context
         )
@@ -557,14 +572,16 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
         let context = ModelContext(container)
 
         try await SwiftSync.sync(
-            payload: [[
-                "id": 10,
-                "title": "Task 10",
-                "members": [
-                    ["id": 1, "name": "Alice"],
-                    ["id": 2, "name": "Bob"]
+            payload: [
+                [
+                    "id": 10,
+                    "title": "Task 10",
+                    "members": [
+                        ["id": 1, "name": "Alice"],
+                        ["id": 2, "name": "Bob"],
+                    ],
                 ]
-            ]],
+            ],
             as: OneSidedNestedTask.self,
             in: context
         )
@@ -572,14 +589,16 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
         OneSidedNestedTask.syncMarkChangedCallCount = 0
 
         try await SwiftSync.sync(
-            payload: [[
-                "id": 10,
-                "title": "Task 10",
-                "members": [
-                    ["id": 1, "name": "Alice"],
-                    ["id": 2, "name": "Bob"]
+            payload: [
+                [
+                    "id": 10,
+                    "title": "Task 10",
+                    "members": [
+                        ["id": 1, "name": "Alice"],
+                        ["id": 2, "name": "Bob"],
+                    ],
                 ]
-            ]],
+            ],
             as: OneSidedNestedTask.self,
             in: context
         )
@@ -599,14 +618,16 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
         let context = ModelContext(container)
 
         try await SwiftSync.sync(
-            payload: [[
-                "id": 10,
-                "title": "Task 10",
-                "members": [
-                    ["id": 1, "name": "Alice"],
-                    ["id": 2, "name": "Bob"]
+            payload: [
+                [
+                    "id": 10,
+                    "title": "Task 10",
+                    "members": [
+                        ["id": 1, "name": "Alice"],
+                        ["id": 2, "name": "Bob"],
+                    ],
                 ]
-            ]],
+            ],
             as: OneSidedNestedTask.self,
             in: context
         )
@@ -617,11 +638,13 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
         OneSidedNestedTask.syncMarkChangedCallCount = 0
 
         try await SwiftSync.sync(
-            payload: [[
-                "id": 10,
-                "title": "Task 10",
-                "members": NSNull()
-            ]],
+            payload: [
+                [
+                    "id": 10,
+                    "title": "Task 10",
+                    "members": NSNull(),
+                ]
+            ],
             as: OneSidedNestedTask.self,
             in: context
         )
@@ -737,7 +760,7 @@ final class RelationshipIntegrityRegressionTests: XCTestCase {
             payload: [
                 ["id": 1, "name": "Tag 1"],
                 ["id": 2, "name": "Tag 2"],
-                ["id": 3, "name": "Tag 3"]
+                ["id": 3, "name": "Tag 3"],
             ],
             as: MissingInverseRegressionTag.self,
             in: context
@@ -745,11 +768,13 @@ final class RelationshipIntegrityRegressionTests: XCTestCase {
 
         // Mirrors the demo flow: a single-task sync happens first after a mutation.
         try await SwiftSync.sync(
-            payload: [[
-                "id": 10,
-                "title": "Task 10",
-                "tag_ids": [1, 2]
-            ]],
+            payload: [
+                [
+                    "id": 10,
+                    "title": "Task 10",
+                    "tag_ids": [1, 2],
+                ]
+            ],
             as: MissingInverseRegressionTask.self,
             in: context
         )
@@ -758,7 +783,7 @@ final class RelationshipIntegrityRegressionTests: XCTestCase {
         try await SwiftSync.sync(
             payload: [
                 ["id": 10, "title": "Task 10", "tag_ids": [1, 2]],
-                ["id": 20, "title": "Task 20", "tag_ids": [2, 3]]
+                ["id": 20, "title": "Task 20", "tag_ids": [2, 3]],
             ],
             as: MissingInverseRegressionTask.self,
             in: context
@@ -785,18 +810,20 @@ final class RelationshipIntegrityRegressionTests: XCTestCase {
             payload: [
                 ["id": 1, "name": "Tag 1"],
                 ["id": 2, "name": "Tag 2"],
-                ["id": 3, "name": "Tag 3"]
+                ["id": 3, "name": "Tag 3"],
             ],
             as: ExplicitInverseRegressionTag.self,
             in: context
         )
 
         try await SwiftSync.sync(
-            payload: [[
-                "id": 10,
-                "title": "Task 10",
-                "tag_ids": [1, 2]
-            ]],
+            payload: [
+                [
+                    "id": 10,
+                    "title": "Task 10",
+                    "tag_ids": [1, 2],
+                ]
+            ],
             as: ExplicitInverseRegressionTask.self,
             in: context
         )
@@ -804,7 +831,7 @@ final class RelationshipIntegrityRegressionTests: XCTestCase {
         try await SwiftSync.sync(
             payload: [
                 ["id": 10, "title": "Task 10", "tag_ids": [1, 2]],
-                ["id": 20, "title": "Task 20", "tag_ids": [2, 3]]
+                ["id": 20, "title": "Task 20", "tag_ids": [2, 3]],
             ],
             as: ExplicitInverseRegressionTask.self,
             in: context

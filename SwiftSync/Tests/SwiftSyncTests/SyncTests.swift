@@ -1,5 +1,6 @@
-import XCTest
 import SwiftData
+import XCTest
+
 @testable import SwiftSync
 
 @Syncable
@@ -1368,7 +1369,7 @@ final class SyncTests: XCTestCase {
         func toSyncPayloadDictionary() -> [String: Any] {
             [
                 "id": id,
-                "full_name": fullName
+                "full_name": fullName,
             ]
         }
     }
@@ -1380,7 +1381,7 @@ final class SyncTests: XCTestCase {
         func toSyncPayloadDictionary() -> [String: Any] {
             [
                 "id": id,
-                "text": text
+                "text": text,
             ]
         }
     }
@@ -1462,11 +1463,13 @@ final class SyncTests: XCTestCase {
         let container = try ModelContainer(for: StatusItem.self, configurations: configuration)
         let context = ModelContext(container)
 
-        let insertPayload: [Any] = [[
-            "id": "item-1",
-            "title": "My Task",
-            "status": ["id": "todo", "label": "To Do"]
-        ]]
+        let insertPayload: [Any] = [
+            [
+                "id": "item-1",
+                "title": "My Task",
+                "status": ["id": "todo", "label": "To Do"],
+            ]
+        ]
         try await SwiftSync.sync(payload: insertPayload, as: StatusItem.self, in: context)
 
         var items = try context.fetch(FetchDescriptor<StatusItem>())
@@ -1474,17 +1477,21 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(items.first?.statusID, "todo")
         XCTAssertEqual(items.first?.statusLabel, "To Do")
 
-        let updatePayload: [Any] = [[
-            "id": "item-1",
-            "title": "My Task",
-            "status": ["id": "done", "label": "Done"]
-        ]]
+        let updatePayload: [Any] = [
+            [
+                "id": "item-1",
+                "title": "My Task",
+                "status": ["id": "done", "label": "Done"],
+            ]
+        ]
         try await SwiftSync.sync(payload: updatePayload, as: StatusItem.self, in: context)
 
         items = try context.fetch(FetchDescriptor<StatusItem>())
         XCTAssertEqual(items.count, 1)
-        XCTAssertEqual(items.first?.statusID, "done", "statusID must be updated by apply(_:) via nested @RemoteKey path")
-        XCTAssertEqual(items.first?.statusLabel, "Done", "statusLabel must be updated by apply(_:) via nested @RemoteKey path")
+        XCTAssertEqual(
+            items.first?.statusID, "done", "statusID must be updated by apply(_:) via nested @RemoteKey path")
+        XCTAssertEqual(
+            items.first?.statusLabel, "Done", "statusLabel must be updated by apply(_:) via nested @RemoteKey path")
     }
 
     @MainActor
@@ -1568,11 +1575,13 @@ final class SyncTests: XCTestCase {
         let container = try ModelContainer(for: Profile.self, configurations: configuration)
         let context = ModelContext(container)
 
-        let payload: [Any] = [[
-            "id": 1,
-            "first_name": "Elvis",
-            "updated_at": "2014-02-17T00:00:00+00:00"
-        ]]
+        let payload: [Any] = [
+            [
+                "id": 1,
+                "first_name": "Elvis",
+                "updated_at": "2014-02-17T00:00:00+00:00",
+            ]
+        ]
         try await SwiftSync.sync(payload: payload, as: Profile.self, in: context)
         try await SwiftSync.sync(payload: payload, as: Profile.self, in: context)
 
@@ -1588,11 +1597,13 @@ final class SyncTests: XCTestCase {
         let container = try ModelContainer(for: Profile.self, configurations: configuration)
         let context = ModelContext(container)
 
-        let payload: [Any] = [[
-            "id": 1,
-            "first_name": "Elvis",
-            "updated_at": "2014-01-02"
-        ]]
+        let payload: [Any] = [
+            [
+                "id": 1,
+                "first_name": "Elvis",
+                "updated_at": "2014-01-02",
+            ]
+        ]
         try await SwiftSync.sync(payload: payload, as: Profile.self, in: context)
 
         let rows = try context.fetch(FetchDescriptor<Profile>())
@@ -1618,11 +1629,13 @@ final class SyncTests: XCTestCase {
 
         // Seconds
         try await SwiftSync.sync(
-            payload: [[
-                "id": 1,
-                "first_name": "A",
-                "updated_at": 1_700_000_000
-            ]],
+            payload: [
+                [
+                    "id": 1,
+                    "first_name": "A",
+                    "updated_at": 1_700_000_000,
+                ]
+            ],
             as: Profile.self,
             in: context
         )
@@ -1631,11 +1644,13 @@ final class SyncTests: XCTestCase {
 
         // Milliseconds
         try await SwiftSync.sync(
-            payload: [[
-                "id": 1,
-                "first_name": "A",
-                "updated_at": 1_700_000_000_000
-            ]],
+            payload: [
+                [
+                    "id": 1,
+                    "first_name": "A",
+                    "updated_at": 1_700_000_000_000,
+                ]
+            ],
             as: Profile.self,
             in: context
         )
@@ -1644,11 +1659,13 @@ final class SyncTests: XCTestCase {
 
         // Microseconds
         try await SwiftSync.sync(
-            payload: [[
-                "id": 1,
-                "first_name": "A",
-                "updated_at": 1_700_000_000_000_000
-            ]],
+            payload: [
+                [
+                    "id": 1,
+                    "first_name": "A",
+                    "updated_at": 1_700_000_000_000_000,
+                ]
+            ],
             as: Profile.self,
             in: context
         )
@@ -1664,11 +1681,13 @@ final class SyncTests: XCTestCase {
 
         // Required Date field defaults to epoch on invalid input.
         try await SwiftSync.sync(
-            payload: [[
-                "id": 1,
-                "first_name": "Elvis",
-                "updated_at": "not-a-date"
-            ]],
+            payload: [
+                [
+                    "id": 1,
+                    "first_name": "Elvis",
+                    "updated_at": "not-a-date",
+                ]
+            ],
             as: Profile.self,
             in: context
         )
@@ -1678,10 +1697,12 @@ final class SyncTests: XCTestCase {
 
         // Optional Date field stays nil on invalid input.
         try await SwiftSync.sync(
-            payload: [[
-                "id": 2,
-                "updated_at": "not-a-date"
-            ]],
+            payload: [
+                [
+                    "id": 2,
+                    "updated_at": "not-a-date",
+                ]
+            ],
             as: OptionalDateProfile.self,
             in: context
         )
@@ -1696,30 +1717,34 @@ final class SyncTests: XCTestCase {
         let container = try ModelContainer(for: PrimitiveUser.self, configurations: configuration)
         let context = ModelContext(container)
 
-        let seedPayload: [Any] = [[
-            "id": 1,
-            "name": "Alice",
-            "age": 40,
-            "score": 99.5,
-            "is_active": true,
-            "updated_at": "2014-02-17T00:00:00+00:00",
-            "token": "123E4567-E89B-12D3-A456-426614174000",
-            "big_count": Int64(77),
-            "nickname": "Al"
-        ]]
+        let seedPayload: [Any] = [
+            [
+                "id": 1,
+                "name": "Alice",
+                "age": 40,
+                "score": 99.5,
+                "is_active": true,
+                "updated_at": "2014-02-17T00:00:00+00:00",
+                "token": "123E4567-E89B-12D3-A456-426614174000",
+                "big_count": Int64(77),
+                "nickname": "Al",
+            ]
+        ]
         try await SwiftSync.sync(payload: seedPayload, as: PrimitiveUser.self, in: context)
 
-        let clearPayload: [Any] = [[
-            "id": 1,
-            "name": NSNull(),
-            "age": NSNull(),
-            "score": NSNull(),
-            "is_active": NSNull(),
-            "updated_at": NSNull(),
-            "token": NSNull(),
-            "big_count": NSNull(),
-            "nickname": NSNull()
-        ]]
+        let clearPayload: [Any] = [
+            [
+                "id": 1,
+                "name": NSNull(),
+                "age": NSNull(),
+                "score": NSNull(),
+                "is_active": NSNull(),
+                "updated_at": NSNull(),
+                "token": NSNull(),
+                "big_count": NSNull(),
+                "nickname": NSNull(),
+            ]
+        ]
         try await SwiftSync.sync(payload: clearPayload, as: PrimitiveUser.self, in: context)
 
         let rows = try context.fetch(FetchDescriptor<PrimitiveUser>())
@@ -1742,7 +1767,7 @@ final class SyncTests: XCTestCase {
 
         let seedPayload: [Any] = [
             ["id": 1, "full_name": "Ava Swift"],
-            ["id": 2, "full_name": "Noah Swift"]
+            ["id": 2, "full_name": "Noah Swift"],
         ]
         try await SwiftSync.sync(payload: seedPayload, as: User.self, in: context)
 
@@ -1766,14 +1791,14 @@ final class SyncTests: XCTestCase {
             ["id": 1, "full_name": "User 1"],
             ["id": 2, "full_name": "User 2"],
             ["id": 3, "full_name": "User 3"],
-            ["id": 4, "full_name": "User 4"]
+            ["id": 4, "full_name": "User 4"],
         ]
         try await SwiftSync.sync(payload: seedPayload, as: User.self, in: context)
 
         let diffPayload: [Any] = [
             ["id": 0, "full_name": "User 0 Updated"],
             ["id": 1, "full_name": "User 1 Updated"],
-            ["id": 6, "full_name": "User 6 New"]
+            ["id": 6, "full_name": "User 6 New"],
         ]
         try await SwiftSync.sync(payload: diffPayload, as: User.self, in: context)
 
@@ -1861,14 +1886,14 @@ final class SyncTests: XCTestCase {
 
         let seedPayload: [Any] = [
             ["id": 1, "full_name": "One"],
-            ["id": 2, "full_name": "Two"]
+            ["id": 2, "full_name": "Two"],
         ]
         try await SwiftSync.sync(payload: seedPayload, as: User.self, in: context)
 
         let mixedPayload: [Any] = [
             ["id": NSNull(), "full_name": "Null ID"],
             ["full_name": "Missing ID"],
-            ["id": 1, "full_name": "One Updated"]
+            ["id": 1, "full_name": "One Updated"],
         ]
 
         do {
@@ -1889,26 +1914,30 @@ final class SyncTests: XCTestCase {
         let container = try ModelContainer(for: Team.self, Member.self, configurations: configuration)
         let context = ModelContext(container)
 
-        let seedPayload: [Any] = [[
-            "id": 10,
-            "name": "Platform",
-            "owner": ["id": 1, "full_name": "Owner A"],
-            "members": [
-                ["id": 1, "full_name": "Owner A"],
-                ["id": 2, "full_name": "Member B"]
+        let seedPayload: [Any] = [
+            [
+                "id": 10,
+                "name": "Platform",
+                "owner": ["id": 1, "full_name": "Owner A"],
+                "members": [
+                    ["id": 1, "full_name": "Owner A"],
+                    ["id": 2, "full_name": "Member B"],
+                ],
             ]
-        ]]
+        ]
         try await SwiftSync.sync(payload: seedPayload, as: Team.self, in: context)
 
-        let updatePayload: [Any] = [[
-            "id": 10,
-            "name": "Platform Updated",
-            "owner": ["id": 2, "full_name": "Member B Updated"],
-            "members": [
-                ["id": 2, "full_name": "Member B Updated"],
-                ["id": 3, "full_name": "Member C"]
+        let updatePayload: [Any] = [
+            [
+                "id": 10,
+                "name": "Platform Updated",
+                "owner": ["id": 2, "full_name": "Member B Updated"],
+                "members": [
+                    ["id": 2, "full_name": "Member B Updated"],
+                    ["id": 3, "full_name": "Member C"],
+                ],
             ]
-        ]]
+        ]
         try await SwiftSync.sync(payload: updatePayload, as: Team.self, in: context)
 
         let teams = try context.fetch(FetchDescriptor<Team>())
@@ -1924,23 +1953,27 @@ final class SyncTests: XCTestCase {
         let container = try ModelContainer(for: Team.self, Member.self, configurations: configuration)
         let context = ModelContext(container)
 
-        let seedPayload: [Any] = [[
-            "id": 11,
-            "name": "Platform",
-            "owner": ["id": 1, "full_name": "Owner A"],
-            "members": [
-                ["id": 1, "full_name": "Owner A"],
-                ["id": 2, "full_name": "Member B"]
+        let seedPayload: [Any] = [
+            [
+                "id": 11,
+                "name": "Platform",
+                "owner": ["id": 1, "full_name": "Owner A"],
+                "members": [
+                    ["id": 1, "full_name": "Owner A"],
+                    ["id": 2, "full_name": "Member B"],
+                ],
             ]
-        ]]
+        ]
         try await SwiftSync.sync(payload: seedPayload, as: Team.self, in: context)
 
-        let clearPayload: [Any] = [[
-            "id": 11,
-            "name": "Platform",
-            "owner": NSNull(),
-            "members": []
-        ]]
+        let clearPayload: [Any] = [
+            [
+                "id": 11,
+                "name": "Platform",
+                "owner": NSNull(),
+                "members": [],
+            ]
+        ]
         try await SwiftSync.sync(payload: clearPayload, as: Team.self, in: context)
 
         let teams = try context.fetch(FetchDescriptor<Team>())
@@ -1955,21 +1988,25 @@ final class SyncTests: XCTestCase {
         let container = try ModelContainer(for: UserTagsByObjects.self, Tag.self, configurations: configuration)
         let context = ModelContext(container)
 
-        let seedPayload: [Any] = [[
-            "id": 1,
-            "name": "U1",
-            "tags": [
-                ["id": 10, "name": "t10"],
-                ["id": 11, "name": "t11"]
+        let seedPayload: [Any] = [
+            [
+                "id": 1,
+                "name": "U1",
+                "tags": [
+                    ["id": 10, "name": "t10"],
+                    ["id": 11, "name": "t11"],
+                ],
             ]
-        ]]
+        ]
         try await SwiftSync.sync(payload: seedPayload, as: UserTagsByObjects.self, in: context)
 
-        let clearPayload: [Any] = [[
-            "id": 1,
-            "name": "U1",
-            "tags": []
-        ]]
+        let clearPayload: [Any] = [
+            [
+                "id": 1,
+                "name": "U1",
+                "tags": [],
+            ]
+        ]
         try await SwiftSync.sync(payload: clearPayload, as: UserTagsByObjects.self, in: context)
 
         let users = try context.fetch(FetchDescriptor<UserTagsByObjects>())
@@ -1984,23 +2021,27 @@ final class SyncTests: XCTestCase {
         let containerA = try ModelContainer(for: UserTagsByObjects.self, Tag.self, configurations: configurationA)
         let contextA = ModelContext(containerA)
         try await SwiftSync.sync(
-            payload: [[
-                "id": 1,
-                "name": "U1",
-                "tags": [
-                    ["id": 10, "name": "t10"],
-                    ["id": 11, "name": "t11"]
+            payload: [
+                [
+                    "id": 1,
+                    "name": "U1",
+                    "tags": [
+                        ["id": 10, "name": "t10"],
+                        ["id": 11, "name": "t11"],
+                    ],
                 ]
-            ]],
+            ],
             as: UserTagsByObjects.self,
             in: contextA
         )
         try await SwiftSync.sync(
-            payload: [[
-                "id": 1,
-                "name": "U1",
-                "tags": []
-            ]],
+            payload: [
+                [
+                    "id": 1,
+                    "name": "U1",
+                    "tags": [],
+                ]
+            ],
             as: UserTagsByObjects.self,
             in: contextA
         )
@@ -2011,24 +2052,28 @@ final class SyncTests: XCTestCase {
         let containerB = try ModelContainer(for: UserTagsByObjects.self, Tag.self, configurations: configurationB)
         let contextB = ModelContext(containerB)
         try await SwiftSync.sync(
-            payload: [[
-                "id": 1,
-                "name": "U1",
-                "tags": [
-                    ["id": 10, "name": "t10"],
-                    ["id": 11, "name": "t11"]
+            payload: [
+                [
+                    "id": 1,
+                    "name": "U1",
+                    "tags": [
+                        ["id": 10, "name": "t10"],
+                        ["id": 11, "name": "t11"],
+                    ],
                 ]
-            ]],
+            ],
             as: UserTagsByObjects.self,
             in: contextB
         )
         do {
             try await SwiftSync.sync(
-                payload: [[
-                    "id": 1,
-                    "name": "U1",
-                    "tags": NSNull()
-                ]],
+                payload: [
+                    [
+                        "id": 1,
+                        "name": "U1",
+                        "tags": NSNull(),
+                    ]
+                ],
                 as: UserTagsByObjects.self,
                 in: contextB
             )
@@ -2050,21 +2095,25 @@ final class SyncTests: XCTestCase {
         let container = try ModelContainer(for: Team.self, Member.self, configurations: configuration)
         let context = ModelContext(container)
 
-        let seedPayload: [Any] = [[
-            "id": 12,
-            "name": "Platform",
-            "owner": ["id": 1, "full_name": "Owner A"],
-            "members": [
-                ["id": 1, "full_name": "Owner A"],
-                ["id": 2, "full_name": "Member B"]
+        let seedPayload: [Any] = [
+            [
+                "id": 12,
+                "name": "Platform",
+                "owner": ["id": 1, "full_name": "Owner A"],
+                "members": [
+                    ["id": 1, "full_name": "Owner A"],
+                    ["id": 2, "full_name": "Member B"],
+                ],
             ]
-        ]]
+        ]
         try await SwiftSync.sync(payload: seedPayload, as: Team.self, in: context)
 
-        let nameOnlyPayload: [Any] = [[
-            "id": 12,
-            "name": "Platform Renamed"
-        ]]
+        let nameOnlyPayload: [Any] = [
+            [
+                "id": 12,
+                "name": "Platform Renamed",
+            ]
+        ]
         try await SwiftSync.sync(payload: nameOnlyPayload, as: Team.self, in: context)
 
         let teams = try context.fetch(FetchDescriptor<Team>())
@@ -2092,11 +2141,13 @@ final class SyncTests: XCTestCase {
             in: context
         )
 
-        let linkPayload: [Any] = [[
-            "id": 1,
-            "name": "Ava",
-            "company_id": 10
-        ]]
+        let linkPayload: [Any] = [
+            [
+                "id": 1,
+                "name": "Ava",
+                "company_id": 10,
+            ]
+        ]
         try await SwiftSync.sync(payload: linkPayload, as: Employee.self, in: context)
 
         var employees = try context.fetch(FetchDescriptor<Employee>())
@@ -2104,11 +2155,13 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(employees.first?.id, 1)
         XCTAssertEqual(employees.first?.company?.id, 10)
 
-        let clearPayload: [Any] = [[
-            "id": 1,
-            "name": "Ava",
-            "company_id": NSNull()
-        ]]
+        let clearPayload: [Any] = [
+            [
+                "id": 1,
+                "name": "Ava",
+                "company_id": NSNull(),
+            ]
+        ]
         try await SwiftSync.sync(payload: clearPayload, as: Employee.self, in: context)
 
         employees = try context.fetch(FetchDescriptor<Employee>())
@@ -2128,11 +2181,13 @@ final class SyncTests: XCTestCase {
             in: context
         )
 
-        let missingReferencePayload: [Any] = [[
-            "id": 1,
-            "name": "Ava",
-            "company_id": 999
-        ]]
+        let missingReferencePayload: [Any] = [
+            [
+                "id": 1,
+                "name": "Ava",
+                "company_id": 999,
+            ]
+        ]
         do {
             try await SwiftSync.sync(payload: missingReferencePayload, as: Employee.self, in: context)
         } catch {
@@ -2162,11 +2217,13 @@ final class SyncTests: XCTestCase {
         )
 
         try await SwiftSync.sync(
-            payload: [[
-                "id": 1,
-                "name": "Ava",
-                "company_id": 10
-            ]],
+            payload: [
+                [
+                    "id": 1,
+                    "name": "Ava",
+                    "company_id": 10,
+                ]
+            ],
             as: AutoEmployee.self,
             in: context
         )
@@ -2177,11 +2234,13 @@ final class SyncTests: XCTestCase {
 
         // Strict FK typing: string payload for Int FK should be ignored.
         try await SwiftSync.sync(
-            payload: [[
-                "id": 1,
-                "name": "Ava",
-                "company_id": "10"
-            ]],
+            payload: [
+                [
+                    "id": 1,
+                    "name": "Ava",
+                    "company_id": "10",
+                ]
+            ],
             as: AutoEmployee.self,
             in: context
         )
@@ -2190,10 +2249,12 @@ final class SyncTests: XCTestCase {
 
         // Missing key should not clear existing relationship.
         try await SwiftSync.sync(
-            payload: [[
-                "id": 1,
-                "name": "Ava Updated"
-            ]],
+            payload: [
+                [
+                    "id": 1,
+                    "name": "Ava Updated",
+                ]
+            ],
             as: AutoEmployee.self,
             in: context
         )
@@ -2203,11 +2264,13 @@ final class SyncTests: XCTestCase {
 
         // Unknown FK keeps current relation unchanged.
         try await SwiftSync.sync(
-            payload: [[
-                "id": 1,
-                "name": "Ava Updated",
-                "company_id": 999
-            ]],
+            payload: [
+                [
+                    "id": 1,
+                    "name": "Ava Updated",
+                    "company_id": 999,
+                ]
+            ],
             as: AutoEmployee.self,
             in: context
         )
@@ -2216,11 +2279,13 @@ final class SyncTests: XCTestCase {
 
         // Explicit null clears relation.
         try await SwiftSync.sync(
-            payload: [[
-                "id": 1,
-                "name": "Ava Updated",
-                "company_id": NSNull()
-            ]],
+            payload: [
+                [
+                    "id": 1,
+                    "name": "Ava Updated",
+                    "company_id": NSNull(),
+                ]
+            ],
             as: AutoEmployee.self,
             in: context
         )
@@ -2234,28 +2299,32 @@ final class SyncTests: XCTestCase {
         let container = try ModelContainer(for: Team.self, Member.self, configurations: configuration)
         let context = ModelContext(container)
 
-        let payloadA: [Any] = [[
-            "id": 21,
-            "name": "Inbox",
-            "members": [
-                ["id": 101, "full_name": "a"],
-                ["id": 102, "full_name": "b"]
+        let payloadA: [Any] = [
+            [
+                "id": 21,
+                "name": "Inbox",
+                "members": [
+                    ["id": 101, "full_name": "a"],
+                    ["id": 102, "full_name": "b"],
+                ],
             ]
-        ]]
+        ]
         try await SwiftSync.sync(payload: payloadA, as: Team.self, in: context)
 
         var teams = try context.fetch(FetchDescriptor<Team>())
         XCTAssertEqual(teams.count, 1)
         XCTAssertEqual(Set(teams[0].members.map(\.id)), Set([101, 102]))
 
-        let payloadB: [Any] = [[
-            "id": 21,
-            "name": "Inbox",
-            "members": [
-                ["id": 102, "full_name": "b2"],
-                ["id": 103, "full_name": "c"]
+        let payloadB: [Any] = [
+            [
+                "id": 21,
+                "name": "Inbox",
+                "members": [
+                    ["id": 102, "full_name": "b2"],
+                    ["id": 103, "full_name": "c"],
+                ],
             ]
-        ]]
+        ]
         try await SwiftSync.sync(payload: payloadB, as: Team.self, in: context)
 
         teams = try context.fetch(FetchDescriptor<Team>())
@@ -2278,7 +2347,7 @@ final class SyncTests: XCTestCase {
             payload: [
                 ["id": 0, "text": "n0"],
                 ["id": 1, "text": "n1"],
-                ["id": 2, "text": "n2"]
+                ["id": 2, "text": "n2"],
             ],
             as: Note.self,
             in: context
@@ -2290,22 +2359,26 @@ final class SyncTests: XCTestCase {
             in: context
         )
 
-        let payloadA: [Any] = [[
-            "id": 10,
-            "name": "U",
-            "notes_ids": [0, 1]
-        ]]
+        let payloadA: [Any] = [
+            [
+                "id": 10,
+                "name": "U",
+                "notes_ids": [0, 1],
+            ]
+        ]
         try await SwiftSync.sync(payload: payloadA, as: UserWithNotes.self, in: context)
 
         var users = try context.fetch(FetchDescriptor<UserWithNotes>())
         XCTAssertEqual(users.count, 1)
         XCTAssertEqual(Set(users[0].notes.map(\.id)), Set([0, 1]))
 
-        let payloadB: [Any] = [[
-            "id": 10,
-            "name": "U",
-            "notes_ids": [1, 2]
-        ]]
+        let payloadB: [Any] = [
+            [
+                "id": 10,
+                "name": "U",
+                "notes_ids": [1, 2],
+            ]
+        ]
         try await SwiftSync.sync(payload: payloadB, as: UserWithNotes.self, in: context)
 
         users = try context.fetch(FetchDescriptor<UserWithNotes>())
@@ -2323,18 +2396,20 @@ final class SyncTests: XCTestCase {
         try await SwiftSync.sync(
             payload: [
                 ["id": 1, "name": "Tag 1"],
-                ["id": 2, "name": "Tag 2"]
+                ["id": 2, "name": "Tag 2"],
             ],
             as: AutoTag.self,
             in: context
         )
 
         try await SwiftSync.sync(
-            payload: [[
-                "id": 5,
-                "title": "Task A",
-                "tag_ids": [1, 2, 2, 999]
-            ]],
+            payload: [
+                [
+                    "id": 5,
+                    "title": "Task A",
+                    "tag_ids": [1, 2, 2, 999],
+                ]
+            ],
             as: AutoTask.self,
             in: context
         )
@@ -2345,10 +2420,12 @@ final class SyncTests: XCTestCase {
 
         // Missing key should preserve current to-many links.
         try await SwiftSync.sync(
-            payload: [[
-                "id": 5,
-                "title": "Task A Updated"
-            ]],
+            payload: [
+                [
+                    "id": 5,
+                    "title": "Task A Updated",
+                ]
+            ],
             as: AutoTask.self,
             in: context
         )
@@ -2358,11 +2435,13 @@ final class SyncTests: XCTestCase {
 
         // Explicit null clears links.
         try await SwiftSync.sync(
-            payload: [[
-                "id": 5,
-                "title": "Task A Updated",
-                "tag_ids": NSNull()
-            ]],
+            payload: [
+                [
+                    "id": 5,
+                    "title": "Task A Updated",
+                    "tag_ids": NSNull(),
+                ]
+            ],
             as: AutoTask.self,
             in: context
         )
@@ -2373,19 +2452,22 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testSyncableGeneratedNestedRelationshipsUpsertAndReplaceMembership() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: AutoNestedTeam.self, AutoNestedMember.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: AutoNestedTeam.self, AutoNestedMember.self, configurations: configuration)
         let context = ModelContext(container)
 
         try await SwiftSync.sync(
-            payload: [[
-                "id": 10,
-                "name": "Team",
-                "owner": ["id": 1, "full_name": "Owner"],
-                "members": [
-                    ["id": 1, "full_name": "Owner"],
-                    ["id": 2, "full_name": "Member Two"]
+            payload: [
+                [
+                    "id": 10,
+                    "name": "Team",
+                    "owner": ["id": 1, "full_name": "Owner"],
+                    "members": [
+                        ["id": 1, "full_name": "Owner"],
+                        ["id": 2, "full_name": "Member Two"],
+                    ],
                 ]
-            ]],
+            ],
             as: AutoNestedTeam.self,
             in: context
         )
@@ -2396,15 +2478,17 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(Set(teams[0].members.map(\.id)), Set([1, 2]))
 
         try await SwiftSync.sync(
-            payload: [[
-                "id": 10,
-                "name": "Team v2",
-                "owner": ["id": 2, "full_name": "Member Two Updated"],
-                "members": [
-                    ["id": 2, "full_name": "Member Two Updated"],
-                    ["id": 3, "full_name": "Member Three"]
+            payload: [
+                [
+                    "id": 10,
+                    "name": "Team v2",
+                    "owner": ["id": 2, "full_name": "Member Two Updated"],
+                    "members": [
+                        ["id": 2, "full_name": "Member Two Updated"],
+                        ["id": 3, "full_name": "Member Three"],
+                    ],
                 ]
-            ]],
+            ],
             as: AutoNestedTeam.self,
             in: context
         )
@@ -2418,12 +2502,14 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(allMembers.first(where: { $0.id == 2 })?.fullName, "Member Two Updated")
 
         try await SwiftSync.sync(
-            payload: [[
-                "id": 10,
-                "name": "Team v2",
-                "owner": NSNull(),
-                "members": NSNull()
-            ]],
+            payload: [
+                [
+                    "id": 10,
+                    "name": "Team v2",
+                    "owner": NSNull(),
+                    "members": NSNull(),
+                ]
+            ],
             as: AutoNestedTeam.self,
             in: context
         )
@@ -2442,7 +2528,7 @@ final class SyncTests: XCTestCase {
         try await SwiftSync.sync(
             payload: [
                 ["id": 1, "text": "n1"],
-                ["id": 2, "text": "n2"]
+                ["id": 2, "text": "n2"],
             ],
             as: Note.self,
             in: context
@@ -2453,11 +2539,13 @@ final class SyncTests: XCTestCase {
             in: context
         )
 
-        let payloadB: [Any] = [[
-            "id": 10,
-            "name": "U",
-            "notes_ids": [1, 2]
-        ]]
+        let payloadB: [Any] = [
+            [
+                "id": 10,
+                "name": "U",
+                "notes_ids": [1, 2],
+            ]
+        ]
         try await SwiftSync.sync(payload: payloadB, as: UserWithNotes.self, in: context)
         try await SwiftSync.sync(payload: payloadB, as: UserWithNotes.self, in: context)
 
@@ -2510,7 +2598,7 @@ final class SyncTests: XCTestCase {
 
         let childPayload: [Any] = [
             ["id": 0, "text": "n0"],
-            ["id": 1, "text": "n1"]
+            ["id": 1, "text": "n1"],
         ]
         try await SwiftSync.sync(
             payload: childPayload,
@@ -2541,7 +2629,7 @@ final class SyncTests: XCTestCase {
         try await SwiftSync.sync(
             payload: [
                 ["id": 0, "text": "a0"],
-                ["id": 1, "text": "a1"]
+                ["id": 1, "text": "a1"],
             ],
             as: SuperNote.self,
             in: context,
@@ -2551,7 +2639,7 @@ final class SyncTests: XCTestCase {
         try await SwiftSync.sync(
             payload: [
                 ["id": 2, "text": "b2"],
-                ["id": 3, "text": "b3"]
+                ["id": 3, "text": "b3"],
             ],
             as: SuperNote.self,
             in: context,
@@ -2609,7 +2697,8 @@ final class SyncTests: XCTestCase {
         if let capturedError {
             let description = String(describing: capturedError).lowercased()
             XCTAssertTrue(
-                description.contains("context") || description.contains("parent") || description.contains("relationship"),
+                description.contains("context") || description.contains("parent")
+                    || description.contains("relationship"),
                 "Expected diagnostic to mention parent/context mismatch, got: \(capturedError)"
             )
         }
@@ -2633,7 +2722,7 @@ final class SyncTests: XCTestCase {
         try await SwiftSync.sync(
             payload: [
                 ["id": 1, "text": "A-1"],
-                ["id": 2, "text": "A-2"]
+                ["id": 2, "text": "A-2"],
             ],
             as: InferredComment.self,
             in: context,
@@ -2678,17 +2767,17 @@ final class SyncTests: XCTestCase {
                 "name": "U1",
                 "tags": [
                     ["id": 1, "name": "t1"],
-                    ["id": 2, "name": "t2"]
-                ]
+                    ["id": 2, "name": "t2"],
+                ],
             ],
             [
                 "id": 2,
                 "name": "U2",
                 "tags": [
                     ["id": 2, "name": "t2"],
-                    ["id": 3, "name": "t3"]
-                ]
-            ]
+                    ["id": 3, "name": "t3"],
+                ],
+            ],
         ]
         try await SwiftSync.sync(payload: payloadA, as: UserTagsByObjects.self, in: context)
 
@@ -2698,16 +2787,16 @@ final class SyncTests: XCTestCase {
                 "name": "U1",
                 "tags": [
                     ["id": 2, "name": "t2"],
-                    ["id": 4, "name": "t4"]
-                ]
+                    ["id": 4, "name": "t4"],
+                ],
             ],
             [
                 "id": 2,
                 "name": "U2",
                 "tags": [
                     ["id": 3, "name": "t3"]
-                ]
-            ]
+                ],
+            ],
         ]
         try await SwiftSync.sync(payload: payloadB, as: UserTagsByObjects.self, in: context)
 
@@ -2726,7 +2815,7 @@ final class SyncTests: XCTestCase {
                 ["id": 1, "name": "t1"],
                 ["id": 2, "name": "t2"],
                 ["id": 3, "name": "t3"],
-                ["id": 4, "name": "t4"]
+                ["id": 4, "name": "t4"],
             ],
             as: Tag.self,
             in: context
@@ -2734,13 +2823,13 @@ final class SyncTests: XCTestCase {
 
         let payloadA: [Any] = [
             ["id": 1, "name": "U1", "tags_ids": [1, 2]],
-            ["id": 2, "name": "U2", "tags_ids": [2, 3]]
+            ["id": 2, "name": "U2", "tags_ids": [2, 3]],
         ]
         try await SwiftSync.sync(payload: payloadA, as: UserTagsByIDs.self, in: context)
 
         let payloadB: [Any] = [
             ["id": 1, "name": "U1", "tags_ids": [2, 4]],
-            ["id": 2, "name": "U2", "tags_ids": [3]]
+            ["id": 2, "name": "U2", "tags_ids": [3]],
         ]
         try await SwiftSync.sync(payload: payloadB, as: UserTagsByIDs.self, in: context)
 
@@ -2767,7 +2856,7 @@ final class SyncTests: XCTestCase {
         let firstTask = Task { @MainActor in
             let payload: [Any] = [
                 ["id": 1, "full_name": "Refresh User"],
-                ["id": 99, "full_name": "Refresh Insert"]
+                ["id": 99, "full_name": "Refresh Insert"],
             ]
             try await SwiftSync.sync(payload: payload, as: ConcurrentRaceUser.self, in: context)
         }
@@ -2776,7 +2865,7 @@ final class SyncTests: XCTestCase {
         let secondTask = Task { @MainActor in
             let payload: [Any] = [
                 ["id": 1, "full_name": "Websocket User"],
-                ["id": 99, "full_name": "Websocket Winner"]
+                ["id": 99, "full_name": "Websocket Winner"],
             ]
             try await SwiftSync.sync(payload: payload, as: ConcurrentRaceUser.self, in: context)
         }
@@ -2846,7 +2935,7 @@ final class SyncTests: XCTestCase {
             try await SwiftSync.sync(
                 payload: [
                     ["id": 1, "full_name": "Post Reset User"],
-                    ["id": 2, "full_name": "Inserted During Sync"]
+                    ["id": 2, "full_name": "Inserted During Sync"],
                 ],
                 as: ConcurrentRaceUser.self,
                 in: syncContext
@@ -3002,7 +3091,7 @@ final class SyncTests: XCTestCase {
         try await syncContainer.sync(
             payload: [
                 ["id": 1, "name": "Urgent"],
-                ["id": 2, "name": "Client"]
+                ["id": 2, "name": "Client"],
             ],
             as: AutoTag.self
         )
@@ -3031,14 +3120,16 @@ final class SyncTests: XCTestCase {
         let syncContainer = try SyncContainer(for: RemoteKeyPathContactRecord.self, configurations: configuration)
 
         try await syncContainer.sync(
-            payload: [[
-                "id": 1,
-                "profile": [
-                    "contact": [
-                        "email": "first@example.com"
-                    ]
+            payload: [
+                [
+                    "id": 1,
+                    "profile": [
+                        "contact": [
+                            "email": "first@example.com"
+                        ]
+                    ],
                 ]
-            ]],
+            ],
             as: RemoteKeyPathContactRecord.self
         )
 
@@ -3055,14 +3146,16 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(rows[0].email, "first@example.com")
 
         try await syncContainer.sync(
-            payload: [[
-                "id": 1,
-                "profile": [
-                    "contact": [
-                        "email": NSNull()
-                    ]
+            payload: [
+                [
+                    "id": 1,
+                    "profile": [
+                        "contact": [
+                            "email": NSNull()
+                        ]
+                    ],
                 ]
-            ]],
+            ],
             as: RemoteKeyPathContactRecord.self
         )
 
@@ -3080,12 +3173,14 @@ final class SyncTests: XCTestCase {
         )
 
         try await syncContainer.sync(
-            payload: [[
-                "id": 1,
-                "profile": [
-                    "contactEmail": "camel@example.com"
+            payload: [
+                [
+                    "id": 1,
+                    "profile": [
+                        "contactEmail": "camel@example.com"
+                    ],
                 ]
-            ]],
+            ],
             as: RemoteKeyPathCamelRecord.self
         )
 
@@ -3104,16 +3199,18 @@ final class SyncTests: XCTestCase {
         )
 
         try await syncContainer.sync(
-            payload: [[
-                "id": 1,
-                "title": "Issue 1",
-                "relationships": [
-                    "owner": [
-                        "id": 10,
-                        "full_name": "Alice"
-                    ]
+            payload: [
+                [
+                    "id": 1,
+                    "title": "Issue 1",
+                    "relationships": [
+                        "owner": [
+                            "id": 10,
+                            "full_name": "Alice",
+                        ]
+                    ],
                 ]
-            ]],
+            ],
             as: RemoteKeyIssue.self
         )
 
@@ -3131,13 +3228,15 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(issues[0].owner?.id, 10)
 
         try await syncContainer.sync(
-            payload: [[
-                "id": 1,
-                "title": "Issue 1 updated",
-                "relationships": [
-                    "owner": NSNull()
+            payload: [
+                [
+                    "id": 1,
+                    "title": "Issue 1 updated",
+                    "relationships": [
+                        "owner": NSNull()
+                    ],
                 ]
-            ]],
+            ],
             as: RemoteKeyIssue.self
         )
 
@@ -3153,7 +3252,7 @@ final class SyncTests: XCTestCase {
                     "contact": [
                         "email": "from-make@example.com"
                     ]
-                ]
+                ],
             ]
         )
 
@@ -3168,14 +3267,16 @@ final class SyncTests: XCTestCase {
         let context = ModelContext(container)
 
         try await SwiftSync.sync(
-            payload: [[
-                "id": 1,
-                "profile": [
-                    "contact": [
-                        "email": "direct@example.com"
-                    ]
+            payload: [
+                [
+                    "id": 1,
+                    "profile": [
+                        "contact": [
+                            "email": "direct@example.com"
+                        ]
+                    ],
                 ]
-            ]],
+            ],
             as: RemoteKeyPathContactRecord.self,
             in: context
         )
@@ -3217,7 +3318,8 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testSyncContainerRequiresExplicitParentRelationship() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let syncContainer = try SyncContainer(for: InferredTask.self, InferredComment.self, configurations: configuration)
+        let syncContainer = try SyncContainer(
+            for: InferredTask.self, InferredComment.self, configurations: configuration)
 
         let taskA = InferredTask(id: 1, title: "A")
         let taskB = InferredTask(id: 2, title: "B")
@@ -3228,7 +3330,7 @@ final class SyncTests: XCTestCase {
         try await syncContainer.sync(
             payload: [
                 ["id": 1, "text": "A-1"],
-                ["id": 2, "text": "A-2"]
+                ["id": 2, "text": "A-2"],
             ],
             as: InferredComment.self,
             parent: taskA,
@@ -3259,7 +3361,8 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testSyncContainerParentScopedPayloadConvertibleSyncsRows() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let syncContainer = try SyncContainer(for: InferredTask.self, InferredComment.self, configurations: configuration)
+        let syncContainer = try SyncContainer(
+            for: InferredTask.self, InferredComment.self, configurations: configuration)
 
         let taskA = InferredTask(id: 1, title: "A")
         let taskB = InferredTask(id: 2, title: "B")
@@ -3270,7 +3373,7 @@ final class SyncTests: XCTestCase {
         try await syncContainer.sync(
             payload: [
                 SendableCommentPayload(id: 1, text: "A-1"),
-                SendableCommentPayload(id: 2, text: "A-2")
+                SendableCommentPayload(id: 2, text: "A-2"),
             ],
             as: InferredComment.self,
             parent: taskA,
@@ -3315,7 +3418,7 @@ final class SyncTests: XCTestCase {
             try await SwiftSync.sync(
                 payload: [
                     ["id": 1, "full_name": "Updated User"],
-                    ["id": 2, "full_name": "Should Rollback"]
+                    ["id": 2, "full_name": "Should Rollback"],
                 ],
                 as: ConcurrentRaceUser.self,
                 in: context
@@ -3377,7 +3480,7 @@ final class SyncTests: XCTestCase {
         try await SwiftSync.sync(
             payload: [
                 ["id": 1, "full_name": "One"],
-                ["id": 2, "full_name": "Two"]
+                ["id": 2, "full_name": "Two"],
             ],
             as: User.self,
             in: context
@@ -3428,7 +3531,7 @@ final class SyncTests: XCTestCase {
         try await SwiftSync.sync(
             payload: [
                 ["id": 1, "full_name": "One"],
-                ["id": 2, "full_name": "Two"]
+                ["id": 2, "full_name": "Two"],
             ],
             as: User.self,
             in: context
@@ -3456,7 +3559,7 @@ final class SyncTests: XCTestCase {
         try await SwiftSync.sync(
             payload: [
                 ["id": 1, "full_name": "One"],
-                ["id": 2, "full_name": "Two"]
+                ["id": 2, "full_name": "Two"],
             ],
             as: LooseUser.self,
             in: context
@@ -3484,7 +3587,7 @@ final class SyncTests: XCTestCase {
         try await SwiftSync.sync(
             payload: [
                 ["id": 1, "name": "One"],
-                ["id": 2, "name": "Two"]
+                ["id": 2, "name": "Two"],
             ],
             as: Team.self,
             in: context
@@ -3523,7 +3626,7 @@ final class SyncTests: XCTestCase {
         try await SwiftSync.sync(
             payload: [
                 ["id": 1, "name": "Tag 1"],
-                ["id": 2, "name": "Tag 2"]
+                ["id": 2, "name": "Tag 2"],
             ],
             as: AutoTag.self,
             in: context
@@ -3563,7 +3666,7 @@ final class SyncTests: XCTestCase {
         try await SwiftSync.sync(
             payload: [
                 ["id": 1, "text": "First"],
-                ["id": 2, "text": "Second"]
+                ["id": 2, "text": "Second"],
             ],
             as: MacroScopedNote.self,
             in: context,
@@ -3575,7 +3678,7 @@ final class SyncTests: XCTestCase {
             try await SwiftSync.sync(
                 payload: [
                     ["id": 1, "text": "First Updated"],
-                    ["id": 2, "text": "Second Updated"]
+                    ["id": 2, "text": "Second Updated"],
                 ],
                 as: MacroScopedNote.self,
                 in: context,
@@ -3601,7 +3704,7 @@ final class SyncTests: XCTestCase {
         try await SwiftSync.sync(
             payload: [
                 ["id": 1, "text": "First"],
-                ["id": 2, "text": "Second"]
+                ["id": 2, "text": "Second"],
             ],
             as: SuperNote.self,
             in: context,
@@ -3613,7 +3716,7 @@ final class SyncTests: XCTestCase {
             try await SwiftSync.sync(
                 payload: [
                     ["id": 1, "text": "First Updated"],
-                    ["id": 2, "text": "Second Updated"]
+                    ["id": 2, "text": "Second Updated"],
                 ],
                 as: SuperNote.self,
                 in: context,
@@ -3639,7 +3742,7 @@ final class SyncTests: XCTestCase {
         try await SwiftSync.sync(
             payload: [
                 ["id": 1, "text": "First"],
-                ["id": 2, "text": "Second"]
+                ["id": 2, "text": "Second"],
             ],
             as: SuperNote.self,
             in: context,
@@ -3674,7 +3777,7 @@ final class SyncTests: XCTestCase {
         try await SwiftSync.sync(
             payload: [
                 ["id": 1, "text": "First"],
-                ["id": 2, "text": "Second"]
+                ["id": 2, "text": "Second"],
             ],
             as: MacroScopedNote.self,
             in: context,
@@ -3710,7 +3813,7 @@ final class SyncTests: XCTestCase {
         try await SwiftSync.sync(
             payload: [
                 ["id": 1, "text": "First"],
-                ["id": 2, "text": "Second"]
+                ["id": 2, "text": "Second"],
             ],
             as: SuperNote.self,
             in: context,
@@ -3800,7 +3903,6 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(all.first?.folder?.id, 2)
     }
 
-
     @MainActor
     func testParentScopedSyncScopedIdentityAllowsDuplicateIDsAcrossParents() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
@@ -3885,7 +3987,7 @@ final class SyncTests: XCTestCase {
         try await SwiftSync.sync(
             payload: [
                 ["id": 1, "text": "A-1"],
-                ["id": 2, "text": "A-2"]
+                ["id": 2, "text": "A-2"],
             ],
             as: ScopedItem.self,
             in: context,
@@ -3896,7 +3998,7 @@ final class SyncTests: XCTestCase {
         try await SwiftSync.sync(
             payload: [
                 ["id": 1, "text": "B-1"],
-                ["id": 3, "text": "B-3"]
+                ["id": 3, "text": "B-3"],
             ],
             as: ScopedItem.self,
             in: context,
@@ -3929,7 +4031,7 @@ final class SyncTests: XCTestCase {
         try await SwiftSync.sync(
             payload: [
                 ["id": 1, "full_name": "One"],
-                ["id": 2, "full_name": "Two"]
+                ["id": 2, "full_name": "Two"],
             ],
             as: User.self,
             in: context

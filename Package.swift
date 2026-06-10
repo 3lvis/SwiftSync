@@ -1,12 +1,12 @@
+import CompilerPluginSupport
 // swift-tools-version: 6.2
 import PackageDescription
-import CompilerPluginSupport
 
 let package = Package(
     name: "SwiftSync",
     platforms: [
         .iOS(.v17),
-        .macOS(.v14)
+        .macOS(.v14),
     ],
     products: [
         .library(name: "SwiftSync", targets: ["SwiftSync"])
@@ -22,7 +22,7 @@ let package = Package(
                 .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
                 .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
                 .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
-                .product(name: "SwiftDiagnostics", package: "swift-syntax")
+                .product(name: "SwiftDiagnostics", package: "swift-syntax"),
             ],
             path: "SwiftSync/Sources/MacrosImplementation"
         ),
@@ -52,13 +52,13 @@ let package = Package(
             dependencies: [
                 "MacrosImplementation",
                 .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
-                .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax")
+                .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
             ],
             path: "SwiftSync/Tests/SwiftSyncMacrosTests",
             swiftSettings: [
                 .unsafeFlags(["-strict-concurrency=complete"])
             ]
-        )
+        ),
     ],
     swiftLanguageModes: [.v6]
 )

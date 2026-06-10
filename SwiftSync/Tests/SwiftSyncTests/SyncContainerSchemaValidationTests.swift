@@ -1,6 +1,6 @@
-import XCTest
 import SwiftData
 import SwiftSync
+import XCTest
 
 @Syncable
 @Model
@@ -89,7 +89,9 @@ final class SyncContainerSchemaValidationTests: XCTestCase {
         ) { error in
             let message = String(describing: error)
             XCTAssertTrue(message.contains("many-to-many"), "Expected many-to-many validation error, got: \(message)")
-            XCTAssertTrue(message.contains("ValidationMissingAnchorTask.tags") || message.contains("ValidationMissingAnchorTag.tasks"))
+            XCTAssertTrue(
+                message.contains("ValidationMissingAnchorTask.tags")
+                    || message.contains("ValidationMissingAnchorTag.tasks"))
         }
     }
 

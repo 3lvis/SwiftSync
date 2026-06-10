@@ -43,8 +43,9 @@
 // `SyncRelationshipUpdatableModel` protocol, which has been collapsed
 // into `SyncUpdatableModel`.
 
-import XCTest
 import SwiftData
+import XCTest
+
 @testable import SwiftSync
 
 // MARK: - Test Models

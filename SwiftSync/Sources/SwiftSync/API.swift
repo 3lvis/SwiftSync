@@ -109,7 +109,7 @@ extension SwiftSync {
                         changed = true
                     }
                 }
-                
+
                 try throwIfCancelled()
                 if changed {
                     try syncProfile("save-context") {
@@ -151,7 +151,8 @@ extension SwiftSync {
                 var changed = false
                 let matchingRow: Model?
                 if syncIdentityHasUniqueAttribute(Model.self),
-                   Model.syncIdentityPredicate(matching: identity) != nil {
+                    Model.syncIdentityPredicate(matching: identity) != nil
+                {
                     matchingRow = try syncProfile("fetch-existing-by-identity") {
                         try fetchUniqueRow(matching: identity, as: Model.self, in: context)
                     }
@@ -171,7 +172,8 @@ extension SwiftSync {
                     if !relationshipOperations.isDisjoint(with: [.update, .delete]) {
                         try throwIfCancelled()
                         let didApplyRelationships = try await syncProfile("apply-relationships") {
-                            try await row.applyRelationships(payloadModel, in: context, operations: relationshipOperations)
+                            try await row.applyRelationships(
+                                payloadModel, in: context, operations: relationshipOperations)
                         }
                         if didApplyRelationships {
                             changed = true
@@ -186,7 +188,8 @@ extension SwiftSync {
                     if relationshipOperations.contains(.insert) {
                         try throwIfCancelled()
                         let didApplyRelationships = try await syncProfile("apply-relationships") {
-                            try await created.applyRelationships(payloadModel, in: context, operations: relationshipOperations)
+                            try await created.applyRelationships(
+                                payloadModel, in: context, operations: relationshipOperations)
                         }
                         if didApplyRelationships {
                             changed = true
@@ -234,9 +237,11 @@ extension SwiftSync {
                     return
                 }
                 let key = identityKey(from: identity)
-                let resolvedParent = try syncProfile("resolve-parent", operation: {
-                    try resolveParent(parent, in: context)
-                })
+                let resolvedParent = try syncProfile(
+                    "resolve-parent",
+                    operation: {
+                        try resolveParent(parent, in: context)
+                    })
                 guard let resolvedParent else {
                     throw SyncError.invalidPayload(
                         model: String(describing: Model.self),
@@ -246,7 +251,8 @@ extension SwiftSync {
                 var changed = false
                 let matchingRow: Model?
                 if syncIdentityHasUniqueAttribute(Model.self),
-                   Model.syncIdentityPredicate(matching: identity) != nil {
+                    Model.syncIdentityPredicate(matching: identity) != nil
+                {
                     matchingRow = try syncProfile("fetch-existing-by-identity") {
                         try fetchUniqueRow(matching: identity, as: Model.self, in: context)
                     }
@@ -277,7 +283,8 @@ extension SwiftSync {
                     if !relationshipOperations.isDisjoint(with: [.update, .delete]) {
                         try throwIfCancelled()
                         let didApplyRelationships = try await syncProfile("apply-relationships") {
-                            try await row.applyRelationships(payloadModel, in: context, operations: relationshipOperations)
+                            try await row.applyRelationships(
+                                payloadModel, in: context, operations: relationshipOperations)
                         }
                         if didApplyRelationships {
                             changed = true
@@ -295,7 +302,8 @@ extension SwiftSync {
                     if relationshipOperations.contains(.insert) {
                         try throwIfCancelled()
                         let didApplyRelationships = try await syncProfile("apply-relationships") {
-                            try await created.applyRelationships(payloadModel, in: context, operations: relationshipOperations)
+                            try await created.applyRelationships(
+                                payloadModel, in: context, operations: relationshipOperations)
                         }
                         if didApplyRelationships {
                             changed = true
@@ -360,9 +368,11 @@ extension SwiftSync {
                 let entries = try syncProfile("normalize-payload") {
                     try normalize(payload: payload, model: Model.self)
                 }
-                let resolvedParent = try syncProfile("resolve-parent", operation: {
-                    try resolveParent(parent, in: context)
-                })
+                let resolvedParent = try syncProfile(
+                    "resolve-parent",
+                    operation: {
+                        try resolveParent(parent, in: context)
+                    })
                 guard let resolvedParent else {
                     throw SyncError.invalidPayload(
                         model: String(describing: Model.self),
@@ -477,12 +487,16 @@ extension SwiftSync {
                     }
 
                     if isGlobal {
-                        let movedRow = try syncProfile("fetch-existing-by-identity", operation: {
-                            try fetchUniqueRow(matching: identity, as: Model.self, in: context)
-                        })
+                        let movedRow = try syncProfile(
+                            "fetch-existing-by-identity",
+                            operation: {
+                                try fetchUniqueRow(matching: identity, as: Model.self, in: context)
+                            })
                         if let movedRow {
                             syncProfile("apply-parent") {
-                                if movedRow[keyPath: parentRelationship]?.persistentModelID != resolvedParent.persistentModelID {
+                                if movedRow[keyPath: parentRelationship]?.persistentModelID
+                                    != resolvedParent.persistentModelID
+                                {
                                     movedRow[keyPath: parentRelationship] = resolvedParent
                                     changed = true
                                 }
@@ -615,10 +629,14 @@ extension SwiftSync {
         for propertyMetadata in Model.schemaMetadata {
             let mirror = Mirror(reflecting: propertyMetadata)
             guard let candidateKeyPath = mirror.children.first(where: { $0.label == "keypath" })?.value as? AnyKeyPath,
-                  candidateKeyPath == identityKeyPath else { continue }
-            guard let rawMetadata = mirror.children.first(where: { $0.label == "metadata" })?.value else { return false }
+                candidateKeyPath == identityKeyPath
+            else { continue }
+            guard let rawMetadata = mirror.children.first(where: { $0.label == "metadata" })?.value else {
+                return false
+            }
             let metadataMirror = Mirror(reflecting: rawMetadata)
-            let unwrapped: Any? = metadataMirror.displayStyle == .optional
+            let unwrapped: Any? =
+                metadataMirror.displayStyle == .optional
                 ? metadataMirror.children.first?.value
                 : rawMetadata
             guard let attribute = unwrapped as? Schema.Attribute else { return false }

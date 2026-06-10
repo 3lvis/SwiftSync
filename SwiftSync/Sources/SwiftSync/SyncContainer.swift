@@ -1,6 +1,6 @@
 import Foundation
-import SwiftData
 import ObjCExceptionCatcher
+import SwiftData
 
 public final class SyncContainer: NSObject, @unchecked Sendable {
     public struct SchemaValidationError: LocalizedError, Sendable {
@@ -64,7 +64,8 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     }
 
     @MainActor
-    public init(_ modelContainer: ModelContainer, keyStyle: KeyStyle = .snakeCase, dateFormatter: DateFormatter? = nil) {
+    public init(_ modelContainer: ModelContainer, keyStyle: KeyStyle = .snakeCase, dateFormatter: DateFormatter? = nil)
+    {
         self.modelContainer = modelContainer
         self.mainContext = modelContainer.mainContext
         self.keyStyle = keyStyle
@@ -296,14 +297,13 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
 
         for relationship in relationships where relationship.isToMany {
             let reciprocalToMany = relationships.filter {
-                $0.ownerTypeName == relationship.relatedTypeName &&
-                $0.relatedTypeName == relationship.ownerTypeName &&
-                $0.isToMany
+                $0.ownerTypeName == relationship.relatedTypeName && $0.relatedTypeName == relationship.ownerTypeName
+                    && $0.isToMany
             }
-            guard !reciprocalToMany.isEmpty else { continue } // not many-to-many
+            guard !reciprocalToMany.isEmpty else { continue }  // not many-to-many
 
-            let hasAnchor = relationship.hasExplicitInverseAnchor ||
-                reciprocalToMany.contains(where: \.hasExplicitInverseAnchor)
+            let hasAnchor =
+                relationship.hasExplicitInverseAnchor || reciprocalToMany.contains(where: \.hasExplicitInverseAnchor)
             guard !hasAnchor else { continue }
 
             let reciprocalList = reciprocalToMany.map(\.fullName).joined(separator: ", ")
@@ -355,7 +355,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             object: self,
             userInfo: [
                 Self.changedIdentifiersUserInfoKey: changedIDs,
-                Self.changedModelTypeNamesUserInfoKey: changedModelTypeNames
+                Self.changedModelTypeNamesUserInfoKey: changedModelTypeNames,
             ]
         )
     }
@@ -366,7 +366,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         let keys: [String] = [
             ModelContext.NotificationKey.insertedIdentifiers.rawValue,
             ModelContext.NotificationKey.updatedIdentifiers.rawValue,
-            ModelContext.NotificationKey.deletedIdentifiers.rawValue
+            ModelContext.NotificationKey.deletedIdentifiers.rawValue,
         ]
 
         var ids: Set<PersistentIdentifier> = []

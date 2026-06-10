@@ -1,8 +1,9 @@
 import Foundation
+
 #if canImport(Darwin)
-import Darwin
+    import Darwin
 #elseif canImport(Glibc)
-import Glibc
+    import Glibc
 #endif
 
 enum DateType: Sendable {
@@ -64,32 +65,35 @@ enum SyncDateParser {
         guard bytes.count >= 19 else { return nil }
 
         guard isDigit(bytes, 0, 4),
-              bytes[safe: 4] == asciiMinus,
-              isDigit(bytes, 5, 2),
-              bytes[safe: 7] == asciiMinus,
-              isDigit(bytes, 8, 2),
-              (bytes[safe: 10] == asciiT || bytes[safe: 10] == asciiSpace),
-              isDigit(bytes, 11, 2),
-              bytes[safe: 13] == asciiColon,
-              isDigit(bytes, 14, 2),
-              bytes[safe: 16] == asciiColon,
-              isDigit(bytes, 17, 2) else {
+            bytes[safe: 4] == asciiMinus,
+            isDigit(bytes, 5, 2),
+            bytes[safe: 7] == asciiMinus,
+            isDigit(bytes, 8, 2),
+            bytes[safe: 10] == asciiT || bytes[safe: 10] == asciiSpace,
+            isDigit(bytes, 11, 2),
+            bytes[safe: 13] == asciiColon,
+            isDigit(bytes, 14, 2),
+            bytes[safe: 16] == asciiColon,
+            isDigit(bytes, 17, 2)
+        else {
             return nil
         }
 
         guard let year = int(bytes, 0, 4),
-              let month = int(bytes, 5, 2),
-              let day = int(bytes, 8, 2),
-              let hour = int(bytes, 11, 2),
-              let minute = int(bytes, 14, 2),
-              let second = int(bytes, 17, 2) else {
+            let month = int(bytes, 5, 2),
+            let day = int(bytes, 8, 2),
+            let hour = int(bytes, 11, 2),
+            let minute = int(bytes, 14, 2),
+            let second = int(bytes, 17, 2)
+        else {
             return nil
         }
         guard (1...12).contains(month),
-              (1...31).contains(day),
-              (0...23).contains(hour),
-              (0...59).contains(minute),
-              (0...60).contains(second) else { return nil }
+            (1...31).contains(day),
+            (0...23).contains(hour),
+            (0...59).contains(minute),
+            (0...60).contains(second)
+        else { return nil }
 
         var index = 19
         var milliseconds = 0
@@ -114,7 +118,8 @@ enum SyncDateParser {
         if bytes[safe: index] == asciiZ, index + 1 == bytes.count {
             index += 1
         } else if index != bytes.count, let signByte = bytes[safe: index],
-                  signByte == asciiPlus || signByte == asciiMinus {
+            signByte == asciiPlus || signByte == asciiMinus
+        {
             let sign = signByte == asciiMinus ? -1 : 1
             index += 1
 
@@ -163,11 +168,8 @@ enum SyncDateParser {
     private static func isDateOnly(_ utf8: String.UTF8View) -> Bool {
         let bytes = Array(utf8)
         guard bytes.count == 10 else { return false }
-        return isDigit(bytes, 0, 4) &&
-            bytes[safe: 4] == asciiMinus &&
-            isDigit(bytes, 5, 2) &&
-            bytes[safe: 7] == asciiMinus &&
-            isDigit(bytes, 8, 2)
+        return isDigit(bytes, 0, 4) && bytes[safe: 4] == asciiMinus && isDigit(bytes, 5, 2)
+            && bytes[safe: 7] == asciiMinus && isDigit(bytes, 8, 2)
     }
 
     private static func isDigit(_ bytes: [UInt8], _ start: Int, _ length: Int) -> Bool {
@@ -200,8 +202,8 @@ extension String {
     }
 }
 
-private extension Array {
-    subscript(safe index: Int) -> Element? {
+extension Array {
+    fileprivate subscript(safe index: Int) -> Element? {
         indices.contains(index) ? self[index] : nil
     }
 }

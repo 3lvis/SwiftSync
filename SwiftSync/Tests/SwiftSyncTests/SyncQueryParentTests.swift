@@ -1,6 +1,6 @@
-import XCTest
 import SwiftData
 import SwiftSync
+import XCTest
 
 final class SyncQueryParentTests: XCTestCase {
     @MainActor

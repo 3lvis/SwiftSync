@@ -122,7 +122,8 @@ public final class SyncQueryPublisher<Model: PersistentModel> {
     }
 
     private func reload() {
-        let descriptor = predicate.map { FetchDescriptor(predicate: $0, sortBy: sortBy) }
+        let descriptor =
+            predicate.map { FetchDescriptor(predicate: $0, sortBy: sortBy) }
             ?? FetchDescriptor(sortBy: sortBy)
         let fetched = (try? syncContainer.mainContext.fetch(descriptor)) ?? []
         rows = postFetchFilter.map { fetched.filter($0) } ?? fetched

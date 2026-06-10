@@ -3,14 +3,14 @@ import SwiftData
 
 // MARK: - Shared String Case Conversion Utilities
 
-fileprivate enum ScalarClass {
+private enum ScalarClass {
     case upper
     case lower
     case digit
     case other
 }
 
-fileprivate func scalarClass(_ scalar: UnicodeScalar) -> ScalarClass {
+private func scalarClass(_ scalar: UnicodeScalar) -> ScalarClass {
     if CharacterSet.uppercaseLetters.contains(scalar) {
         return .upper
     }
@@ -23,7 +23,7 @@ fileprivate func scalarClass(_ scalar: UnicodeScalar) -> ScalarClass {
     return .other
 }
 
-fileprivate func toSnakeCaseString(_ value: String) -> String {
+private func toSnakeCaseString(_ value: String) -> String {
     guard !value.isEmpty else { return value }
     var output = ""
     let scalars = Array(value.unicodeScalars)
@@ -34,7 +34,7 @@ fileprivate func toSnakeCaseString(_ value: String) -> String {
             let next = index + 1 < scalars.count ? scalarClass(scalars[index + 1]) : nil
             let startsNewWord = previous == .lower || previous == .digit
             let endsAcronym = previous == .upper && next == .lower
-            if (startsNewWord || endsAcronym), output.last != "_" {
+            if startsNewWord || endsAcronym, output.last != "_" {
                 output.append("_")
             }
         }
@@ -61,33 +61,33 @@ public protocol SyncModelable: PersistentModel {
     static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] { get }
 }
 
-public extension SyncModelable {
-    static var syncIdentityRemoteKeys: [String] { ["id", "remote_id", "remoteID"] }
-    static func syncIdentityPredicate(matching _: SyncID) -> Predicate<Self>? { nil }
-    static func syncParentPredicate(
+extension SyncModelable {
+    public static var syncIdentityRemoteKeys: [String] { ["id", "remote_id", "remoteID"] }
+    public static func syncIdentityPredicate(matching _: SyncID) -> Predicate<Self>? { nil }
+    public static func syncParentPredicate(
         parentPersistentID _: PersistentIdentifier,
         relationship _: PartialKeyPath<Self>
     ) -> Predicate<Self>? { nil }
-    static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] { [] }
+    public static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] { [] }
 
-    static func syncRelatedModelType(for keyPath: PartialKeyPath<Self>) -> (any PersistentModel.Type)? {
+    public static func syncRelatedModelType(for keyPath: PartialKeyPath<Self>) -> (any PersistentModel.Type)? {
         _ = keyPath
         return nil
     }
 
-    static var syncDefaultRefreshModelTypeNames: Set<String> {
+    public static var syncDefaultRefreshModelTypeNames: Set<String> {
         Set(syncDefaultRefreshModelTypes.map { String(reflecting: $0) })
     }
 
-    static func syncRefreshModelTypes(for keyPaths: [PartialKeyPath<Self>]) -> [any PersistentModel.Type] {
+    public static func syncRefreshModelTypes(for keyPaths: [PartialKeyPath<Self>]) -> [any PersistentModel.Type] {
         keyPaths.compactMap { syncRelatedModelType(for: $0) }
     }
 
-    static func syncRefreshModelTypeNames(for keyPaths: [PartialKeyPath<Self>]) -> Set<String> {
+    public static func syncRefreshModelTypeNames(for keyPaths: [PartialKeyPath<Self>]) -> Set<String> {
         Set(syncRefreshModelTypes(for: keyPaths).map { String(reflecting: $0) })
     }
 
-    static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] { [] }
+    public static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] { [] }
 }
 
 public struct SyncRelationshipSchemaDescriptor: Sendable {
@@ -131,10 +131,10 @@ public protocol SyncUpdatableModel: SyncModelable {
     func syncMarkChanged()
 }
 
-public extension SyncUpdatableModel {
-    func syncMarkChanged() {}
+extension SyncUpdatableModel {
+    public func syncMarkChanged() {}
 
-    func applyRelationships(
+    public func applyRelationships(
         _ payload: SyncPayload,
         in context: ModelContext,
         isolation: isolated (any Actor)? = #isolation
@@ -142,7 +142,7 @@ public extension SyncUpdatableModel {
         false
     }
 
-    func applyRelationships(
+    public func applyRelationships(
         _ payload: SyncPayload,
         in context: ModelContext,
         operations: SyncRelationshipOperations,
@@ -151,7 +151,7 @@ public extension SyncUpdatableModel {
         try await applyRelationships(payload, in: context, isolation: isolation)
     }
 
-    func export(keyStyle _: KeyStyle, dateFormatter _: DateFormatter) -> [String: Any] {
+    public func export(keyStyle _: KeyStyle, dateFormatter _: DateFormatter) -> [String: Any] {
         [:]
     }
 }
@@ -205,7 +205,8 @@ final class SyncRelationshipLookupCache: @unchecked Sendable {
             rowsByType[key] = cached
         }
         if var cached = rowsByIdentityType[key] as? [String: Model],
-           let identity = resolveIdentity(from: row) {
+            let identity = resolveIdentity(from: row)
+        {
             cached[identity] = row
             rowsByIdentityType[key] = cached
         }
@@ -466,14 +467,14 @@ public func syncApplyToOneNestedObject<Owner, Related: SyncUpdatableModel>(
 
         var resolvedRelated: Related?
         if let nestedIdentity = resolveIdentity(from: nestedPayload, model: Related.self),
-           let existing = relatedByID[nestedIdentity]
+            let existing = relatedByID[nestedIdentity]
         {
             if operations.contains(.update), try existing.apply(nestedPayload) {
                 changed = true
             }
             resolvedRelated = existing
         } else if let current = owner[keyPath: relationship], operations.contains(.update),
-                  resolveIdentity(from: nestedPayload, model: Related.self) == nil
+            resolveIdentity(from: nestedPayload, model: Related.self) == nil
         {
             if try current.apply(nestedPayload) {
                 changed = true
@@ -555,7 +556,7 @@ public func syncApplyToManyNestedObjects<Owner: SyncUpdatableModel, Related: Syn
             var resolved: Related?
 
             if let nestedIdentity = resolveIdentity(from: nestedPayload, model: Related.self),
-               let existing = relatedByID[nestedIdentity]
+                let existing = relatedByID[nestedIdentity]
             {
                 if operations.contains(.update), try existing.apply(nestedPayload) {
                     changed = true
@@ -948,16 +949,18 @@ public struct SyncPayload {
         var keys: [String] = []
         switch keyStyle {
         case .snakeCase:
-            keys.append(key.split(separator: ".", omittingEmptySubsequences: false)
-                .map { snakeCased(String($0)) }
-                .joined(separator: "."))
+            keys.append(
+                key.split(separator: ".", omittingEmptySubsequences: false)
+                    .map { snakeCased(String($0)) }
+                    .joined(separator: "."))
         case .camelCase:
-            keys.append(key.split(separator: ".", omittingEmptySubsequences: false)
-                .map { segment in
-                    let normalizedSnake = snakeCased(String(segment))
-                    return camelCased(normalizedSnake)
-                }
-                .joined(separator: "."))
+            keys.append(
+                key.split(separator: ".", omittingEmptySubsequences: false)
+                    .map { segment in
+                        let normalizedSnake = snakeCased(String(segment))
+                        return camelCased(normalizedSnake)
+                    }
+                    .joined(separator: "."))
         }
         keys.append(key)
         if key == "remoteID" {
@@ -1163,7 +1166,9 @@ public struct SyncPayload {
         }
 
         if T.self == Decimal.self {
-            if let string = raw as? String, let value = Decimal(string: string, locale: Locale(identifier: "en_US_POSIX")) {
+            if let string = raw as? String,
+                let value = Decimal(string: string, locale: Locale(identifier: "en_US_POSIX"))
+            {
                 return value as? T
             }
             if let int = raw as? Int {
@@ -1184,7 +1189,9 @@ public struct SyncPayload {
             if let int = raw as? Int, let date = SyncDateParser.dateFromUnixTimestampNumber(NSNumber(value: int)) {
                 return date as? T
             }
-            if let double = raw as? Double, let date = SyncDateParser.dateFromUnixTimestampNumber(NSNumber(value: double)) {
+            if let double = raw as? Double,
+                let date = SyncDateParser.dateFromUnixTimestampNumber(NSNumber(value: double))
+            {
                 return date as? T
             }
             if let number = raw as? NSNumber, let date = SyncDateParser.dateFromUnixTimestampNumber(number) {

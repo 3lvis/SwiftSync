@@ -1,5 +1,6 @@
-import XCTest
 import SwiftData
+import XCTest
+
 @testable import SwiftSync
 
 final class SyncContainerRecoveryTests: XCTestCase {
@@ -73,7 +74,7 @@ final class SyncContainerRecoveryTests: XCTestCase {
             directory.appendingPathComponent("client-cache.store-wal"),
             directory.appendingPathComponent("client-cache.store-shm"),
             directory.appendingPathComponent("client-cache.store.support"),
-            directory.appendingPathComponent("unrelated.store")
+            directory.appendingPathComponent("unrelated.store"),
         ]
 
         for url in filesToCreate {

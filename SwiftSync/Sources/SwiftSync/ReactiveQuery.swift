@@ -50,7 +50,9 @@ private final class SyncQueryObserver<Model: PersistentModel> {
             let changedModelTypeNames = syncQueryChangedModelTypeNames(from: notification.userInfo)
             let changedIDs = syncQueryChangedIdentifiers(from: notification.userInfo)
             MainActor.assumeIsolated {
-                guard self.shouldReload(changedModelTypeNames: changedModelTypeNames, changedIDs: changedIDs) else { return }
+                guard self.shouldReload(changedModelTypeNames: changedModelTypeNames, changedIDs: changedIDs) else {
+                    return
+                }
                 self.reload()
             }
         }
@@ -174,7 +176,8 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
             syncContainer: syncContainer,
             predicate: nil,
             sortBy: sortBy,
-            postFetchFilter: Self.explicitToOneRelationshipIDFilter(relationshipID: relationshipID, relationship: relationship),
+            postFetchFilter: Self.explicitToOneRelationshipIDFilter(
+                relationshipID: relationshipID, relationship: relationship),
             observedModelTypeNames: Self.defaultObservedModelTypeNames(),
             animation: animation
         )
@@ -192,7 +195,8 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
             syncContainer: syncContainer,
             predicate: nil,
             sortBy: sortBy,
-            postFetchFilter: Self.explicitToManyRelationshipIDFilter(relationshipID: relationshipID, relationship: relationship),
+            postFetchFilter: Self.explicitToManyRelationshipIDFilter(
+                relationshipID: relationshipID, relationship: relationship),
             observedModelTypeNames: Self.defaultObservedModelTypeNames(),
             animation: animation
         )
@@ -249,8 +253,8 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
 
 }
 
-public extension SyncQuery where Model: SyncModelable {
-    init(
+extension SyncQuery where Model: SyncModelable {
+    public init(
         _ _: Model.Type,
         in syncContainer: SyncContainer,
         sortBy: [SortDescriptor<Model>] = [],
@@ -267,7 +271,7 @@ public extension SyncQuery where Model: SyncModelable {
         )
     }
 
-    init(
+    public init(
         _ _: Model.Type,
         predicate: Predicate<Model>,
         in syncContainer: SyncContainer,
@@ -285,7 +289,7 @@ public extension SyncQuery where Model: SyncModelable {
         )
     }
 
-    init<Related: SyncModelable>(
+    public init<Related: SyncModelable>(
         _ _: Model.Type,
         relationship: ReferenceWritableKeyPath<Model, Related?>,
         relationshipID: Related.SyncID,
@@ -298,13 +302,14 @@ public extension SyncQuery where Model: SyncModelable {
             syncContainer: syncContainer,
             predicate: nil,
             sortBy: sortBy,
-            postFetchFilter: Self.explicitToOneRelationshipIDFilter(relationshipID: relationshipID, relationship: relationship),
+            postFetchFilter: Self.explicitToOneRelationshipIDFilter(
+                relationshipID: relationshipID, relationship: relationship),
             observedModelTypeNames: Self.observedModelTypeNames(refreshOn: refreshOn),
             animation: animation
         )
     }
 
-    init<Related: SyncModelable>(
+    public init<Related: SyncModelable>(
         _ _: Model.Type,
         relationship: ReferenceWritableKeyPath<Model, [Related]>,
         relationshipID: Related.SyncID,
@@ -317,7 +322,8 @@ public extension SyncQuery where Model: SyncModelable {
             syncContainer: syncContainer,
             predicate: nil,
             sortBy: sortBy,
-            postFetchFilter: Self.explicitToManyRelationshipIDFilter(relationshipID: relationshipID, relationship: relationship),
+            postFetchFilter: Self.explicitToManyRelationshipIDFilter(
+                relationshipID: relationshipID, relationship: relationship),
             observedModelTypeNames: Self.observedModelTypeNames(refreshOn: refreshOn),
             animation: animation
         )
@@ -329,8 +335,6 @@ public extension SyncQuery where Model: SyncModelable {
         return names
     }
 }
-
-
 
 @MainActor
 @Observable
