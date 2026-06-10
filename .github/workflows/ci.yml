@@ -13,6 +13,19 @@ env:
   DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
 
 jobs:
+  swift-format-check:
+    name: swift-format check
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check formatting
+        run: |
+          swift format --in-place --recursive SwiftSync/Sources SwiftSync/Tests
+          if ! git diff --exit-code; then
+            echo "::error::Code is not formatted. Run: swift format --in-place --recursive SwiftSync/Sources SwiftSync/Tests (and commit)."
+            exit 1
+          fi
+
   macos-tests:
     name: macOS Swift Test (${{ matrix.package.name }})
     runs-on: macos-15
