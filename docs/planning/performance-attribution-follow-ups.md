@@ -2,7 +2,26 @@
 
 ## Open items
 
-- [ ] Run the optimized `sqlite + 10k` demo-shaped benchmark under Instruments Time Profiler with Points of Interest and record the hottest SwiftData and Swift call stacks inside `relationship-fetch` (optional: the phase profiler already attributes `relationship-fetch` as the dominant demo-shaped sub-phase; Instruments would only add Swift/SwiftData stack-level detail)
+- [ ] Instruments stack attribution of `relationship-fetch` — only needed once someone decides to optimize the demo-shaped relationship path further (see "Deferred: Instruments run" below for why and exactly how)
+
+## Deferred: Instruments run (why + how)
+
+**Why we need it (and only then):** items 2-3 already prove that for the realistic demo-shaped workload the dominant cost is `apply-relationships` (~596 ms), inside which `relationship-fetch` (~509 ms) is the single largest sub-phase. The phase profiler tells us *which phase* is hot but not *what inside it* — whether `relationship-fetch` time is SwiftData relationship faulting, SQLite reads, or Swift-side model materialization. We do **not** need that breakdown yet: no relationship optimization is currently planned, and `relationship-fetch` is already the known target. Run Instruments only when someone commits to optimizing that path and needs to know which layer to attack.
+
+**Exact steps to do it later:**
+
+1. The signposts already exist — `SyncPerformanceProfiler` emits `OSSignposter` intervals named `SwiftSyncPhase` (subsystem `SwiftSync`, category `Performance`), with the phase name as the interval message, so `relationship-fetch` shows up as a labelled interval.
+2. Record headlessly with the bundled toolchain:
+
+   ```
+   SWIFTSYNC_RUN_BENCHMARKS=1 SWIFTSYNC_BENCHMARK_PROFILE_PHASES=1 \
+   SWIFTSYNC_BENCHMARK_STORES=sqlite SWIFTSYNC_BENCHMARK_TIERS=10000 SWIFTSYNC_BENCHMARK_SAMPLES=1 \
+   xcrun xctrace record --template 'Time Profiler' \
+     --launch -- $(swift build --show-bin-path)/SwiftSyncPackageTests.xctest
+   ```
+
+   or attach the Time Profiler + os_signpost instruments in Instruments.app to the test run and filter to the `SwiftSyncPhase` / `relationship-fetch` interval.
+3. Inside the `relationship-fetch` interval, capture the hottest stacks and classify them: SwiftData relationship fault/fetch vs SQLite read vs model materialization. That classification is the deliverable — it decides whether the next optimization targets fetch shaping, batching, or materialization.
 
 ## Product boundary (measured 2026-06-10, Xcode 26.5 / Swift 6.3.2)
 
