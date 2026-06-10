@@ -2,10 +2,35 @@
 
 ## Open items
 
-- [ ] Run the optimized `sqlite + 10k` demo-shaped benchmark under Instruments Time Profiler with Points of Interest and record the hottest SwiftData and Swift call stacks inside `relationship-fetch`
-- [ ] Re-run the optimized demo-shaped benchmark with multiple samples to confirm the retained relationship win is stable and not a single-run outlier
-- [ ] Compare `memory` vs `sqlite` phase output at `1k`, `10k`, and `50k` for the remaining broad global paths to separate SwiftData table-scan cost from persistence cost
-- [ ] Document the current product boundary now that the demo-shaped `10k` path is around `803 ms` but broader global paths still have visible `save-context` and materialization costs
+- [ ] Run the optimized `sqlite + 10k` demo-shaped benchmark under Instruments Time Profiler with Points of Interest and record the hottest SwiftData and Swift call stacks inside `relationship-fetch` (optional: the phase profiler already attributes `relationship-fetch` as the dominant demo-shaped sub-phase; Instruments would only add Swift/SwiftData stack-level detail)
+
+## Product boundary (measured 2026-06-10, Xcode 26.5 / Swift 6.3.2)
+
+Confirmed with multi-sample runs on the same `FetchStrategyBenchmarkTests` harness.
+
+Demo-shaped `sqlite + 10k`, 5 samples — the retained relationship win is stable, not a single-run outlier:
+
+- total: median `744 ms`, max `783 ms` (prior single-run was about `803 ms`)
+- `apply-relationships`: about `596 ms` (dominant), with `relationship-fetch` about `509 ms` as the largest sub-phase — this is the next attribution target if the demo-shaped path is optimized further
+
+Global paths, `memory` vs `sqlite`, 3 samples — persistence is **not** the bottleneck (stores are within noise of each other), so the cost is SwiftData model-layer work, not the store engine:
+
+| case | tier | memory median | sqlite median |
+| --- | --- | --- | --- |
+| `global-batch-sync` | 1k | `78 ms` | `75 ms` |
+| `global-batch-sync` | 10k | `804 ms` | `780 ms` |
+| `global-batch-sync` | 50k | `3997 ms` | `4160 ms` |
+| `single-item-sync` | 1k | `2.3 ms` | `2.2 ms` |
+| `single-item-sync` | 10k | `12.6 ms` | `12.9 ms` |
+| `single-item-sync` | 50k | `59 ms` | `58 ms` |
+
+For `global-batch-sync` at `10k` the phase split is `save-context` about `410 ms` (~52%), `fetch-existing` (full-table) about `115 ms`, `apply-fields` about `100 ms` — all scaling roughly linearly with row count. `single-item-sync` stays cheap (≤ `59 ms` even at `50k`).
+
+Boundary conclusions:
+
+- Low-level SQLite tuning (PRAGMA, custom SQL) is confirmed out of scope: `sqlite ~= memory`.
+- The realistic demo-shaped bottleneck is relationship work (`relationship-fetch`); the isolated global-batch bottleneck is `save-context`, which is explicitly **not** the next target for the realistic workload.
+- Single-item and scoped paths are already fast and not worth further fetch-narrowing.
 
 ## Current bottlenecks
 
