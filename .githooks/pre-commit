@@ -1,0 +1,19 @@
+#!/bin/sh
+# Formats staged Swift files with swift-format before each commit.
+# Enable once per clone: git config core.hooksPath .githooks
+set -e
+
+# NUL-delimited so paths with spaces survive. ACM excludes deletions.
+files=$(git diff --cached --name-only --diff-filter=ACM -z -- '*.swift' | tr '\0' '\n')
+[ -z "$files" ] && exit 0
+
+if ! command -v swift >/dev/null 2>&1; then
+    echo "pre-commit: swift toolchain not found; skipping swift-format." >&2
+    exit 0
+fi
+
+echo "$files" | while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    swift format --in-place "$f"
+    git add -- "$f"
+done

@@ -88,6 +88,13 @@
 - For Git, run these sequentially only: `git add`, `git rm`, `git mv`, `git commit`, `git merge`, `git rebase`, `git cherry-pick`, `git checkout`, `git stash`, `git reset`, `git clean`.
 - If a Git command fails due to `index.lock`, stop, remove the stale lock, and retry the same command sequentially.
 
+## Code Formatting (swift-format)
+
+- The package is formatted with `swift-format` (config: `.swift-format`).
+- A tracked pre-commit hook in `.githooks/pre-commit` formats staged `*.swift` files automatically.
+- **Enable it once per clone:** `git config core.hooksPath .githooks`
+- To format manually: `swift format --in-place --recursive Sources Tests` (Swift 6 toolchain; no standalone binary needed).
+
 ## Pre-Commit Checkpoint
 
 - **Do not commit unless the user explicitly asks.**
