@@ -2,36 +2,24 @@
 
 ## Plan
 
-- [x] Branch off master onto `chore/xcode-26-5-and-perf` (carries staged transition-doc deletion)
-- [x] Verify local toolchain = Xcode 26.5 / Swift 6.3.2 (already current; nothing to install)
-- [x] Scope the test-target compile break: 102 `SendingRisksDataRace` errors in SyncTests.swift + FetchStrategyBenchmarkTests.swift
-- [x] Root-cause: `SwiftSync.sync(...)` is nonisolated-async taking non-Sendable `ModelContext`; @MainActor test code "sends" context across regions. Library compiles; only tests fail.
-- [x] DECISION: user chose full isolation refactor (thread `#isolation` through async sync API)
-- [x] Thread `isolation: isolated (any Actor)? = #isolation` through sync overloads + acquireSyncLease + withRelationshipLookupCache (API.swift)
-- [x] Add isolation param to applyRelationships protocol reqs + defaults (Core.swift) and macro output (MacrosImplementation)
-- [x] Update macro-expansion snapshot test (SyncableMacroDiagnosticsTests)
-- [x] Fix all ~18 hand-written `applyRelationships` conformances in test files (old signature no longer satisfied the requirement -> no-op default silently ran -> relationships skipped)
-- [x] Get test target compiling under Swift 6.3.2 + full suite green (149 tests, 0 failures, 9 benchmark skips)
-- [ ] Commit + push branch for review
-- [ ] PERF item 2: re-run demo-shaped sqlite+10k SAMPLES=5, confirm relationship win stable
-- [ ] PERF item 3: memory vs sqlite at 1k/10k/50k for global paths
-- [ ] PERF item 1: Instruments Time Profiler + Points of Interest on sqlite+10k (signposts already exist in SyncPerformanceProfiler.swift)
-- [ ] PERF item 4: write product-boundary section into docs/planning/performance-attribution-follow-ups.md, then clear/remove
+Performance-attribution follow-ups (from docs/planning/performance-attribution-follow-ups.md).
+Benchmarks now runnable on Xcode 26.5 / Swift 6.3.2 (test target compiles after the isolation refactor, merged to master in c4973c2).
+
+- [ ] item 2: re-run demo-shaped sqlite+10k SAMPLES=5, confirm the retained relationship win is stable (not a single-run outlier)
+- [ ] item 3: compare memory vs sqlite phase output at 1k/10k/50k for the remaining broad global paths (global-batch-sync, single-item-sync)
+- [ ] item 1: Instruments Time Profiler + Points of Interest on sqlite+10k demo-shaped; record hottest stacks inside `relationship-fetch` (signposts already emit in SyncPerformanceProfiler.swift via OSSignposter)
+- [ ] item 4: write the product-boundary section into the planning doc from items 1-3 data, then clear/remove the doc
 
 ## Last known state
 
-Library + tests build on Xcode 26.5 / Swift 6.3.2 with -strict-concurrency=complete preserved. Full suite green (149 tests, 0 failures). Benchmarks (perf items) not yet run.
+Branch fresh off master. Toolchain + swift-format work merged to master (c4973c2). No perf items started yet.
 
 ## Decisions (don't revisit)
 
-- All 4 perf-attribution items are unstarted; underlying numbers were captured in a prior session but follow-ups never run.
-- Proper fix for 6.3.2 strictness = thread `isolation: isolated (any Actor)? = #isolation` through async `sync` API; cascades into `applyRelationships` protocol requirement in Core.swift + macro in MacrosImplementation -> strict TDD + iOS-regression trigger. Large.
-- Lighter fix = relax test target concurrency. But project deliberately set `-strict-concurrency=complete` on ALL targets + `swiftLanguageModes: [.v6]`, so this fights project intent.
-- Replaced a stale state.md (completed export-API task) with this capsule.
-- CI NOT bumped to Xcode 26.5: the isolation changes (`#isolation`/`isolated`) compile on Swift 6.2 too, so CI on Xcode_26.2 stays green. Xcode 26.5 likely needs a macOS 26 runner (local is macOS 26; GitHub CI is macos-15) — bumping risks red CI. Left as an open question for review.
-- API-COMPAT NOTE: adding isolation to the `applyRelationships` protocol requirement is source-breaking for external hand-written `SyncUpdatableModel` conformances (they must add the isolation param). `@Syncable` users are unaffected (macro regenerates).
+- Benchmark harness: FetchStrategyBenchmarkTests with env vars SWIFTSYNC_RUN_BENCHMARKS=1, SWIFTSYNC_BENCHMARK_STORES, SWIFTSYNC_BENCHMARK_TIERS, SWIFTSYNC_BENCHMARK_SAMPLES, SWIFTSYNC_BENCHMARK_PROFILE_PHASES.
+- Run `swift test` benchmarks in the FOREGROUND or via background-to-file; piping through grep buffers output to 0 bytes until completion.
+- Record before/after on the same command per AGENTS.md perf rule.
 
 ## Files touched
 
-- .agents/state.md (replaced)
-- docs/planning/swiftsync-repo-transition.md (staged deletion, carried from master)
+- .agents/state.md (new for this branch)
