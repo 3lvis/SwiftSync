@@ -104,6 +104,7 @@
   - run `git status --short`
   - confirm only intended files are staged
   - then run the commit command (sequentially)
+- The pre-commit hook reformats and re-stages fully-staged `*.swift` files at commit time, so committed content may differ from what `git status` showed; partially-staged files are skipped (format them manually).
 - Do NOT add attribution footer to commits:
 
   ```
