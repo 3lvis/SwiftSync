@@ -2,13 +2,21 @@
 
 ## Open items
 
-- [ ] Instruments stack attribution of `relationship-fetch` — only needed once someone decides to optimize the demo-shaped relationship path further (see "Deferred: Instruments run" below for why and exactly how)
+- [ ] Narrow `relationship-fetch` to only the referenced related rows via a macro-generated multi-identity (`IN`) predicate; collect the union of referenced IDs per sync pass, cache per type as today, and fall back to a full fetch above a threshold (SQLite param limits). Measure on the `demo-shaped-project-session` benchmark before/after.
 
-## Deferred: Instruments run (why + how)
+## Next optimization target: narrow `relationship-fetch` (why + how)
 
-**Why we need it (and only then):** items 2-3 already prove that for the realistic demo-shaped workload the dominant cost is `apply-relationships` (~596 ms), inside which `relationship-fetch` (~509 ms) is the single largest sub-phase. The phase profiler tells us *which phase* is hot but not *what inside it* — whether `relationship-fetch` time is SwiftData relationship faulting, SQLite reads, or Swift-side model materialization. We do **not** need that breakdown yet: no relationship optimization is currently planned, and `relationship-fetch` is already the known target. Run Instruments only when someone commits to optimizing that path and needs to know which layer to attack.
+**The gap (confirmed by the fixture, not speculative):** both relationship-resolution paths fetch the entire related table to resolve however few IDs the payload references — `try context.fetch(FetchDescriptor<Model>())` with no predicate (`Core.swift` `SyncRelationshipLookupCache.rows(for:in:)` and `syncFetchRelatedRows(_:in:)`). The per-pass `SyncRelationshipLookupCache` only ensures this runs once per type per pass; it does not narrow *what* is fetched.
 
-**Exact steps to do it later:**
+In the demo-shaped benchmark (`FetchStrategyBenchmarkTests.testDemoShapedScenarioBenchmarks`), at the 10k tier the related tables hold 10,000 rows but the payload references only ~20 IDs total (`tag_ids: Array(1...10)`, `watcher_ids`: 10, `assignee_id`: 1). So the ~547 ms `relationship-fetch` materializes 10,000 rows to use ~20 — the same fetch-all-then-filter-in-memory pattern already beaten on the `fetch-existing-by-identity` path.
+
+**Why this, not Instruments:** the layer question (SwiftData faulting vs SQLite reads vs model materialization) is moot while the fetch is unbounded — over-fetching 10k rows to use 20 is wasteful at every layer, and the fix does not depend on the answer. The macro already emits `Model.syncIdentityPredicate(matching:)` for the single-identity fast path (`API.swift`); the natural move is an `IN`-predicate variant for related-row resolution.
+
+**Caveat — the win is reference-density dependent:** narrowing helps only when referenced IDs are a small subset of the related table (K ≪ N), which the demo fixture is and detail/list screens generally are. If a pass references most of the table, an `IN` over thousands of IDs won't help and risks SQLite's parameter limit — hence narrow to the per-pass union of referenced IDs and keep a full-fetch fallback above a threshold.
+
+**Instruments is now the fallback, not the gate:** run it only if the `IN`-predicate narrowing fails to move `relationship-fetch` on the demo benchmark. That outcome would prove the residual cost is materializing rows we genuinely need — and only then does layer attribution decide the next move.
+
+**Exact Instruments steps if it comes to that:**
 
 1. The signposts already exist — `SyncPerformanceProfiler` emits `OSSignposter` intervals named `SwiftSyncPhase` (subsystem `SwiftSync`, category `Performance`), with the phase name as the interval message, so `relationship-fetch` shows up as a labelled interval.
 2. Record headlessly with the bundled toolchain:
