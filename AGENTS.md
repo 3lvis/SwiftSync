@@ -60,19 +60,9 @@
 - When a bug appears and the correct fix is not yet known, follow `docs/project/bug-solving-playbook.md`.
 - If a new bug is discovered while working on a base or integration branch, move that investigation onto a dedicated branch before debugging further.
 
-## docs/planning Rules
+## Roadmap
 
-1. Cleanup on new task start
-
-- Before adding new work, remove completed or stale items.
-- Remove: `[x]`, `[~]`, `completed`, `done`, `superseded`, `scheduled`.
-- Keep only active items.
-
-2. Required todo format
-
-- Every planning file must include `## Open items`.
-- Open items must use unchecked checkboxes only: `- [ ] <task>`.
-- Items must be short, actionable, and implementation-focused.
+`docs/planning/world-class-roadmap.md` is the single living plan — the path from "very good" to world-class. Update it as work lands: strike through or delete completed items and keep only what's still open. The roadmap plus git history is the memory; there are no per-branch state files or capsules.
 
 ## Execution Safety
 
@@ -112,123 +102,6 @@
 
   Co-Authored-By: Claude <noreply@anthropic.com>
   ```
-
-## Agent RAM Persistence Protocol (.agents)
-
-### Why
-
-Agents remember two things:
-
-- **Disk context** = what's in the repo (persists via git)
-- **RAM context** = the current working memory (gets lost if the agent stops or you switch machines)
-
-RAM context is: the plan, which steps are done, which was in-progress when stopped, and any decisions that cost time to reach.
-
-### Goal
-
-Make work **restart-safe** by writing the agent's RAM into the repo.
-
----
-
-## Where it lives
-
-Put all continuity files in **`.agents/`**:
-
-- **`.agents/state.md`** — the plan and its execution state (source of truth)
-
-Keep it committed and current while working.
-
----
-
-## 1) `.agents/state.md` (State Capsule)
-
-**Purpose:** survive an abrupt stop — usage cap, crash, machine switch — and resume exactly where work left off.
-
-**Write the plan before implementation starts. Update checkboxes as steps complete. Never wait until "on stop" to fill this in — that moment may never come.**
-
-**Rules:**
-
-- Write the full plan upfront as a checkbox list
-- Mark steps complete (`[x]`) immediately after finishing — in the same commit as the code for that step
-- Mark the in-progress step `[~]` with a brief trailing note if it's partially done
-- Update `Last known state:` after any test or build run
-- Decisions that cost time to reach go in **Decisions** — not in commit messages, not in your head
-- Amend the plan freely if reality diverges — the plan is a map, not a contract
-
-**Template:**
-
-```md
-# State Capsule
-
-## Plan
-
-- [x] Step already done
-- [~] Step in progress — brief note on exactly where it stopped
-- [ ] Step not started yet
-- [ ] Step not started yet
-
-## Last known state
-
-tests green / build failing / untested
-
-## Decisions (don't revisit)
-
-- <decision> — <why>
-
-## Files touched
-
-- path
-```
-
----
-
-## Operating procedure
-
-### Start (every agent run)
-
-1. Read `.agents/state.md`
-2. Run `git status` and `git log --oneline -5` to orient
-3. Resume from the `[~]` step if one exists, otherwise the first `[ ]` step in the Plan
-
-### During work
-
-- **Before starting each step** — mark it `[~]` in the Plan
-- **After completing each step** — mark it `[x]`; include the `state.md` update in the same commit as the code for that step
-- **After any test or build run** — update `Last known state:`
-- **When a non-obvious decision is made** — add it to **Decisions** immediately
-
-### On stop
-
-No special procedure needed. If the plan was kept current during work, `state.md` already reflects reality.
-
----
-
-## Memory Lifecycle: Feature Branches
-
-`.agents/` is **branch-scoped**. It lives and dies with the feature branch.
-
-### Rules
-
-- `.agents/` is only valid on feature branches — never on `main`.
-- Prefer not to include `.agents/` in PR diffs, but if it lands on `main`, CI will clean it up automatically.
-- Each feature branch owns its own isolated `.agents/` — no cross-branch memory.
-- `.agents/` is automatically deleted from `main` by the **Purge .agents on main** GitHub Actions workflow (`.github/workflows/purge-agents.yml`). No manual cleanup is required.
-
-### Lifecycle
-
-| Event                              | Action                                                                          |
-| ---------------------------------- | ------------------------------------------------------------------------------- |
-| Start feature branch               | Create `.agents/state.md` and write the full plan before touching code          |
-| Switch machines mid-task           | Read `.agents/state.md` to restore context — no lost work                       |
-| Usage cap hit mid-task             | Read `.agents/state.md` on resume — continue from the `[~]` or first `[ ]` step |
-| PR merged / branch closed          | CI purges `.agents/` automatically on next push to `main`                       |
-| Hard context switch (abandon task) | Delete `.agents/` — stale state misleads more than it helps                     |
-
-### Why not gitignore it?
-
-Gitignoring `.agents/` defeats the "switch machines" goal. The files must be committed to survive machine switches. The tradeoff is: commit freely on feature branches, CI cleans up on merge.
-
----
 
 ## iOS Test Policy
 
