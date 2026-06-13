@@ -68,6 +68,17 @@ final class SyncableMacroDiagnosticsTests: XCTestCase {
                             )
                         }
                     }
+                    public static func syncIdentityPredicate(matchingAny identities: [String]) -> Predicate<Ticket>? {
+                        Predicate<Ticket> { row in
+                            PredicateExpressions.build_contains(
+                                PredicateExpressions.build_Arg(identities),
+                                PredicateExpressions.build_KeyPath(
+                                    root: row,
+                                    keyPath: \\.id
+                                )
+                            )
+                        }
+                    }
                     public static func syncParentPredicate(
                         parentPersistentID: PersistentIdentifier,
                         relationship: PartialKeyPath<Ticket>

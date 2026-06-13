@@ -3654,6 +3654,100 @@ final class SyncTests: XCTestCase {
     }
 
     @MainActor
+    func testToOneForeignKeyResolutionUsesIdentityTargetedFetchWhenPredicateExists() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: AutoCompany.self,
+            AutoEmployee.self,
+            configurations: configuration
+        )
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 10, "name": "Acme"],
+                ["id": 11, "name": "Globex"],
+            ],
+            as: AutoCompany.self,
+            in: context
+        )
+
+        let (_, profile) = try await SwiftSync.withMainActorPerformanceProfiling {
+            try await SwiftSync.sync(
+                item: ["id": 1, "name": "Ava", "company_id": 10],
+                as: AutoEmployee.self,
+                in: context
+            )
+        }
+
+        XCTAssertNotNil(profile.totalsByPhase["relationship-fetch-by-identity"])
+        XCTAssertNil(profile.totalsByPhase["relationship-fetch"])
+    }
+
+    @MainActor
+    func testToManyForeignKeyResolutionUsesIdentityTargetedFetchWhenPredicateExists() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: ScenarioTag.self,
+            ScenarioTask.self,
+            configurations: configuration
+        )
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "name": "Tag 1"],
+                ["id": 2, "name": "Tag 2"],
+                ["id": 3, "name": "Tag 3"],
+            ],
+            as: ScenarioTag.self,
+            in: context
+        )
+
+        let (_, profile) = try await SwiftSync.withMainActorPerformanceProfiling {
+            try await SwiftSync.sync(
+                item: ["id": 10, "title": "Task 10", "tag_ids": [1, 2]],
+                as: ScenarioTask.self,
+                in: context
+            )
+        }
+
+        XCTAssertNotNil(profile.totalsByPhase["relationship-fetch-by-identity"])
+        XCTAssertNil(profile.totalsByPhase["relationship-fetch"])
+    }
+
+    @MainActor
+    func testForeignKeyResolutionFallsBackToTableFetchForManualConformerWithoutPredicate() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: AutoTag.self,
+            AutoTask.self,
+            configurations: configuration
+        )
+        let context = ModelContext(container)
+
+        try await SwiftSync.sync(
+            payload: [
+                ["id": 1, "name": "Tag 1"],
+                ["id": 2, "name": "Tag 2"],
+            ],
+            as: AutoTag.self,
+            in: context
+        )
+
+        let (_, profile) = try await SwiftSync.withMainActorPerformanceProfiling {
+            try await SwiftSync.sync(
+                item: ["id": 10, "title": "Task 10", "tag_ids": [1, 2]],
+                as: AutoTask.self,
+                in: context
+            )
+        }
+
+        XCTAssertNotNil(profile.totalsByPhase["relationship-fetch"])
+        XCTAssertNil(profile.totalsByPhase["relationship-fetch-by-identity"])
+    }
+
+    @MainActor
     func testParentScopedBatchSyncUsesParentTargetedFetchWhenPredicateExists() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: NoteFolder.self, MacroScopedNote.self, configurations: configuration)

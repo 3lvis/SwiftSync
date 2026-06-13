@@ -51,6 +51,7 @@ public protocol SyncModelable: PersistentModel {
     associatedtype SyncID: Hashable & Codable & Sendable
     static var syncIdentity: KeyPath<Self, SyncID> { get }
     static func syncIdentityPredicate(matching identity: SyncID) -> Predicate<Self>?
+    static func syncIdentityPredicate(matchingAny identities: [SyncID]) -> Predicate<Self>?
     static func syncParentPredicate(
         parentPersistentID: PersistentIdentifier,
         relationship: PartialKeyPath<Self>
@@ -64,6 +65,7 @@ public protocol SyncModelable: PersistentModel {
 extension SyncModelable {
     public static var syncIdentityRemoteKeys: [String] { ["id", "remote_id", "remoteID"] }
     public static func syncIdentityPredicate(matching _: SyncID) -> Predicate<Self>? { nil }
+    public static func syncIdentityPredicate(matchingAny _: [SyncID]) -> Predicate<Self>? { nil }
     public static func syncParentPredicate(
         parentPersistentID _: PersistentIdentifier,
         relationship _: PartialKeyPath<Self>
@@ -159,6 +161,9 @@ extension SyncUpdatableModel {
 final class SyncRelationshipLookupCache: @unchecked Sendable {
     private var rowsByType: [ObjectIdentifier: Any] = [:]
     private var rowsByIdentityType: [ObjectIdentifier: Any] = [:]
+    // Partial identity maps from id-narrowed fetches. Kept separate from the full-table
+    // `rowsByIdentityType` so a partial map is never mistaken for a complete one.
+    private var narrowedRowsByIdentityType: [ObjectIdentifier: Any] = [:]
 
     func rows<Model: PersistentModel>(
         for modelType: Model.Type,
@@ -198,17 +203,52 @@ final class SyncRelationshipLookupCache: @unchecked Sendable {
         return indexed
     }
 
+    func rowsByIdentity<Model: SyncModelable>(
+        for modelType: Model.Type,
+        matching identities: [Model.SyncID],
+        in context: ModelContext
+    ) throws -> [String: Model] {
+        let key = ObjectIdentifier(modelType)
+        var map = (narrowedRowsByIdentityType[key] as? [String: Model]) ?? [:]
+
+        // Unresolved ids are intentionally not memoized: a later pass may have inserted them,
+        // and the re-fetch is a narrow predicate query over the few still-missing ids.
+        let missing = identities.filter { map[syncIdentityKey(from: $0)] == nil }
+        guard !missing.isEmpty else { return map }
+
+        guard let predicate = Model.syncIdentityPredicate(matchingAny: missing) else {
+            return try rowsByIdentity(for: modelType, in: context)
+        }
+
+        let fetched = try syncProfile("relationship-fetch-by-identity") {
+            try context.fetch(FetchDescriptor<Model>(predicate: predicate))
+        }
+        syncProfile("relationship-index-by-id") {
+            for row in fetched {
+                if let identity = resolveIdentity(from: row) {
+                    map[identity] = row
+                }
+            }
+        }
+        narrowedRowsByIdentityType[key] = map
+        return map
+    }
+
     func append<Model: SyncModelable>(_ row: Model, as modelType: Model.Type) {
         let key = ObjectIdentifier(modelType)
         if var cached = rowsByType[key] as? [Model] {
             cached.append(row)
             rowsByType[key] = cached
         }
-        if var cached = rowsByIdentityType[key] as? [String: Model],
-            let identity = resolveIdentity(from: row)
-        {
-            cached[identity] = row
-            rowsByIdentityType[key] = cached
+        if let identity = resolveIdentity(from: row) {
+            if var cached = rowsByIdentityType[key] as? [String: Model] {
+                cached[identity] = row
+                rowsByIdentityType[key] = cached
+            }
+            if var cached = narrowedRowsByIdentityType[key] as? [String: Model] {
+                cached[identity] = row
+                narrowedRowsByIdentityType[key] = cached
+            }
         }
     }
 }
@@ -265,7 +305,7 @@ public func syncApplyToOneForeignKey<Owner, Related: SyncModelable>(
             return false
         }
 
-        let relatedByID = try syncFetchRelatedRowsByIdentity(Related.self, in: context)
+        let relatedByID = try syncFetchRelatedRowsByIdentity(Related.self, matching: [nextID], in: context)
         guard let nextRelated = relatedByID[syncIdentityKey(from: nextID)] else {
             // Old Sync parity: unknown FK row is a soft no-op.
             return false
@@ -320,7 +360,7 @@ public func syncApplyToOneForeignKey<Owner, Related: SyncModelable>(
             return false
         }
 
-        let relatedByID = try syncFetchRelatedRowsByIdentity(Related.self, in: context)
+        let relatedByID = try syncFetchRelatedRowsByIdentity(Related.self, matching: [nextID], in: context)
         guard let nextRelated = relatedByID[syncIdentityKey(from: nextID)] else {
             return false
         }
@@ -397,7 +437,7 @@ public func syncApplyToManyForeignKeys<Owner: SyncUpdatableModel, Related: SyncM
 
         // Old Sync behavior avoids duplicate membership; dedupe input deterministically.
         let desiredIDs = dedupePreservingOrder(rawIDs)
-        let relatedByID = try syncFetchRelatedRowsByIdentity(Related.self, in: context)
+        let relatedByID = try syncFetchRelatedRowsByIdentity(Related.self, matching: desiredIDs, in: context)
         let desiredRelated = desiredIDs.compactMap { relatedByID[syncIdentityKey(from: $0)] }
 
         // SwiftData does not expose ordered-relationship metadata; treat to-many as unordered membership.
@@ -647,6 +687,32 @@ private func syncFetchRelatedRowsByIdentity<Model: SyncModelable>(
             }
         )
         return indexed
+    }
+}
+
+private func syncFetchRelatedRowsByIdentity<Model: SyncModelable>(
+    _ modelType: Model.Type,
+    matching identities: [Model.SyncID],
+    in context: ModelContext
+) throws -> [String: Model] {
+    if let cache = SyncRelationshipLookupState.current {
+        return try cache.rowsByIdentity(for: modelType, matching: identities, in: context)
+    }
+
+    guard let predicate = Model.syncIdentityPredicate(matchingAny: identities) else {
+        return try syncFetchRelatedRowsByIdentity(modelType, in: context)
+    }
+
+    let fetched = try syncProfile("relationship-fetch-by-identity") {
+        try context.fetch(FetchDescriptor<Model>(predicate: predicate))
+    }
+    return syncProfile("relationship-index-by-id") {
+        Dictionary(
+            uniqueKeysWithValues: fetched.compactMap { row in
+                guard let identity = resolveIdentity(from: row) else { return nil }
+                return (identity, row)
+            }
+        )
     }
 }
 

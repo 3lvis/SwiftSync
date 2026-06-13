@@ -2,19 +2,27 @@
 
 ## Open items
 
-- [ ] Narrow `relationship-fetch` to only the referenced related rows via a macro-generated multi-identity (`IN`) predicate; collect the union of referenced IDs per sync pass, cache per type as today, and fall back to a full fetch above a threshold (SQLite param limits). Measure on the `demo-shaped-project-session` benchmark before/after.
+- [ ] Narrow the nested-object relationship paths (`syncApplyToOneNestedObject` / `syncApplyToManyNestedObjects`) — they still `context.fetch(FetchDescriptor<Model>())` the whole related table (`relationship-fetch`). Only worth doing if a nested-object-heavy workload shows the full fetch dominating; the demo workload uses foreign-key relationships, which are now narrowed.
 
-## Next optimization target: narrow `relationship-fetch` (why + how)
+## Done: foreign-key `relationship-fetch` narrowing (measured 2026-06-13, Xcode 26.5 / Swift 6.3.2)
 
-**The gap (confirmed by the fixture, not speculative):** both relationship-resolution paths fetch the entire related table to resolve however few IDs the payload references — `try context.fetch(FetchDescriptor<Model>())` with no predicate (`Core.swift` `SyncRelationshipLookupCache.rows(for:in:)` and `syncFetchRelatedRows(_:in:)`). The per-pass `SyncRelationshipLookupCache` only ensures this runs once per type per pass; it does not narrow *what* is fetched.
+The foreign-key relationship paths now resolve referenced rows through a macro-generated multi-identity (`IN`) predicate (`syncIdentityPredicate(matchingAny:)`) instead of fetching the whole related table. New phase `relationship-fetch-by-identity`; the per-pass cache keeps a separate partial identity map so a narrowed result is never mistaken for a complete table. Manual conformers without the generated predicate fall back to the full-table path (locked by `testForeignKeyResolutionFallsBackToTableFetchForManualConformerWithoutPredicate`).
 
-In the demo-shaped benchmark (`FetchStrategyBenchmarkTests.testDemoShapedScenarioBenchmarks`), at the 10k tier the related tables hold 10,000 rows but the payload references only ~20 IDs total (`tag_ids: Array(1...10)`, `watcher_ids`: 10, `assignee_id`: 1). So the ~547 ms `relationship-fetch` materializes 10,000 rows to use ~20 — the same fetch-all-then-filter-in-memory pattern already beaten on the `fetch-existing-by-identity` path.
+Verified before/after on `FetchStrategyBenchmarkTests.testDemoShapedScenarioBenchmarks`, `sqlite + 10k`, 3 samples:
 
-**Why this, not Instruments:** the layer question (SwiftData faulting vs SQLite reads vs model materialization) is moot while the fetch is unbounded — over-fetching 10k rows to use 20 is wasteful at every layer, and the fix does not depend on the answer. The macro already emits `Model.syncIdentityPredicate(matching:)` for the single-identity fast path (`API.swift`); the natural move is an `IN`-predicate variant for related-row resolution.
+| phase | before | after |
+| --- | --- | --- |
+| total | `784.97 ms` | `112.34 ms` |
+| `apply-relationships` | `614.34 ms` | `40.51 ms` |
+| `relationship-fetch` (full table) | `527.09 ms` | — (gone) |
+| `relationship-fetch-by-identity` | — | `18.31 ms` |
+| `relationship-apply-to-many-foreign-keys` | `309.47 ms` | `16.85 ms` |
+| `relationship-apply-to-one-foreign-key` | `303.90 ms` | `19.45 ms` |
+| `relationship-index-by-id` | `67.96 ms` | `0.54 ms` |
 
-**Caveat — the win is reference-density dependent:** narrowing helps only when referenced IDs are a small subset of the related table (K ≪ N), which the demo fixture is and detail/list screens generally are. If a pass references most of the table, an `IN` over thousands of IDs won't help and risks SQLite's parameter limit — hence narrow to the per-pass union of referenced IDs and keep a full-fetch fallback above a threshold.
+About 7× faster on the demo-shaped workload. The apply-phase totals shrank because they wrap the fetch (nested signposts); indexing dropped because it now indexes ~20 rows instead of 10k.
 
-**Instruments is now the fallback, not the gate:** run it only if the `IN`-predicate narrowing fails to move `relationship-fetch` on the demo benchmark. That outcome would prove the residual cost is materializing rows we genuinely need — and only then does layer attribution decide the next move.
+This makes the Instruments stack-attribution follow-up moot for the foreign-key paths: the cost was over-fetching, not a layer that needed attributing. Keep the Instruments steps below only as a fallback if the remaining nested-object full fetch ever becomes the dominant phase in a real workload.
 
 **Exact Instruments steps if it comes to that:**
 
