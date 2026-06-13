@@ -2,13 +2,29 @@
 
 ## Open items
 
-- [ ] Instruments stack attribution of `relationship-fetch` — only needed once someone decides to optimize the demo-shaped relationship path further (see "Deferred: Instruments run" below for why and exactly how)
+- [ ] Narrow the nested-object relationship paths (`syncApplyToOneNestedObject` / `syncApplyToManyNestedObjects`) — they still `context.fetch(FetchDescriptor<Model>())` the whole related table (`relationship-fetch`). Only worth doing if a nested-object-heavy workload shows the full fetch dominating; the demo workload uses foreign-key relationships, which are now narrowed.
 
-## Deferred: Instruments run (why + how)
+## Done: foreign-key `relationship-fetch` narrowing (measured 2026-06-13, Xcode 26.5 / Swift 6.3.2)
 
-**Why we need it (and only then):** items 2-3 already prove that for the realistic demo-shaped workload the dominant cost is `apply-relationships` (~596 ms), inside which `relationship-fetch` (~509 ms) is the single largest sub-phase. The phase profiler tells us *which phase* is hot but not *what inside it* — whether `relationship-fetch` time is SwiftData relationship faulting, SQLite reads, or Swift-side model materialization. We do **not** need that breakdown yet: no relationship optimization is currently planned, and `relationship-fetch` is already the known target. Run Instruments only when someone commits to optimizing that path and needs to know which layer to attack.
+The foreign-key relationship paths now resolve referenced rows through a macro-generated multi-identity (`IN`) predicate (`syncIdentityPredicate(matchingAny:)`) instead of fetching the whole related table. New phase `relationship-fetch-by-identity`; the per-pass cache keeps a separate partial identity map so a narrowed result is never mistaken for a complete table. Manual conformers without the generated predicate fall back to the full-table path (locked by `testForeignKeyResolutionFallsBackToTableFetchForManualConformerWithoutPredicate`).
 
-**Exact steps to do it later:**
+Verified before/after on `FetchStrategyBenchmarkTests.testDemoShapedScenarioBenchmarks`, `sqlite + 10k`, 3 samples:
+
+| phase | before | after |
+| --- | --- | --- |
+| total | `784.97 ms` | `112.34 ms` |
+| `apply-relationships` | `614.34 ms` | `40.51 ms` |
+| `relationship-fetch` (full table) | `527.09 ms` | — (gone) |
+| `relationship-fetch-by-identity` | — | `18.31 ms` |
+| `relationship-apply-to-many-foreign-keys` | `309.47 ms` | `16.85 ms` |
+| `relationship-apply-to-one-foreign-key` | `303.90 ms` | `19.45 ms` |
+| `relationship-index-by-id` | `67.96 ms` | `0.54 ms` |
+
+About 7× faster on the demo-shaped workload. The apply-phase totals shrank because they wrap the fetch (nested signposts); indexing dropped because it now indexes ~20 rows instead of 10k.
+
+This makes the Instruments stack-attribution follow-up moot for the foreign-key paths: the cost was over-fetching, not a layer that needed attributing. Keep the Instruments steps below only as a fallback if the remaining nested-object full fetch ever becomes the dominant phase in a real workload.
+
+**Exact Instruments steps if it comes to that:**
 
 1. The signposts already exist — `SyncPerformanceProfiler` emits `OSSignposter` intervals named `SwiftSyncPhase` (subsystem `SwiftSync`, category `Performance`), with the phase name as the interval message, so `relationship-fetch` shows up as a labelled interval.
 2. Record headlessly with the bundled toolchain:

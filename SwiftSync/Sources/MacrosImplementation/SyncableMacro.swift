@@ -114,6 +114,17 @@ public struct SyncableMacro: ExtensionMacro {
                             )
                         }
                     }
+                    \(raw: memberAccessModifier)static func syncIdentityPredicate(matchingAny identities: [\(raw: identityProperty.typeSource)]) -> Predicate<\(raw: typeName)>? {
+                        Predicate<\(raw: typeName)> { row in
+                            PredicateExpressions.build_contains(
+                                PredicateExpressions.build_Arg(identities),
+                                PredicateExpressions.build_KeyPath(
+                                    root: row,
+                                    keyPath: \\.\(raw: identityProperty.name)
+                                )
+                            )
+                        }
+                    }
                     \(raw: memberAccessModifier)static func syncParentPredicate(
                         parentPersistentID: PersistentIdentifier,
                         relationship: PartialKeyPath<\(raw: typeName)>
