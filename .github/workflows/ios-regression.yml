@@ -23,9 +23,9 @@ jobs:
         run: xcodebuild -version && swift --version
 
       - name: Test — DirtyTrackingGapTests (iOS Simulator)
+        working-directory: DemoCore
         run: |
           xcodebuild test \
-            -project Demo/Demo.xcodeproj \
-            -scheme Demo \
+            -scheme DemoCore \
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest' \
-            -only-testing:DemoTests/DirtyTrackingGapTests
+            -only-testing:DemoCoreTests/DirtyTrackingGapTests
