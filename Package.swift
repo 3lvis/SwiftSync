@@ -5,8 +5,8 @@ import PackageDescription
 let package = Package(
     name: "SwiftSync",
     platforms: [
-        .iOS(.v17),
-        .macOS(.v14),
+        .iOS(.v18),
+        .macOS(.v15),
     ],
     products: [
         .library(name: "SwiftSync", targets: ["SwiftSync"])

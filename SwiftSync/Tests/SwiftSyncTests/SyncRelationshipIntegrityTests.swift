@@ -1,4 +1,3 @@
-import Dispatch
 import Observation
 import SwiftData
 import XCTest
@@ -677,11 +676,19 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
         )
 
         let task = try XCTUnwrap(context.fetch(FetchDescriptor<OneSidedTask>()).first)
-        let spy = ObservationSpy<[Int]> {
-            task.members.map(\.id).sorted()
-        }
+        XCTAssertEqual(task.members.map(\.id).sorted(), [1, 2])
 
-        XCTAssertEqual(spy.values.first, [1, 2])
+        // A direct withObservationTracking observer of the to-many relationship must be
+        // notified when membership-changing sync mutates it. onChange fires synchronously
+        // during the mutation, so the flag is set by the time the sync's await returns;
+        // asserting it directly avoids the polling/re-registration that flakes under
+        // concurrent test-suite load.
+        let observedChange = ObservationFlag()
+        withObservationTracking {
+            _ = task.members.map(\.id).sorted()
+        } onChange: {
+            observedChange.fire()
+        }
 
         try await SwiftSync.sync(
             payload: [["id": 10, "title": "Task 10", "member_ids": [2, 3]]],
@@ -689,54 +696,31 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
             in: context
         )
 
-        try await waitUntil {
-            spy.values.contains(where: { $0 == [2, 3] })
-        }
-
         XCTAssertEqual(task.members.map(\.id).sorted(), [2, 3])
         XCTAssertTrue(
-            spy.values.contains(where: { $0 == [2, 3] }),
-            "spy values: \(spy.values)"
+            observedChange.didFire,
+            "direct withObservationTracking observer was not notified of the to-many membership change"
         )
     }
 }
 
-@MainActor
-private final class ObservationSpy<Value> {
-    private let read: @MainActor () -> Value
-    private(set) var values: [Value] = []
+/// Thread-safe one-shot flag. `withObservationTracking`'s `onChange` is `@Sendable` and may
+/// fire off the main actor, so the box guards its state with a lock.
+private final class ObservationFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var fired = false
 
-    init(read: @escaping @MainActor () -> Value) {
-        self.read = read
-        observe()
+    func fire() {
+        lock.lock()
+        fired = true
+        lock.unlock()
     }
 
-    private func observe() {
-        withObservationTracking {
-            values.append(read())
-        } onChange: { [weak self] in
-            guard let self else { return }
-            DispatchQueue.main.async {
-                self.observe()
-            }
-        }
+    var didFire: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return fired
     }
-}
-
-@MainActor
-private func waitUntil(
-    timeoutNanoseconds: UInt64 = 2_000_000_000,
-    pollNanoseconds: UInt64 = 20_000_000,
-    condition: @escaping @MainActor () -> Bool
-) async throws {
-    let deadline = ContinuousClock.now.advanced(by: .nanoseconds(Int64(timeoutNanoseconds)))
-    while ContinuousClock.now < deadline {
-        if condition() {
-            return
-        }
-        try await _Concurrency.Task.sleep(nanoseconds: pollNanoseconds)
-    }
-    XCTFail("Condition not satisfied before timeout")
 }
 
 // MARK: -

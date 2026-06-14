@@ -37,13 +37,6 @@ branch. Work through them systematically; mark complete by deleting the line (pe
 
 ## Open items
 
-### Phase 0 — Foundation: version + platform parity
-
-- [ ] Bump SwiftSync `Package.swift` platforms to iOS 18 / macOS 15; confirm swift-tools
-      6.2 + `swiftLanguageModes: [.v6]` everywhere.
-- [ ] Align DemoCore, DemoBackend, and the `Demo` app project to the same platform floor;
-      run `swift test` on all packages and build the Demo app to confirm green.
-
 ### Phase 1 — Warning-clean under Swift 6.x
 
 - [ ] Eliminate generated-macro warnings in the SwiftSync root build.

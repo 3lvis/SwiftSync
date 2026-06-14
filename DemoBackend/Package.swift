@@ -4,8 +4,8 @@ import PackageDescription
 let package = Package(
     name: "DemoBackend",
     platforms: [
-        .iOS(.v17),
-        .macOS(.v14)
+        .iOS(.v18),
+        .macOS(.v15),
     ],
     products: [
         .library(name: "DemoBackend", targets: ["DemoBackend"])
@@ -25,7 +25,7 @@ let package = Package(
             swiftSettings: [
                 .unsafeFlags(["-strict-concurrency=complete"])
             ]
-        )
+        ),
     ],
     swiftLanguageModes: [.v6]
 )
