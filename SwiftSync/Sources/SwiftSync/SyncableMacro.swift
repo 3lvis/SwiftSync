@@ -1,5 +1,6 @@
 @attached(
     extension, conformances: SyncUpdatableModel, names: named(SyncID), named(syncIdentity),
+    named(syncIdentityPropertyName),
     named(syncIdentityPredicate), named(syncParentPredicate), named(syncIdentityRemoteKeys),
     named(syncDefaultRefreshModelTypes), named(syncRelatedModelType), named(syncRelationshipSchemaDescriptors),
     named(make), named(apply), named(applyRelationships), named(syncApplyGeneratedRelationships), named(export),

@@ -57,6 +57,9 @@ final class SyncableMacroDiagnosticsTests: XCTestCase {
                     public static var syncIdentity: KeyPath<Ticket, String> {
                         \\.id
                     }
+                    public static var syncIdentityPropertyName: String {
+                        "id"
+                    }
                     public static func syncIdentityPredicate(matching identity: String) -> Predicate<Ticket>? {
                         Predicate<Ticket> { row in
                             PredicateExpressions.build_Equal(
@@ -198,6 +201,9 @@ final class SyncableMacroDiagnosticsTests: XCTestCase {
 
                     static var syncIdentity: KeyPath<Note, Int> {
                         \\.id
+                    }
+                    static var syncIdentityPropertyName: String {
+                        "id"
                     }
                     static func syncIdentityPredicate(matching identity: Int) -> Predicate<Note>? {
                         Predicate<Note> { row in
