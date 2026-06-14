@@ -1,11 +1,17 @@
-name: iOS Regression (post-merge)
+name: iOS Regression
 
-# Runs only when a PR is actually merged into master — not on draft closes,
-# not on manual dispatch, not on direct pushes.
+# Pre-merge gate: the dirty-tracking gap is iOS-specific, so the macOS `swift test`
+# in ci.yml can pass while iOS behaves differently. Run the iOS-Simulator regression
+# on every PR (and on master pushes) so it can actually block a regression — a
+# post-merge-only check only reports the breakage after it has already landed.
 on:
   pull_request:
-    types: [closed]
+  push:
     branches: [master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
@@ -13,7 +19,6 @@ env:
 jobs:
   ios-dirty-tracking:
     name: iOS Dirty-Tracking Regression
-    if: github.event.pull_request.merged == true
     runs-on: macos-15
 
     steps:
