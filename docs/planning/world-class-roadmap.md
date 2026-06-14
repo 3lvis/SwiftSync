@@ -37,15 +37,6 @@ branch. Work through them systematically; mark complete by deleting the line (pe
 
 ## Open items
 
-### Phase 1 — Warning-clean under Swift 6.x
-
-- [ ] Eliminate generated-macro warnings in the SwiftSync root build.
-- [ ] Eliminate Swift 6 sendability warnings in DemoCore (prefer `actor`/real isolation
-      over `@unchecked Sendable`, per iOS conventions).
-- [ ] Audit DemoBackend and the Demo app for build warnings; drive to zero.
-- [ ] Turn on `-warnings-as-errors` (or Swift 6.2 upcoming-feature/warning controls) for
-      library targets once clean, so regressions can't reintroduce warnings.
-
 ### Phase 2 — Fix doc drift
 
 - [ ] Rewrite `ARCHITECTURE.md` to match the real Package.swift module layout
@@ -74,7 +65,9 @@ branch. Work through them systematically; mark complete by deleting the line (pe
 
 ### Phase 6 — CI gates for world-class hygiene
 
-- [ ] Add a warnings gate (depends on Phase 1).
+- [ ] Add a warnings gate now that all packages are warning-clean: turn on
+      `-warnings-as-errors` (or Swift 6.2 warning controls) for the library targets and/or
+      enforce zero warnings in CI, so regressions can't reintroduce them.
 - [ ] Add a docs gate: DocC build success + doc link-check (depends on Phases 2–3).
 - [ ] Un-skip a small, fast benchmark subset and add a thresholded perf-regression gate;
       `log()` anything intentionally excluded so coverage isn't silently truncated.

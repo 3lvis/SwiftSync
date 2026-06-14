@@ -179,4 +179,133 @@ final class SyncableMacroDiagnosticsTests: XCTestCase {
             indentationWidth: .spaces(4)
         )
     }
+
+    func testSyncableApplyReturnsFalseWhenNoMutableScalarProperties() {
+        assertMacroExpansion(
+            """
+            @Syncable
+            final class Note {
+                var id: Int = 0
+            }
+            """,
+            expandedSource: """
+                final class Note {
+                    var id: Int = 0
+                }
+
+                extension Note: SyncUpdatableModel {
+                    typealias SyncID = Int
+
+                    static var syncIdentity: KeyPath<Note, Int> {
+                        \\.id
+                    }
+                    static func syncIdentityPredicate(matching identity: Int) -> Predicate<Note>? {
+                        Predicate<Note> { row in
+                            PredicateExpressions.build_Equal(
+                                lhs: PredicateExpressions.build_KeyPath(
+                                    root: row,
+                                    keyPath: \\.id
+                                ),
+                                rhs: PredicateExpressions.build_Arg(identity)
+                            )
+                        }
+                    }
+                    static func syncIdentityPredicate(matchingAny identities: [Int]) -> Predicate<Note>? {
+                        Predicate<Note> { row in
+                            PredicateExpressions.build_contains(
+                                PredicateExpressions.build_Arg(identities),
+                                PredicateExpressions.build_KeyPath(
+                                    root: row,
+                                    keyPath: \\.id
+                                )
+                            )
+                        }
+                    }
+                    static func syncParentPredicate(
+                        parentPersistentID: PersistentIdentifier,
+                        relationship: PartialKeyPath<Note>
+                    ) -> Predicate<Note>? {
+                        return nil
+                    }
+
+                    static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] {
+                        []
+                    }
+
+                    static func syncRelatedModelType(for keyPath: PartialKeyPath<Note>) -> (any PersistentModel.Type)? {
+                        return nil
+                    }
+
+                    static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] {
+                        []
+                    }
+
+                    static func make(from payload: SyncPayload) throws -> Note {
+                        Note(
+                            id: try payload.required(Int.self, for: "id")
+                        )
+                    }
+
+                    func apply(_ payload: SyncPayload) throws -> Bool {
+                        return false
+
+
+                    }
+
+                    func syncApplyGeneratedRelationships(
+                        _ payload: SyncPayload,
+                        in context: ModelContext,
+                        operations: SyncRelationshipOperations = .all
+                    ) throws -> Bool {
+                        guard !operations.isDisjoint(with: [.insert, .update, .delete]) else {
+                            return false
+                        }
+                        return false
+
+
+                    }
+
+                    func applyRelationships(
+                        _ payload: SyncPayload,
+                        in context: ModelContext,
+                        isolation: isolated (any Actor)? = #isolation
+                    ) async throws -> Bool {
+                        try syncApplyGeneratedRelationships(payload, in: context, operations: .all)
+                    }
+
+                    func applyRelationships(
+                        _ payload: SyncPayload,
+                        in context: ModelContext,
+                        operations: SyncRelationshipOperations,
+                        isolation: isolated (any Actor)? = #isolation
+                    ) async throws -> Bool {
+                        try syncApplyGeneratedRelationships(payload, in: context, operations: operations)
+                    }
+
+                    func export(keyStyle: KeyStyle, dateFormatter: DateFormatter) -> [String: Any] {
+                        if !ExportState.enter(self) {
+                            return [:]
+                        }
+                        defer {
+                            ExportState.leave(self)
+                        }
+
+                        var result: [String: Any] = [:]
+                        if let encoded = exportEncodeValue(self.id, dateFormatter: dateFormatter) {
+                    exportSetValue(encoded, for: keyStyle.transform("id"), into: &result)
+                        } else {
+                    exportSetValue(NSNull(), for: keyStyle.transform("id"), into: &result)
+                        }
+                        return result
+                    }
+
+                    func syncMarkChanged() {
+                        self.id = self.id
+                    }
+                }
+                """,
+            macros: macros,
+            indentationWidth: .spaces(4)
+        )
+    }
 }
