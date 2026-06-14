@@ -1,6 +1,7 @@
 import SwiftData
 import SwiftSync
 import XCTest
+
 @testable import DemoCore
 
 final class DirtyTrackingGapTests: XCTestCase {
@@ -52,9 +53,10 @@ final class DirtyTrackingGapTests: XCTestCase {
 
         let user1 = User(id: "u1", displayName: "Alice", createdAt: Date(), updatedAt: Date())
         let user2 = User(id: "u2", displayName: "Bob", createdAt: Date(), updatedAt: Date())
-        let task = Task(id: "t1", projectID: "p1", assigneeID: nil, authorID: "u1",
-                        title: "Test Task", descriptionText: "", state: "open", stateLabel: "Open",
-                        createdAt: Date(), updatedAt: Date())
+        let task = Task(
+            id: "t1", projectID: "p1", assigneeID: nil, authorID: "u1",
+            title: "Test Task", descriptionText: "", state: "open", stateLabel: "Open",
+            createdAt: Date(), updatedAt: Date())
         mainContext.insert(user1)
         mainContext.insert(user2)
         mainContext.insert(task)
@@ -63,8 +65,7 @@ final class DirtyTrackingGapTests: XCTestCase {
         let taskID = task.persistentModelID
         XCTAssertEqual(task.reviewers.count, 0)
 
-        var updatedIDs: Set<PersistentIdentifier> = []
-        var insertedIDs: Set<PersistentIdentifier> = []
+        let capture = DidSaveCapture()
         let saved = XCTestExpectation(description: "ModelContext.didSave")
         let bgContext = ModelContext(container)
 
@@ -72,8 +73,10 @@ final class DirtyTrackingGapTests: XCTestCase {
             forName: ModelContext.didSave, object: bgContext, queue: nil
         ) { notification in
             if let ui = notification.userInfo {
-                if let ids = ui["updated"] as? [PersistentIdentifier] { updatedIDs = Set(ids) }
-                if let ids = ui["inserted"] as? [PersistentIdentifier] { insertedIDs = Set(ids) }
+                capture.record(
+                    updated: ui["updated"] as? [PersistentIdentifier] ?? [],
+                    inserted: ui["inserted"] as? [PersistentIdentifier] ?? []
+                )
             }
             saved.fulfill()
         }
@@ -93,9 +96,8 @@ final class DirtyTrackingGapTests: XCTestCase {
         await fulfillment(of: [saved], timeout: 5)
 
         XCTAssertTrue(
-            updatedIDs.contains(taskID) || insertedIDs.contains(taskID),
-            "[\(label)] Task ID absent from didSave after syncApplyToManyForeignKeys. " +
-            "updatedIDs: \(updatedIDs) insertedIDs: \(insertedIDs)"
+            capture.contains(taskID),
+            "[\(label)] Task ID absent from didSave after syncApplyToManyForeignKeys. \(capture.summary)"
         )
 
         mainContext.processPendingChanges()
@@ -103,4 +105,31 @@ final class DirtyTrackingGapTests: XCTestCase {
         XCTAssertEqual(refreshed.first?.reviewers.count, 2, "[\(label)] Relationship not written")
     }
 
+}
+
+/// Thread-safe capture of `ModelContext.didSave` identifier sets. The notification observer
+/// closure is `@Sendable` and runs off the test's actor, so the box guards its state with a lock.
+private final class DidSaveCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    private var updated: Set<PersistentIdentifier> = []
+    private var inserted: Set<PersistentIdentifier> = []
+
+    func record(updated: [PersistentIdentifier], inserted: [PersistentIdentifier]) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.updated = Set(updated)
+        self.inserted = Set(inserted)
+    }
+
+    func contains(_ id: PersistentIdentifier) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return updated.contains(id) || inserted.contains(id)
+    }
+
+    var summary: String {
+        lock.lock()
+        defer { lock.unlock() }
+        return "updatedIDs: \(updated) insertedIDs: \(inserted)"
+    }
 }
