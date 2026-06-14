@@ -12,7 +12,9 @@ let package = Package(
         .library(name: "SwiftSync", targets: ["SwiftSync"])
     ],
     dependencies: [
-        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0-latest")
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0-latest"),
+        // Doc generation only (`swift package generate-documentation`); not linked into the library.
+        .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.0.0"),
     ],
     targets: [
         .macro(

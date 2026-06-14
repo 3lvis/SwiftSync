@@ -13,6 +13,9 @@ DemoBackend/.build/
 DemoBackend/.swiftpm/
 DemoBackend/Package.resolved
 
+# DocC build output
+/.docc-out/
+
 # Xcode user data
 xcuserdata/
 *.xcuserdatad/

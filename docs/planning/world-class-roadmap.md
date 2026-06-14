@@ -39,9 +39,9 @@ branch. Work through them systematically; mark complete by deleting the line (pe
 
 ### Phase 3 — DocC + publishable API documentation
 
-- [ ] Add a DocC catalog to the SwiftSync target with a landing page and curated topics.
-- [ ] Document every public symbol surviving the API-surface tightening (Phase 5).
-- [ ] Add a CI job that builds DocC (and optionally publishes to GitHub Pages).
+- [ ] Document every public symbol with doc comments, once the API surface is tightened
+      in Phase 5 (do it after, so we don't write docs for symbols that get demoted).
+- [ ] Optionally publish the built DocC archive to GitHub Pages.
 
 ### Phase 4 — Explicit SwiftData-modern stance
 

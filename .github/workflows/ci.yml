@@ -55,3 +55,26 @@ jobs:
       - name: Test package
         working-directory: ${{ matrix.package.path }}
         run: swift test -v
+
+  docc-build:
+    name: DocC build
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Cache SPM
+        uses: actions/cache@v5
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-docc-${{ hashFiles('Package.resolved') }}
+          restore-keys: ${{ runner.os }}-spm-docc-
+
+      - name: Build documentation
+        run: |
+          set -o pipefail
+          swift package --allow-writing-to-directory ./.docc-out \
+            generate-documentation --target SwiftSync --output-path ./.docc-out 2>&1 | tee docc.log
+          if grep -q "warning:" docc.log; then
+            echo "::error::DocC emitted warnings (e.g. unresolved symbol links). Fix them and rebuild."
+            exit 1
+          fi
