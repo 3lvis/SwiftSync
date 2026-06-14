@@ -47,10 +47,10 @@ branch. Work through them systematically; mark complete by deleting the line (pe
 
 ### Phase 4 — Explicit SwiftData-modern stance
 
-- [ ] Write a doc stating SwiftSync's position on `#Unique`, `#Index`, the history API,
-      custom `DataStore`, and `#Expression`/richer predicates — interop rules + rationale.
-- [ ] Adopt the features that genuinely improve the library (e.g. `#Index` on sync keys),
-      with red-first tests; document the rest as interop-only.
+Tracked feature-by-feature in `docs/planning/swiftdata-modern-features.md` (implement →
+measure before/after → decide → document; one feature per PR). `#Index` is evaluated
+(not adopted — identity is already unique-indexed). Remaining: `#Unique`, `#Expression`,
+History API, custom `DataStore`.
 
 ### Phase 5 — Tighten the public API surface
 
