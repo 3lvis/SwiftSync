@@ -2,35 +2,29 @@
 
 ## Package Structure
 
-5 library targets, 1 compiler plugin, 1 ObjC helper:
+One library product (`SwiftSync`), backed by a single library target plus a compiler
+plugin and an ObjC helper (see `Package.swift`):
 
 ```
-Core                    (no dependencies)
-  ↑
-  ├─ MacrosImplementation  (compiler plugin, + swift-syntax)
-  │     ↑
-  │     └─ Macros          (public macro declarations)
-  │
-  ├─ SwiftDataBridge       (sync engine)
-  │
-  └─ TestingKit            (test helpers)
-
-SwiftSync                 (container + reactive queries)
-  depends on: Core, SwiftDataBridge, Macros, ObjCExceptionCatcher
-
-ObjCExceptionCatcher      (mixed Swift/ObjC, catches NSException from ModelContainer)
+SwiftSync                 (library — public API, sync engine, reactive queries)
+  ├─ MacrosImplementation (compiler plugin, + swift-syntax)
+  └─ ObjCExceptionCatcher (ObjC, catches NSException from ModelContainer init)
 ```
+
+There is no separate `Core` / `SwiftDataBridge` / `Macros` / `TestingKit` target —
+everything public lives in the one `SwiftSync` target. The `@Syncable` family of macro
+*declarations* lives in `SwiftSync` (`SyncableMacro.swift`); the macro *implementation*
+lives in `MacrosImplementation` (`SyncableMacro.swift`).
 
 ### What lives where
 
-| Target | Key types |
-|---|---|
-| Core | `SyncPayload`, `SyncDateParser`, all protocols, `KeyStyle`, `SyncError` |
-| SwiftDataBridge | `SwiftSync.sync()`, `SyncLeaseRegistry` |
-| MacrosImplementation | `SyncableMacro` + three no-op peer macros |
-| Macros | `@Syncable`, `@PrimaryKey`, `@RemoteKey`, `@NotExport` declarations |
-| SwiftSync | `SyncContainer`, `SyncQuery`, `SyncModel` |
-| ObjCExceptionCatcher | `SwiftSyncObjCExceptionCatcher` |
+| Target | Role | Key contents |
+|---|---|---|
+| `SwiftSync` | the library (public API) | `SyncPayload`, `SyncDateParser`, the protocols (`SyncModelable`, `SyncUpdatableModel`, `ParentScopedModel`), `KeyStyle`, `SyncError`, `SwiftSync.sync()`, the relationship-apply globals (`Core.swift`), `SyncContainer`, the reactive query system (`@SyncQuery`/`@SyncModel`, `SyncModelPublisher`, `SyncQueryPublisher`), and the `@Syncable`/`@PrimaryKey`/`@RemoteKey`/`@NotExport` macro declarations |
+| `MacrosImplementation` | compiler plugin (`.macro`, + swift-syntax) | `SyncableMacro` plus the `PrimaryKeyMacro` / `NotExportMacro` / `RemoteKeyMacro` no-op peer macros |
+| `ObjCExceptionCatcher` | ObjC helper | bridges `NSException` from `ModelContainer(for:)` into a Swift error |
+
+Test targets: `SwiftSyncTests`, `SwiftSyncMacrosTests`.
 
 ---
 
@@ -151,7 +145,7 @@ The macro emits an `extension Task: SyncUpdatableModel, ...` containing:
 - For `tags`: if `payload.contains("tags_ids") || payload.contains("tag_ids")` → `syncApplyToManyForeignKeys`
   - else if `payload.contains("tags")` → `syncApplyToManyNestedObjects`
 
-**`func exportObject(keyStyle:dateFormatter:) -> [String: Any]`**
+**`func export(keyStyle:dateFormatter:) -> [String: Any]`**
 - `internalFlag` skipped (`@NotExport`)
 - `stateID` exported under key `"state.id"` (nested dict)
 - `assignee` exported as object or NSNull
@@ -312,13 +306,13 @@ syncContainer.export(as: Task.self)
 ```
 
 1. Fetch all rows, sort by identity key string
-2. For each row: `row.exportObject(keyStyle: syncContainer.keyStyle, dateFormatter: syncContainer.dateFormatter)`
-3. Each call to `exportObject`:
+2. For each row: `row.export(keyStyle: syncContainer.keyStyle, dateFormatter: syncContainer.dateFormatter)`
+3. Each call to `export`:
    - `state.enter(self)` — guard against cycles
    - For each non-`@NotExport` property:
       - Scalar: `exportEncodeValue(value, dateFormatter: dateFormatter)` → encode
      - Optional scalar: encode or NSNull if nil
-     - Relationship: recurse via `exportObject` on children
+     - Relationship: recurse via `export` on children
     - Key from `@RemoteKey` or `keyStyle.transform(propertyName)`
    - `exportSetValue(value, for: keyPath, into: &result)` — supports nested dot-path keys
    - `state.leave(self)`

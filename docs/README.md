@@ -18,7 +18,6 @@ If you want the shortest description of the project:
 - Need parent-scoped sync/query rules: [parent-scope.md](project/parent-scope.md)
 - Need mapping/import/export rules: [property-mapping-contract.md](project/property-mapping-contract.md)
 - Need relationship edge-case guidance: [relationship-integrity.md](project/relationship-integrity.md)
-- Migrating from legacy `Sync`: [migrating-from-sync.md](project/migrating-from-sync.md)
 - Need short answers first: [faq.md](project/faq.md)
 
 ## Recommended Reading Order
@@ -33,7 +32,6 @@ If you want the shortest description of the project:
 - [backend-contract.md](project/backend-contract.md): recommended API shape for low-boilerplate sync
 - [faq.md](project/faq.md): short answers and cross-links
 - [manual-syncupdatablemodel.md](project/manual-syncupdatablemodel.md): manual conformance path
-- [migrating-from-sync.md](project/migrating-from-sync.md): how to approach the old Core Data `Sync` -> SwiftSync transition
 - [parent-scope.md](project/parent-scope.md): parent-scoped identity and query rules
 - [property-mapping-contract.md](project/property-mapping-contract.md): key mapping, `null`, export, and coercion rules
 - [reactive-reads.md](project/reactive-reads.md): `@SyncQuery`, `@SyncModel`, publishers, and app architecture guidance

@@ -37,13 +37,6 @@ branch. Work through them systematically; mark complete by deleting the line (pe
 
 ## Open items
 
-### Phase 2 — Fix doc drift
-
-- [ ] Rewrite `ARCHITECTURE.md` to match the real Package.swift module layout
-      (SwiftSync + ObjCExceptionCatcher libraries, MacrosImplementation macro, test targets).
-- [ ] Remove the two `migrating-from-sync.md` dangling links in `docs/README.md`.
-- [ ] Sweep all docs for dead cross-links and stale claims; add a link-check to CI (Phase 6).
-
 ### Phase 3 — DocC + publishable API documentation
 
 - [ ] Add a DocC catalog to the SwiftSync target with a landing page and curated topics.
