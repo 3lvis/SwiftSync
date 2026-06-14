@@ -149,9 +149,9 @@ public struct SyncableMacro: ExtensionMacro {
                     }
 
                     \(raw: memberAccessModifier)func apply(_ payload: SyncPayload) throws -> Bool {
-                        var changed = false
+                        \(raw: applyBody.isEmpty ? "return false" : "var changed = false")
                         \(raw: applyBody)
-                        return changed
+                        \(raw: applyBody.isEmpty ? "" : "return changed")
                     }
 
                     \(raw: memberAccessModifier)func syncApplyGeneratedRelationships(
