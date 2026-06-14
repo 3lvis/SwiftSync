@@ -1,24 +1,24 @@
 import Foundation
 
-public enum ScopeLoadPath: Sendable, Equatable, CaseIterable {
+enum ScopeLoadPath: Sendable, Equatable, CaseIterable {
     case localFirstRefresh
     case networkFirst
 }
 
-public enum ScopeSyncPhase: Sendable, Equatable {
+enum ScopeSyncPhase: Sendable, Equatable {
     case idle
     case loading
     case refreshing
     case failed
 }
 
-public struct ScopeSyncStatus: Sendable, Equatable {
-    public let phase: ScopeSyncPhase
-    public let path: ScopeLoadPath
-    public let errorMessage: String?
-    public let updatedAt: Date
+struct ScopeSyncStatus: Sendable, Equatable {
+    let phase: ScopeSyncPhase
+    let path: ScopeLoadPath
+    let errorMessage: String?
+    let updatedAt: Date
 
-    public init(phase: ScopeSyncPhase, path: ScopeLoadPath, errorMessage: String?, updatedAt: Date) {
+    init(phase: ScopeSyncPhase, path: ScopeLoadPath, errorMessage: String?, updatedAt: Date) {
         self.phase = phase
         self.path = path
         self.errorMessage = errorMessage
@@ -26,8 +26,8 @@ public struct ScopeSyncStatus: Sendable, Equatable {
     }
 }
 
-public enum ScopeSyncStatusReducer {
-    public static func start(path: ScopeLoadPath, now: Date = Date()) -> ScopeSyncStatus {
+enum ScopeSyncStatusReducer {
+    static func start(path: ScopeLoadPath, now: Date = Date()) -> ScopeSyncStatus {
         ScopeSyncStatus(
             phase: path == .localFirstRefresh ? .refreshing : .loading,
             path: path,
@@ -36,7 +36,7 @@ public enum ScopeSyncStatusReducer {
         )
     }
 
-    public static func succeed(previous: ScopeSyncStatus, now: Date = Date()) -> ScopeSyncStatus {
+    static func succeed(previous: ScopeSyncStatus, now: Date = Date()) -> ScopeSyncStatus {
         ScopeSyncStatus(
             phase: .idle,
             path: previous.path,
@@ -45,7 +45,7 @@ public enum ScopeSyncStatusReducer {
         )
     }
 
-    public static func fail(previous: ScopeSyncStatus, errorMessage: String, now: Date = Date()) -> ScopeSyncStatus {
+    static func fail(previous: ScopeSyncStatus, errorMessage: String, now: Date = Date()) -> ScopeSyncStatus {
         ScopeSyncStatus(
             phase: .failed,
             path: previous.path,

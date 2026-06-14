@@ -1,15 +1,15 @@
 import Foundation
 
 @MainActor
-public final class FiniteAsyncRunner {
+final class FiniteAsyncRunner {
     private let sleep: @Sendable (UInt64) async throws -> Void
     private let operation: @Sendable (Int) async -> Void
     private let onStop: @MainActor () async -> Void
     private var workerTask: _Concurrency.Task<Void, Never>?
 
-    public private(set) var isRunning = false
+    private(set) var isRunning = false
 
-    public init(
+    init(
         sleep: @escaping @Sendable (UInt64) async throws -> Void,
         operation: @escaping @Sendable (Int) async -> Void,
         onStop: @escaping @MainActor () async -> Void
@@ -19,7 +19,7 @@ public final class FiniteAsyncRunner {
         self.onStop = onStop
     }
 
-    public func start(maxIterations: Int, intervalNanoseconds: UInt64) {
+    func start(maxIterations: Int, intervalNanoseconds: UInt64) {
         guard !isRunning, maxIterations > 0 else { return }
         isRunning = true
 
@@ -44,7 +44,7 @@ public final class FiniteAsyncRunner {
         }
     }
 
-    public func stop() {
+    func stop() {
         workerTask?.cancel()
         workerTask = nil
         isRunning = false
