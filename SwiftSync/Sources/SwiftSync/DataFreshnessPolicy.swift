@@ -1,31 +1,31 @@
 import Foundation
 
-public struct DataKey: Hashable, Sendable {
-    public let namespace: String
-    public let id: String?
+struct DataKey: Hashable, Sendable {
+    let namespace: String
+    let id: String?
 
-    public init(namespace: String, id: String? = nil) {
+    init(namespace: String, id: String? = nil) {
         self.namespace = namespace
         self.id = id
     }
 }
 
-public enum LoadDecision: Sendable, Equatable {
+enum LoadDecision: Sendable, Equatable {
     case empty
     case fresh
     case stale
 }
 
-public struct DataFreshnessPolicy: Sendable {
-    public let defaultTTL: TimeInterval
-    public let ttlByNamespace: [String: TimeInterval]
+struct DataFreshnessPolicy: Sendable {
+    let defaultTTL: TimeInterval
+    let ttlByNamespace: [String: TimeInterval]
 
-    public init(defaultTTL: TimeInterval, ttlByNamespace: [String: TimeInterval]) {
+    init(defaultTTL: TimeInterval, ttlByNamespace: [String: TimeInterval]) {
         self.defaultTTL = defaultTTL
         self.ttlByNamespace = ttlByNamespace
     }
 
-    public func decision(
+    func decision(
         for key: DataKey,
         hasLocalData: Bool,
         lastSuccessfulSync: Date?,

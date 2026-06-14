@@ -26,12 +26,14 @@ branch. Work through them systematically; mark complete by deleting the line (pe
   version + iOS 18 floor; covers all tested surface.
 - `migrating-from-sync.md`: **remove the two dangling links** (docs/README.md); defer any
   migration guide.
+- Public extension points: the low-level helpers (`syncApplyTo*`, `exportSetValue`,
+  `exportEncodeValue`, `ExportState`, `SyncRelationshipSchemaDescriptor`,
+  `SyncRelationshipOperations`) **stay public by contract** — the `@Syncable` expansion emits
+  calls to them in the *consumer's* module, so demoting them breaks every consumer. The
+  accidental publics were the load-planning/freshness internals, now demoted to `internal`.
 
 ## Open decisions (resolve before/while doing the items they block)
 
-- [ ] Decide intended public extension points: which low-level sync helpers
-      (`syncApplyToOneForeignKey`, `exportSetValue`, `ExportState`, …) are deliberate
-      seams vs. accidentally-public implementation detail.
 - [ ] Decide SwiftData-modern stance per feature (`#Unique`, `#Index`, history API,
       custom `DataStore`, `#Expression`): adopt, interop-and-document, or out-of-scope.
 
@@ -52,9 +54,8 @@ branch. Work through them systematically; mark complete by deleting the line (pe
 
 ### Phase 5 — Tighten the public API surface
 
-- [ ] Audit all `public` symbols; demote low-level sync helpers to `internal`/`package`
-      unless the decision marks them as intended extension points.
-- [ ] Document the intended public surface and supported extension points in DocC.
+- [ ] Document the intended public surface and the macro-support extension points (the
+      helpers that must stay public) so they aren't mistakenly demoted later.
 
 ### Phase 6 — CI gates for world-class hygiene
 
