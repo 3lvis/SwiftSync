@@ -66,8 +66,10 @@ token (with delete tombstones) is how outbound/offline change export works. High
 design-first, substantial effort — not a quick bolt-on. Evaluated and deferred here from Phase 4
 for that reason; SwiftSync has no outbound/change-tracking path today.
 
-- [ ] Write a design doc framing the gap from "sync-assist" to "production sync":
-      conflict resolution, offline mutation queue, retry/backoff, observability hooks,
-      schema-migration policy, history-based local change export (via the History API),
-      CloudKit coexistence, and versioned API stability.
-- [ ] Break each accepted area into its own dedicated implementation item once designed.
+Design recorded in [`production-sync-design.md`](production-sync-design.md): offline queue in the
+DB, last-writer-wins, a visible/actionable failures table, net-new structured observability,
+offline-safe migrations, CloudKit out, break-freely versioning. Two forks remain open.
+
+- [ ] Spike outbound change detection — SwiftData History API vs. our own plumbing — and decide the foundation.
+- [ ] Resolve the identity-strategy fork (client UUID becomes the server id, vs. a localId + remoteId mapping).
+- [ ] Break each accepted area (queue, failures table, observability hooks, migration safety) into its own implementation PR once the forks land.
