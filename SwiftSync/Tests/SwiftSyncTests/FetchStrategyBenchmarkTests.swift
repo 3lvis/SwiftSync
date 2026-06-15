@@ -8,6 +8,8 @@ import XCTest
 // Full matrix example:
 // SWIFTSYNC_RUN_BENCHMARKS=1 SWIFTSYNC_BENCHMARK_STORES=memory,sqlite \
 // SWIFTSYNC_BENCHMARK_TIERS=1000,10000,50000 swift test --filter FetchStrategyBenchmarkTests
+// CI regression gate: set SWIFTSYNC_BENCHMARK_MAX_MEDIAN_MS=<ms> to fail when any run's median
+// exceeds that ceiling (set generously — a catastrophic-regression guard, not perf tracking).
 
 @Syncable
 @Model
@@ -873,6 +875,14 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
 
     private func emit(_ result: BenchmarkSummary) {
         print(result.rendered)
+        if let ceiling = environment.maxMedianMilliseconds {
+            let medianMs = result.median.millisecondsValue
+            XCTAssertLessThanOrEqual(
+                medianMs, ceiling,
+                "Perf regression: \(result.name) (store=\(result.storeKind.rawValue), totalRows=\(result.totalRows)) "
+                    + "median \(medianMs)ms exceeded ceiling \(ceiling)ms"
+            )
+        }
     }
 }
 
@@ -894,6 +904,10 @@ private struct BenchmarkEnvironment {
     let scopeSize: Int
     let sampleCount: Int
     let phaseProfilingEnabled: Bool
+    /// Optional CI regression ceiling: if set, a benchmark whose median exceeds this many
+    /// milliseconds fails the test. Set generously — this is a catastrophic/algorithmic
+    /// regression guard, not precise perf tracking (CI hardware varies and is noisy).
+    let maxMedianMilliseconds: Double?
 
     static var current: BenchmarkEnvironment {
         from(ProcessInfo.processInfo.environment)
@@ -907,7 +921,8 @@ private struct BenchmarkEnvironment {
             relationshipCounts: parseIntegers(environment["SWIFTSYNC_BENCHMARK_RELATIONSHIP_COUNTS"]) ?? [1, 10, 50],
             scopeSize: parseIntegers(environment["SWIFTSYNC_BENCHMARK_SCOPE_SIZE"])?.first ?? 100,
             sampleCount: max(1, parseIntegers(environment["SWIFTSYNC_BENCHMARK_SAMPLES"])?.first ?? 3),
-            phaseProfilingEnabled: environment["SWIFTSYNC_BENCHMARK_PROFILE_PHASES"] == "1"
+            phaseProfilingEnabled: environment["SWIFTSYNC_BENCHMARK_PROFILE_PHASES"] == "1",
+            maxMedianMilliseconds: environment["SWIFTSYNC_BENCHMARK_MAX_MEDIAN_MS"].flatMap(Double.init)
         )
     }
 
@@ -980,7 +995,7 @@ private struct BenchmarkSummary {
         durations.sorted { $0.millisecondsValue < $1.millisecondsValue }
     }
 
-    private var median: Duration {
+    var median: Duration {
         sortedDurations[sortedDurations.count / 2]
     }
 

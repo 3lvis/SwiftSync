@@ -55,3 +55,65 @@ jobs:
       - name: Test package
         working-directory: ${{ matrix.package.path }}
         run: swift test -v
+
+  warnings:
+    name: Warnings gate (${{ matrix.package.name }})
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - name: SwiftSync
+            path: .
+          - name: DemoBackend
+            path: DemoBackend
+          - name: DemoCore
+            path: DemoCore
+    steps:
+      - uses: actions/checkout@v5
+      # No SPM cache on purpose: a fresh build recompiles everything so warnings are
+      # actually re-emitted (an incremental build would skip unchanged files).
+      - name: Build and fail on first-party warnings
+        working-directory: ${{ matrix.package.path }}
+        run: |
+          set -o pipefail
+          swift build --build-tests 2>&1 | tee build.log
+          if grep -E "warning:" build.log | grep -vE "\.build/(checkouts|artifacts)"; then
+            echo "::error::Build emitted warnings in first-party code (${{ matrix.package.name }}). Fix them (the lines above)."
+            exit 1
+          fi
+
+  doc-links:
+    name: Doc link check
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check relative markdown links resolve
+        run: python3 scripts/check-doc-links.py
+
+  perf-regression:
+    name: Perf regression gate
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Cache SPM
+        uses: actions/cache@v5
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-perf-${{ hashFiles('Package.resolved') }}
+          restore-keys: ${{ runner.os }}-spm-perf-
+
+      # Runs a small, fast benchmark subset (memory store, 1000 rows) and fails if a median
+      # exceeds the ceiling. Generous on purpose — a catastrophic/algorithmic-regression guard,
+      # not precise perf tracking (CI hardware is shared and noisy). Local median is ~75ms.
+      - name: Run benchmark subset with regression ceiling
+        env:
+          SWIFTSYNC_RUN_BENCHMARKS: "1"
+          SWIFTSYNC_BENCHMARK_STORES: memory
+          SWIFTSYNC_BENCHMARK_TIERS: "1000"
+          SWIFTSYNC_BENCHMARK_MAX_MEDIAN_MS: "2000"
+        run: |
+          swift test \
+            --filter FetchStrategyBenchmarkTests/testGlobalBatchSyncBenchmarks \
+            --filter FetchStrategyBenchmarkTests/testSingleItemSyncBenchmarks
