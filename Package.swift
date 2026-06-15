@@ -29,10 +29,7 @@ let package = Package(
         .target(
             name: "SwiftSync",
             dependencies: ["MacrosImplementation", "ObjCExceptionCatcher"],
-            path: "SwiftSync/Sources/SwiftSync",
-            swiftSettings: [
-                .unsafeFlags(["-strict-concurrency=complete"])
-            ]
+            path: "SwiftSync/Sources/SwiftSync"
         ),
         .target(
             name: "ObjCExceptionCatcher",
@@ -42,10 +39,7 @@ let package = Package(
         .testTarget(
             name: "SwiftSyncTests",
             dependencies: ["SwiftSync"],
-            path: "SwiftSync/Tests/SwiftSyncTests",
-            swiftSettings: [
-                .unsafeFlags(["-strict-concurrency=complete"])
-            ]
+            path: "SwiftSync/Tests/SwiftSyncTests"
         ),
         .testTarget(
             name: "SwiftSyncMacrosTests",
@@ -54,10 +48,7 @@ let package = Package(
                 .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
                 .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax"),
             ],
-            path: "SwiftSync/Tests/SwiftSyncMacrosTests",
-            swiftSettings: [
-                .unsafeFlags(["-strict-concurrency=complete"])
-            ]
+            path: "SwiftSync/Tests/SwiftSyncMacrosTests"
         ),
     ],
     swiftLanguageModes: [.v6]

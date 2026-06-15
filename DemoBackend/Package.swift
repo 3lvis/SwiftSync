@@ -13,18 +13,12 @@ let package = Package(
     targets: [
         .target(
             name: "DemoBackend",
-            path: "Sources/DemoBackend",
-            swiftSettings: [
-                .unsafeFlags(["-strict-concurrency=complete"])
-            ]
+            path: "Sources/DemoBackend"
         ),
         .testTarget(
             name: "DemoBackendTests",
             dependencies: ["DemoBackend"],
-            path: "Tests/DemoBackendTests",
-            swiftSettings: [
-                .unsafeFlags(["-strict-concurrency=complete"])
-            ]
+            path: "Tests/DemoBackendTests"
         ),
     ],
     swiftLanguageModes: [.v6]
