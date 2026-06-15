@@ -23,10 +23,10 @@ change detection, and failure surface; the app owns the network calls.
   Photos' offline-sync failure list. SwiftSync surfaces the table and the actions; the app decides
   policy.
 
-- **Observability: net-new structured hooks.** SwiftSync has *no* `print`/logging in its library
-  source today (earlier "remove print" note was a mix-up with the Networking repo). Add structured
-  hooks for the sync lifecycle — started / progress / succeeded / failed, with errors — so apps can
-  log/surface sync state. Additive, not a rework.
+- **Observability: TBD — maybe not needed.** SwiftSync has *no* `print`/logging in its library
+  source today (the earlier "remove print" note was a mix-up with the Networking repo). Whether to
+  add structured sync-lifecycle hooks is undecided — revisit once outbound sync exists and we can see
+  what's actually worth surfacing.
 
 - **Schema migration: optimistic, with offline-safe nuclear option.** Prefer lightweight migrations;
   when a destructive ("nuclear") reset is unavoidable, the **pending offline queue must be preserved**
@@ -40,21 +40,27 @@ change detection, and failure surface; the app owns the network calls.
 
 ## Open forks (resolve before/while implementing)
 
-- [ ] **Identity strategy for offline-created rows.** Preferred: **client-generated UUIDs that become
-      the server id** — the app and backend both use UUID ids; SwiftSync pushes the offline UUID and it
-      *is* the remote id (one id, minimal bookkeeping; a dictated contract). Alternative (debatable):
-      keep a separate **localId + remoteId** mapping (as the very old offline implementation did) —
-      more bookkeeping, but doesn't require backend UUIDs. **Decide.**
+- [~] **Identity strategy — leaning `localId` + `remoteId`.** Client-UUID-becomes-the-server-id is
+      simpler (one id, minimal bookkeeping, a clean dictated contract) but is a *hard* requirement that
+      effectively limits adoption to greenfield apps. A `localId` + `remoteId` mapping is battle-tested
+      and works for existing apps / any backend; the historical pain was Core Data breaking when an id
+      changed — thread-safety + mutability red zones (never pass a model across contexts) — but that was
+      solved before with a lot of effort. **Leaning localId + remoteId for the broader reach; manage the
+      identity-mutation/threading hazard deliberately. Confirm before building on it.**
 
-- [ ] **Change detection: SwiftData History API vs. our own plumbing.** Spike the History API first;
-      adopt it if it's ergonomic and reliable (low consumer ceremony). It's new, so if it's cumbersome
-      or breaks easily, fall back to our own change-tracking plumbing. **It depends — resolve by spike,
-      not by guess.**
+- [ ] **Change detection — build our own plumbing first, then evaluate History.** To avoid biasing
+      toward a new and possibly-fragile API: implement our *own* outbound change-tracking first and get
+      it working, then see where the SwiftData History API can connect to / reduce its complexity.
+      Own-first; History as an optional optimization, decided on evidence, not a guess.
 
-## Proposed first step
+## Proposed first step — own-plumbing change detection (spike)
 
-A **time-boxed spike**: implement outbound change detection two ways — (a) via the SwiftData History
-API, (b) via a minimal own-plumbing approach — on a representative model, and compare on consumer
-ceremony and reliability. The result picks the foundation. Throwaway code; the finding is the
-deliverable. Then break the accepted areas (queue, failures table, observability hooks, migration
-safety) into their own implementation PRs.
+Build our own outbound change-tracking: capture **app-originated** local edits into a pending-changes
+queue, keyed by `localId` / `remoteId`. Time-boxed and exploratory.
+
+The central question it must answer: **how to tell an app-originated (local, queue-it) mutation from a
+sync-originated (server) one**, so only real local edits go outbound. Candidate to validate: a
+`ModelContext` save that happens *outside* a `SwiftSync.sync()` operation is a local edit.
+
+Once it works, evaluate where the History API could simplify it. Then break the accepted areas
+(queue, failures table, migration safety) into their own implementation PRs.
