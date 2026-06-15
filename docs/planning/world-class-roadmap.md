@@ -61,13 +61,18 @@ branch. Work through them systematically; mark complete by deleting the line (pe
 
 ### Phase 7 — Define the production-sync story (design-first)
 
-The **SwiftData History API** is the foundation here: querying what changed locally since a
-token (with delete tombstones) is how outbound/offline change export works. High-value, but a
-design-first, substantial effort — not a quick bolt-on. Evaluated and deferred here from Phase 4
-for that reason; SwiftSync has no outbound/change-tracking path today.
+The gap: SwiftSync is inbound-only (server → local, read-reactive); production sync adds the
+outbound/offline side (local edits flow back). Design-first and substantial — deferred here from
+Phase 4. Full design in [`production-sync-design.md`](production-sync-design.md): offline queue in
+the DB, last-writer-wins, a visible/actionable failures table, offline-safe migrations, CloudKit out,
+break-freely versioning; observability TBD.
 
-- [ ] Write a design doc framing the gap from "sync-assist" to "production sync":
-      conflict resolution, offline mutation queue, retry/backoff, observability hooks,
-      schema-migration policy, history-based local change export (via the History API),
-      CloudKit coexistence, and versioned API stability.
-- [ ] Break each accepted area into its own dedicated implementation item once designed.
+Decided: **identity + change detection** use a `localId` + `remoteId` + `updatedAt` model — detection
+is a query over the store (no save-interception; a `didSave`-interception spike was explored and
+discarded as unnecessary), and conflicts resolve by latest `updatedAt`. The History API is an optional
+later optimisation (efficient deltas / delete tombstones), not the foundation.
+
+- [ ] Study prior art (the old `Sync`, WatermelonDB, PouchDB–CouchDB replication, Realm sync), then
+      design the public outbound seam — syncable-model contract, pending queue, push hook, failures
+      table — and build it with its first real use.
+- [ ] Break each accepted area into its own implementation PR.
