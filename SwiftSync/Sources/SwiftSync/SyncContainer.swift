@@ -316,6 +316,39 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
                     """
             )
         }
+
+        try _validateUniquenessConstraints(modelTypes: modelTypes)
+    }
+
+    /// Uniqueness must live only on the sync identity. A unique constraint (`@Attribute(.unique)`
+    /// or `#Unique`, single or compound) on any other property lets SwiftData's constraint-based
+    /// upsert silently destroy identity-distinct rows during sync — breaking SwiftSync's one-row-
+    /// per-`syncIdentity` invariant. Enforced for `@Syncable` models (which synthesise
+    /// `syncIdentityPropertyName`); hand-written conformances opt out by leaving it empty.
+    static func _validateUniquenessConstraints(
+        modelTypes: [any PersistentModel.Type]
+    ) throws {
+        let entitiesByName = Dictionary(
+            Schema(modelTypes).entities.map { ($0.name, $0) }, uniquingKeysWith: { lhs, _ in lhs })
+
+        for modelType in modelTypes {
+            guard let syncType = modelType as? any SyncModelable.Type else { continue }
+            let identityName = syncType.syncIdentityPropertyName
+            guard !identityName.isEmpty else { continue }
+            guard let entity = entitiesByName[String(describing: modelType)] else { continue }
+
+            for constraint in entity.uniquenessConstraints where constraint != [identityName] {
+                throw SchemaValidationError(
+                    message: """
+                        \(String(reflecting: modelType)) declares a uniqueness constraint on \(constraint), \
+                        which is not the sync identity ("\(identityName)"). A unique constraint on a \
+                        non-identity property causes silent data loss during sync: SwiftData's \
+                        constraint-based upsert overwrites identity-distinct rows that collide on it. \
+                        Declare uniqueness only on the sync identity.
+                        """
+                )
+            }
+        }
     }
 
     static func _schemaRelationships(from modelTypes: [any PersistentModel.Type]) -> [_SchemaRelationship] {

@@ -103,6 +103,7 @@ public struct SyncableMacro: ExtensionMacro {
                     \(raw: memberAccessModifier)typealias SyncID = \(raw: identityProperty.typeSource)
 
                     \(raw: memberAccessModifier)static var syncIdentity: KeyPath<\(raw: typeName), \(raw: identityProperty.typeSource)> { \\.\(raw: identityProperty.name) }
+                    \(raw: memberAccessModifier)static var syncIdentityPropertyName: String { "\(raw: identityProperty.name)" }
                     \(raw: memberAccessModifier)static func syncIdentityPredicate(matching identity: \(raw: identityProperty.typeSource)) -> Predicate<\(raw: typeName)>? {
                         Predicate<\(raw: typeName)> { row in
                             PredicateExpressions.build_Equal(

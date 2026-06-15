@@ -131,3 +131,23 @@ Supported scalar coercions on inbound attribute reads include:
 - string/number -> `Date` via parser and unix timestamp handling
 
 Strict reads (`strictValue`, relationship FK linking) remain non-coercive by design.
+
+## Uniqueness Constraints (identity only)
+
+Declare uniqueness **only on the sync identity** (the `id` / `@PrimaryKey` property). Do **not**
+put `@Attribute(.unique)` or `#Unique` (single or compound) on any other property of a synced model.
+
+SwiftSync identifies rows by `syncIdentity` and upserts by fetching the existing row, then
+updating or inserting — one row per identity is the core invariant. SwiftData enforces unique
+constraints with its own *constraint-based* upsert: inserting a row that collides on a unique
+property silently overwrites the existing row. When those two disagree — e.g. two
+identity-distinct records that happen to share a `email` you marked unique — sync **silently
+destroys** one of them, and the local store ends up with fewer rows than the backend sent, with
+no error.
+
+Guardrail: `SyncContainer` validates this at init and throws `SchemaValidationError` if a
+`@Syncable` model declares a uniqueness constraint on a non-identity property (alongside the
+existing many-to-many inverse check). `#Index` on any property is unaffected — it only changes
+query planning and is safe to use freely. Hand-written `SyncUpdatableModel` conformances are not
+checked (they leave `syncIdentityPropertyName` empty); the same rule applies to them by
+convention.
