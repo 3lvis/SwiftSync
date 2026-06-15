@@ -63,10 +63,44 @@ thread-safety: never pass a model across contexts).
       id + `updatedAt` query above. History could help *later* for efficient deltas and **delete
       tombstones** at scale; evaluate it then, on evidence — not now.
 
-## Next step — design the public seam (study prior art first)
+## Prior art (surveyed) — and what it changes
 
-The outbound API — the syncable-model contract (`localId`/`remoteId`/`updatedAt`), the pending queue,
-the push hook, the failures table — is a **public seam**, so study prior art before designing it: how
-the old `Sync` did `localId`/`remoteId` (and where it hurt), plus WatermelonDB / PouchDB–CouchDB
-replication / Realm sync. Then design *our* seam for *our* constraints and build it together with its
-first real use — not plumbing now and a use case later.
+- **Legacy `Sync` (`DataFilter`):** inbound set-diff keyed by `localPrimaryKey` / `remotePrimaryKey`
+  (local-not-in-remote ⇒ delete; remote-not-in-local ⇒ insert; intersection ⇒ update). Inbound only —
+  the id mapping is the identity concept; its pain was rewriting references when a local id became a
+  remote id (the Core Data "ids changed" breakage).
+- **WatermelonDB:** client-generated stable ids (no remap); reserved `_status` + `_changed` columns;
+  outbound is a *query* for `_status != synced`; soft-delete tombstones until the server acks;
+  per-column "client wins" merge; all-or-nothing batch push with retry-once.
+- **PouchDB ⇄ CouchDB:** client-chosen stable `_id`; `_rev` tree; changes-feed + resumable checkpoint;
+  `_deleted` tombstone revisions; deterministic (clock-free) conflict winner, app resolves; pushes are
+  idempotent/resumable.
+- **Realm / Atlas Device Sync:** client-generated id; an *operation-log* changeset (not a query);
+  field-level OT merge (deletes win, per-field LWW); client-reset escape hatch.
+
+**Implications for our `localId` + `remoteId` + `updatedAt` model:**
+
+1. **The two-id model is the heavier, less-common choice — confirm it deliberately.** All three modern
+   systems use a single client-generated id that *is* the server id (no remap). Our `remoteId`-nil-until-
+   synced design re-introduces exactly the id-rewrite pain we remember (patching the id + every
+   foreign-key reference after first sync). We chose it for broad reach (non-greenfield backends); that
+   trade is real, but prior art weighs against it. **Re-confirm: accept the rewrite cost for reach, or
+   adopt single-client-id and accept greenfield-only?**
+2. **We are missing deletes — a real gap.** "Missing `remoteId` or newer `updatedAt`" *cannot represent
+   a deletion* (the row is gone, the query finds nothing). Every system keeps **tombstones**. Add a
+   soft-delete state that survives until the server acks, then hard-delete.
+3. **Make retried pushes idempotent.** Server upserts keyed by the client id; advance `lastSyncedAt` /
+   clear the dirty condition only *after* the server acks; a client mutation-id lets the server dedupe.
+4. **Whole-record `updatedAt` LWW loses concurrent different-field edits.** WatermelonDB (`_changed`)
+   and Realm (OT) merge per-field. If a record can have concurrent writers, track `changedKeys` and
+   merge per-field; if single-writer, whole-record LWW is fine — decide deliberately.
+5. **`updatedAt` wall-clock is clock-skew-fragile.** Prefer a server-authoritative timestamp, and use a
+   monotonic server cursor (CouchDB-style) for "what changed since last sync" rather than a raw
+   timestamp (records written in the same second as a sync can be missed).
+
+## Next step — design the public seam
+
+With prior art in hand, design *our* outbound seam (syncable-model contract, pending queue + tombstones,
+push hook, failures table) for *our* constraints, and build it with its first real use — not plumbing
+now and a use case later. Blocked on resolving implication #1 (two-id vs single-id) and #2 (add
+tombstones).
