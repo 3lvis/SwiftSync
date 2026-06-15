@@ -61,15 +61,18 @@ branch. Work through them systematically; mark complete by deleting the line (pe
 
 ### Phase 7 — Define the production-sync story (design-first)
 
-The **SwiftData History API** is the foundation here: querying what changed locally since a
-token (with delete tombstones) is how outbound/offline change export works. High-value, but a
-design-first, substantial effort — not a quick bolt-on. Evaluated and deferred here from Phase 4
-for that reason; SwiftSync has no outbound/change-tracking path today.
+The gap: SwiftSync is inbound-only (server → local, read-reactive); production sync adds the
+outbound/offline side (local edits flow back). Design-first and substantial — deferred here from
+Phase 4. Full design in [`production-sync-design.md`](production-sync-design.md): offline queue in
+the DB, last-writer-wins, a visible/actionable failures table, offline-safe migrations, CloudKit out,
+break-freely versioning; observability TBD.
 
-Design recorded in [`production-sync-design.md`](production-sync-design.md): offline queue in the
-DB, last-writer-wins, a visible/actionable failures table, net-new structured observability,
-offline-safe migrations, CloudKit out, break-freely versioning. Two forks remain open.
+Decided: **identity + change detection** use a `localId` + `remoteId` + `updatedAt` model — detection
+is a query over the store (no save-interception; a `didSave`-interception spike was explored and
+discarded as unnecessary), and conflicts resolve by latest `updatedAt`. The History API is an optional
+later optimisation (efficient deltas / delete tombstones), not the foundation.
 
-- [ ] Spike outbound change detection — SwiftData History API vs. our own plumbing — and decide the foundation.
-- [ ] Resolve the identity-strategy fork (client UUID becomes the server id, vs. a localId + remoteId mapping).
-- [ ] Break each accepted area (queue, failures table, observability hooks, migration safety) into its own implementation PR once the forks land.
+- [ ] Study prior art (the old `Sync`, WatermelonDB, PouchDB–CouchDB replication, Realm sync), then
+      design the public outbound seam — syncable-model contract, pending queue, push hook, failures
+      table — and build it with its first real use.
+- [ ] Break each accepted area into its own implementation PR.

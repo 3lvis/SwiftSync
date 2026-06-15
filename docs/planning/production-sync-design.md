@@ -38,29 +38,35 @@ change detection, and failure surface; the app owns the network calls.
 - **API stability: break freely.** No pre-1.0 stability constraint; breaking changes ship as a SemVer
   major bump. Don't over-engineer for source stability.
 
-## Open forks (resolve before/while implementing)
+## Identity & change detection (decided)
 
-- [~] **Identity strategy — leaning `localId` + `remoteId`.** Client-UUID-becomes-the-server-id is
-      simpler (one id, minimal bookkeeping, a clean dictated contract) but is a *hard* requirement that
-      effectively limits adoption to greenfield apps. A `localId` + `remoteId` mapping is battle-tested
-      and works for existing apps / any backend; the historical pain was Core Data breaking when an id
-      changed — thread-safety + mutability red zones (never pass a model across contexts) — but that was
-      solved before with a lot of effort. **Leaning localId + remoteId for the broader reach; manage the
-      identity-mutation/threading hazard deliberately. Confirm before building on it.**
+**Model: `localId` + `remoteId` + `updatedAt`.** Every syncable row carries a client-generated
+`localId` (always) and a `remoteId` (nil until the server has it). The data model itself classifies
+and drives sync — no save-interception:
 
-- [ ] **Change detection — build our own plumbing first, then evaluate History.** To avoid biasing
-      toward a new and possibly-fragile API: implement our *own* outbound change-tracking first and get
-      it working, then see where the SwiftData History API can connect to / reduce its complexity.
-      Own-first; History as an optional optimization, decided on evidence, not a guess.
+- **Missing `remoteId`** ⇒ local-only row ⇒ a pending *create* to push (it gets a `remoteId` on success).
+- **Both ids, `updatedAt` newer than the last sync** ⇒ a pending *local update* to push.
+- **Conflict** (a local row with both ids vs an incoming server row) ⇒ **latest `updatedAt` wins** (last-writer-wins).
 
-## Proposed first step — own-plumbing change detection (spike)
+So outbound detection is a **query over the store**, not interception of saves. (A spike confirmed you
+*can* distinguish local-vs-sync writes via `didSave` + an "is-syncing" window — but the id model makes
+that machinery unnecessary; detection is data-driven, which is simpler and more robust.)
 
-Build our own outbound change-tracking: capture **app-originated** local edits into a pending-changes
-queue, keyed by `localId` / `remoteId`. Time-boxed and exploratory.
+Chosen over *client-UUID-becomes-the-server-id*: that's simpler (one id, a clean dictated contract)
+but a hard requirement that limits adoption to greenfield apps. `localId`/`remoteId` is battle-tested
+and works with any backend — with the known Core Data hazard to manage deliberately (id mutation +
+thread-safety: never pass a model across contexts).
 
-The central question it must answer: **how to tell an app-originated (local, queue-it) mutation from a
-sync-originated (server) one**, so only real local edits go outbound. Candidate to validate: a
-`ModelContext` save that happens *outside* a `SwiftSync.sync()` operation is a local edit.
+## Open question
 
-Once it works, evaluate where the History API could simplify it. Then break the accepted areas
-(queue, failures table, migration safety) into their own implementation PRs.
+- [ ] **SwiftData History API — optional optimisation, not the foundation.** Basic detection is the
+      id + `updatedAt` query above. History could help *later* for efficient deltas and **delete
+      tombstones** at scale; evaluate it then, on evidence — not now.
+
+## Next step — design the public seam (study prior art first)
+
+The outbound API — the syncable-model contract (`localId`/`remoteId`/`updatedAt`), the pending queue,
+the push hook, the failures table — is a **public seam**, so study prior art before designing it: how
+the old `Sync` did `localId`/`remoteId` (and where it hurt), plus WatermelonDB / PouchDB–CouchDB
+replication / Realm sync. Then design *our* seam for *our* constraints and build it together with its
+first real use — not plumbing now and a use case later.
