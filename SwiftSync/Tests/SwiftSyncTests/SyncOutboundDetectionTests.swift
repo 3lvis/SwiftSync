@@ -69,4 +69,80 @@ final class SyncOutboundDetectionTests: XCTestCase {
         XCTAssertEqual(pending.updates.map(\.syncLocalID).sorted(), ["b"])
         XCTAssertEqual(pending.deletes.map(\.syncLocalID).sorted(), ["d"])
     }
+
+    @MainActor
+    func testPushAppliesServerOutcome() async throws {
+        let context = ModelContext(
+            try ModelContainer(
+                for: OfflineNote.self,
+                configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
+        let lastSync = Date(timeIntervalSince1970: 1_000)
+        let now = Date(timeIntervalSince1970: 2_000)
+        let edited = Date(timeIntervalSince1970: 1_500)
+
+        context.insert(
+            OfflineNote(
+                syncLocalID: "c1", syncRemoteID: nil, syncUpdatedAt: edited, syncIsDeleted: false,
+                title: "create"))
+        context.insert(
+            OfflineNote(
+                syncLocalID: "u1", syncRemoteID: "r-u1", syncUpdatedAt: edited, syncIsDeleted: false,
+                title: "update"))
+        context.insert(
+            OfflineNote(
+                syncLocalID: "d1", syncRemoteID: "r-d1", syncUpdatedAt: edited, syncIsDeleted: true,
+                title: "delete"))
+        try context.save()
+
+        let summary = try await SwiftSync.pushPendingChanges(
+            for: OfflineNote.self, in: context, changedSince: lastSync, now: now
+        ) { batch in
+            // Stand-in for the app's network call: server accepts everything.
+            XCTAssertEqual(batch.creates, ["c1"])
+            return SyncUploadOutcome(
+                assignedRemoteIDs: ["c1": "server-c1"],
+                confirmedUpdateLocalIDs: ["u1"],
+                confirmedDeleteLocalIDs: ["d1"])
+        }
+
+        let rows = try context.fetch(FetchDescriptor<OfflineNote>())
+        let byLocalID = Dictionary(uniqueKeysWithValues: rows.map { ($0.syncLocalID, $0) })
+
+        XCTAssertEqual(byLocalID["c1"]?.syncRemoteID, "server-c1", "create must get its server id")
+        XCTAssertNil(byLocalID["d1"], "confirmed delete must be hard-deleted")
+        XCTAssertEqual(summary.createdCount, 1)
+        XCTAssertEqual(summary.updatedCount, 1)
+        XCTAssertEqual(summary.deletedCount, 1)
+        XCTAssertTrue(summary.failures.isEmpty)
+        XCTAssertEqual(summary.cursor, now)
+    }
+
+    @MainActor
+    func testPushSurfacesFailures() async throws {
+        let context = ModelContext(
+            try ModelContainer(
+                for: OfflineNote.self,
+                configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
+        context.insert(
+            OfflineNote(
+                syncLocalID: "c1", syncRemoteID: nil, syncUpdatedAt: Date(timeIntervalSince1970: 1_500),
+                syncIsDeleted: false, title: "rejected create"))
+        try context.save()
+
+        let summary = try await SwiftSync.pushPendingChanges(
+            for: OfflineNote.self, in: context, changedSince: Date(timeIntervalSince1970: 1_000)
+        ) { _ in
+            SyncUploadOutcome(failures: [
+                SyncOutboundFailure(localID: "c1", operation: .create, message: "422 invalid")
+            ])
+        }
+
+        XCTAssertEqual(
+            summary.failures,
+            [
+                SyncOutboundFailure(localID: "c1", operation: .create, message: "422 invalid")
+            ])
+        let rows = try context.fetch(FetchDescriptor<OfflineNote>())
+        XCTAssertNil(rows.first?.syncRemoteID, "a rejected create keeps no remote id and stays local")
+    }
 }
