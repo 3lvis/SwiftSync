@@ -22,10 +22,7 @@ let package = Package(
                 .product(name: "SwiftSync", package: "SwiftSync"),
                 .product(name: "DemoBackend", package: "DemoBackend"),
             ],
-            path: "Sources/DemoCore",
-            swiftSettings: [
-                .unsafeFlags(["-strict-concurrency=complete"])
-            ]
+            path: "Sources/DemoCore"
         ),
         .testTarget(
             name: "DemoCoreTests",
