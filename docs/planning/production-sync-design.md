@@ -78,29 +78,39 @@ thread-safety: never pass a model across contexts).
 - **Realm / Atlas Device Sync:** client-generated id; an *operation-log* changeset (not a query);
   field-level OT merge (deletes win, per-field LWW); client-reset escape hatch.
 
-**Implications for our `localId` + `remoteId` + `updatedAt` model:**
+**Decisions and implications for our `localId` + `remoteId` + `updatedAt` model:**
 
-1. **The two-id model is the heavier, less-common choice — confirm it deliberately.** All three modern
-   systems use a single client-generated id that *is* the server id (no remap). Our `remoteId`-nil-until-
-   synced design re-introduces exactly the id-rewrite pain we remember (patching the id + every
-   foreign-key reference after first sync). We chose it for broad reach (non-greenfield backends); that
-   trade is real, but prior art weighs against it. **Re-confirm: accept the rewrite cost for reach, or
-   adopt single-client-id and accept greenfield-only?**
-2. **We are missing deletes — a real gap.** "Missing `remoteId` or newer `updatedAt`" *cannot represent
-   a deletion* (the row is gone, the query finds nothing). Every system keeps **tombstones**. Add a
-   soft-delete state that survives until the server acks, then hard-delete.
+1. **Decided: keep `localId` + `remoteId`.** The modern single-client-id systems (WatermelonDB / Couch /
+   Realm) all *control both ends* — a different category. SwiftSync syncs **conventional JSON APIs**:
+   backends it doesn't control, that mint their own ids on create. Single-client-id would require the
+   backend to accept client UUIDs as canonical, narrowing SwiftSync to greenfield / controlled-backend
+   apps. Two-id is the fit for our positioning (reach over existing backends *is* the point). The cost
+   we knowingly own: the id-rewrite when `remoteId` arrives — reconcile references, and manage the
+   thread-safety/mutability hazard (never pass a model across contexts). *(Only a deliberate
+   repositioning to greenfield would flip this.)*
+2. **Decided: `isDeleted` soft-delete.** A query for "missing `remoteId` / newer `updatedAt`" can't
+   represent a deletion, so a deleted row keeps an `isDeleted` flag and stays in the store until the
+   delete is pushed and the server acks; only then is it hard-deleted. (This is what "tombstone" means.)
 3. **Make retried pushes idempotent.** Server upserts keyed by the client id; advance `lastSyncedAt` /
    clear the dirty condition only *after* the server acks; a client mutation-id lets the server dedupe.
 4. **Whole-record `updatedAt` LWW loses concurrent different-field edits.** WatermelonDB (`_changed`)
    and Realm (OT) merge per-field. If a record can have concurrent writers, track `changedKeys` and
-   merge per-field; if single-writer, whole-record LWW is fine — decide deliberately.
-5. **`updatedAt` wall-clock is clock-skew-fragile.** Prefer a server-authoritative timestamp, and use a
-   monotonic server cursor (CouchDB-style) for "what changed since last sync" rather than a raw
-   timestamp (records written in the same second as a sync can be missed).
+   merge per-field; if single-writer, whole-record LWW is fine — decide when we hit it.
+5. **`updatedAt` wall-clock is clock-skew-fragile.** Prefer a server-authoritative timestamp, and a
+   monotonic server cursor for "what changed since last sync" rather than a raw timestamp (records
+   written in the same second as a sync can be missed).
 
-## Next step — design the public seam
+## Next step — build the seam, slice by slice (each with its first real use)
 
-With prior art in hand, design *our* outbound seam (syncable-model contract, pending queue + tombstones,
-push hook, failures table) for *our* constraints, and build it with its first real use — not plumbing
-now and a use case later. Blocked on resolving implication #1 (two-id vs single-id) and #2 (add
-tombstones).
+Decisions are settled; implement the outbound seam in thin slices, each shipped with the thing that
+exercises it (no plumbing-then-use-later):
+
+1. **Offline-model contract + outbound detection.** A model declares `localId` (always), `remoteId`
+   (nil until synced), `updatedAt`, `isDeleted`. First use: a query that partitions a store into
+   pending **creates** (`remoteId == nil`), **updates** (`remoteId != nil`, `updatedAt` newer than last
+   sync), and **deletes** (`isDeleted`). TDD it.
+2. Pending-changes queue + push hook (app owns the network call); advance the sync cursor only on ack.
+3. Failures table with discard / edit / retry.
+4. Migration safety (the offline queue survives a nuclear reset).
+
+Open: per-field vs whole-record LWW (#4 above) and the History-API optimisation — revisit on evidence.
