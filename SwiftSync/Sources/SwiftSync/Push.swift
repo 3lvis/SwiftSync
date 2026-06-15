@@ -1,7 +1,8 @@
 import Foundation
 import SwiftData
 
-/// A model that participates in **outbound** (local → server) sync.
+/// A model that participates in **push** (local → server) sync — the counterpart to the inbound
+/// `SwiftSync.sync` (pull).
 ///
 /// SwiftSync targets conventional JSON APIs whose backend mints its own ids, so identity is a
 /// two-id mapping: `syncLocalID` is the client-generated id that is stable forever, and
@@ -9,8 +10,8 @@ import SwiftData
 /// push driver assigns it). `syncUpdatedAt` drives last-writer-wins; `syncIsDeleted` is a
 /// soft-delete that survives until the deletion is pushed (then the row is hard-deleted).
 ///
-/// `package` while the outbound feature is built out; promoted to `public` (with README docs) once
-/// it is consumer-usable.
+/// `package` while the push feature is built out; promoted to `public` (with README docs) once it
+/// is consumer-usable.
 package protocol SyncOfflineModel: PersistentModel {
     var syncLocalID: String { get }
     var syncRemoteID: String? { get set }
@@ -18,19 +19,30 @@ package protocol SyncOfflineModel: PersistentModel {
     var syncIsDeleted: Bool { get }
 }
 
-/// The local rows that need pushing to the server, partitioned by operation.
+/// The local rows pending a push, partitioned by operation (live models, for applying results).
 package struct SyncPendingChanges<Model: SyncOfflineModel> {
-    package let creates: [Model]
+    package let inserts: [Model]
     package let updates: [Model]
     package let deletes: [Model]
 
-    package var isEmpty: Bool { creates.isEmpty && updates.isEmpty && deletes.isEmpty }
+    package var isEmpty: Bool { inserts.isEmpty && updates.isEmpty && deletes.isEmpty }
 }
 
-/// A single outbound item the server rejected. SwiftSync surfaces these so the app can let the user
-/// act on them (discard / edit / retry) rather than silently retrying forever.
-package struct SyncOutboundFailure: Equatable, Sendable {
-    package enum Operation: String, Equatable, Sendable { case create, update, delete }
+/// The `syncLocalID`s to push, partitioned by operation. This — not the live models — is what the
+/// async uploader receives, so SwiftData objects never cross into a network call (the
+/// "never pass a model across contexts" rule). It's `Sendable`; the app maps each id to its payload.
+package struct SyncPushBatch: Sendable {
+    package let inserts: [String]
+    package let updates: [String]
+    package let deletes: [String]
+
+    package var isEmpty: Bool { inserts.isEmpty && updates.isEmpty && deletes.isEmpty }
+}
+
+/// One pushed item the server rejected. SwiftSync surfaces these so the app can let the user act on
+/// them (discard / edit / retry) rather than silently retrying forever.
+package struct SyncPushFailure: Equatable, Sendable {
+    package enum Operation: String, Equatable, Sendable { case insert, update, delete }
     package let localID: String
     package let operation: Operation
     package let message: String
@@ -42,31 +54,20 @@ package struct SyncOutboundFailure: Equatable, Sendable {
     }
 }
 
-/// The `syncLocalID`s to push, partitioned by operation. This — not the live models — is what the
-/// async uploader receives, so SwiftData objects never cross into a network call (the
-/// "never pass a model across contexts" rule). It's `Sendable`; the app maps each id to its payload.
-package struct SyncOutboundBatch: Sendable {
-    package let creates: [String]
-    package let updates: [String]
-    package let deletes: [String]
-
-    package var isEmpty: Bool { creates.isEmpty && updates.isEmpty && deletes.isEmpty }
-}
-
 /// What the app's uploader reports back after talking to the server: the server-assigned ids for
-/// created rows, which updates/deletes were accepted, and any per-item failures.
-package struct SyncUploadOutcome: Sendable {
-    /// create's `syncLocalID` → server-assigned `syncRemoteID`.
+/// inserted rows, which updates/deletes were accepted, and any per-item failures.
+package struct SyncPushResponse: Sendable {
+    /// insert's `syncLocalID` → server-assigned `syncRemoteID`.
     package var assignedRemoteIDs: [String: String]
     package var confirmedUpdateLocalIDs: Set<String>
     package var confirmedDeleteLocalIDs: Set<String>
-    package var failures: [SyncOutboundFailure]
+    package var failures: [SyncPushFailure]
 
     package init(
         assignedRemoteIDs: [String: String] = [:],
         confirmedUpdateLocalIDs: Set<String> = [],
         confirmedDeleteLocalIDs: Set<String> = [],
-        failures: [SyncOutboundFailure] = []
+        failures: [SyncPushFailure] = []
     ) {
         self.assignedRemoteIDs = assignedRemoteIDs
         self.confirmedUpdateLocalIDs = confirmedUpdateLocalIDs
@@ -77,29 +78,29 @@ package struct SyncUploadOutcome: Sendable {
 
 /// Result of a push pass. Advance the caller's stored "last synced" cursor to `cursor` on success.
 package struct SyncPushSummary {
-    package let createdCount: Int
+    package let insertedCount: Int
     package let updatedCount: Int
     package let deletedCount: Int
-    package let failures: [SyncOutboundFailure]
+    package let failures: [SyncPushFailure]
     package let cursor: Date
 }
 
 extension SwiftSync {
-    /// Partition a store's rows into the outbound work to push, relative to `changedSince` (the last
+    /// Partition a store's rows into the changes pending a push, relative to `changedSince` (the last
     /// successful sync). Detection is a query over the store — no save-interception:
     ///
-    /// - **create**: never synced (`syncRemoteID == nil`) and not deleted.
+    /// - **insert**: never synced (`syncRemoteID == nil`) and not deleted.
     /// - **update**: synced (`syncRemoteID != nil`), not deleted, edited since the last sync.
-    /// - **delete**: soft-deleted *and* known to the server (a row created-then-deleted locally
+    /// - **delete**: soft-deleted *and* known to the server (a row inserted-then-deleted locally
     ///   never reached the server, so it's dropped, not pushed).
-    package static func pendingOutboundChanges<Model: SyncOfflineModel>(
+    package static func pendingChanges<Model: SyncOfflineModel>(
         for _: Model.Type,
         in context: ModelContext,
         changedSince: Date
     ) throws -> SyncPendingChanges<Model> {
         let rows = try context.fetch(FetchDescriptor<Model>())
 
-        var creates: [Model] = []
+        var inserts: [Model] = []
         var updates: [Model] = []
         var deletes: [Model] = []
         for row in rows {
@@ -107,51 +108,50 @@ extension SwiftSync {
             if row.syncIsDeleted {
                 if synced { deletes.append(row) }  // never-synced + deleted → drop, don't push
             } else if !synced {
-                creates.append(row)
+                inserts.append(row)
             } else if row.syncUpdatedAt > changedSince {
                 updates.append(row)
             }
         }
-        return SyncPendingChanges(creates: creates, updates: updates, deletes: deletes)
+        return SyncPendingChanges(inserts: inserts, updates: updates, deletes: deletes)
     }
 
-    /// Drive one outbound push: detect pending changes, hand them to the app's `upload` closure
-    /// (the app owns the network call), then apply the server's outcome locally — stamp
-    /// server-assigned `syncRemoteID`s onto created rows, hard-delete confirmed deletes — and report
-    /// failures for the app to surface. Returns a summary; advance your "last synced" cursor to
-    /// `summary.cursor` on success.
+    /// Drive one push: detect pending changes, hand their ids (a Sendable `SyncPushBatch`) to the
+    /// app's `upload` closure (the app owns the network call), then apply the server's response
+    /// locally — stamp server-assigned `syncRemoteID`s onto inserted rows, hard-delete confirmed
+    /// deletes — and report failures for the app to surface. Returns a summary; advance your
+    /// "last synced" cursor to `summary.cursor` on success.
     @discardableResult
-    package static func pushPendingChanges<Model: SyncOfflineModel>(
+    package static func push<Model: SyncOfflineModel>(
         for _: Model.Type,
         in context: ModelContext,
         changedSince: Date,
         now: Date = Date(),
         isolation: isolated (any Actor)? = #isolation,
-        upload: (SyncOutboundBatch) async throws -> SyncUploadOutcome
+        upload: (SyncPushBatch) async throws -> SyncPushResponse
     ) async throws -> SyncPushSummary {
-        let pending = try pendingOutboundChanges(
-            for: Model.self, in: context, changedSince: changedSince)
+        let pending = try pendingChanges(for: Model.self, in: context, changedSince: changedSince)
         guard !pending.isEmpty else {
             return SyncPushSummary(
-                createdCount: 0, updatedCount: 0, deletedCount: 0, failures: [], cursor: now)
+                insertedCount: 0, updatedCount: 0, deletedCount: 0, failures: [], cursor: now)
         }
 
-        let batch = SyncOutboundBatch(
-            creates: pending.creates.map(\.syncLocalID),
+        let batch = SyncPushBatch(
+            inserts: pending.inserts.map(\.syncLocalID),
             updates: pending.updates.map(\.syncLocalID),
             deletes: pending.deletes.map(\.syncLocalID))
-        let outcome = try await upload(batch)
+        let response = try await upload(batch)
 
-        var createdCount = 0
-        for create in pending.creates {
-            if let remoteID = outcome.assignedRemoteIDs[create.syncLocalID] {
-                create.syncRemoteID = remoteID
-                createdCount += 1
+        var insertedCount = 0
+        for insert in pending.inserts {
+            if let remoteID = response.assignedRemoteIDs[insert.syncLocalID] {
+                insert.syncRemoteID = remoteID
+                insertedCount += 1
             }
         }
 
         var deletedCount = 0
-        for delete in pending.deletes where outcome.confirmedDeleteLocalIDs.contains(delete.syncLocalID) {
+        for delete in pending.deletes where response.confirmedDeleteLocalIDs.contains(delete.syncLocalID) {
             context.delete(delete)
             deletedCount += 1
         }
@@ -159,10 +159,10 @@ extension SwiftSync {
         try context.save()
 
         return SyncPushSummary(
-            createdCount: createdCount,
-            updatedCount: outcome.confirmedUpdateLocalIDs.count,
+            insertedCount: insertedCount,
+            updatedCount: response.confirmedUpdateLocalIDs.count,
             deletedCount: deletedCount,
-            failures: outcome.failures,
+            failures: response.failures,
             cursor: now)
     }
 }
