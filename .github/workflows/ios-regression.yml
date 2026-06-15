@@ -27,10 +27,32 @@ jobs:
       - name: Xcode Version
         run: xcodebuild -version && swift --version
 
+      # Pick whatever iPhone simulator the runner image ships — don't pin a device name,
+      # which breaks whenever GitHub rolls the macos image (e.g. iPhone 16 Pro -> 17 Pro).
+      - name: Select an available iPhone simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          candidates = [
+              d for runtime, ds in devices.items() if "iOS" in runtime
+              for d in ds if d.get("isAvailable") and "iPhone" in d.get("name", "")
+          ]
+          print(candidates[0]["udid"] if candidates else "")
+          ')
+          if [ -z "$UDID" ]; then
+            echo "::error::No available iPhone simulator found on the runner."
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "Using iPhone simulator $UDID"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
       - name: Test — DirtyTrackingGapTests (iOS Simulator)
         working-directory: DemoCore
         run: |
           xcodebuild test \
             -scheme DemoCore \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest' \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
             -only-testing:DemoCoreTests/DirtyTrackingGapTests
