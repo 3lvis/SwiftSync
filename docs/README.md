@@ -38,6 +38,7 @@ If you want the shortest description of the project:
 - [relationship-integrity.md](project/relationship-integrity.md): many-to-many inverse anchor guidance
 - [fetch-strategy-under-load.md](project/fetch-strategy-under-load.md): performance framing for query strategy
 - [ios-dirty-tracking-gap.md](project/ios-dirty-tracking-gap.md): known SwiftData observation caveat
+- [custom-datastore-compat.md](project/custom-datastore-compat.md): what a custom SwiftData store must support
 
 ## Internal Project Workflow Docs
 

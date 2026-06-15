@@ -45,13 +45,6 @@ branch. Work through them systematically; mark complete by deleting the line (pe
 - [ ] Document every public symbol surviving the API-surface tightening (Phase 5).
 - [ ] Add a CI job that builds DocC (and optionally publishes to GitHub Pages).
 
-### Phase 4 — Explicit SwiftData-modern stance
-
-- [ ] Write a doc stating SwiftSync's position on `#Unique`, `#Index`, the history API,
-      custom `DataStore`, and `#Expression`/richer predicates — interop rules + rationale.
-- [ ] Adopt the features that genuinely improve the library (e.g. `#Index` on sync keys),
-      with red-first tests; document the rest as interop-only.
-
 ### Phase 5 — Tighten the public API surface
 
 - [ ] Document the intended public surface and the macro-support extension points (the
@@ -68,10 +61,13 @@ branch. Work through them systematically; mark complete by deleting the line (pe
 
 ### Phase 7 — Define the production-sync story (design-first)
 
+The **SwiftData History API** is the foundation here: querying what changed locally since a
+token (with delete tombstones) is how outbound/offline change export works. High-value, but a
+design-first, substantial effort — not a quick bolt-on. Evaluated and deferred here from Phase 4
+for that reason; SwiftSync has no outbound/change-tracking path today.
+
 - [ ] Write a design doc framing the gap from "sync-assist" to "production sync":
       conflict resolution, offline mutation queue, retry/backoff, observability hooks,
-      schema-migration policy, history-based local change export, CloudKit coexistence,
-      and versioned API stability.
+      schema-migration policy, history-based local change export (via the History API),
+      CloudKit coexistence, and versioned API stability.
 - [ ] Break each accepted area into its own dedicated implementation item once designed.
-</content>
-</invoke>
