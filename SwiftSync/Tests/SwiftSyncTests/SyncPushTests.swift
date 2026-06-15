@@ -145,4 +145,59 @@ final class SyncPushTests: XCTestCase {
         let rows = try context.fetch(FetchDescriptor<OfflineNote>())
         XCTAssertNil(rows.first?.syncRemoteID, "a rejected insert keeps no remote id and stays local")
     }
+
+    /// P1: a failed (or unacknowledged) update is cursor-gated, so the cursor must NOT advance past
+    /// it — otherwise it silently disappears from future detection and the edit is lost.
+    @MainActor
+    func testPushDoesNotAdvanceCursorWhenAnUpdateIsUnacknowledged() async throws {
+        let context = ModelContext(
+            try ModelContainer(
+                for: OfflineNote.self,
+                configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
+        let lastSync = Date(timeIntervalSince1970: 1_000)
+        let now = Date(timeIntervalSince1970: 2_000)
+        context.insert(
+            OfflineNote(
+                syncLocalID: "u1", syncRemoteID: "r-u1", syncUpdatedAt: Date(timeIntervalSince1970: 1_500),
+                syncIsDeleted: false, title: "update that fails"))
+        try context.save()
+
+        let summary = try await SwiftSync.push(
+            for: OfflineNote.self, in: context, changedSince: lastSync, now: now
+        ) { _ in
+            SyncPushResponse(failures: [
+                SyncPushFailure(localID: "u1", operation: .update, message: "500")
+            ])
+        }
+
+        XCTAssertEqual(summary.cursor, lastSync, "cursor must not advance past an unacknowledged update")
+        // Following the contract (advance to summary.cursor) must still re-detect the failed update.
+        let stillPending = try SwiftSync.pendingChanges(
+            for: OfflineNote.self, in: context, changedSince: summary.cursor)
+        XCTAssertEqual(stillPending.updates.map(\.syncLocalID), ["u1"])
+    }
+
+    /// P2: `updatedCount` must reflect only rows that were actually in this push batch, not whatever
+    /// ids the server echoed back.
+    @MainActor
+    func testPushUpdatedCountIgnoresIDsOutsideTheBatch() async throws {
+        let context = ModelContext(
+            try ModelContainer(
+                for: OfflineNote.self,
+                configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
+        context.insert(
+            OfflineNote(
+                syncLocalID: "u1", syncRemoteID: "r-u1", syncUpdatedAt: Date(timeIntervalSince1970: 1_500),
+                syncIsDeleted: false, title: "update"))
+        try context.save()
+
+        let summary = try await SwiftSync.push(
+            for: OfflineNote.self, in: context, changedSince: Date(timeIntervalSince1970: 1_000),
+            now: Date(timeIntervalSince1970: 2_000)
+        ) { _ in
+            SyncPushResponse(confirmedUpdateLocalIDs: ["u1", "ghost-not-in-batch"])
+        }
+
+        XCTAssertEqual(summary.updatedCount, 1, "only the in-batch update counts, not server echoes")
+    }
 }

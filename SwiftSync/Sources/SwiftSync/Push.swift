@@ -119,8 +119,9 @@ extension SwiftSync {
     /// Drive one push: detect pending changes, hand their ids (a Sendable `SyncPushBatch`) to the
     /// app's `upload` closure (the app owns the network call), then apply the server's response
     /// locally — stamp server-assigned `syncRemoteID`s onto inserted rows, hard-delete confirmed
-    /// deletes — and report failures for the app to surface. Returns a summary; advance your
-    /// "last synced" cursor to `summary.cursor` on success.
+    /// deletes — and report failures for the app to surface. Always advance your "last synced"
+    /// cursor to `summary.cursor`: it only moves forward when *every* pending update was
+    /// acknowledged, so an unacknowledged update is safely re-detected on the next push.
     @discardableResult
     package static func push<Model: SyncOfflineModel>(
         for _: Model.Type,
@@ -158,11 +159,20 @@ extension SwiftSync {
 
         try context.save()
 
+        // Updates are cursor-gated, so only count/advance for updates actually in this batch — and
+        // only advance the cursor when *every* pending update was acknowledged. An unacknowledged
+        // update (a failure, or one the server silently ignored) would otherwise fall out of future
+        // detection and be lost. Inserts and deletes self-gate (remoteID stays nil / isDeleted stays
+        // true until applied), so they don't constrain the cursor.
+        let pendingUpdateIDs = Set(pending.updates.map(\.syncLocalID))
+        let confirmedUpdateIDs = response.confirmedUpdateLocalIDs.intersection(pendingUpdateIDs)
+        let allUpdatesAcknowledged = confirmedUpdateIDs.count == pendingUpdateIDs.count
+
         return SyncPushSummary(
             insertedCount: insertedCount,
-            updatedCount: response.confirmedUpdateLocalIDs.count,
+            updatedCount: confirmedUpdateIDs.count,
             deletedCount: deletedCount,
             failures: response.failures,
-            cursor: now)
+            cursor: allUpdatesAcknowledged ? now : changedSince)
     }
 }
