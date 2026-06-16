@@ -200,4 +200,85 @@ final class SyncPushTests: XCTestCase {
 
         XCTAssertEqual(summary.updatedCount, 1, "only the in-batch update counts, not server echoes")
     }
+
+    @MainActor
+    func testPushWithPerItemClosuresAppliesResults() async throws {
+        let context = ModelContext(
+            try ModelContainer(
+                for: OfflineNote.self,
+                configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
+        let lastSync = Date(timeIntervalSince1970: 1_000)
+        let now = Date(timeIntervalSince1970: 2_000)
+        let edited = Date(timeIntervalSince1970: 1_500)
+
+        context.insert(
+            OfflineNote(
+                syncLocalID: "c1", syncRemoteID: nil, syncUpdatedAt: edited, syncIsDeleted: false,
+                title: "insert"))
+        context.insert(
+            OfflineNote(
+                syncLocalID: "u1", syncRemoteID: "r-u1", syncUpdatedAt: edited, syncIsDeleted: false,
+                title: "update"))
+        context.insert(
+            OfflineNote(
+                syncLocalID: "d1", syncRemoteID: "r-d1", syncUpdatedAt: edited, syncIsDeleted: true,
+                title: "delete"))
+        try context.save()
+
+        var inserted: [String] = []
+        var updated: [String] = []
+        var deleted: [String] = []
+        let summary = try await SwiftSync.push(
+            for: OfflineNote.self, in: context, changedSince: lastSync, now: now,
+            insert: { localID in
+                inserted.append(localID)
+                return "server-\(localID)"
+            },
+            update: { localID in updated.append(localID) },
+            delete: { localID in deleted.append(localID) }
+        )
+
+        XCTAssertEqual(inserted, ["c1"])
+        XCTAssertEqual(updated, ["u1"])
+        XCTAssertEqual(deleted, ["d1"])
+
+        let rows = try context.fetch(FetchDescriptor<OfflineNote>())
+        let byLocalID = Dictionary(uniqueKeysWithValues: rows.map { ($0.syncLocalID, $0) })
+        XCTAssertEqual(byLocalID["c1"]?.syncRemoteID, "server-c1", "insert closure's return becomes the remote id")
+        XCTAssertNil(byLocalID["d1"], "confirmed delete is hard-deleted")
+        XCTAssertEqual(summary.insertedCount, 1)
+        XCTAssertEqual(summary.updatedCount, 1)
+        XCTAssertEqual(summary.deletedCount, 1)
+        XCTAssertTrue(summary.failures.isEmpty)
+        XCTAssertEqual(summary.cursor, now)
+    }
+
+    @MainActor
+    func testPushWithPerItemClosuresRecordsThrownFailures() async throws {
+        struct RejectedError: LocalizedError {
+            var errorDescription: String? { "422 invalid" }
+        }
+        let context = ModelContext(
+            try ModelContainer(
+                for: OfflineNote.self,
+                configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
+        context.insert(
+            OfflineNote(
+                syncLocalID: "c1", syncRemoteID: nil, syncUpdatedAt: Date(timeIntervalSince1970: 1_500),
+                syncIsDeleted: false, title: "rejected insert"))
+        try context.save()
+
+        let summary = try await SwiftSync.push(
+            for: OfflineNote.self, in: context, changedSince: Date(timeIntervalSince1970: 1_000),
+            insert: { _ in throw RejectedError() },
+            update: { _ in },
+            delete: { _ in }
+        )
+
+        XCTAssertEqual(
+            summary.failures,
+            [SyncPushFailure(localID: "c1", operation: .insert, message: "422 invalid")])
+        let rows = try context.fetch(FetchDescriptor<OfflineNote>())
+        XCTAssertNil(rows.first?.syncRemoteID, "a thrown insert keeps no remote id and stays local")
+    }
 }

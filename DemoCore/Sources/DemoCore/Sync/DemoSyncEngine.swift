@@ -9,6 +9,7 @@ public final class DemoSyncEngine {
     private enum SyncTaskDetailError: LocalizedError {
         case missingProjectID
         case missingProject(String)
+        case missingLocalTask(String)
 
         var errorDescription: String? {
             switch self {
@@ -16,6 +17,8 @@ public final class DemoSyncEngine {
                 return "Task detail payload is missing project_id."
             case let .missingProject(projectID):
                 return "Task detail sync requires project \(projectID) to exist locally."
+            case let .missingLocalTask(taskID):
+                return "Task \(taskID) is no longer in the local store."
             }
         }
     }
@@ -151,49 +154,26 @@ public final class DemoSyncEngine {
             for: Task.self,
             in: syncContainer.mainContext,
             changedSince: syncCursor,
-            upload: { batch in try await self.upload(batch) }
+            insert: { localID in
+                let created = try await self.apiClient.createTask(body: try self.taskBody(localID: localID))
+                return created.string("id") ?? localID
+            },
+            update: { localID in
+                _ = try await self.apiClient.updateTask(taskID: localID, body: try self.taskBody(localID: localID))
+            },
+            delete: { localID in
+                try await self.apiClient.deleteTask(taskID: localID)
+            }
         )
         syncCursor = summary.cursor
         refreshPendingCount()
         return summary
     }
 
-    private func upload(_ batch: SyncPushBatch) async throws -> SyncPushResponse {
-        var response = SyncPushResponse()
-        for localID in batch.inserts {
-            guard let body = try taskBody(localID: localID) else { continue }
-            do {
-                let created = try await apiClient.createTask(body: body)
-                response.assignedRemoteIDs[localID] = created.string("id") ?? localID
-            } catch {
-                response.failures.append(
-                    SyncPushFailure(localID: localID, operation: .insert, message: errorMessage(error)))
-            }
+    private func taskBody(localID: String) throws -> DemoSyncPayload {
+        guard let task = try task(withID: localID) else {
+            throw SyncTaskDetailError.missingLocalTask(localID)
         }
-        for localID in batch.updates {
-            guard let body = try taskBody(localID: localID) else { continue }
-            do {
-                _ = try await apiClient.updateTask(taskID: localID, body: body)
-                response.confirmedUpdateLocalIDs.insert(localID)
-            } catch {
-                response.failures.append(
-                    SyncPushFailure(localID: localID, operation: .update, message: errorMessage(error)))
-            }
-        }
-        for localID in batch.deletes {
-            do {
-                try await apiClient.deleteTask(taskID: localID)
-                response.confirmedDeleteLocalIDs.insert(localID)
-            } catch {
-                response.failures.append(
-                    SyncPushFailure(localID: localID, operation: .delete, message: errorMessage(error)))
-            }
-        }
-        return response
-    }
-
-    private func taskBody(localID: String) throws -> DemoSyncPayload? {
-        guard let task = try task(withID: localID) else { return nil }
         return try DemoSyncPayload(dictionary: syncContainer.export(task))
     }
 
@@ -218,10 +198,6 @@ public final class DemoSyncEngine {
         }
         syncCursor = Date()
         refreshPendingCount()
-    }
-
-    private func errorMessage(_ error: Error) -> String {
-        (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
     }
 
     private func syncProjectsData() async throws {

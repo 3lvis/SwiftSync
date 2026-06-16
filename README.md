@@ -651,6 +651,19 @@ lastSyncedAt = summary.cursor
 
 Advance your cursor to `summary.cursor` on every pass: it only moves forward when *every* pending update was acknowledged, so an unacknowledged update is safely re-detected on the next push rather than lost.
 
+If your backend works one item at a time, use the per-item overload — supply a closure per operation and SwiftSync builds the `SyncPushResponse` for you (`insert` returns the server-assigned id; `update`/`delete` confirm by returning; a closure that throws becomes a `SyncPushFailure` for that item, leaving the row pending):
+
+```swift
+let summary = try await SwiftSync.push(
+  for: Task.self,
+  in: syncContainer.mainContext,
+  changedSince: lastSyncedAt,
+  insert: { localID in try await api.create(localID) },  // returns the server id
+  update: { localID in try await api.update(localID) },
+  delete: { localID in try await api.delete(localID) }
+)
+```
+
 ## Date Handling
 
 SwiftSync handles common API date formats out of the box, so most apps do not need any date setup to get started.

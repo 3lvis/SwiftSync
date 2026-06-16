@@ -172,4 +172,57 @@ extension SwiftSync {
             failures: response.failures,
             cursor: allUpdatesAcknowledged ? now : changedSince)
     }
+
+    /// Convenience over `push(…, upload:)` for the common case where the app talks to the server one
+    /// item at a time. Supply a per-operation closure and SwiftSync runs the batch, building the
+    /// `SyncPushResponse` for you: `insert` returns the server-assigned `syncRemoteID`; `update` and
+    /// `delete` are confirmed by returning normally. A closure that throws records a `SyncPushFailure`
+    /// for that item (its message taken from the error) and leaves the row pending — the other items
+    /// in the batch still run.
+    @discardableResult
+    public static func push<Model: SyncOfflineModel>(
+        for _: Model.Type,
+        in context: ModelContext,
+        changedSince: Date,
+        now: Date = Date(),
+        isolation: isolated (any Actor)? = #isolation,
+        insert: (String) async throws -> String,
+        update: (String) async throws -> Void,
+        delete: (String) async throws -> Void
+    ) async throws -> SyncPushSummary {
+        try await push(for: Model.self, in: context, changedSince: changedSince, now: now) { batch in
+            var response = SyncPushResponse()
+            for localID in batch.inserts {
+                do {
+                    response.assignedRemoteIDs[localID] = try await insert(localID)
+                } catch {
+                    response.failures.append(
+                        SyncPushFailure(localID: localID, operation: .insert, message: failureMessage(error)))
+                }
+            }
+            for localID in batch.updates {
+                do {
+                    try await update(localID)
+                    response.confirmedUpdateLocalIDs.insert(localID)
+                } catch {
+                    response.failures.append(
+                        SyncPushFailure(localID: localID, operation: .update, message: failureMessage(error)))
+                }
+            }
+            for localID in batch.deletes {
+                do {
+                    try await delete(localID)
+                    response.confirmedDeleteLocalIDs.insert(localID)
+                } catch {
+                    response.failures.append(
+                        SyncPushFailure(localID: localID, operation: .delete, message: failureMessage(error)))
+                }
+            }
+            return response
+        }
+    }
+
+    private static func failureMessage(_ error: Error) -> String {
+        (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+    }
 }
