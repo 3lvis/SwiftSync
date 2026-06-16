@@ -118,7 +118,7 @@ public final class ProjectViewMachine {
         projectPublisher.rows.first(where: { $0.id == projectID })
     }
     public var tasks: [Task] {
-        taskPublisher.rows
+        taskPublisher.rows.filter { $0.isLocallyDeleted != true }
     }
     public var contentState: ProjectDetailContentState {
         resolveProjectDetailContentState(

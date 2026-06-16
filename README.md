@@ -10,6 +10,7 @@ Define your models once, read from local SwiftData, and let SwiftSync handle the
 - Deterministic diffing for inserts, updates, and deletes
 - Automatic relationship syncing for nested objects and foreign keys
 - Export back into API-ready JSON
+- Offline push (local → server) with two-id identity and last-writer-wins
 - Reactive local reads for SwiftUI and UIKit
 
 ## Quick Start
@@ -610,6 +611,45 @@ Best practices:
 - Use `@RemoteKey`, `@NotExport`, and container formatting options to keep transport concerns out of your UI code
 
 See [FAQ](docs/project/faq.md) and [Property Mapping Contract](docs/project/property-mapping-contract.md) for more on export.
+
+## Offline Push (local → server)
+
+`sync` and `export` cover the pull side: pull server state into SwiftData, and turn a draft into a request body. **Push** is the outbound counterpart for offline-first apps — edit locally while disconnected, then reconcile with the server when you reconnect.
+
+Identity is a two-id mapping: `syncLocalID` is the client-generated id that is stable forever; `syncRemoteID` is the server's id, `nil` until the row has been pushed and acknowledged. `syncUpdatedAt` drives last-writer-wins, and `syncIsDeleted` is a soft-delete tombstone that survives until the deletion reaches the server. Conform your model to `SyncOfflineModel`:
+
+```swift
+extension Task: SyncOfflineModel {
+  var syncLocalID: String { id }
+  var syncUpdatedAt: Date { updatedAt }
+  var syncIsDeleted: Bool { isDeleted }
+  // syncRemoteID is a stored property the push driver assigns on acknowledgement
+}
+```
+
+`pendingChanges` partitions the store into inserts, updates, and deletes relative to your last-synced cursor — by querying the store, with no save-interception:
+
+- **insert** — never synced (`syncRemoteID == nil`) and not deleted
+- **update** — synced, not deleted, and edited since the cursor
+- **delete** — soft-deleted *and* known to the server (a row inserted-then-deleted locally never reached the server, so it is dropped, not pushed)
+
+`push` drives one pass. It hands the pending ids to your `upload` closure as a `Sendable` `SyncPushBatch` (so SwiftData objects never cross into a network call — you own the request), then applies the server's `SyncPushResponse` locally: stamping server-assigned `syncRemoteID`s onto inserts, hard-deleting confirmed deletes, and returning per-item failures for you to surface (discard / edit / retry).
+
+```swift
+let summary = try await SwiftSync.push(
+  for: Task.self,
+  in: syncContainer.mainContext,
+  changedSince: lastSyncedAt,
+  upload: { batch in
+    // map batch.inserts / batch.updates / batch.deletes (syncLocalIDs) to requests,
+    // call your API, and report back what the server assigned/accepted/rejected
+    try await api.push(batch)
+  }
+)
+lastSyncedAt = summary.cursor
+```
+
+Advance your cursor to `summary.cursor` on every pass: it only moves forward when *every* pending update was acknowledged, so an unacknowledged update is safely re-detected on the next push rather than lost.
 
 ## Date Handling
 
