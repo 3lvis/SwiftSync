@@ -690,6 +690,7 @@ Open `SwiftSync.xcworkspace` if you want to see those cases working together in 
 - [Property Mapping Contract](docs/project/property-mapping-contract.md)
 - [Reactive Reads](docs/project/reactive-reads.md)
 - [Backend Contract](docs/project/backend-contract.md)
+- [Upload Endpoint Contract](docs/project/upload-endpoint-contract.md)
 - [FAQ](docs/project/faq.md)
 
 ## License
