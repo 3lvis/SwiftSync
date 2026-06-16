@@ -75,6 +75,34 @@ final class OfflinePushTests: XCTestCase {
     }
 
     @MainActor
+    func testPushWhileOfflineIsANoOp() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        let body = try createBody(
+            from: DemoSeedData.SeedIDs.Tasks.sessionTimeout,
+            newID: "OFFLINE-NOOP-1",
+            in: syncContainer
+        )
+
+        engine.isOffline = true
+        try await engine.createTask(body: body, projectID: projectID)
+        XCTAssertEqual(engine.pendingChangeCount, 1)
+
+        // Still offline: a push must not reach the server.
+        let result = try await engine.pushPendingChanges()
+        XCTAssertNil(result, "push is unavailable while offline")
+        XCTAssertEqual(engine.pendingChangeCount, 1, "the pending change survives")
+        let backendDetail = try await apiClient.getTaskDetail(taskID: "OFFLINE-NOOP-1")
+        XCTAssertNil(backendDetail, "nothing was uploaded while offline")
+    }
+
+    @MainActor
     private func createBody(from templateID: String, newID: String, in syncContainer: SyncContainer) throws
         -> DemoSyncPayload
     {

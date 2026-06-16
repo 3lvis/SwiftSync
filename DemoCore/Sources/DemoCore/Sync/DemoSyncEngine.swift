@@ -132,10 +132,11 @@ public final class DemoSyncEngine {
         }
     }
 
-    /// Push every locally-pending task change to the server and apply the result. Returns `nil` if a
-    /// push is already in flight.
+    /// Push every locally-pending task change to the server and apply the result. Returns `nil` while
+    /// offline (no network) or if a push is already in flight.
     @discardableResult
     public func pushPendingChanges() async throws -> SyncPushSummary? {
+        guard !isOffline else { return nil }
         let key = "push"
         guard !inFlightOperations.contains(key) else { return nil }
 

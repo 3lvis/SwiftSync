@@ -44,7 +44,7 @@ struct ContentView: View {
                         Spacer()
 
                         Button("Sync now", action: pushPendingChanges)
-                            .disabled(engine.pendingChangeCount == 0 || engine.isSyncing)
+                            .disabled(engine.isOffline || engine.pendingChangeCount == 0 || engine.isSyncing)
                     }
                 }
             }
