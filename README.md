@@ -633,25 +633,7 @@ extension Task: SyncOfflineModel {
 - **update** — synced, not deleted, and edited since the cursor
 - **delete** — soft-deleted *and* known to the server (a row inserted-then-deleted locally never reached the server, so it is dropped, not pushed)
 
-`push` drives one pass. It hands the pending ids to your `upload` closure as a `Sendable` `SyncPushBatch` (so SwiftData objects never cross into a network call — you own the request), then applies the server's `SyncPushResponse` locally: stamping server-assigned `syncRemoteID`s onto inserts, hard-deleting confirmed deletes, and returning per-item failures for you to surface (discard / edit / retry).
-
-```swift
-let summary = try await SwiftSync.push(
-  for: Task.self,
-  in: syncContainer.mainContext,
-  changedSince: lastSyncedAt,
-  upload: { batch in
-    // map batch.inserts / batch.updates / batch.deletes (syncLocalIDs) to requests,
-    // call your API, and report back what the server assigned/accepted/rejected
-    try await api.push(batch)
-  }
-)
-lastSyncedAt = summary.cursor
-```
-
-Advance your cursor to `summary.cursor` on every pass: it only moves forward when *every* pending update was acknowledged, so an unacknowledged update is safely re-detected on the next push rather than lost.
-
-If your backend works one item at a time, use the per-item overload — supply a closure per operation and SwiftSync builds the `SyncPushResponse` for you (`insert` returns the server-assigned id; `update`/`delete` confirm by returning; a closure that throws becomes a `SyncPushFailure` for that item, leaving the row pending):
+`push` drives one pass. You supply a closure per operation; SwiftSync detects the pending changes, calls your closures (SwiftData objects never cross into the network call — your closures get `syncLocalID`s, not models), then applies the result locally: stamping server-assigned `syncRemoteID`s onto inserts, hard-deleting confirmed deletes, and returning per-item failures for you to surface (discard / edit / retry). `insert` returns the server-assigned id; `update`/`delete` confirm by returning; a closure that throws becomes a `SyncPushFailure` for that item and leaves the row pending, while the rest of the batch still runs.
 
 ```swift
 let summary = try await SwiftSync.push(
@@ -662,7 +644,10 @@ let summary = try await SwiftSync.push(
   update: { localID in try await api.update(localID) },
   delete: { localID in try await api.delete(localID) }
 )
+lastSyncedAt = summary.cursor
 ```
+
+Advance your cursor to `summary.cursor` on every pass: it only moves forward when *every* pending update was acknowledged, so an unacknowledged update is safely re-detected on the next push rather than lost.
 
 ## Date Handling
 

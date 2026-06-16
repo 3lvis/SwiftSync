@@ -26,14 +26,14 @@ public struct SyncPendingChanges<Model: SyncOfflineModel> {
 }
 
 /// The `syncLocalID`s to push, partitioned by operation. This — not the live models — is what the
-/// async uploader receives, so SwiftData objects never cross into a network call (the
-/// "never pass a model across contexts" rule). It's `Sendable`; the app maps each id to its payload.
-public struct SyncPushBatch: Sendable {
-    public let inserts: [String]
-    public let updates: [String]
-    public let deletes: [String]
+/// internal uploader works from, so SwiftData objects never cross into a network call (the
+/// "never pass a model across contexts" rule). It's `Sendable`.
+struct SyncPushBatch: Sendable {
+    let inserts: [String]
+    let updates: [String]
+    let deletes: [String]
 
-    public var isEmpty: Bool { inserts.isEmpty && updates.isEmpty && deletes.isEmpty }
+    var isEmpty: Bool { inserts.isEmpty && updates.isEmpty && deletes.isEmpty }
 }
 
 /// One pushed item the server rejected. SwiftSync surfaces these so the app can let the user act on
@@ -51,16 +51,16 @@ public struct SyncPushFailure: Equatable, Sendable {
     }
 }
 
-/// What the app's uploader reports back after talking to the server: the server-assigned ids for
+/// What the internal uploader reports back after talking to the server: the server-assigned ids for
 /// inserted rows, which updates/deletes were accepted, and any per-item failures.
-public struct SyncPushResponse: Sendable {
+struct SyncPushResponse: Sendable {
     /// insert's `syncLocalID` → server-assigned `syncRemoteID`.
-    public var assignedRemoteIDs: [String: String]
-    public var confirmedUpdateLocalIDs: Set<String>
-    public var confirmedDeleteLocalIDs: Set<String>
-    public var failures: [SyncPushFailure]
+    var assignedRemoteIDs: [String: String]
+    var confirmedUpdateLocalIDs: Set<String>
+    var confirmedDeleteLocalIDs: Set<String>
+    var failures: [SyncPushFailure]
 
-    public init(
+    init(
         assignedRemoteIDs: [String: String] = [:],
         confirmedUpdateLocalIDs: Set<String> = [],
         confirmedDeleteLocalIDs: Set<String> = [],
@@ -113,14 +113,13 @@ extension SwiftSync {
         return SyncPendingChanges(inserts: inserts, updates: updates, deletes: deletes)
     }
 
-    /// Drive one push: detect pending changes, hand their ids (a Sendable `SyncPushBatch`) to the
-    /// app's `upload` closure (the app owns the network call), then apply the server's response
-    /// locally — stamp server-assigned `syncRemoteID`s onto inserted rows, hard-delete confirmed
-    /// deletes — and report failures for the app to surface. Always advance your "last synced"
-    /// cursor to `summary.cursor`: it only moves forward when *every* pending update was
-    /// acknowledged, so an unacknowledged update is safely re-detected on the next push.
+    /// The push core: detect pending changes, hand their ids (a Sendable `SyncPushBatch`) to `upload`,
+    /// then apply the server's response locally — stamp server-assigned `syncRemoteID`s onto inserted
+    /// rows, hard-delete confirmed deletes — and report failures. Internal: the public `push` is the
+    /// per-item form below, which builds the `SyncPushResponse` for you. This bulk seam (one call for
+    /// the whole batch) stays internal until a backend with a bulk endpoint needs it.
     @discardableResult
-    public static func push<Model: SyncOfflineModel>(
+    static func push<Model: SyncOfflineModel>(
         for _: Model.Type,
         in context: ModelContext,
         changedSince: Date,
@@ -173,12 +172,14 @@ extension SwiftSync {
             cursor: allUpdatesAcknowledged ? now : changedSince)
     }
 
-    /// Convenience over `push(…, upload:)` for the common case where the app talks to the server one
-    /// item at a time. Supply a per-operation closure and SwiftSync runs the batch, building the
-    /// `SyncPushResponse` for you: `insert` returns the server-assigned `syncRemoteID`; `update` and
-    /// `delete` are confirmed by returning normally. A closure that throws records a `SyncPushFailure`
-    /// for that item (its message taken from the error) and leaves the row pending — the other items
-    /// in the batch still run.
+    /// Drive one push. Supply a closure per operation — `insert` returns the server-assigned
+    /// `syncRemoteID`; `update` and `delete` are confirmed by returning normally — and SwiftSync runs
+    /// the batch: detect pending changes, call your closures, then apply the result locally (stamp
+    /// remote ids, hard-delete confirmed deletes). A closure that throws records a `SyncPushFailure`
+    /// for that item (its message taken from the error) and leaves the row pending; the other items in
+    /// the batch still run. Always advance your "last synced" cursor to `summary.cursor`: it only moves
+    /// forward when *every* pending update was acknowledged, so an unacknowledged update is safely
+    /// re-detected on the next push.
     @discardableResult
     public static func push<Model: SyncOfflineModel>(
         for _: Model.Type,
