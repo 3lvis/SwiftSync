@@ -158,43 +158,70 @@ public final class DemoSyncEngine {
         return summary
     }
 
+    /// Serialize the pending batch into the `/sync/upload` operation list, POST it once, and map the
+    /// per-operation results back into a `SyncPushResponse`. Inserts carry the `localId` + full
+    /// resource; updates/deletes carry the server-assigned `remoteId` (from `syncRemoteID`). A `stale`
+    /// result means the server won last-writer-wins — adopt its state locally and treat the row as
+    /// resolved so it isn't re-sent.
     private func upload(_ batch: SyncPushBatch) async throws -> SyncPushResponse {
-        var response = SyncPushResponse()
+        var operations: [[String: Any]] = []
+        var remoteToLocal: [String: String] = [:]
+
         for localID in batch.inserts {
-            guard let body = try taskBody(localID: localID) else { continue }
-            do {
-                let created = try await apiClient.createTask(body: body)
-                response.assignedRemoteIDs[localID] = created.string("id") ?? localID
-            } catch {
-                response.failures.append(
-                    SyncPushFailure(localID: localID, operation: .insert, message: errorMessage(error)))
-            }
+            guard let task = try task(withID: localID) else { continue }
+            let data = syncContainer.export(task)
+            operations.append([
+                "operation": "insert", "type": "tasks", "localId": localID,
+                "updatedAt": data["updated_at"] ?? "", "data": data,
+            ])
         }
         for localID in batch.updates {
-            guard let body = try taskBody(localID: localID) else { continue }
-            do {
-                _ = try await apiClient.updateTask(taskID: localID, body: body)
-                response.confirmedUpdateLocalIDs.insert(localID)
-            } catch {
-                response.failures.append(
-                    SyncPushFailure(localID: localID, operation: .update, message: errorMessage(error)))
-            }
+            guard let task = try task(withID: localID), let remote = task.syncRemoteID else { continue }
+            remoteToLocal[remote] = localID
+            let data = syncContainer.export(task)
+            operations.append([
+                "operation": "update", "type": "tasks", "remoteId": remote,
+                "updatedAt": data["updated_at"] ?? "", "data": data,
+            ])
         }
         for localID in batch.deletes {
-            do {
-                try await apiClient.deleteTask(taskID: localID)
-                response.confirmedDeleteLocalIDs.insert(localID)
-            } catch {
+            guard let task = try task(withID: localID), let remote = task.syncRemoteID else { continue }
+            remoteToLocal[remote] = localID
+            let data = syncContainer.export(task)
+            operations.append([
+                "operation": "delete", "type": "tasks", "remoteId": remote,
+                "updatedAt": data["updated_at"] ?? "",
+            ])
+        }
+
+        let results = try await apiClient.upload(operations: operations)
+
+        var response = SyncPushResponse()
+        for result in results {
+            let operation = result["operation"] as? String
+            let status = result["status"] as? String
+            let remoteID = result["remoteId"] as? String
+            let localID = (result["localId"] as? String) ?? remoteID.flatMap { remoteToLocal[$0] }
+            switch (operation, status) {
+            case ("insert", "applied"):
+                if let localID, let remoteID { response.assignedRemoteIDs[localID] = remoteID }
+            case ("update", "applied"), ("update", "stale"):
+                if let localID { response.confirmedUpdateLocalIDs.insert(localID) }
+                if status == "stale", let server = result["server"] as? [String: Any] {
+                    try? await syncContainer.sync(item: DemoSyncPayload(dictionary: server), as: Task.self)
+                }
+            case ("delete", "applied"):
+                if let localID { response.confirmedDeleteLocalIDs.insert(localID) }
+            default:
+                let operationKind: SyncPushFailure.Operation =
+                    operation == "insert" ? .insert : (operation == "delete" ? .delete : .update)
                 response.failures.append(
-                    SyncPushFailure(localID: localID, operation: .delete, message: errorMessage(error)))
+                    SyncPushFailure(
+                        localID: localID ?? remoteID ?? "", operation: operationKind,
+                        message: (result["message"] as? String) ?? "rejected"))
             }
         }
         return response
-    }
-
-    private func taskBody(localID: String) throws -> DemoSyncPayload? {
-        guard let task = try task(withID: localID) else { return nil }
-        return try DemoSyncPayload(dictionary: syncContainer.export(task))
     }
 
     private func refreshPendingCount() {
@@ -203,25 +230,11 @@ public final class DemoSyncEngine {
         pendingChangeCount = pending.map { $0.inserts.count + $0.updates.count + $0.deletes.count } ?? 0
     }
 
-    /// Mark every task the server just reported as synced (`syncRemoteID = id`) and advance the cursor,
-    /// so freshly-pulled rows are not later mistaken for local inserts or edits.
-    private func markServerTasksSynced(payloadIDs: [String]) throws {
-        let idSet = Set(payloadIDs.filter { !$0.isEmpty })
-        if !idSet.isEmpty {
-            let tasks = try syncContainer.mainContext.fetch(FetchDescriptor<Task>())
-            var changed = false
-            for task in tasks where task.syncRemoteID == nil && idSet.contains(task.id) {
-                task.syncRemoteID = task.id
-                changed = true
-            }
-            if changed { try syncContainer.mainContext.save() }
-        }
+    /// After an inbound pull, advance the cursor so freshly-pulled rows aren't mistaken for local
+    /// edits, and refresh the pending count. (`syncRemoteID` is populated from `remote_id` on import.)
+    private func markPulled() {
         syncCursor = Date()
         refreshPendingCount()
-    }
-
-    private func errorMessage(_ error: Error) -> String {
-        (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
     }
 
     private func syncProjectsData() async throws {
@@ -259,7 +272,7 @@ public final class DemoSyncEngine {
             parent: project,
             relationship: \Task.project
         )
-        try markServerTasksSynced(payloadIDs: payload.compactMap { $0.string("id") })
+        markPulled()
         try await syncProjectsData()
     }
 
@@ -283,9 +296,7 @@ public final class DemoSyncEngine {
             throw SyncTaskDetailError.missingProject(projectID)
         }
         try await syncContainer.sync(item: payload, as: Task.self)
-        if let taskID = payload.string("id") {
-            try markServerTasksSynced(payloadIDs: [taskID])
-        }
+        markPulled()
     }
 
     private func syncTaskAfterMutation(taskID: String, projectID: String?) async throws {

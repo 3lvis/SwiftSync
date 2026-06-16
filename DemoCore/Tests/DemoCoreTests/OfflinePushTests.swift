@@ -39,9 +39,11 @@ final class OfflinePushTests: XCTestCase {
         XCTAssertEqual(engine.pendingChangeCount, 0)
 
         let synced = try XCTUnwrap(fetchTask(id: "OFFLINE-CREATE-1", in: syncContainer.mainContext))
-        XCTAssertEqual(synced.syncRemoteID, "OFFLINE-CREATE-1", "push stamps the server-assigned id")
+        let remoteID = try XCTUnwrap(synced.syncRemoteID, "push stamps the server-minted remote id")
+        XCTAssertNotEqual(remoteID, "OFFLINE-CREATE-1", "the server mints its own id, distinct from localId")
+        XCTAssertTrue(remoteID.hasPrefix("srv-"))
         let backendDetail = try await apiClient.getTaskDetail(taskID: "OFFLINE-CREATE-1")
-        XCTAssertNotNil(backendDetail)
+        XCTAssertNotNil(backendDetail, "the row reached the backend, keyed by its localId")
     }
 
     @MainActor

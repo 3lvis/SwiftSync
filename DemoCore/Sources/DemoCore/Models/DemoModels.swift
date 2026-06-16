@@ -85,6 +85,9 @@ public final class Task {
     public var createdAt: Date
     public var updatedAt: Date
 
+    // Imported from the server's `remote_id` (so a synced row knows its server id for later
+    // update/delete addressing); never exported back.
+    @RemoteKey("remote_id")
     @NotExport
     public var syncRemoteID: String?
 

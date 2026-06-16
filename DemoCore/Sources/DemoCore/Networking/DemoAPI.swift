@@ -146,6 +146,13 @@ public final class FakeDemoAPIClient {
         try backend.deleteTask(taskID: taskID)
     }
 
+    /// POST /sync/upload — the batched offline push. Returns the per-operation `results` array.
+    public func upload(operations: [[String: Any]]) async throws -> [[String: Any]] {
+        try await networkGate(endpoint: "POST /sync/upload")
+        let response = try backend.upload(operations: operations)
+        return (response["results"] as? [[String: Any]]) ?? []
+    }
+
     private func networkGate(endpoint: String) async throws {
         requestCounter += 1
         let callIndex = requestCounter

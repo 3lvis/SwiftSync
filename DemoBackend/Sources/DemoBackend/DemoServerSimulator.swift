@@ -680,9 +680,18 @@ public final class DemoServerSimulator {
     }
 
     private func localID(forRemoteID remote: String) throws -> String? {
+        // Match the minted remote_id, or fall back to id for pre-upload rows whose remote_id the
+        // payload coalesced to their id.
         let rows = try self.sqlite.query(
-            "SELECT id FROM tasks WHERE remote_id = ? AND deleted_at IS NULL LIMIT 1",
-            bind: { stmt in self.sqlite.bind(text: remote, at: 1, in: stmt) }
+            """
+            SELECT id FROM tasks
+            WHERE (remote_id = ? OR (remote_id IS NULL AND id = ?)) AND deleted_at IS NULL
+            LIMIT 1
+            """,
+            bind: { stmt in
+                self.sqlite.bind(text: remote, at: 1, in: stmt)
+                self.sqlite.bind(text: remote, at: 2, in: stmt)
+            }
         )
         return rows.first.map { $0.string("id") }
     }
@@ -822,7 +831,9 @@ public final class DemoServerSimulator {
         let stateID = row.string("state")
         return [
             "id": taskID,
-            "remote_id": row.nullableString("remote_id") ?? NSNull(),
+            // Rows created before the upload path (seed / per-resource POST) have no minted
+            // remote_id; their own id is their canonical server id, so coalesce to it.
+            "remote_id": row.nullableString("remote_id") ?? taskID,
             "project_id": row.string("project_id"),
             "assignee_id": row.nullableString("assignee_id") ?? NSNull(),
             "reviewer_ids": try reviewerIDsFor(taskID: taskID),
