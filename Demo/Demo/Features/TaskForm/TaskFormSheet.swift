@@ -246,12 +246,12 @@ extension TaskFormSheet {
     var overviewSection: some View {
         Section {
             VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    requiredMarker
+                HStack(alignment: .center, spacing: 8) {
                     TextField("Task title", text: $draft.title, axis: .vertical)
                         .lineLimit(2...4)
                         .font(.title3.weight(.semibold))
                         .accessibilityIdentifier("task-form.title")
+                    requiredPill
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -267,14 +267,21 @@ extension TaskFormSheet {
     // Required fields are marked; only Title, State, and Author gate Create (see isSaveDisabled).
     // Assignee, Description, Reviewers, Watchers, and Items are optional.
     @ViewBuilder
-    var requiredMarker: some View {
-        Text("*")
-            .foregroundStyle(.red)
+    var requiredPill: some View {
+        Text("Required")
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.gray, in: Capsule())
             .accessibilityLabel("required")
     }
 
-    func requiredFieldLabel(_ title: String) -> Text {
-        Text(title) + Text("  *").foregroundStyle(.red)
+    func requiredFieldLabel(_ title: String) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+            requiredPill
+        }
     }
 
     var descriptionSection: some View {
