@@ -88,8 +88,22 @@ For update/delete, the server compares the incoming `updatedAt` with the stored 
 
 ### Delete is a soft-delete tombstone
 
-A delete marks the row deleted (retained for a TTL) so other clients pull the deletion via the pull
-endpoint. It is not an immediate hard-delete.
+A delete marks the row deleted (server-side) so other clients still learn of the deletion on their
+next pull, rather than the row vanishing without a trace. It is not an immediate hard-delete on the
+server. (The *client* does hard-delete its own local row once the delete is acknowledged — tombstone
+lifecycle is purely a server concern; SwiftSync never manages it.)
+
+**Tombstone retention is the backend's responsibility, not the client's.** A tombstone must be kept
+at least as long as your longest plausible client offline window: purge too early and a client that
+was offline past the retention period never learns of the deletion and **resurrects the row** on its
+next push. Production backends therefore retain tombstones for a bounded window (≥ max offline window)
+and purge older ones with a periodic job — the same shape as Amplify DataStore's `BaseTableTTL` or
+CouchDB's purge. Pin the retention *capability* (outlast the max offline window), not a magic number
+of days.
+
+The `DemoServerSimulator` keeps tombstones indefinitely — it implements no purge, since the demo has
+no scheduler and its data is ephemeral. That is a deliberate omission: purge is production backend
+guidance, out of scope for the demo and irrelevant to the client.
 
 ### Safety: destruction is always explicit
 
