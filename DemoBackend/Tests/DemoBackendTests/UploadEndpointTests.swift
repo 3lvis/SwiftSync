@@ -71,6 +71,31 @@ final class UploadEndpointTests: XCTestCase {
             "tombstoned row is hidden from the list")
     }
 
+    func testUploadDeleteIsLastWriterWins() throws {
+        let backend = try makeBackend()
+        let localID = "LOCAL-DELETE-LWW-1"
+        let inserted = try result(of: backend.upload(operations: [
+            insertOp(localID: localID, title: "Live", updatedAt: "2030-01-01T00:00:00.000Z")
+        ]))
+        let remoteID = try XCTUnwrap(inserted["remoteId"] as? String)
+
+        // A delete older than the server's version must lose: stale + server state, not a tombstone.
+        let stale = try result(of: backend.upload(operations: [
+            deleteOp(remoteID: remoteID, updatedAt: "2020-01-01T00:00:00.000Z")
+        ]))
+        XCTAssertEqual(stale["status"] as? String, "stale")
+        XCTAssertNotNil(stale["server"] as? [String: Any])
+        XCTAssertNotNil(
+            try backend.getTaskDetailPayload(taskID: localID), "a stale delete must not tombstone the row")
+
+        // A newer delete wins.
+        let applied = try result(of: backend.upload(operations: [
+            deleteOp(remoteID: remoteID, updatedAt: "2040-01-01T00:00:00.000Z")
+        ]))
+        XCTAssertEqual(applied["status"] as? String, "applied")
+        XCTAssertNil(try backend.getTaskDetailPayload(taskID: localID))
+    }
+
     func testUploadFailsClosedOnMissingOrUnknownOperation() throws {
         let backend = try makeBackend()
         let response = try backend.upload(operations: [

@@ -626,10 +626,17 @@ public final class DemoServerSimulator {
     private func uploadDelete(_ payload: [String: Any]) throws -> [String: Any] {
         try requireTasksType(payload)
         let remote = try requireRemoteID(payload)
-        _ = try requireUpdatedAt(payload)
+        let incoming = try requireUpdatedAt(payload)
         guard let localID = try localID(forRemoteID: remote) else {
             // Already absent ⇒ idempotent success.
             return ["operation": "delete", "remoteId": remote, "status": "applied"]
+        }
+        // Last-writer-wins applies to deletes too: an older delete must not erase a newer server edit.
+        if try isStale(localID: localID, incoming: incoming) {
+            return [
+                "operation": "delete", "remoteId": remote, "status": "stale",
+                "server": try getTaskDetailPayload(taskID: localID) ?? NSNull(),
+            ]
         }
         suspendAmbientMutationsAfterWrite()
         try self.sqlite.execute(
@@ -702,7 +709,8 @@ public final class DemoServerSimulator {
             bind: { stmt in self.sqlite.bind(text: localID, at: 1, in: stmt) }
         )
         guard let stored = rows.first?.double("updated_at") else { return false }
-        return incoming.timeIntervalSince1970 < stored
+        // Contract: an incoming write older *or equal* loses (server wins ties).
+        return incoming.timeIntervalSince1970 <= stored
     }
 
     private func rejected(_ payload: [String: Any], code: String, message: String) -> [String: Any] {

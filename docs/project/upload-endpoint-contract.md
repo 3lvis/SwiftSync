@@ -21,16 +21,21 @@ A single batched request carrying all pending local changes. Returns a per-opera
 
 Every syncable row has two ids:
 
-- **`localId`** — client-generated, stable forever, never changes. SwiftSync mints it (a UUID) the
-  moment the row is created offline. It is also the **idempotency key** (see below).
-- **`remoteId`** — the server's own canonical id, minted by the server on insert. **Opaque to
-  SwiftSync** — it may be a UUID, an integer, a slug, anything; SwiftSync carries it as a string at
-  the boundary (an integer-PK backend just stringifies). `nil` on the client until an insert is
-  acknowledged.
+- **`localId`** — client-generated, stable forever, **never changes**. SwiftSync mints it (a UUID) the
+  moment the row is created offline. It is the row's identity on both sides — the key inbound sync
+  matches on — and the **idempotency key** for inserts (see below).
+- **`remoteId`** — a second id the server **mints** for the row on insert. **Opaque to SwiftSync** — a
+  UUID, an integer, a slug, anything; SwiftSync carries it as a string at the boundary (an integer-PK
+  backend just stringifies). `nil` on the client until an insert is acknowledged. The client uses it
+  to **address** the row in subsequent `update`/`delete` operations.
 
-The server does **not** accept the client's id as canonical — it mints its own. This is what lets
-SwiftSync work with conventional backends (including legacy integer-PK ones), not just greenfield
-UUID schemas. The cost SwiftSync owns is the local id-rewrite when `remoteId` arrives.
+The server mints its own `remoteId` (so SwiftSync works with conventional backends, including legacy
+integer-PK ones, not just greenfield UUID schemas), but **`localId` remains the stable identity** the
+two sides agree on — the server echoes it back on pulls and SwiftSync matches by it. That is a
+deliberate choice: because `localId` never changes, **there is no client-side id rewrite** and inbound
+sync needs no special handling — sidestepping the Core Data id-mutation hazard. (The alternative —
+making `remoteId` the canonical identity and rewriting local references when it arrives — is viable but
+not what this contract describes.)
 
 ## Request
 

@@ -225,6 +225,13 @@ public final class DemoSyncEngine {
                 }
             case ("delete", "applied"):
                 if let localID { response.confirmedDeleteLocalIDs.insert(localID) }
+            case ("delete", "stale"):
+                // The server has a newer edit — the delete lost LWW. Abandon the tombstone and adopt
+                // the server's state so the row reappears with the winning version (no re-send loop).
+                if let localID, let server = result["server"] as? [String: Any] {
+                    try? await syncContainer.sync(item: DemoSyncPayload(dictionary: server), as: Task.self)
+                    if let task = try task(withID: localID) { task.isLocallyDeleted = false }
+                }
             default:
                 let operationKind: SyncPushFailure.Operation =
                     operation == "insert" ? .insert : (operation == "delete" ? .delete : .update)
