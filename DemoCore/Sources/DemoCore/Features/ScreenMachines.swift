@@ -104,6 +104,9 @@ public final class ProjectsViewMachine {
     public func send(_ event: ScreenLoadEvent) {
         loadMachine.send(event, run: { [syncEngine] in
             try await syncEngine.syncProjects()
+            // Warm reference data (users + task states) on the home screen so it is cached for
+            // offline task creation — otherwise the new-task form has no options while offline.
+            try await syncEngine.syncTaskFormMetadata()
         })
     }
 
