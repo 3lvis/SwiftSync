@@ -256,8 +256,8 @@ extension TaskFormSheet {
 
                 VStack(alignment: .leading, spacing: 8) {
                     stateControl
-                    assigneeControl
                     authorControl
+                    assigneeControl
                 }
             }
             .padding(.vertical, 8)
@@ -273,7 +273,7 @@ extension TaskFormSheet {
             .foregroundStyle(.white)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Color.gray, in: Capsule())
+            .background(Color(.systemGray3), in: Capsule())
             .accessibilityLabel("required")
     }
 
