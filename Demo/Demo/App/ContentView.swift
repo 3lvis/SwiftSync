@@ -11,7 +11,12 @@ struct ContentView: View {
 
     var body: some View {
         ProjectsView(syncContainer: runtime.syncContainer, syncEngine: runtime.syncEngine)
+            // A safe-area inset, not a `.bottomBar` toolbar: the toolbar would attach outside
+            // ProjectsView's own NavigationStack and drop out on re-render. This stays put.
+            .safeAreaInset(edge: .bottom) { offlineBar }
             .toolbar {
+                // The scenario picker is dev chrome with non-deterministic network behavior, so it
+                // stays hidden under UI testing. The offline bar above is a real feature (and tested).
                 if !runtime.isUITesting {
                     ToolbarItem(placement: .topBarTrailing) {
                         Picker("Scenario", selection: $runtime.scenario) {
@@ -21,36 +26,44 @@ struct ContentView: View {
                         }
                         .pickerStyle(.menu)
                     }
-
-                    ToolbarItemGroup(placement: .bottomBar) {
-                        Button {
-                            engine.isOffline.toggle()
-                        } label: {
-                            Label(
-                                engine.isOffline ? "Offline" : "Online",
-                                systemImage: engine.isOffline ? "wifi.slash" : "wifi"
-                            )
-                        }
-                        .tint(engine.isOffline ? .orange : .accentColor)
-
-                        Spacer()
-
-                        if engine.pendingChangeCount > 0 {
-                            Text("\(engine.pendingChangeCount) pending")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
-                        Button("Sync now", action: pushPendingChanges)
-                            .disabled(engine.isOffline || engine.pendingChangeCount == 0 || engine.isSyncing)
-                    }
                 }
             }
             .alert(item: $syncResult) { result in
                 Alert(title: Text(result.title), message: Text(result.message), dismissButton: .default(Text("OK")))
             }
+    }
+
+    private var offlineBar: some View {
+        HStack {
+            Button {
+                engine.isOffline.toggle()
+            } label: {
+                Label(
+                    engine.isOffline ? "Offline" : "Online",
+                    systemImage: engine.isOffline ? "wifi.slash" : "wifi"
+                )
+            }
+            .tint(engine.isOffline ? .orange : .accentColor)
+            .accessibilityIdentifier("offline-toggle")
+
+            Spacer()
+
+            if engine.pendingChangeCount > 0 {
+                Text("\(engine.pendingChangeCount) pending")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("pending-count")
+            }
+
+            Spacer()
+
+            Button("Sync now", action: pushPendingChanges)
+                .disabled(engine.isOffline || engine.pendingChangeCount == 0 || engine.isSyncing)
+                .accessibilityIdentifier("sync-now")
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(.bar)
     }
 
     private func pushPendingChanges() {
