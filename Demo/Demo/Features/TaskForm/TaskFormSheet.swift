@@ -246,10 +246,13 @@ extension TaskFormSheet {
     var overviewSection: some View {
         Section {
             VStack(alignment: .leading, spacing: 8) {
-                TextField("Task title", text: $draft.title, axis: .vertical)
-                    .lineLimit(2...4)
-                    .font(.title3.weight(.semibold))
-                    .accessibilityIdentifier("task-form.title")
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    requiredMarker
+                    TextField("Task title", text: $draft.title, axis: .vertical)
+                        .lineLimit(2...4)
+                        .font(.title3.weight(.semibold))
+                        .accessibilityIdentifier("task-form.title")
+                }
 
                 VStack(alignment: .leading, spacing: 8) {
                     stateControl
@@ -258,14 +261,20 @@ extension TaskFormSheet {
                 }
             }
             .padding(.vertical, 8)
-        } footer: {
-            // Only these three gate Create (see isSaveDisabled); Assignee, Description, Reviewers,
-            // Watchers, and Items are optional.
-            if case .create = mode {
-                Text("Title, State, and Author are required.")
-                    .accessibilityIdentifier("task-form.required-note")
-            }
         }
+    }
+
+    // Required fields are marked; only Title, State, and Author gate Create (see isSaveDisabled).
+    // Assignee, Description, Reviewers, Watchers, and Items are optional.
+    @ViewBuilder
+    var requiredMarker: some View {
+        Text("*")
+            .foregroundStyle(.red)
+            .accessibilityLabel("required")
+    }
+
+    func requiredFieldLabel(_ title: String) -> Text {
+        Text(title) + Text("  *").foregroundStyle(.red)
     }
 
     var descriptionSection: some View {
@@ -350,12 +359,14 @@ extension TaskFormSheet {
                 ProgressView("Loading states...")
             }
         case .available:
-            Picker("State", selection: $draft.state) {
+            Picker(selection: $draft.state) {
                 ForEach(machine.taskStateOptions, id: \.id) { option in
                     Text(option.label)
                         .tag(option.id)
                         .accessibilityIdentifier("task-form.state.\(option.id)")
                 }
+            } label: {
+                requiredFieldLabel("State")
             }
             .pickerStyle(.menu)
             .onChange(of: draft.state) { _, newValue in
@@ -409,12 +420,14 @@ extension TaskFormSheet {
                     ProgressView("Loading people...")
                 }
             case .available:
-                Picker("Author", selection: $draft.authorID) {
+                Picker(selection: $draft.authorID) {
                     ForEach(machine.users, id: \.id) { user in
                         Text(user.displayName)
                             .tag(user.id)
                             .accessibilityIdentifier("task-form.author.option.\(user.id)")
                     }
+                } label: {
+                    requiredFieldLabel("Author")
                 }
                 .pickerStyle(.menu)
                 .accessibilityIdentifier("task-form.summary.author")

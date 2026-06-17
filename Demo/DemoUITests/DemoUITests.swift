@@ -331,8 +331,6 @@ final class DemoUITests: XCTestCase {
         // Create a task offline. With reference data cached, the form fills its defaults and Create enables.
         openProject(app, id: DemoSeedProjectID.accountSecurity)
         openCreateTaskForm(app)
-        XCTAssertTrue(
-            app.staticTexts["task-form.required-note"].exists, "the form marks which fields are required")
         let title = uniqueTitle(prefix: "Offline Created")
         replaceText(in: app.textFields["task-form.title"], with: title, app: app)
         XCTAssertTrue(app.buttons["task-form.save"].isEnabled, "offline create works with cached reference data")
