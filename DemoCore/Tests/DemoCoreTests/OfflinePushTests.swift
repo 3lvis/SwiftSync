@@ -1,3 +1,4 @@
+import DemoBackend
 import SwiftData
 import SwiftSync
 import XCTest
@@ -100,8 +101,52 @@ final class OfflinePushTests: XCTestCase {
         let result = try await engine.pushPendingChanges()
         XCTAssertNil(result, "push is unavailable while offline")
         XCTAssertEqual(engine.pendingChangeCount, 1, "the pending change survives")
+
+        // Reconnect to confirm the server never received it (the transport is unreachable offline).
+        engine.isOffline = false
         let backendDetail = try await apiClient.getTaskDetail(taskID: "OFFLINE-NOOP-1")
         XCTAssertNil(backendDetail, "nothing was uploaded while offline")
+    }
+
+    @MainActor
+    func testOfflinePullServesCacheAndDoesNotReachServer() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("offline-read-\(UUID().uuidString).sqlite")
+        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
+        let backend = try DemoServerSimulator(databaseURL: url, seedData: DemoSeedData.generate())
+        let apiClient = FakeDemoAPIClient(backend: backend)
+        let syncContainer = try makeSyncContainer()
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        try await engine.syncProjectTasks(projectID: projectID)
+        let onlineCount = try syncContainer.mainContext.fetch(FetchDescriptor<Task>()).count
+        XCTAssertGreaterThan(onlineCount, 0)
+
+        // A task appears on the server that this client has never seen.
+        _ = try backend.upload(operations: [
+            [
+                "operation": "insert", "type": "tasks", "localId": "SERVER-ONLY-1",
+                "updatedAt": "2026-06-16T20:00:00.000Z",
+                "data": [
+                    "project_id": projectID, "author_id": DemoSeedData.SeedIDs.Users.avaMartinez,
+                    "title": "Created on the server", "description": "x", "state": ["id": "todo"],
+                    "created_at": "2026-06-16T20:00:00.000Z", "updated_at": "2026-06-16T20:00:00.000Z",
+                ],
+            ]
+        ])
+
+        // Offline: a pull must not reach the server — no error, and no new data.
+        engine.isOffline = true
+        try await engine.syncProjectTasks(projectID: projectID)
+        let offlineCount = try syncContainer.mainContext.fetch(FetchDescriptor<Task>()).count
+        XCTAssertEqual(offlineCount, onlineCount, "offline pull serves the local cache, never the server")
+
+        // Reconnect: the server task is pulled in.
+        engine.isOffline = false
+        try await engine.syncProjectTasks(projectID: projectID)
+        let refreshedCount = try syncContainer.mainContext.fetch(FetchDescriptor<Task>()).count
+        XCTAssertEqual(refreshedCount, onlineCount + 1, "reconnecting refreshes from the server")
     }
 
     @MainActor

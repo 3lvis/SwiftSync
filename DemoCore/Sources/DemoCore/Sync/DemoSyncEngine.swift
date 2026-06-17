@@ -22,9 +22,12 @@ public final class DemoSyncEngine {
 
     public private(set) var isSyncing = false
 
-    /// When on, task create/edit/delete mutate the local store only — no network — and accumulate as
-    /// pending changes until `pushPendingChanges()` reconciles them with the server.
-    public var isOffline = false
+    /// Simulated airplane mode. The state lives at the transport (`apiClient`); this mirror drives it
+    /// and lets the UI bind to it. While offline, pulls keep serving the local cache, task edits queue
+    /// locally, and push is held — reconciled on reconnect.
+    public var isOffline = false {
+        didSet { apiClient.isOffline = isOffline }
+    }
 
     public private(set) var pendingChangeCount = 0
 
@@ -44,27 +47,37 @@ public final class DemoSyncEngine {
     }
 
     public func syncProjects() async throws {
-        try await runOperation("projects") {
-            try await syncProjectsData()
+        try await pull("projects") {
+            try await self.syncProjectsData()
         }
     }
 
     public func syncProjectTasks(projectID: String) async throws {
-        try await runOperation("projectTasks-\(projectID)") {
-            try await syncProjectTasksData(projectID: projectID)
+        try await pull("projectTasks-\(projectID)") {
+            try await self.syncProjectTasksData(projectID: projectID)
         }
     }
 
     public func syncTaskDetail(taskID: String) async throws {
-        try await runOperation("taskDetail-\(taskID)") {
-            try await syncTaskDetailData(taskID: taskID)
+        try await pull("taskDetail-\(taskID)") {
+            try await self.syncTaskDetailData(taskID: taskID)
         }
     }
 
     public func syncTaskFormMetadata() async throws {
-        try await runOperation("taskFormMetadata") {
-            try await syncUsersData()
-            try await syncTaskStatesData()
+        try await pull("taskFormMetadata") {
+            try await self.syncUsersData()
+            try await self.syncTaskStatesData()
+        }
+    }
+
+    /// Run an inbound pull, tolerating a dead transport: while offline the refresh is skipped and the
+    /// UI keeps reading the local cache (a failed refresh is a non-event, never a surfaced error).
+    private func pull(_ key: String, _ operation: () async throws -> Void) async throws {
+        do {
+            try await runOperation(key, operation)
+        } catch DemoAPIError.offline {
+            // Offline: keep serving what's already in the local store.
         }
     }
 
