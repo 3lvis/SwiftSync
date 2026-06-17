@@ -258,6 +258,13 @@ extension TaskFormSheet {
                 }
             }
             .padding(.vertical, 8)
+        } footer: {
+            // Only these three gate Create (see isSaveDisabled); Assignee, Description, Reviewers,
+            // Watchers, and Items are optional.
+            if case .create = mode {
+                Text("Title, State, and Author are required.")
+                    .accessibilityIdentifier("task-form.required-note")
+            }
         }
     }
 
