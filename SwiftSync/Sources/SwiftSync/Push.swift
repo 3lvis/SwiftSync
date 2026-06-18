@@ -143,8 +143,6 @@ extension SwiftSync {
             deletes: pending.deletes.map(\.syncLocalID))
         let response = try await upload(batch)
 
-        // Per-item rejection reasons are stamped onto the rows (and cleared on success), so they
-        // persist for the app to surface — a failures inbox is then just a query for set reasons.
         let failureReasons = Dictionary(
             response.failures.map { ($0.localID, $0.message) }, uniquingKeysWith: { first, _ in first })
 

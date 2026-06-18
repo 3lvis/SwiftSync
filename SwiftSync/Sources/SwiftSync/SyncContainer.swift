@@ -9,7 +9,7 @@ struct UncheckedSendableBox<Value>: @unchecked Sendable {
     init(_ value: Value) { self.value = value }
 }
 
-/// Which `ModelContext` a single-object `sync` writes into — the one knob a caller actually chooses.
+/// Which `ModelContext` a single-object `sync` writes into.
 public enum SyncContext: Sendable {
     /// Apply on the main actor against `mainContext`: the row mutates in place, so live queries reflect
     /// it at once. Occupies the main thread, so use it only for small, single-object local writes.
@@ -157,8 +157,6 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         )
     }
 
-    /// Sync a single object.
-    ///
     /// `context` has **no default** so every caller chooses deliberately (see `SyncContext`): `.main`
     /// for a small local write that must be visible at once, `.background` for a server/inbound sync.
     /// The split exists because SwiftData has no `mergeChanges(fromContextDidSave:)`, so a

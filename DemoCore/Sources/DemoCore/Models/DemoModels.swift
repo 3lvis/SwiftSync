@@ -96,8 +96,6 @@ public final class Task {
     @NotExport
     public var isLocallyDeleted: Bool?
 
-    // Set by the push driver when the server rejects this row; cleared on a successful push. Local
-    // bookkeeping, never exported.
     @NotExport
     public var syncFailureReason: String?
 
