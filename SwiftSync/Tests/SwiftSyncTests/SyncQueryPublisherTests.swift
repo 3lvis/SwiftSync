@@ -362,4 +362,25 @@ final class SyncQueryPublisherTests: XCTestCase {
         }
         XCTFail("Timed out waiting for condition: \(description)")
     }
+
+    // MARK: - Local (offline) writes
+
+    @MainActor
+    func testApplyLocalUpdatesRegisteredMainContextRowInPlace() async throws {
+        let container = try makeContainer(modelTypes: PubTask.self)
+        container.mainContext.insert(PubTask(id: "t1", title: "Original"))
+        try container.mainContext.save()
+
+        // A live query / SwiftUI view holds the registered main-context instance.
+        let row = try XCTUnwrap(
+            container.mainContext.fetch(FetchDescriptor<PubTask>()).first { $0.id == "t1" })
+
+        try await container.applyLocal(item: ["id": "t1", "title": "Edited"], as: PubTask.self)
+
+        // A local write must be visible on the already-registered instance immediately. Importing
+        // through a background context (plain `sync`) leaves this instance stale until SwiftData's
+        // cross-context merge eventually catches up — which is the offline edit-doesn't-update-the-list
+        // bug. `applyLocal` writes straight to the main context, so the change lands in place.
+        XCTAssertEqual(row.title, "Edited")
+    }
 }

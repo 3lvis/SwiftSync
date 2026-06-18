@@ -89,7 +89,7 @@ public final class DemoSyncEngine {
             guard try project(withID: projectID) != nil else {
                 throw SyncTaskDetailError.missingProject(projectID)
             }
-            try await syncContainer.sync(item: body, as: Task.self)
+            try await syncContainer.applyLocal(item: body, as: Task.self)
             refreshPendingCount()
             return
         }
@@ -107,7 +107,7 @@ public final class DemoSyncEngine {
         // must be re-inserted. Apply locally so it stays a pending insert; online, push to (re)insert.
         let neverSynced = (try task(withID: taskID))?.syncRemoteID == nil
         if isOffline || neverSynced {
-            try await syncContainer.sync(item: body, as: Task.self)
+            try await syncContainer.applyLocal(item: body, as: Task.self)
             if let task = try task(withID: taskID) {
                 task.updatedAt = Date()
                 task.syncFailureReason = nil  // the corrected edit gets a fresh attempt

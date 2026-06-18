@@ -223,6 +223,36 @@ final class OfflinePushTests: XCTestCase {
     }
 
     @MainActor
+    func testOfflineEditOfCreatedTaskUpdatesTitleAndKeepsProjectLink() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        engine.isOffline = true
+        let createBody = try createBody(
+            from: DemoSeedData.SeedIDs.Tasks.sessionTimeout, newID: "OFFLINE-EDIT-1", in: syncContainer)
+        try await engine.createTask(body: createBody, projectID: projectID)
+
+        let created = try XCTUnwrap(fetchTask(id: "OFFLINE-EDIT-1", in: syncContainer.mainContext))
+        XCTAssertEqual(created.project?.id, projectID, "precondition: the created task is linked to its project")
+
+        var editDictionary = syncContainer.export(created)
+        editDictionary["title"] = "Renamed offline"
+        editDictionary.removeValue(forKey: "items")
+        try await engine.updateTask(
+            taskID: "OFFLINE-EDIT-1", projectID: projectID,
+            body: try DemoSyncPayload(dictionary: editDictionary))
+
+        let edited = try XCTUnwrap(fetchTask(id: "OFFLINE-EDIT-1", in: syncContainer.mainContext))
+        XCTAssertEqual(edited.title, "Renamed offline", "the edit updates the local row's title")
+        XCTAssertEqual(edited.project?.id, projectID, "the edit must not drop the project link")
+    }
+
+    @MainActor
     func testPushWhileOfflineIsANoOp() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()

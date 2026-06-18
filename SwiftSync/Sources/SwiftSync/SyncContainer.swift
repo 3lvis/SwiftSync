@@ -206,6 +206,46 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         model.export(keyStyle: keyStyle, dateFormatter: dateFormatter)
     }
 
+    /// Apply a *local* (offline) write directly to `mainContext`, then notify query publishers.
+    ///
+    /// `sync(...)` imports through a background context. SwiftData's cross-context merge does not
+    /// promptly refresh an already-registered `mainContext` row on *update*, so an offline edit can
+    /// take a noticeable delay to surface in a live query (a fresh insert has no stale row, so it is
+    /// fine — which is why offline *create* already works but *edit* lags). Writing straight to
+    /// `mainContext` mutates the row in place, so the change is observable immediately. `mainContext`
+    /// saves are skipped by the did-save bridge, so the change notification is posted explicitly here.
+    public func applyLocal<Model: SyncUpdatableModel>(
+        item: [String: Any],
+        as model: Model.Type,
+        relationshipOperations: SyncRelationshipOperations = .all
+    ) async throws {
+        try await SwiftSync.sync(
+            item: item, as: model, in: mainContext,
+            keyStyle: keyStyle, relationshipOperations: relationshipOperations)
+        postLocalChange(modelTypeName: String(reflecting: Model.self))
+    }
+
+    public func applyLocal<Model: SyncUpdatableModel, Payload: SyncPayloadConvertible>(
+        item: Payload,
+        as model: Model.Type,
+        relationshipOperations: SyncRelationshipOperations = .all
+    ) async throws {
+        try await applyLocal(
+            item: item.toSyncPayloadDictionary(), as: model,
+            relationshipOperations: relationshipOperations)
+    }
+
+    private func postLocalChange(modelTypeName: String) {
+        NotificationCenter.default.post(
+            name: Self.didSaveChangesNotification,
+            object: self,
+            userInfo: [
+                Self.changedIdentifiersUserInfoKey: Set<PersistentIdentifier>(),
+                Self.changedModelTypeNamesUserInfoKey: Set([modelTypeName]),
+            ]
+        )
+    }
+
     private func installDidSaveObserver() {
         NotificationCenter.default.addObserver(
             self,

@@ -353,6 +353,47 @@ final class DemoUITests: XCTestCase {
         XCTAssertTrue(findAfterScrolling(app.staticTexts[title], in: app))
     }
 
+    // User journey: edit an offline-created task's title; the project list reflects the new title.
+    @MainActor
+    func testOfflineEditTaskTitleUpdatesProjectList() throws {
+        let app = configuredApp()
+        app.launch()
+
+        // Online: warm reference data (users + task states) so offline create/edit works.
+        openProject(app, id: DemoSeedProjectID.accountSecurity)
+        XCTAssertTrue(
+            app.staticTexts["Add session timeout controls to account settings"].waitForExistence(timeout: 2))
+        goBack(app)
+
+        app.buttons["offline-toggle"].tap()
+        XCTAssertEqual(app.buttons["offline-toggle"].label, "Offline")
+
+        // Create a task offline.
+        let originalTitle = uniqueTitle(prefix: "Offline Original")
+        openProject(app, id: DemoSeedProjectID.accountSecurity)
+        openCreateTaskForm(app)
+        replaceText(in: app.textFields["task-form.title"], with: originalTitle, app: app)
+        app.buttons["task-form.save"].tap()
+        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 1))
+        XCTAssertTrue(findAfterScrolling(app.staticTexts[originalTitle], in: app))
+
+        // Open it and rename it offline.
+        let updatedTitle = uniqueTitle(prefix: "Offline Renamed")
+        openTopProjectTask(app)
+        openEditTaskForm(app)
+        replaceText(in: app.textFields["task-form.title"], with: updatedTitle, app: app)
+        app.buttons["task-form.save"].tap()
+        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 1))
+        XCTAssertEqual(detailElement(app, id: "task.title").label, updatedTitle, "the detail shows the new title")
+
+        // Back on the project list, the row reflects the edit — not the stale original title.
+        goBack(app)
+        XCTAssertTrue(
+            findAfterScrolling(app.staticTexts[updatedTitle], in: app),
+            "the project list shows the edited title")
+        XCTAssertFalse(app.staticTexts[originalTitle].exists, "the stale title is gone")
+    }
+
     // User journey: a rejected offline edit lands in the failures inbox; discard resolves it.
     @MainActor
     func testRejectedOfflineEditAppearsInFailuresInboxAndDiscards() throws {
@@ -461,8 +502,8 @@ final class DemoUITests: XCTestCase {
     }
 }
 
-private extension DemoUITests {
-    func configuredApp() -> XCUIApplication {
+extension DemoUITests {
+    fileprivate func configuredApp() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SWIFTSYNC_UI_TESTING"] = "1"
         app.launchEnvironment["SWIFTSYNC_UI_TEST_RUN_ID"] = UUID().uuidString
@@ -470,29 +511,29 @@ private extension DemoUITests {
         return app
     }
 
-    func uniqueTitle(prefix: String) -> String {
+    fileprivate func uniqueTitle(prefix: String) -> String {
         "\(prefix) \(UUID().uuidString.prefix(6))"
     }
 
-    func openProject(_ app: XCUIApplication, id: String) {
+    fileprivate func openProject(_ app: XCUIApplication, id: String) {
         let row = app.cells["projects.row.\(id)"]
         XCTAssertTrue(row.exists)
         row.tap()
     }
 
-    func openTask(_ app: XCUIApplication, id: String) {
+    fileprivate func openTask(_ app: XCUIApplication, id: String) {
         let taskRow = app.descendants(matching: .any)["project.task.\(id)"]
         XCTAssertTrue(taskRow.waitForExistence(timeout: 1))
         taskRow.tap()
     }
 
-    func openTaskDetail(_ app: XCUIApplication, projectID: String, taskID: String) {
+    fileprivate func openTaskDetail(_ app: XCUIApplication, projectID: String, taskID: String) {
         openProject(app, id: projectID)
         openTask(app, id: taskID)
         XCTAssertTrue(detailElement(app, id: "task.title").exists)
     }
 
-    func openTopProjectTask(_ app: XCUIApplication) {
+    fileprivate func openTopProjectTask(_ app: XCUIApplication) {
         let rows = app.descendants(matching: .any)
             .matching(NSPredicate(format: "identifier BEGINSWITH 'project.task.'"))
         let row = rows.element(boundBy: 0)
@@ -500,40 +541,40 @@ private extension DemoUITests {
         row.tap()
     }
 
-    func detailElement(_ app: XCUIApplication, id: String) -> XCUIElement {
+    fileprivate func detailElement(_ app: XCUIApplication, id: String) -> XCUIElement {
         app.descendants(matching: .any)[id]
     }
 
-    func goBack(_ app: XCUIApplication) {
+    fileprivate func goBack(_ app: XCUIApplication) {
         app.navigationBars.buttons.element(boundBy: 0).tap()
     }
 
-    func openCreateTaskForm(_ app: XCUIApplication) {
+    fileprivate func openCreateTaskForm(_ app: XCUIApplication) {
         app.buttons["New Task"].tap()
         XCTAssertTrue(app.buttons["task-form.save"].exists)
     }
 
-    func openEditTaskForm(_ app: XCUIApplication) {
+    fileprivate func openEditTaskForm(_ app: XCUIApplication) {
         app.buttons["Edit"].tap()
         XCTAssertTrue(app.buttons["task-form.save"].exists)
     }
 
-    func selectAssignee(_ app: XCUIApplication, userID: String) {
+    fileprivate func selectAssignee(_ app: XCUIApplication, userID: String) {
         tapAfterScrolling(app.buttons["task-form.summary.assignee"], in: app)
         tapAfterScrolling(app.buttons["task-form.assignee.option.\(userID)"], in: app)
     }
 
-    func selectAuthor(_ app: XCUIApplication, userID: String) {
+    fileprivate func selectAuthor(_ app: XCUIApplication, userID: String) {
         tapAfterScrolling(app.buttons["task-form.summary.author"], in: app)
         tapAfterScrolling(app.buttons["task-form.author.option.\(userID)"], in: app)
     }
 
-    func addPerson(_ app: XCUIApplication, role: String, userID: String) {
+    fileprivate func addPerson(_ app: XCUIApplication, role: String, userID: String) {
         tapAfterScrolling(app.buttons["task-form.\(role).add"], in: app)
         tapAfterScrolling(app.buttons["task-form.\(role).option.\(userID)"], in: app)
     }
 
-    func deleteTaskFromProject(_ app: XCUIApplication, id: String) {
+    fileprivate func deleteTaskFromProject(_ app: XCUIApplication, id: String) {
         let taskRow = app.descendants(matching: .any)["project.task.\(id)"]
         XCTAssertTrue(taskRow.waitForExistence(timeout: 1))
         taskRow.swipeLeft()
@@ -541,7 +582,7 @@ private extension DemoUITests {
         app.alerts["Delete Task?"].buttons["Delete"].tap()
     }
 
-    func tapAfterScrolling(_ element: XCUIElement, in app: XCUIApplication, maxSwipes: Int = 6) {
+    fileprivate func tapAfterScrolling(_ element: XCUIElement, in app: XCUIApplication, maxSwipes: Int = 6) {
         for _ in 0..<maxSwipes where !element.isHittable {
             if app.tables.firstMatch.exists {
                 app.tables.firstMatch.swipeUp()
@@ -557,7 +598,7 @@ private extension DemoUITests {
         element.tap()
     }
 
-    func scrollToVisible(_ element: XCUIElement, in app: XCUIApplication, maxSwipes: Int = 6) {
+    fileprivate func scrollToVisible(_ element: XCUIElement, in app: XCUIApplication, maxSwipes: Int = 6) {
         for _ in 0..<maxSwipes where !element.exists {
             if app.tables.firstMatch.exists {
                 app.tables.firstMatch.swipeUp()
@@ -572,12 +613,12 @@ private extension DemoUITests {
         XCTAssertTrue(element.exists)
     }
 
-    func tapVisible(_ element: XCUIElement) {
+    fileprivate func tapVisible(_ element: XCUIElement) {
         XCTAssertTrue(element.exists)
         element.tap()
     }
 
-    func findAfterScrolling(_ element: XCUIElement, in app: XCUIApplication, maxSwipes: Int = 6) -> Bool {
+    fileprivate func findAfterScrolling(_ element: XCUIElement, in app: XCUIApplication, maxSwipes: Int = 6) -> Bool {
         for _ in 0..<maxSwipes where !element.exists {
             if app.tables.firstMatch.exists {
                 app.tables.firstMatch.swipeUp()
@@ -590,7 +631,7 @@ private extension DemoUITests {
         return element.exists
     }
 
-    func replaceText(in element: XCUIElement, with text: String, app: XCUIApplication) {
+    fileprivate func replaceText(in element: XCUIElement, with text: String, app: XCUIApplication) {
         XCTAssertTrue(element.exists)
         element.tap()
 
