@@ -9,6 +9,16 @@ struct UncheckedSendableBox<Value>: @unchecked Sendable {
     init(_ value: Value) { self.value = value }
 }
 
+/// Which `ModelContext` a single-object `sync` writes into — the one knob a caller actually chooses.
+public enum SyncContext: Sendable {
+    /// Apply on the main actor against `mainContext`: the row mutates in place, so live queries reflect
+    /// it at once. Occupies the main thread, so use it only for small, single-object local writes.
+    case main
+    /// Import on a background context off the main thread; changes merge into `mainContext` via the
+    /// did-save bridge (gated on an idle main runloop). The right choice for server/inbound syncs.
+    case background
+}
+
 public final class SyncContainer: NSObject, @unchecked Sendable {
     public struct SchemaValidationError: LocalizedError, Sendable {
         public let message: String
@@ -149,31 +159,27 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
 
     /// Sync a single object.
     ///
-    /// `runOnMain` has **no default** so every caller makes the choice deliberately:
-    /// - `true` for a *small, single-object local write* (a UI/offline create or edit) that must be
-    ///   visible at once: the import runs on the main actor against `mainContext`, mutating the row in
-    ///   place so live queries update synchronously. Only for small writes — it occupies the main thread.
-    /// - `false` for a server/background sync: it imports on a background context off the main thread
-    ///   (changes reach `mainContext` via the did-save bridge), so a large pull never blocks the UI.
-    ///
+    /// `context` has **no default** so every caller chooses deliberately (see `SyncContext`): `.main`
+    /// for a small local write that must be visible at once, `.background` for a server/inbound sync.
     /// The split exists because SwiftData has no `mergeChanges(fromContextDidSave:)`, so a
     /// background-context *update* doesn't promptly refresh an already-registered `mainContext` row
-    /// (the merge is gated on an idle main runloop) — running a local edit on main sidesteps that.
+    /// (the merge is gated on an idle main runloop) — writing a local edit on `.main` sidesteps that.
     public func sync<Model: SyncUpdatableModel>(
         item: [String: Any],
         as model: Model.Type,
         relationshipOperations: SyncRelationshipOperations = .all,
-        runOnMain: Bool
+        context: SyncContext
     ) async throws {
-        if runOnMain {
+        switch context {
+        case .main:
             try await syncIntoMainContext(
                 UncheckedSendableBox(item), as: model, relationshipOperations: relationshipOperations)
-        } else {
-            let context = ModelContext(modelContainer)
+        case .background:
+            let backgroundContext = ModelContext(modelContainer)
             try await SwiftSync.sync(
                 item: item,
                 as: model,
-                in: context,
+                in: backgroundContext,
                 keyStyle: keyStyle,
                 relationshipOperations: relationshipOperations
             )
@@ -202,13 +208,13 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         item: Payload,
         as model: Model.Type,
         relationshipOperations: SyncRelationshipOperations = .all,
-        runOnMain: Bool
+        context: SyncContext
     ) async throws {
         try await sync(
             item: item.toSyncPayloadDictionary(),
             as: model,
             relationshipOperations: relationshipOperations,
-            runOnMain: runOnMain
+            context: context
         )
     }
 

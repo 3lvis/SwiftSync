@@ -363,10 +363,10 @@ final class SyncQueryPublisherTests: XCTestCase {
         XCTFail("Timed out waiting for condition: \(description)")
     }
 
-    // MARK: - runOnMain (local) writes land in place
+    // MARK: - context: .main (local) writes land in place
 
     @MainActor
-    func testRunOnMainSyncUpdatesRegisteredRowInPlace() async throws {
+    func testMainContextSyncUpdatesRegisteredRowInPlace() async throws {
         let container = try makeContainer(modelTypes: PubTask.self)
         container.mainContext.insert(PubTask(id: "t1", title: "Original"))
         try container.mainContext.save()
@@ -375,10 +375,10 @@ final class SyncQueryPublisherTests: XCTestCase {
         let row = try XCTUnwrap(
             container.mainContext.fetch(FetchDescriptor<PubTask>()).first { $0.id == "t1" })
 
-        // runOnMain: true applies on the main context, so the edit lands on the already-registered
-        // instance at once. A background-context sync (runOnMain: false) would leave this instance
-        // stale until SwiftData's cross-context merge catches up on an idle main runloop.
-        try await container.sync(item: ["id": "t1", "title": "Edited"], as: PubTask.self, runOnMain: true)
+        // context: .main applies on the main context, so the edit lands on the already-registered
+        // instance at once. context: .background would leave this instance stale until SwiftData's
+        // cross-context merge catches up on an idle main runloop.
+        try await container.sync(item: ["id": "t1", "title": "Edited"], as: PubTask.self, context: .main)
 
         XCTAssertEqual(row.title, "Edited")
     }
