@@ -14,7 +14,7 @@ public final class DemoSyncEngine {
             switch self {
             case .missingProjectID:
                 return "Task detail payload is missing project_id."
-            case let .missingProject(projectID):
+            case .missingProject(let projectID):
                 return "Task detail sync requires project \(projectID) to exist locally."
             }
         }
@@ -30,6 +30,9 @@ public final class DemoSyncEngine {
     }
 
     public private(set) var pendingChangeCount = 0
+
+    /// Rows the server rejected (a failure reason is set). Drives the failures inbox.
+    public private(set) var failedChangeCount = 0
 
     /// Last point local state was reconciled with the server. Edits after this are pending updates;
     /// advanced after every inbound pull (so freshly-pulled rows aren't mistaken for local edits) and
@@ -86,7 +89,7 @@ public final class DemoSyncEngine {
             guard try project(withID: projectID) != nil else {
                 throw SyncTaskDetailError.missingProject(projectID)
             }
-            try await syncContainer.sync(item: body, as: Task.self)
+            try await syncContainer.sync(item: body, as: Task.self, context: .main)
             refreshPendingCount()
             return
         }
@@ -100,18 +103,33 @@ public final class DemoSyncEngine {
     }
 
     public func updateTask(taskID: String, projectID: String?, body: DemoSyncPayload) async throws {
-        if isOffline {
-            try await syncContainer.sync(item: body, as: Task.self)
+        // A row the server doesn't have yet (offline-created, or a rejected insert) can't be PUT — it
+        // must be re-inserted. Apply locally so it stays a pending insert; online, push to (re)insert.
+        let neverSynced = (try task(withID: taskID))?.syncRemoteID == nil
+        if isOffline || neverSynced {
+            try await syncContainer.sync(item: body, as: Task.self, context: .main)
             if let task = try task(withID: taskID) {
                 task.updatedAt = Date()
+                task.syncFailureReason = nil  // the corrected edit gets a fresh attempt
                 try syncContainer.mainContext.save()
             }
             refreshPendingCount()
+            if !isOffline {
+                _ = try await pushPendingChanges()
+            }
             return
         }
         try await runOperation("updateTask-\(taskID)") {
             _ = try await apiClient.updateTask(taskID: taskID, body: body)
             try await syncTaskAfterMutation(taskID: taskID, projectID: projectID)
+            // A successful online edit resolves any prior failure on this row (e.g. fixing a rejected
+            // offline edit from the failures inbox). syncFailureReason is @NotExport, so the server
+            // refresh won't clear it — do it explicitly.
+            if let task = try task(withID: taskID), task.syncFailureReason != nil {
+                task.syncFailureReason = nil
+                try syncContainer.mainContext.save()
+                refreshPendingCount()
+            }
         }
     }
 
@@ -201,37 +219,27 @@ public final class DemoSyncEngine {
     }
 
     /// Serialize the pending batch into the `/sync/upload` operation list, POST it once, and map the
-    /// per-operation results back into a `SyncPushResponse`. Inserts carry the `localId` + full
-    /// resource; updates/deletes carry the server-assigned `remoteId` (from `syncRemoteID`). A `stale`
-    /// result means the server won last-writer-wins — adopt its state locally and treat the row as
-    /// resolved so it isn't re-sent.
+    /// per-operation results back into a `SyncPushResponse`. Every created-or-edited row is an `upsert`
+    /// keyed by its stable `localId` (the server find-by-localId → update-else-creates, minting and
+    /// returning a distinct `remoteId` on first create); tombstones are a `delete` by the same
+    /// `localId`. A `stale` result means the server won last-writer-wins — adopt its state locally and
+    /// treat the row as resolved so it isn't re-sent.
     private func upload(_ batch: SyncPushBatch) async throws -> SyncPushResponse {
         var operations: [[String: Any]] = []
-        var remoteToLocal: [String: String] = [:]
 
-        for localID in batch.inserts {
+        for localID in batch.inserts + batch.updates {
             guard let task = try task(withID: localID) else { continue }
             let data = taskData(task)
             operations.append([
-                "operation": "insert", "type": "tasks", "localId": localID,
-                "updatedAt": data["updated_at"] ?? "", "data": data,
-            ])
-        }
-        for localID in batch.updates {
-            guard let task = try task(withID: localID), let remote = task.syncRemoteID else { continue }
-            remoteToLocal[remote] = localID
-            let data = taskData(task)
-            operations.append([
-                "operation": "update", "type": "tasks", "remoteId": remote,
+                "operation": "upsert", "type": "tasks", "localId": localID,
                 "updatedAt": data["updated_at"] ?? "", "data": data,
             ])
         }
         for localID in batch.deletes {
-            guard let task = try task(withID: localID), let remote = task.syncRemoteID else { continue }
-            remoteToLocal[remote] = localID
+            guard let task = try task(withID: localID) else { continue }
             let data = syncContainer.export(task)
             operations.append([
-                "operation": "delete", "type": "tasks", "remoteId": remote,
+                "operation": "delete", "type": "tasks", "localId": localID,
                 "updatedAt": data["updated_at"] ?? "",
             ])
         }
@@ -242,15 +250,18 @@ public final class DemoSyncEngine {
         for result in results {
             let operation = result["operation"] as? String
             let status = result["status"] as? String
+            let localID = result["localId"] as? String
             let remoteID = result["remoteId"] as? String
-            let localID = (result["localId"] as? String) ?? remoteID.flatMap { remoteToLocal[$0] }
             switch (operation, status) {
-            case ("insert", "applied"):
+            case ("upsert", "applied"), ("upsert", "stale"):
+                // An applied upsert resolves both inserts (stamp the server-minted remoteId) and
+                // updates; SwiftSync scopes each field to its own batch slice, so populating both is
+                // safe.
                 if let localID, let remoteID { response.assignedRemoteIDs[localID] = remoteID }
-            case ("update", "applied"), ("update", "stale"):
                 if let localID { response.confirmedUpdateLocalIDs.insert(localID) }
                 if status == "stale", let server = result["server"] as? [String: Any] {
-                    try? await syncContainer.sync(item: DemoSyncPayload(dictionary: server), as: Task.self)
+                    try? await syncContainer.sync(
+                        item: DemoSyncPayload(dictionary: server), as: Task.self, context: .main)
                 }
             case ("delete", "applied"):
                 if let localID { response.confirmedDeleteLocalIDs.insert(localID) }
@@ -258,15 +269,15 @@ public final class DemoSyncEngine {
                 // The server has a newer edit — the delete lost LWW. Abandon the tombstone and adopt
                 // the server's state so the row reappears with the winning version (no re-send loop).
                 if let localID, let server = result["server"] as? [String: Any] {
-                    try? await syncContainer.sync(item: DemoSyncPayload(dictionary: server), as: Task.self)
+                    try? await syncContainer.sync(
+                        item: DemoSyncPayload(dictionary: server), as: Task.self, context: .main)
                     if let task = try task(withID: localID) { task.isLocallyDeleted = false }
                 }
             default:
-                let operationKind: SyncPushFailure.Operation =
-                    operation == "insert" ? .insert : (operation == "delete" ? .delete : .update)
                 response.failures.append(
                     SyncPushFailure(
-                        localID: localID ?? remoteID ?? "", operation: operationKind,
+                        localID: localID ?? "",
+                        operation: operation == "delete" ? .delete : .update,
                         message: (result["message"] as? String) ?? "rejected"))
             }
         }
@@ -286,6 +297,35 @@ public final class DemoSyncEngine {
         let pending = try? SwiftSync.pendingChanges(
             for: Task.self, in: syncContainer.mainContext, changedSince: syncCursor)
         pendingChangeCount = pending.map { $0.inserts.count + $0.updates.count + $0.deletes.count } ?? 0
+
+        let failed = try? syncContainer.mainContext.fetch(
+            FetchDescriptor<Task>(predicate: #Predicate { $0.syncFailureReason != nil }))
+        failedChangeCount = failed?.count ?? 0
+    }
+
+    /// Tasks the server rejected (a failure reason is set), newest first — the failures inbox.
+    public func failedTasks() -> [Task] {
+        (try? syncContainer.mainContext.fetch(
+            FetchDescriptor<Task>(
+                predicate: #Predicate { $0.syncFailureReason != nil },
+                sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]))) ?? []
+    }
+
+    /// Resolve a rejected change: drop a never-synced row, or restore the server's version of an
+    /// edited row (abandoning the local edit) and clear its failure.
+    public func discardFailedChange(taskID: String) async throws {
+        guard let task = try task(withID: taskID) else { return }
+        if task.syncRemoteID == nil {
+            syncContainer.mainContext.delete(task)
+            try syncContainer.mainContext.save()
+        } else {
+            try await syncTaskDetail(taskID: taskID)
+            if let refreshed = try self.task(withID: taskID) {
+                refreshed.syncFailureReason = nil
+                try syncContainer.mainContext.save()
+            }
+        }
+        refreshPendingCount()
     }
 
     /// After an inbound pull, advance the cursor so freshly-pulled rows aren't mistaken for local
@@ -353,7 +393,7 @@ public final class DemoSyncEngine {
         guard try project(withID: projectID) != nil else {
             throw SyncTaskDetailError.missingProject(projectID)
         }
-        try await syncContainer.sync(item: payload, as: Task.self)
+        try await syncContainer.sync(item: payload, as: Task.self, context: .background)
         markPulled()
     }
 

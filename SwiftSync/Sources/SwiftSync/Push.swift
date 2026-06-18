@@ -14,6 +14,9 @@ public protocol SyncOfflineModel: PersistentModel {
     var syncRemoteID: String? { get set }
     var syncUpdatedAt: Date { get }
     var syncIsDeleted: Bool { get }
+    /// Why the server last rejected this row's push (`nil` if none). `push` stamps it on a per-item
+    /// failure and clears it on success, so a failures inbox is just a query for rows where it's set.
+    var syncFailureReason: String? { get set }
 }
 
 /// The local rows pending a push, partitioned by operation (live models, for applying results).
@@ -140,18 +143,40 @@ extension SwiftSync {
             deletes: pending.deletes.map(\.syncLocalID))
         let response = try await upload(batch)
 
+        let failureReasons = Dictionary(
+            response.failures.map { ($0.localID, $0.message) }, uniquingKeysWith: { first, _ in first })
+
+        // Clear a persisted failure only on *actual* success (remote id assigned / confirmed update /
+        // confirmed delete). A row the response neither acknowledged nor freshly failed is still
+        // pending — same as the cursor logic below treats it — so leave its existing marker untouched
+        // rather than silently dropping it from the failures inbox.
         var insertedCount = 0
         for insert in pending.inserts {
             if let remoteID = response.assignedRemoteIDs[insert.syncLocalID] {
                 insert.syncRemoteID = remoteID
                 insertedCount += 1
+                insert.syncFailureReason = nil
+            } else if let reason = failureReasons[insert.syncLocalID] {
+                insert.syncFailureReason = reason
+            }
+        }
+
+        for update in pending.updates {
+            if response.confirmedUpdateLocalIDs.contains(update.syncLocalID) {
+                update.syncFailureReason = nil
+            } else if let reason = failureReasons[update.syncLocalID] {
+                update.syncFailureReason = reason
             }
         }
 
         var deletedCount = 0
-        for delete in pending.deletes where response.confirmedDeleteLocalIDs.contains(delete.syncLocalID) {
-            context.delete(delete)
-            deletedCount += 1
+        for delete in pending.deletes {
+            if response.confirmedDeleteLocalIDs.contains(delete.syncLocalID) {
+                context.delete(delete)
+                deletedCount += 1
+            } else if let reason = failureReasons[delete.syncLocalID] {
+                delete.syncFailureReason = reason
+            }
         }
 
         try context.save()

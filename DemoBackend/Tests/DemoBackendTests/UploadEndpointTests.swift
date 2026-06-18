@@ -7,13 +7,14 @@ final class UploadEndpointTests: XCTestCase {
     private let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
     private let authorID = DemoSeedData.SeedIDs.Users.avaMartinez
 
-    func testUploadInsertMintsDistinctRemoteIDAndIsIdempotent() throws {
+    func testUploadUpsertMintsDistinctRemoteIDAndIsIdempotent() throws {
         let backend = try makeBackend()
-        let localID = "LOCAL-INSERT-1"
+        let localID = "LOCAL-UPSERT-1"
         let before = try backend.getProjectTasksPayload(projectID: projectID).count
 
-        let first = try result(of: backend.upload(operations: [insertOp(localID: localID, title: "Offline task")]))
+        let first = try result(of: backend.upload(operations: [upsertOp(localID: localID, title: "Offline task")]))
         XCTAssertEqual(first["status"] as? String, "applied")
+        XCTAssertEqual(first["localId"] as? String, localID)
         let remoteID = try XCTUnwrap(first["remoteId"] as? String)
         XCTAssertNotEqual(remoteID, localID, "the server mints its own remote id, distinct from localId")
         XCTAssertTrue(remoteID.hasPrefix("srv-"))
@@ -23,33 +24,40 @@ final class UploadEndpointTests: XCTestCase {
         let inserted = try XCTUnwrap(tasks.first { ($0["id"] as? String) == localID })
         XCTAssertEqual(inserted["remote_id"] as? String, remoteID)
 
-        // Retry the same insert (lost-response scenario): same remote id, no duplicate row.
-        let retry = try result(of: backend.upload(operations: [insertOp(localID: localID, title: "Offline task")]))
-        XCTAssertEqual(retry["remoteId"] as? String, remoteID)
+        // Re-upsert the same localId (lost-response retry): same remote id, no duplicate row. The
+        // identical updatedAt loses the LWW tie, so it's a converged no-op — not a failure.
+        let retry = try result(of: backend.upload(operations: [upsertOp(localID: localID, title: "Offline task")]))
+        XCTAssertNotEqual(retry["status"] as? String, "rejected")
+        XCTAssertEqual(retry["remoteId"] as? String, remoteID, "the minted remote id is stable across retries")
         XCTAssertEqual(try backend.getProjectTasksPayload(projectID: projectID).count, before + 1)
     }
 
-    func testUploadUpdateIsLastWriterWins() throws {
+    func testUploadUpsertIsLastWriterWins() throws {
         let backend = try makeBackend()
-        let localID = "LOCAL-UPDATE-1"
-        let inserted = try result(of: backend.upload(operations: [
-            insertOp(localID: localID, title: "Original", updatedAt: "2026-01-01T00:00:00.000Z")
-        ]))
-        let remoteID = try XCTUnwrap(inserted["remoteId"] as? String)
+        let localID = "LOCAL-UPSERT-LWW-1"
+        let created = try result(
+            of: backend.upload(operations: [
+                upsertOp(localID: localID, title: "Original", updatedAt: "2026-01-01T00:00:00.000Z")
+            ]))
+        let remoteID = try XCTUnwrap(created["remoteId"] as? String)
 
-        // Older write loses: kept server state returned, title unchanged.
-        let stale = try result(of: backend.upload(operations: [
-            updateOp(remoteID: remoteID, localID: localID, title: "Stale edit", updatedAt: "2020-01-01T00:00:00.000Z")
-        ]))
+        // Older write loses: kept server state returned, title unchanged, same remote id.
+        let stale = try result(
+            of: backend.upload(operations: [
+                upsertOp(localID: localID, title: "Stale edit", updatedAt: "2020-01-01T00:00:00.000Z")
+            ]))
         XCTAssertEqual(stale["status"] as? String, "stale")
+        XCTAssertEqual(stale["remoteId"] as? String, remoteID)
         let server = try XCTUnwrap(stale["server"] as? [String: Any])
         XCTAssertEqual(server["title"] as? String, "Original")
 
         // Newer write wins.
-        let applied = try result(of: backend.upload(operations: [
-            updateOp(remoteID: remoteID, localID: localID, title: "Fresh edit", updatedAt: "2030-01-01T00:00:00.000Z")
-        ]))
+        let applied = try result(
+            of: backend.upload(operations: [
+                upsertOp(localID: localID, title: "Fresh edit", updatedAt: "2030-01-01T00:00:00.000Z")
+            ]))
         XCTAssertEqual(applied["status"] as? String, "applied")
+        XCTAssertEqual(applied["remoteId"] as? String, remoteID, "an update keeps the existing remote id")
         let detail = try XCTUnwrap(backend.getTaskDetailPayload(taskID: localID))
         XCTAssertEqual(detail["title"] as? String, "Fresh edit")
     }
@@ -57,12 +65,12 @@ final class UploadEndpointTests: XCTestCase {
     func testUploadDeleteTombstonesAndHidesFromReads() throws {
         let backend = try makeBackend()
         let localID = "LOCAL-DELETE-1"
-        let inserted = try result(of: backend.upload(operations: [insertOp(localID: localID, title: "Doomed")]))
-        let remoteID = try XCTUnwrap(inserted["remoteId"] as? String)
+        _ = try result(of: backend.upload(operations: [upsertOp(localID: localID, title: "Doomed")]))
 
-        let deleted = try result(of: backend.upload(operations: [
-            deleteOp(remoteID: remoteID, updatedAt: "2030-01-01T00:00:00.000Z")
-        ]))
+        let deleted = try result(
+            of: backend.upload(operations: [
+                deleteOp(localID: localID, updatedAt: "2030-01-01T00:00:00.000Z")
+            ]))
         XCTAssertEqual(deleted["status"] as? String, "applied")
 
         XCTAssertNil(try backend.getTaskDetailPayload(taskID: localID), "tombstoned row is hidden from detail")
@@ -74,33 +82,80 @@ final class UploadEndpointTests: XCTestCase {
     func testUploadDeleteIsLastWriterWins() throws {
         let backend = try makeBackend()
         let localID = "LOCAL-DELETE-LWW-1"
-        let inserted = try result(of: backend.upload(operations: [
-            insertOp(localID: localID, title: "Live", updatedAt: "2030-01-01T00:00:00.000Z")
-        ]))
-        let remoteID = try XCTUnwrap(inserted["remoteId"] as? String)
+        _ = try result(
+            of: backend.upload(operations: [
+                upsertOp(localID: localID, title: "Live", updatedAt: "2030-01-01T00:00:00.000Z")
+            ]))
 
         // A delete older than the server's version must lose: stale + server state, not a tombstone.
-        let stale = try result(of: backend.upload(operations: [
-            deleteOp(remoteID: remoteID, updatedAt: "2020-01-01T00:00:00.000Z")
-        ]))
+        let stale = try result(
+            of: backend.upload(operations: [
+                deleteOp(localID: localID, updatedAt: "2020-01-01T00:00:00.000Z")
+            ]))
         XCTAssertEqual(stale["status"] as? String, "stale")
         XCTAssertNotNil(stale["server"] as? [String: Any])
         XCTAssertNotNil(
             try backend.getTaskDetailPayload(taskID: localID), "a stale delete must not tombstone the row")
 
         // A newer delete wins.
-        let applied = try result(of: backend.upload(operations: [
-            deleteOp(remoteID: remoteID, updatedAt: "2040-01-01T00:00:00.000Z")
-        ]))
+        let applied = try result(
+            of: backend.upload(operations: [
+                deleteOp(localID: localID, updatedAt: "2040-01-01T00:00:00.000Z")
+            ]))
         XCTAssertEqual(applied["status"] as? String, "applied")
         XCTAssertNil(try backend.getTaskDetailPayload(taskID: localID))
+    }
+
+    func testUploadUpsertRevivesTombstonedRowWhenEditIsNewer() throws {
+        let backend = try makeBackend()
+        let localID = "REVIVE-1"
+        _ = try result(
+            of: backend.upload(operations: [
+                upsertOp(localID: localID, title: "Live", updatedAt: "2030-01-01T00:00:00.000Z")
+            ]))
+        _ = try result(
+            of: backend.upload(operations: [
+                deleteOp(localID: localID, updatedAt: "2040-01-01T00:00:00.000Z")
+            ]))
+        XCTAssertNil(try backend.getTaskDetailPayload(taskID: localID), "precondition: tombstoned")
+
+        // An edit newer than the delete wins LWW: it revives the row, not a phantom "applied".
+        let revived = try result(
+            of: backend.upload(operations: [
+                upsertOp(localID: localID, title: "Revived", updatedAt: "2050-01-01T00:00:00.000Z")
+            ]))
+        XCTAssertEqual(revived["status"] as? String, "applied")
+        let detail = try XCTUnwrap(
+            backend.getTaskDetailPayload(taskID: localID), "a newer edit must resurrect the tombstoned row")
+        XCTAssertEqual(detail["title"] as? String, "Revived")
+    }
+
+    func testUploadUpsertOnTombstonedRowStaysDeletedWhenEditIsOlder() throws {
+        let backend = try makeBackend()
+        let localID = "REVIVE-2"
+        _ = try result(
+            of: backend.upload(operations: [
+                upsertOp(localID: localID, title: "Live", updatedAt: "2030-01-01T00:00:00.000Z")
+            ]))
+        _ = try result(
+            of: backend.upload(operations: [
+                deleteOp(localID: localID, updatedAt: "2040-01-01T00:00:00.000Z")
+            ]))
+
+        // An edit older than the delete loses LWW: stale, and the row stays deleted (no phantom apply).
+        let stale = try result(
+            of: backend.upload(operations: [
+                upsertOp(localID: localID, title: "Too late", updatedAt: "2035-01-01T00:00:00.000Z")
+            ]))
+        XCTAssertEqual(stale["status"] as? String, "stale")
+        XCTAssertNil(try backend.getTaskDetailPayload(taskID: localID), "the row stays deleted")
     }
 
     func testUploadFailsClosedOnMissingOrUnknownOperation() throws {
         let backend = try makeBackend()
         let response = try backend.upload(operations: [
             ["type": "tasks", "localId": "x", "data": [:]],  // no operation
-            ["operation": "destroy", "type": "tasks", "remoteId": "y"],  // unknown
+            ["operation": "destroy", "type": "tasks", "localId": "y"],  // unknown
         ])
         let results = try XCTUnwrap(response["results"] as? [[String: Any]])
         XCTAssertEqual(results.allSatisfy { ($0["status"] as? String) == "rejected" }, true)
@@ -117,34 +172,21 @@ final class UploadEndpointTests: XCTestCase {
         return try DemoServerSimulator(databaseURL: url, seedData: DemoSeedData.generate())
     }
 
-    private func insertOp(localID: String, title: String, updatedAt: String = "2026-06-16T20:00:00.000Z")
+    private func upsertOp(localID: String, title: String, updatedAt: String = "2026-06-16T20:00:00.000Z")
         -> [String: Any]
     {
         [
-            "operation": "insert", "type": "tasks", "localId": localID, "updatedAt": updatedAt,
+            "operation": "upsert", "type": "tasks", "localId": localID, "updatedAt": updatedAt,
             "data": [
-                "project_id": projectID, "author_id": authorID, "title": title,
+                "id": localID, "project_id": projectID, "author_id": authorID, "title": title,
                 "description": "from offline", "state": ["id": "todo"],
                 "created_at": updatedAt, "updated_at": updatedAt,
             ],
         ]
     }
 
-    private func updateOp(remoteID: String, localID: String, title: String, updatedAt: String)
-        -> [String: Any]
-    {
-        [
-            "operation": "update", "type": "tasks", "remoteId": remoteID, "updatedAt": updatedAt,
-            "data": [
-                "id": localID, "project_id": projectID, "author_id": authorID, "title": title,
-                "description": "edited", "state": ["id": "todo"],
-                "created_at": "2026-01-01T00:00:00.000Z", "updated_at": updatedAt,
-            ],
-        ]
-    }
-
-    private func deleteOp(remoteID: String, updatedAt: String) -> [String: Any] {
-        ["operation": "delete", "type": "tasks", "remoteId": remoteID, "updatedAt": updatedAt]
+    private func deleteOp(localID: String, updatedAt: String) -> [String: Any] {
+        ["operation": "delete", "type": "tasks", "localId": localID, "updatedAt": updatedAt]
     }
 
     private func result(of response: [String: Any]) throws -> [String: Any] {

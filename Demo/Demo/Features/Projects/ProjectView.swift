@@ -23,24 +23,24 @@ struct ProjectView: View {
 
     var body: some View {
         List { content }
-        .listStyle(.plain)
-        .accessibilityIdentifier("project.detail")
-        .navigationTitle("Project")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar { toolbarContent }
-        .task(loadProject)
-        .animation(.snappy(duration: 0.2), value: taskIDs)
-        .projectPresentations(
-            createTaskSheetIsPresented: $isShowingCreateTaskSheet,
-            createTaskSheet: { createTaskSheet },
-            deletePromptIsPresented: deletePromptIsPresented,
-            taskPendingDelete: taskPendingDelete,
-            onConfirmDelete: confirmDelete,
-            onCancelDelete: { taskPendingDelete = nil },
-            deleteFailureIsPresented: deleteFailureIsPresented,
-            deleteFailureMessage: deleteFailureMessage,
-            onDismissDeleteFailure: { machine.sendDelete(.dismissError) }
-        )
+            .listStyle(.plain)
+            .accessibilityIdentifier("project.detail")
+            .navigationTitle("Project")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { toolbarContent }
+            .task(loadProject)
+            .animation(.snappy(duration: 0.2), value: taskIDs)
+            .projectPresentations(
+                createTaskSheetIsPresented: $isShowingCreateTaskSheet,
+                createTaskSheet: { createTaskSheet },
+                deletePromptIsPresented: deletePromptIsPresented,
+                taskPendingDelete: taskPendingDelete,
+                onConfirmDelete: confirmDelete,
+                onCancelDelete: { taskPendingDelete = nil },
+                deleteFailureIsPresented: deleteFailureIsPresented,
+                deleteFailureMessage: deleteFailureMessage,
+                onDismissDeleteFailure: { machine.sendDelete(.dismissError) }
+            )
     }
 
     private var taskIDs: [String] {
@@ -147,8 +147,10 @@ struct ProjectView: View {
                     .font(.headline)
                     .lineLimit(3)
 
-                LabeledContent("Tasks", value: projectModel.taskCount == 1 ? "1 task" : "\(projectModel.taskCount) tasks")
-                    .foregroundStyle(.secondary)
+                LabeledContent(
+                    "Tasks", value: projectModel.taskCount == 1 ? "1 task" : "\(projectModel.taskCount) tasks"
+                )
+                .foregroundStyle(.secondary)
             } else {
                 Text("Project details unavailable")
                     .foregroundStyle(.secondary)
@@ -211,8 +213,8 @@ private struct TaskDeletePrompt: Equatable {
     let title: String
 }
 
-private extension View {
-    func projectPresentations<SheetContent: View>(
+extension View {
+    fileprivate func projectPresentations<SheetContent: View>(
         createTaskSheetIsPresented: Binding<Bool>,
         @ViewBuilder createTaskSheet: @escaping () -> SheetContent,
         deletePromptIsPresented: Binding<Bool>,

@@ -97,6 +97,9 @@ public final class Task {
     public var isLocallyDeleted: Bool?
 
     @NotExport
+    public var syncFailureReason: String?
+
+    @NotExport
     public var project: Project?
 
     @NotExport
@@ -128,6 +131,7 @@ public final class Task {
         updatedAt: Date = Date(),
         syncRemoteID: String? = nil,
         isLocallyDeleted: Bool? = nil,
+        syncFailureReason: String? = nil,
         project: Project? = nil,
         author: User? = nil,
         assignee: User? = nil,
@@ -147,6 +151,7 @@ public final class Task {
         self.updatedAt = updatedAt
         self.syncRemoteID = syncRemoteID
         self.isLocallyDeleted = isLocallyDeleted
+        self.syncFailureReason = syncFailureReason
         self.project = project
         self.author = author
         self.assignee = assignee

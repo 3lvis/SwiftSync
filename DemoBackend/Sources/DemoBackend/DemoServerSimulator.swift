@@ -10,15 +10,15 @@ public enum DemoBackendError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case let .openDatabase(path):
+        case .openDatabase(let path):
             return "Failed to open demo backend database at \(path)."
-        case let .sqlite(message):
+        case .sqlite(let message):
             return "SQLite error: \(message)"
-        case let .notFound(entity, id):
+        case .notFound(let entity, let id):
             return "\(entity) not found: \(id)"
-        case let .invalidReference(entity, id):
+        case .invalidReference(let entity, let id):
             return "Invalid reference \(entity)=\(id)"
-        case let .validation(message):
+        case .validation(let message):
             return "Validation error: \(message)"
         }
     }
@@ -73,7 +73,7 @@ public final class DemoServerSimulator {
                 "name": row.string("name"),
                 "task_count": Int(row.int64("task_count")),
                 "created_at": iso8601(row.double("created_at")),
-                "updated_at": iso8601(row.double("updated_at"))
+                "updated_at": iso8601(row.double("updated_at")),
             ]
         }
     }
@@ -111,7 +111,7 @@ public final class DemoServerSimulator {
                 "id": row.string("id"),
                 "display_name": row.string("display_name"),
                 "created_at": iso8601(row.double("created_at")),
-                "updated_at": iso8601(row.double("updated_at"))
+                "updated_at": iso8601(row.double("updated_at")),
             ]
         }
     }
@@ -124,22 +124,22 @@ public final class DemoServerSimulator {
                 "label": "To Do",
                 "sort_order": 0,
                 "created_at": timestamp,
-                "updated_at": timestamp
+                "updated_at": timestamp,
             ],
             [
                 "id": "inProgress",
                 "label": "In Progress",
                 "sort_order": 1,
                 "created_at": timestamp,
-                "updated_at": timestamp
+                "updated_at": timestamp,
             ],
             [
                 "id": "done",
                 "label": "Done",
                 "sort_order": 2,
                 "created_at": timestamp,
-                "updated_at": timestamp
-            ]
+                "updated_at": timestamp,
+            ],
         ]
     }
 
@@ -334,18 +334,21 @@ public final class DemoServerSimulator {
             throw DemoBackendError.validation(message: "description is required")
         }
         guard let stateDict = body["state"] as? [String: Any],
-              let stateID = stateDict["id"] as? String else {
+            let stateID = stateDict["id"] as? String
+        else {
             throw DemoBackendError.validation(message: "state.id is required")
         }
         guard let authorID = body["author_id"] as? String else {
             throw DemoBackendError.validation(message: "author_id is required")
         }
         guard let createdAtString = body["created_at"] as? String,
-              let createdAt = parseISO8601String(createdAtString) else {
+            let createdAt = parseISO8601String(createdAtString)
+        else {
             throw DemoBackendError.validation(message: "created_at is required (ISO 8601)")
         }
         guard let updatedAtString = body["updated_at"] as? String,
-              let updatedAt = parseISO8601String(updatedAtString) else {
+            let updatedAt = parseISO8601String(updatedAtString)
+        else {
             throw DemoBackendError.validation(message: "updated_at is required (ISO 8601)")
         }
         let assigneeID = body["assignee_id"] as? String
@@ -461,7 +464,8 @@ public final class DemoServerSimulator {
             throw DemoBackendError.validation(message: "description is required")
         }
         guard let stateDict = body["state"] as? [String: Any],
-              let stateID = stateDict["id"] as? String else {
+            let stateID = stateDict["id"] as? String
+        else {
             throw DemoBackendError.validation(message: "state.id is required")
         }
 
@@ -477,7 +481,8 @@ public final class DemoServerSimulator {
             let existingTitlesByID = Dictionary(
                 uniqueKeysWithValues: existingRows.compactMap { row -> (String, String)? in
                     guard let id = row["id"] as? String,
-                          let title = row["title"] as? String else { return nil }
+                        let title = row["title"] as? String
+                    else { return nil }
                     return (id, title)
                 }
             )
@@ -489,7 +494,7 @@ public final class DemoServerSimulator {
         // assignee_id: present key means update (NSNull clears, String sets)
         let assigneeID: String?
         if body.keys.contains("assignee_id") {
-            assigneeID = body["assignee_id"] as? String   // nil if NSNull
+            assigneeID = body["assignee_id"] as? String  // nil if NSNull
         } else {
             // Preserve current value if key is absent
             assigneeID = current["assignee_id"] as? String
@@ -558,8 +563,9 @@ public final class DemoServerSimulator {
 
     // MARK: - POST /sync/upload (offline batch push)
     // See docs/project/upload-endpoint-contract.md. A flat, op-tagged operation list; per-operation
-    // results (no all-or-nothing). The server mints an opaque `remote_id`; `localId` (the task's `id`)
-    // is the stable client key and the idempotency key.
+    // results (no all-or-nothing). Operations are keyed by the client's stable `localId`; the server
+    // mints (and returns) a distinct `remoteId` on first create. `upsert` is find-by-localId →
+    // update-else-create, `delete` tombstones by localId. Both are idempotent.
 
     public func upload(operations: [[String: Any]]) throws -> [String: Any] {
         let results = operations.map(applyUploadOperation(_:))
@@ -569,8 +575,7 @@ public final class DemoServerSimulator {
     private func applyUploadOperation(_ payload: [String: Any]) -> [String: Any] {
         do {
             switch payload["operation"] as? String {
-            case "insert": return try uploadInsert(payload)
-            case "update": return try uploadUpdate(payload)
+            case "upsert": return try uploadUpsert(payload)
             case "delete": return try uploadDelete(payload)
             case .none:
                 return rejected(payload, code: "missing_operation", message: "operation is required")
@@ -584,82 +589,78 @@ public final class DemoServerSimulator {
         }
     }
 
-    private func uploadInsert(_ payload: [String: Any]) throws -> [String: Any] {
+    /// Insert-or-update keyed by the client's stable `localId`. Found ⇒ update (last-writer-wins);
+    /// absent ⇒ create. The server mints its own `remoteId` on first create and returns it (the same
+    /// one on every subsequent upsert) — addressing by `localId` means a never-synced row still
+    /// upserts cleanly. Idempotent: re-sending converges, no duplicate row.
+    private func uploadUpsert(_ payload: [String: Any]) throws -> [String: Any] {
         try requireTasksType(payload)
-        guard let localID = payload["localId"] as? String, !localID.isEmpty else {
-            throw DemoBackendError.validation(message: "localId is required for insert")
-        }
-        // Idempotency: a row already keyed by this localId ⇒ return its remote_id (retry-safe).
-        if try !exists(in: "tasks", id: localID) {
-            guard let data = payload["data"] as? [String: Any] else {
-                throw DemoBackendError.validation(message: "data is required for insert")
-            }
-            var body = data
-            body["id"] = localID
-            _ = try createTask(body: body)
-            if let reviewerIDs = data["reviewer_ids"] as? [String], !reviewerIDs.isEmpty {
-                _ = try replaceTaskReviewers(taskID: localID, reviewerIDs: reviewerIDs)
-            }
-            if let watcherIDs = data["watcher_ids"] as? [String], !watcherIDs.isEmpty {
-                _ = try replaceTaskWatchers(taskID: localID, watcherIDs: watcherIDs)
-            }
-        }
-        let remote = try ensureRemoteID(forLocalID: localID)
-        return ["operation": "insert", "localId": localID, "remoteId": remote, "status": "applied"]
-    }
-
-    private func uploadUpdate(_ payload: [String: Any]) throws -> [String: Any] {
-        try requireTasksType(payload)
-        let remote = try requireRemoteID(payload)
+        let localID = try requireLocalID(payload)
         let incoming = try requireUpdatedAt(payload)
-        guard let localID = try localID(forRemoteID: remote) else {
-            throw DemoBackendError.notFound(entity: "task", id: remote)
+        guard let data = payload["data"] as? [String: Any] else {
+            throw DemoBackendError.validation(message: "data is required for upsert")
         }
-        if try isStale(localID: localID, incoming: incoming) {
-            return [
-                "operation": "update", "remoteId": remote, "status": "stale",
-                "server": try getTaskDetailPayload(taskID: localID) ?? NSNull(),
-            ]
-        }
-        guard var body = payload["data"] as? [String: Any] else {
-            throw DemoBackendError.validation(message: "data is required for update")
-        }
+        var body = data
         body["id"] = localID
-        _ = try updateTask(taskID: localID, body: body)
+
+        if try exists(in: "tasks", id: localID) {
+            if try isStale(localID: localID, incoming: incoming) {
+                return [
+                    "operation": "upsert", "localId": localID,
+                    "remoteId": try ensureRemoteID(forLocalID: localID), "status": "stale",
+                    "server": try getTaskDetailPayload(taskID: localID) ?? NSNull(),
+                ]
+            }
+            // An edit newer than a delete wins LWW: revive the tombstoned row before updating it
+            // (updateTask ignores tombstoned rows). A no-op for a live row.
+            try self.sqlite.execute(
+                "UPDATE tasks SET deleted_at = NULL WHERE id = ?",
+                bind: { stmt in self.sqlite.bind(text: localID, at: 1, in: stmt) }
+            )
+            _ = try updateTask(taskID: localID, body: body)
+        } else {
+            _ = try createTask(body: body)
+        }
         // Relationship edits (reviewers/watchers) ride in the same operation when present.
-        if let reviewerIDs = body["reviewer_ids"] as? [String] {
+        if let reviewerIDs = data["reviewer_ids"] as? [String] {
             _ = try replaceTaskReviewers(taskID: localID, reviewerIDs: reviewerIDs)
         }
-        if let watcherIDs = body["watcher_ids"] as? [String] {
+        if let watcherIDs = data["watcher_ids"] as? [String] {
             _ = try replaceTaskWatchers(taskID: localID, watcherIDs: watcherIDs)
         }
-        return ["operation": "update", "remoteId": remote, "status": "applied"]
+        return [
+            "operation": "upsert", "localId": localID,
+            "remoteId": try ensureRemoteID(forLocalID: localID), "status": "applied",
+        ]
     }
 
     private func uploadDelete(_ payload: [String: Any]) throws -> [String: Any] {
         try requireTasksType(payload)
-        let remote = try requireRemoteID(payload)
+        let localID = try requireLocalID(payload)
         let incoming = try requireUpdatedAt(payload)
-        guard let localID = try localID(forRemoteID: remote) else {
-            // Already absent ⇒ idempotent success.
-            return ["operation": "delete", "remoteId": remote, "status": "applied"]
+        guard try exists(in: "tasks", id: localID) else {
+            // Already absent (or never synced) ⇒ idempotent success.
+            return ["operation": "delete", "localId": localID, "status": "applied"]
         }
         // Last-writer-wins applies to deletes too: an older delete must not erase a newer server edit.
         if try isStale(localID: localID, incoming: incoming) {
             return [
-                "operation": "delete", "remoteId": remote, "status": "stale",
+                "operation": "delete", "localId": localID, "status": "stale",
                 "server": try getTaskDetailPayload(taskID: localID) ?? NSNull(),
             ]
         }
         suspendAmbientMutationsAfterWrite()
+        // Record the delete's logical timestamp in updated_at too, so a later upsert that targets this
+        // (now tombstoned) row compares LWW against *the delete*, not the pre-delete edit.
         try self.sqlite.execute(
-            "UPDATE tasks SET deleted_at = ? WHERE id = ?",
+            "UPDATE tasks SET deleted_at = ?, updated_at = ? WHERE id = ?",
             bind: { stmt in
                 self.sqlite.bind(double: Date().timeIntervalSince1970, at: 1, in: stmt)
-                self.sqlite.bind(text: localID, at: 2, in: stmt)
+                self.sqlite.bind(double: incoming.timeIntervalSince1970, at: 2, in: stmt)
+                self.sqlite.bind(text: localID, at: 3, in: stmt)
             }
         )
-        return ["operation": "delete", "remoteId": remote, "status": "applied"]
+        return ["operation": "delete", "localId": localID, "status": "applied"]
     }
 
     private func requireTasksType(_ payload: [String: Any]) throws {
@@ -668,11 +669,11 @@ public final class DemoServerSimulator {
         }
     }
 
-    private func requireRemoteID(_ payload: [String: Any]) throws -> String {
-        guard let remote = payload["remoteId"] as? String, !remote.isEmpty else {
-            throw DemoBackendError.validation(message: "remoteId is required")
+    private func requireLocalID(_ payload: [String: Any]) throws -> String {
+        guard let localID = payload["localId"] as? String, !localID.isEmpty else {
+            throw DemoBackendError.validation(message: "localId is required")
         }
-        return remote
+        return localID
     }
 
     private func requireUpdatedAt(_ payload: [String: Any]) throws -> Date {
@@ -682,6 +683,8 @@ public final class DemoServerSimulator {
         return date
     }
 
+    /// The server's own id for a row, minted (and persisted) on first sight, returned unchanged after.
+    /// Opaque to the client; distinct from `localId` so the demo exercises a backend that owns its PKs.
     private func ensureRemoteID(forLocalID localID: String) throws -> String {
         let rows = try self.sqlite.query(
             "SELECT remote_id FROM tasks WHERE id = ? LIMIT 1",
@@ -699,23 +702,6 @@ public final class DemoServerSimulator {
         return remote
     }
 
-    private func localID(forRemoteID remote: String) throws -> String? {
-        // Match the minted remote_id, or fall back to id for pre-upload rows whose remote_id the
-        // payload coalesced to their id.
-        let rows = try self.sqlite.query(
-            """
-            SELECT id FROM tasks
-            WHERE (remote_id = ? OR (remote_id IS NULL AND id = ?)) AND deleted_at IS NULL
-            LIMIT 1
-            """,
-            bind: { stmt in
-                self.sqlite.bind(text: remote, at: 1, in: stmt)
-                self.sqlite.bind(text: remote, at: 2, in: stmt)
-            }
-        )
-        return rows.first.map { $0.string("id") }
-    }
-
     private func isStale(localID: String, incoming: Date) throws -> Bool {
         let rows = try self.sqlite.query(
             "SELECT updated_at FROM tasks WHERE id = ? LIMIT 1",
@@ -730,7 +716,6 @@ public final class DemoServerSimulator {
         var result: [String: Any] = ["status": "rejected", "code": code, "message": message]
         if let operation = payload["operation"] as? String { result["operation"] = operation }
         if let localID = payload["localId"] as? String { result["localId"] = localID }
-        if let remoteID = payload["remoteId"] as? String { result["remoteId"] = remoteID }
         return result
     }
 
@@ -818,7 +803,7 @@ public final class DemoServerSimulator {
             "Polish empty state after scoped delete",
             "Add regression check for task list animation",
             "Confirm assignee clear flow matches API contract",
-            "Re-run parent-scoped sync smoke test"
+            "Re-run parent-scoped sync smoke test",
         ]
         let states = ["todo", "inProgress", "done"]
         let selectedTitle = titles[step % titles.count]
@@ -865,7 +850,7 @@ public final class DemoServerSimulator {
             "watcher_ids": try watcherIDs(forTaskID: taskID),
             "items": try itemsPayload(taskID: taskID),
             "created_at": iso8601(row.double("created_at")),
-            "updated_at": iso8601(row.double("updated_at"))
+            "updated_at": iso8601(row.double("updated_at")),
         ]
     }
 
@@ -888,7 +873,7 @@ public final class DemoServerSimulator {
                 "title": row.string("title"),
                 "position": Int(row.int64("position")),
                 "created_at": iso8601(row.double("created_at")),
-                "updated_at": iso8601(row.double("updated_at"))
+                "updated_at": iso8601(row.double("updated_at")),
             ]
         }
     }
@@ -905,7 +890,7 @@ public final class DemoServerSimulator {
     private func labeledValuePayload(id: String, label: String) -> [String: Any] {
         [
             "id": id,
-            "label": label
+            "label": label,
         ]
     }
 
@@ -918,7 +903,7 @@ public final class DemoServerSimulator {
                 "label": id,
                 "sort_order": index,
                 "created_at": timestamp,
-                "updated_at": timestamp
+                "updated_at": timestamp,
             ]
         }
     }
@@ -983,7 +968,8 @@ public final class DemoServerSimulator {
             let createdAt: Date
             if let createdAtValue = item["created_at"] {
                 guard let createdAtString = createdAtValue as? String,
-                      let parsedCreatedAt = parseISO8601String(createdAtString) else {
+                    let parsedCreatedAt = parseISO8601String(createdAtString)
+                else {
                     throw DemoBackendError.validation(message: "items[\(index)].created_at must be ISO 8601")
                 }
                 createdAt = parsedCreatedAt
@@ -994,7 +980,8 @@ public final class DemoServerSimulator {
             let updatedAt: Date
             if let updatedAtValue = item["updated_at"] {
                 guard let updatedAtString = updatedAtValue as? String,
-                      let parsedUpdatedAt = parseISO8601String(updatedAtString) else {
+                    let parsedUpdatedAt = parseISO8601String(updatedAtString)
+                else {
                     throw DemoBackendError.validation(message: "items[\(index)].updated_at must be ISO 8601")
                 }
                 updatedAt = parsedUpdatedAt
@@ -1048,10 +1035,16 @@ public final class DemoServerSimulator {
         return rows.map { $0.string("id") }
     }
 
+    private static let maxTitleLength = 80
+
     private func validatedNonEmpty(_ value: String, field: String) throws -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             throw DemoBackendError.validation(message: "\(field) must not be empty")
+        }
+        guard trimmed.count <= Self.maxTitleLength else {
+            throw DemoBackendError.validation(
+                message: "\(field) must be \(Self.maxTitleLength) characters or fewer")
         }
         return trimmed
     }
@@ -1174,18 +1167,18 @@ public final class DemoServerSimulator {
         try sqlite.execute("BEGIN TRANSACTION;")
         do {
             for project in seedData.projects {
-            try sqlite.execute(
-                """
-                INSERT INTO projects (id, name, created_at, updated_at)
-                VALUES (?, ?, ?, ?)
-                """,
-                bind: { stmt in
-                    sqlite.bind(text: project.id, at: 1, in: stmt)
-                    sqlite.bind(text: project.name, at: 2, in: stmt)
-                    sqlite.bind(double: project.createdAt.timeIntervalSince1970, at: 3, in: stmt)
-                    sqlite.bind(double: project.updatedAt.timeIntervalSince1970, at: 4, in: stmt)
-                }
-            )
+                try sqlite.execute(
+                    """
+                    INSERT INTO projects (id, name, created_at, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    bind: { stmt in
+                        sqlite.bind(text: project.id, at: 1, in: stmt)
+                        sqlite.bind(text: project.name, at: 2, in: stmt)
+                        sqlite.bind(double: project.createdAt.timeIntervalSince1970, at: 3, in: stmt)
+                        sqlite.bind(double: project.updatedAt.timeIntervalSince1970, at: 4, in: stmt)
+                    }
+                )
             }
 
             for user in seedData.users {
@@ -1386,20 +1379,20 @@ private struct DemoSQLiteRow {
     }
 
     func string(_ key: String) -> String {
-        guard case let .string(value)? = values[key] else { return "" }
+        guard case .string(let value)? = values[key] else { return "" }
         return value
     }
 
     func nullableString(_ key: String) -> String? {
         guard let value = values[key] else { return nil }
         switch value {
-        case let .string(string):
+        case .string(let string):
             return string
         case .null:
             return nil
-        case let .int64(number):
+        case .int64(let number):
             return String(number)
-        case let .double(number):
+        case .double(let number):
             return String(number)
         }
     }
@@ -1407,11 +1400,11 @@ private struct DemoSQLiteRow {
     func int64(_ key: String) -> Int64 {
         guard let value = values[key] else { return 0 }
         switch value {
-        case let .int64(number):
+        case .int64(let number):
             return number
-        case let .double(number):
+        case .double(let number):
             return Int64(number)
-        case let .string(string):
+        case .string(let string):
             return Int64(string) ?? 0
         case .null:
             return 0
@@ -1421,11 +1414,11 @@ private struct DemoSQLiteRow {
     func double(_ key: String) -> Double {
         guard let value = values[key] else { return 0 }
         switch value {
-        case let .double(number):
+        case .double(let number):
             return number
-        case let .int64(number):
+        case .int64(let number):
             return Double(number)
-        case let .string(string):
+        case .string(let string):
             return Double(string) ?? 0
         case .null:
             return 0
@@ -1433,7 +1426,6 @@ private struct DemoSQLiteRow {
     }
 
 }
-
 
 private enum DemoSQLiteValue {
     case null

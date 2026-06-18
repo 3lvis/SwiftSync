@@ -2,6 +2,23 @@ import Foundation
 import ObjCExceptionCatcher
 import SwiftData
 
+/// Carries a non-Sendable value across an actor hop. Sound only when the value is handed off (not used
+/// concurrently) — here, a sync payload passed to the main actor and read only there.
+struct UncheckedSendableBox<Value>: @unchecked Sendable {
+    let value: Value
+    init(_ value: Value) { self.value = value }
+}
+
+/// Which `ModelContext` a single-object `sync` writes into.
+public enum SyncContext: Sendable {
+    /// Apply on the main actor against `mainContext`: the row mutates in place, so live queries reflect
+    /// it at once. Occupies the main thread, so use it only for small, single-object local writes.
+    case main
+    /// Import on a background context off the main thread; changes merge into `mainContext` via the
+    /// did-save bridge (gated on an idle main runloop). The right choice for server/inbound syncs.
+    case background
+}
+
 public final class SyncContainer: NSObject, @unchecked Sendable {
     public struct SchemaValidationError: LocalizedError, Sendable {
         public let message: String
@@ -140,16 +157,46 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         )
     }
 
+    /// `context` has **no default** so every caller chooses deliberately (see `SyncContext`): `.main`
+    /// for a small local write that must be visible at once, `.background` for a server/inbound sync.
+    /// The split exists because SwiftData has no `mergeChanges(fromContextDidSave:)`, so a
+    /// background-context *update* doesn't promptly refresh an already-registered `mainContext` row
+    /// (the merge is gated on an idle main runloop) — writing a local edit on `.main` sidesteps that.
     public func sync<Model: SyncUpdatableModel>(
         item: [String: Any],
         as model: Model.Type,
-        relationshipOperations: SyncRelationshipOperations = .all
+        relationshipOperations: SyncRelationshipOperations = .all,
+        context: SyncContext
     ) async throws {
-        let context = ModelContext(modelContainer)
+        switch context {
+        case .main:
+            try await syncIntoMainContext(
+                UncheckedSendableBox(item), as: model, relationshipOperations: relationshipOperations)
+        case .background:
+            let backgroundContext = ModelContext(modelContainer)
+            try await SwiftSync.sync(
+                item: item,
+                as: model,
+                in: backgroundContext,
+                keyStyle: keyStyle,
+                relationshipOperations: relationshipOperations
+            )
+        }
+    }
+
+    /// Import a single object straight into `mainContext` on the main actor (for immediate local
+    /// writes). The payload rides in an unchecked-Sendable box so it can cross to the main actor; it is
+    /// only read on the main actor here, so the box is sound.
+    @MainActor
+    private func syncIntoMainContext<Model: SyncUpdatableModel>(
+        _ item: UncheckedSendableBox<[String: Any]>,
+        as model: Model.Type,
+        relationshipOperations: SyncRelationshipOperations
+    ) async throws {
         try await SwiftSync.sync(
-            item: item,
+            item: item.value,
             as: model,
-            in: context,
+            in: mainContext,
             keyStyle: keyStyle,
             relationshipOperations: relationshipOperations
         )
@@ -158,12 +205,14 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     public func sync<Model: SyncUpdatableModel, Payload: SyncPayloadConvertible>(
         item: Payload,
         as model: Model.Type,
-        relationshipOperations: SyncRelationshipOperations = .all
+        relationshipOperations: SyncRelationshipOperations = .all,
+        context: SyncContext
     ) async throws {
         try await sync(
             item: item.toSyncPayloadDictionary(),
             as: model,
-            relationshipOperations: relationshipOperations
+            relationshipOperations: relationshipOperations,
+            context: context
         )
     }
 
@@ -375,14 +424,24 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     private func modelContextDidSave(_ notification: Notification) {
         guard let sourceContext = notification.object as? ModelContext else { return }
         guard sourceContext.container == modelContainer else { return }
-        guard sourceContext != mainContext else { return }
 
         let changedIDs = changedIdentifiers(from: notification.userInfo)
-        for identifier in changedIDs {
-            _ = mainContext.model(for: identifier)
+        let changedModelTypeNames: Set<String>
+        if sourceContext == mainContext {
+            // A local (immediate) write already landed in the main context, so its rows are current
+            // here — don't re-touch the context during its own did-save (avoid reentrancy); just notify
+            // publishers to re-fetch. Type names come from the source (main) context: a safe read.
+            changedModelTypeNames = Set(
+                changedIDs.map { String(reflecting: type(of: sourceContext.model(for: $0))) })
+        } else {
+            // A background-context sync: register the changed rows in the main context and process its
+            // pending changes so the merge lands, then notify.
+            for identifier in changedIDs {
+                _ = mainContext.model(for: identifier)
+            }
+            changedModelTypeNames = self.changedModelTypeNames(for: changedIDs)
+            mainContext.processPendingChanges()
         }
-        let changedModelTypeNames = changedModelTypeNames(for: changedIDs)
-        mainContext.processPendingChanges()
         NotificationCenter.default.post(
             name: Self.didSaveChangesNotification,
             object: self,
