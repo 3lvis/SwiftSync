@@ -597,6 +597,12 @@ public final class DemoServerSimulator {
             var body = data
             body["id"] = localID
             _ = try createTask(body: body)
+            if let reviewerIDs = data["reviewer_ids"] as? [String], !reviewerIDs.isEmpty {
+                _ = try replaceTaskReviewers(taskID: localID, reviewerIDs: reviewerIDs)
+            }
+            if let watcherIDs = data["watcher_ids"] as? [String], !watcherIDs.isEmpty {
+                _ = try replaceTaskWatchers(taskID: localID, watcherIDs: watcherIDs)
+            }
         }
         let remote = try ensureRemoteID(forLocalID: localID)
         return ["operation": "insert", "localId": localID, "remoteId": remote, "status": "applied"]
@@ -620,6 +626,13 @@ public final class DemoServerSimulator {
         }
         body["id"] = localID
         _ = try updateTask(taskID: localID, body: body)
+        // Relationship edits (reviewers/watchers) ride in the same operation when present.
+        if let reviewerIDs = body["reviewer_ids"] as? [String] {
+            _ = try replaceTaskReviewers(taskID: localID, reviewerIDs: reviewerIDs)
+        }
+        if let watcherIDs = body["watcher_ids"] as? [String] {
+            _ = try replaceTaskWatchers(taskID: localID, watcherIDs: watcherIDs)
+        }
         return ["operation": "update", "remoteId": remote, "status": "applied"]
     }
 

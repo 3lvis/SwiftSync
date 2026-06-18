@@ -132,6 +132,10 @@ public final class DemoSyncEngine {
     }
 
     public func replaceTaskReviewers(taskID: String, projectID: String?, reviewerIDs: [String]) async throws {
+        if isOffline {
+            try applyLocalPeople(taskID: taskID, reviewerIDs: reviewerIDs)
+            return
+        }
         try await runOperation("replaceTaskReviewers-\(taskID)") {
             _ = try await self.apiClient.replaceTaskReviewers(taskID: taskID, reviewerIDs: reviewerIDs)
             try await self.syncTaskAfterMutation(taskID: taskID, projectID: projectID)
@@ -139,10 +143,35 @@ public final class DemoSyncEngine {
     }
 
     public func replaceTaskWatchers(taskID: String, projectID: String?, watcherIDs: [String]) async throws {
+        if isOffline {
+            try applyLocalPeople(taskID: taskID, watcherIDs: watcherIDs)
+            return
+        }
         try await runOperation("replaceTaskWatchers-\(taskID)") {
             _ = try await self.apiClient.replaceTaskWatchers(taskID: taskID, watcherIDs: watcherIDs)
             try await self.syncTaskAfterMutation(taskID: taskID, projectID: projectID)
         }
+    }
+
+    /// Apply a reviewers/watchers change to the local store only (offline). The bumped `updatedAt`
+    /// makes it a pending update; the push carries `reviewer_ids`/`watcher_ids` so the server applies it.
+    private func applyLocalPeople(taskID: String, reviewerIDs: [String]? = nil, watcherIDs: [String]? = nil)
+        throws
+    {
+        guard let task = try task(withID: taskID) else { return }
+        if let reviewerIDs { task.reviewers = try users(for: reviewerIDs) }
+        if let watcherIDs { task.watchers = try users(for: watcherIDs) }
+        task.updatedAt = Date()
+        try syncContainer.mainContext.save()
+        refreshPendingCount()
+    }
+
+    private func users(for ids: [String]) throws -> [User] {
+        let byID = Dictionary(
+            uniqueKeysWithValues: try syncContainer.mainContext.fetch(FetchDescriptor<User>()).map {
+                ($0.id, $0)
+            })
+        return ids.compactMap { byID[$0] }
     }
 
     /// Push every locally-pending task change to the server and apply the result. Returns `nil` while
@@ -182,7 +211,7 @@ public final class DemoSyncEngine {
 
         for localID in batch.inserts {
             guard let task = try task(withID: localID) else { continue }
-            let data = syncContainer.export(task)
+            let data = taskData(task)
             operations.append([
                 "operation": "insert", "type": "tasks", "localId": localID,
                 "updatedAt": data["updated_at"] ?? "", "data": data,
@@ -191,7 +220,7 @@ public final class DemoSyncEngine {
         for localID in batch.updates {
             guard let task = try task(withID: localID), let remote = task.syncRemoteID else { continue }
             remoteToLocal[remote] = localID
-            let data = syncContainer.export(task)
+            let data = taskData(task)
             operations.append([
                 "operation": "update", "type": "tasks", "remoteId": remote,
                 "updatedAt": data["updated_at"] ?? "", "data": data,
@@ -242,6 +271,15 @@ public final class DemoSyncEngine {
             }
         }
         return response
+    }
+
+    /// The task's upload payload: its exported scalars plus `reviewer_ids`/`watcher_ids` (which are
+    /// `@NotExport`, so `export` omits them) so relationship edits travel with the operation.
+    private func taskData(_ task: Task) -> [String: Any] {
+        var data = syncContainer.export(task)
+        data["reviewer_ids"] = task.reviewers.map(\.id)
+        data["watcher_ids"] = task.watchers.map(\.id)
+        return data
     }
 
     private func refreshPendingCount() {

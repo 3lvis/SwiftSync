@@ -342,19 +342,48 @@ final class DemoUITests: XCTestCase {
         goBack(app)
         XCTAssertTrue(app.staticTexts["pending-count"].waitForExistence(timeout: 2), "the create is queued")
 
-        // Reconnect and sync.
+        // Reconnect: the queue syncs automatically — no button tap.
         app.buttons["offline-toggle"].tap()
-        let syncNow = app.buttons["sync-now"]
-        XCTAssertTrue(syncNow.isEnabled)
-        syncNow.tap()
-        let okButton = app.alerts.buttons["OK"]
-        XCTAssertTrue(okButton.waitForExistence(timeout: 5))
-        okButton.tap()
-        XCTAssertTrue(app.staticTexts["pending-count"].waitForNonExistence(timeout: 3))
+        XCTAssertTrue(
+            app.staticTexts["pending-count"].waitForNonExistence(timeout: 5),
+            "reconnecting auto-syncs the queue")
 
         // It survived the sync: reopening online (a real refresh) still shows it.
         openProject(app, id: DemoSeedProjectID.accountSecurity)
         XCTAssertTrue(findAfterScrolling(app.staticTexts[title], in: app))
+    }
+
+    // User journey: edit a task's reviewers offline, then sync on reconnect.
+    @MainActor
+    func testOfflineAddReviewerSyncsOnReconnect() throws {
+        let app = configuredApp()
+        app.launch()
+
+        // Online: open the task so it + reference data are cached.
+        openTaskDetail(
+            app, projectID: DemoSeedProjectID.notificationsReliability,
+            taskID: DemoSeedTaskID.duplicatePushFix)
+
+        // Go offline and add a reviewer.
+        app.buttons["offline-toggle"].tap()
+        XCTAssertEqual(app.buttons["offline-toggle"].label, "Offline")
+        openEditTaskForm(app)
+        addPerson(app, role: "reviewers", userID: DemoSeedUserID.sofiaGarcia)
+        app.buttons["task-form.save"].tap()
+        XCTAssertTrue(
+            app.buttons["task-form.save"].waitForNonExistence(timeout: 2), "an offline edit saves locally")
+        XCTAssertTrue(findAfterScrolling(app.staticTexts["task.reviewer.\(DemoSeedUserID.sofiaGarcia)"], in: app))
+
+        // Reconnect → the change auto-syncs.
+        app.buttons["offline-toggle"].tap()
+        XCTAssertTrue(
+            app.staticTexts["pending-count"].waitForNonExistence(timeout: 5),
+            "reconnecting auto-syncs the reviewer change")
+
+        // Persisted on the server: reopen the task (a real refresh) and the reviewer is still there.
+        goBack(app)
+        openTask(app, id: DemoSeedTaskID.duplicatePushFix)
+        XCTAssertTrue(findAfterScrolling(app.staticTexts["task.reviewer.\(DemoSeedUserID.sofiaGarcia)"], in: app))
     }
 
     // User journey: work offline, queue a change, then sync on reconnect.
@@ -387,20 +416,13 @@ final class DemoUITests: XCTestCase {
         goBack(app)
 
         XCTAssertTrue(app.staticTexts["pending-count"].waitForExistence(timeout: 2), "the delete is queued")
-        XCTAssertFalse(app.buttons["sync-now"].isEnabled, "cannot push while offline")
 
-        // Reconnect and sync.
+        // Reconnect: the queue syncs automatically — no button tap.
         app.buttons["offline-toggle"].tap()
         XCTAssertEqual(app.buttons["offline-toggle"].label, "Online")
-        let syncNow = app.buttons["sync-now"]
-        XCTAssertTrue(syncNow.isEnabled)
-        syncNow.tap()
-
-        // The "Synced" confirmation appears; dismiss it and the pending indicator clears.
-        let okButton = app.alerts.buttons["OK"]
-        XCTAssertTrue(okButton.waitForExistence(timeout: 5))
-        okButton.tap()
-        XCTAssertTrue(app.staticTexts["pending-count"].waitForNonExistence(timeout: 3))
+        XCTAssertTrue(
+            app.staticTexts["pending-count"].waitForNonExistence(timeout: 5),
+            "reconnecting auto-syncs the queue")
 
         // The deletion held: reopening online (a real server refresh) does not bring it back.
         openProject(app, id: DemoSeedProjectID.accountSecurity)

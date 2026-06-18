@@ -74,7 +74,7 @@ public struct SyncPushResponse: Sendable {
 }
 
 /// Result of a push pass. Advance the caller's stored "last synced" cursor to `cursor` on success.
-public struct SyncPushSummary {
+public struct SyncPushSummary: Sendable {
     public let insertedCount: Int
     public let updatedCount: Int
     public let deletedCount: Int
