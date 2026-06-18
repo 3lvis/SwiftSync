@@ -106,6 +106,51 @@ final class UploadEndpointTests: XCTestCase {
         XCTAssertNil(try backend.getTaskDetailPayload(taskID: localID))
     }
 
+    func testUploadUpsertRevivesTombstonedRowWhenEditIsNewer() throws {
+        let backend = try makeBackend()
+        let localID = "REVIVE-1"
+        _ = try result(
+            of: backend.upload(operations: [
+                upsertOp(localID: localID, title: "Live", updatedAt: "2030-01-01T00:00:00.000Z")
+            ]))
+        _ = try result(
+            of: backend.upload(operations: [
+                deleteOp(localID: localID, updatedAt: "2040-01-01T00:00:00.000Z")
+            ]))
+        XCTAssertNil(try backend.getTaskDetailPayload(taskID: localID), "precondition: tombstoned")
+
+        // An edit newer than the delete wins LWW: it revives the row, not a phantom "applied".
+        let revived = try result(
+            of: backend.upload(operations: [
+                upsertOp(localID: localID, title: "Revived", updatedAt: "2050-01-01T00:00:00.000Z")
+            ]))
+        XCTAssertEqual(revived["status"] as? String, "applied")
+        let detail = try XCTUnwrap(
+            backend.getTaskDetailPayload(taskID: localID), "a newer edit must resurrect the tombstoned row")
+        XCTAssertEqual(detail["title"] as? String, "Revived")
+    }
+
+    func testUploadUpsertOnTombstonedRowStaysDeletedWhenEditIsOlder() throws {
+        let backend = try makeBackend()
+        let localID = "REVIVE-2"
+        _ = try result(
+            of: backend.upload(operations: [
+                upsertOp(localID: localID, title: "Live", updatedAt: "2030-01-01T00:00:00.000Z")
+            ]))
+        _ = try result(
+            of: backend.upload(operations: [
+                deleteOp(localID: localID, updatedAt: "2040-01-01T00:00:00.000Z")
+            ]))
+
+        // An edit older than the delete loses LWW: stale, and the row stays deleted (no phantom apply).
+        let stale = try result(
+            of: backend.upload(operations: [
+                upsertOp(localID: localID, title: "Too late", updatedAt: "2035-01-01T00:00:00.000Z")
+            ]))
+        XCTAssertEqual(stale["status"] as? String, "stale")
+        XCTAssertNil(try backend.getTaskDetailPayload(taskID: localID), "the row stays deleted")
+    }
+
     func testUploadFailsClosedOnMissingOrUnknownOperation() throws {
         let backend = try makeBackend()
         let response = try backend.upload(operations: [

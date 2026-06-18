@@ -611,6 +611,12 @@ public final class DemoServerSimulator {
                     "server": try getTaskDetailPayload(taskID: localID) ?? NSNull(),
                 ]
             }
+            // An edit newer than a delete wins LWW: revive the tombstoned row before updating it
+            // (updateTask ignores tombstoned rows). A no-op for a live row.
+            try self.sqlite.execute(
+                "UPDATE tasks SET deleted_at = NULL WHERE id = ?",
+                bind: { stmt in self.sqlite.bind(text: localID, at: 1, in: stmt) }
+            )
             _ = try updateTask(taskID: localID, body: body)
         } else {
             _ = try createTask(body: body)
@@ -644,11 +650,14 @@ public final class DemoServerSimulator {
             ]
         }
         suspendAmbientMutationsAfterWrite()
+        // Record the delete's logical timestamp in updated_at too, so a later upsert that targets this
+        // (now tombstoned) row compares LWW against *the delete*, not the pre-delete edit.
         try self.sqlite.execute(
-            "UPDATE tasks SET deleted_at = ? WHERE id = ?",
+            "UPDATE tasks SET deleted_at = ?, updated_at = ? WHERE id = ?",
             bind: { stmt in
                 self.sqlite.bind(double: Date().timeIntervalSince1970, at: 1, in: stmt)
-                self.sqlite.bind(text: localID, at: 2, in: stmt)
+                self.sqlite.bind(double: incoming.timeIntervalSince1970, at: 2, in: stmt)
+                self.sqlite.bind(text: localID, at: 3, in: stmt)
             }
         )
         return ["operation": "delete", "localId": localID, "status": "applied"]

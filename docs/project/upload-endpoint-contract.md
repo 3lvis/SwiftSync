@@ -95,6 +95,12 @@ The server compares the incoming `updatedAt` with the stored `updatedAt`:
 This applies to both `upsert` (when the row already exists) and `delete` — an older delete must not
 erase a newer server edit.
 
+A delete records its timestamp on the row, so a later `upsert` resolves against **the delete**: an
+upsert newer than the delete **revives** the tombstoned row (clears the tombstone, applies the edit,
+`status: "applied"`); one older or equal stays `stale` and the row remains deleted. A tombstoned row
+must never be silently updated-in-place while staying hidden — that would acknowledge an edit the
+server didn't actually surface.
+
 ### Delete is a soft-delete tombstone
 
 A delete marks the row deleted (server-side) so other clients still learn of the deletion on their
