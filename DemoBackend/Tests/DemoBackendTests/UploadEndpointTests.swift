@@ -151,6 +151,18 @@ final class UploadEndpointTests: XCTestCase {
         XCTAssertNil(try backend.getTaskDetailPayload(taskID: localID), "the row stays deleted")
     }
 
+    func testUploadUpsertTagsValidationRejectionWithValidationCode() throws {
+        let backend = try makeBackend()
+        // A too-long title is a validation rejection — the result code must distinguish it from a
+        // generic server rejection so the client can categorize (fixable, not retryable).
+        let result = try result(
+            of: backend.upload(operations: [
+                upsertOp(localID: "VALIDATION-1", title: String(repeating: "A", count: 100))
+            ]))
+        XCTAssertEqual(result["status"] as? String, "rejected")
+        XCTAssertEqual(result["code"] as? String, "validation")
+    }
+
     func testUploadFailsClosedOnMissingOrUnknownOperation() throws {
         let backend = try makeBackend()
         let response = try backend.upload(operations: [

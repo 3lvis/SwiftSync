@@ -10,6 +10,7 @@ final class OfflineNote: SyncOfflineModel {
     var syncUpdatedAt: Date
     var syncIsDeleted: Bool
     var syncFailureReason: String?
+    var syncFailureKind: String?
     var title: String
 
     init(
@@ -134,17 +135,21 @@ final class SyncPushTests: XCTestCase {
             for: OfflineNote.self, in: context, changedSince: Date(timeIntervalSince1970: 1_000)
         ) { _ in
             SyncPushResponse(failures: [
-                SyncPushFailure(localID: "c1", operation: .insert, message: "422 invalid")
+                SyncPushFailure(localID: "c1", operation: .insert, kind: .validation, message: "422 invalid")
             ])
         }
 
         XCTAssertEqual(
             summary.failures,
             [
-                SyncPushFailure(localID: "c1", operation: .insert, message: "422 invalid")
+                SyncPushFailure(localID: "c1", operation: .insert, kind: .validation, message: "422 invalid")
             ])
         let rows = try context.fetch(FetchDescriptor<OfflineNote>())
         XCTAssertNil(rows.first?.syncRemoteID, "a rejected insert keeps no remote id and stays local")
+        XCTAssertEqual(rows.first?.syncFailureReason, "422 invalid")
+        XCTAssertEqual(
+            rows.first?.syncFailureKind, "validation",
+            "push stamps the failure kind so the inbox can categorize without parsing the message")
     }
 
     /// P1: a failed (or unacknowledged) update is cursor-gated, so the cursor must NOT advance past
@@ -167,7 +172,7 @@ final class SyncPushTests: XCTestCase {
             for: OfflineNote.self, in: context, changedSince: lastSync, now: now
         ) { _ in
             SyncPushResponse(failures: [
-                SyncPushFailure(localID: "u1", operation: .update, message: "500")
+                SyncPushFailure(localID: "u1", operation: .update, kind: .server, message: "500")
             ])
         }
 

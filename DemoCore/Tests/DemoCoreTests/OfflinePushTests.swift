@@ -105,6 +105,10 @@ final class OfflinePushTests: XCTestCase {
         let failed = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
         let reason = try XCTUnwrap(failed.syncFailureReason, "the rejection is persisted on the row")
         XCTAssertTrue(reason.contains("80 characters"), "the failure carries the server's reason: \(reason)")
+        XCTAssertEqual(
+            failed.syncFailureKind, SyncFailureKind.validation.rawValue,
+            "an over-long title is a validation rejection, not a transient one")
+        XCTAssertEqual(summary.failures.first?.isRetryable, false, "a validation failure is not retryable")
     }
 
     @MainActor

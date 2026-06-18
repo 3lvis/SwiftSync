@@ -100,6 +100,9 @@ public final class Task {
     public var syncFailureReason: String?
 
     @NotExport
+    public var syncFailureKind: String?
+
+    @NotExport
     public var project: Project?
 
     @NotExport
@@ -132,6 +135,7 @@ public final class Task {
         syncRemoteID: String? = nil,
         isLocallyDeleted: Bool? = nil,
         syncFailureReason: String? = nil,
+        syncFailureKind: String? = nil,
         project: Project? = nil,
         author: User? = nil,
         assignee: User? = nil,
@@ -152,6 +156,7 @@ public final class Task {
         self.syncRemoteID = syncRemoteID
         self.isLocallyDeleted = isLocallyDeleted
         self.syncFailureReason = syncFailureReason
+        self.syncFailureKind = syncFailureKind
         self.project = project
         self.author = author
         self.assignee = assignee

@@ -23,6 +23,15 @@ struct FailuresSheet: View {
                     ForEach(rows, id: \.id) { task in
                         VStack(alignment: .leading, spacing: 8) {
                             Text(task.title).font(.headline)
+                            if let kind = task.syncFailureKind.flatMap(SyncFailureKind.init(rawValue:)) {
+                                Text(badgeLabel(kind))
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(badgeColor(kind), in: Capsule())
+                                    .accessibilityIdentifier("failure.kind.\(task.id)")
+                            }
                             if let reason = task.syncFailureReason {
                                 Label(reason, systemImage: "exclamationmark.triangle.fill")
                                     .font(.footnote)
@@ -68,5 +77,18 @@ struct FailuresSheet: View {
             try? await syncEngine.discardFailedChange(taskID: taskID)
             reload()
         }
+    }
+
+    private func badgeLabel(_ kind: SyncFailureKind) -> String {
+        switch kind {
+        case .validation: return "Needs a fix"
+        case .server, .transport: return "Temporary"
+        case .conflict: return "Conflict"
+        }
+    }
+
+    private func badgeColor(_ kind: SyncFailureKind) -> Color {
+        // Validation is the user's to fix (prominent); a retryable one is transient (calmer).
+        kind.isRetryable ? Color(.systemGray) : .orange
     }
 }

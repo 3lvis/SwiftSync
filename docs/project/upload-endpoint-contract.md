@@ -159,7 +159,9 @@ A per-operation result list (partial success — one bad row never blocks the ba
 
 - Each result echoes the operation's `localId` so SwiftSync can map it back onto the right row; an
   `upsert` also carries the server-minted `remoteId` (the same one on every subsequent upsert).
-- `rejected` carries a human-readable `message` and an optional machine `code`.
+- `rejected` carries a human-readable `message` and a machine `code`. The client categorizes by
+  `code`: `validation` marks a client-fixable rejection (bad field/reference — *not* retryable);
+  anything else is treated as a server-side rejection. Pick a stable `code` vocabulary for this.
 - `cursor` is an **opaque** string (a timestamp or token — the server decides). The client feeds it to
   the pull side; SwiftSync treats it as opaque.
 

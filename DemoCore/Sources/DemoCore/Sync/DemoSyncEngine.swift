@@ -274,10 +274,14 @@ public final class DemoSyncEngine {
                     if let task = try task(withID: localID) { task.isLocallyDeleted = false }
                 }
             default:
+                // The server's `code` distinguishes a permanent validation rejection from a generic
+                // server-side one; the inbox renders them differently and only the latter is retryable.
+                let kind: SyncFailureKind = (result["code"] as? String == "validation") ? .validation : .server
                 response.failures.append(
                     SyncPushFailure(
                         localID: localID ?? "",
                         operation: operation == "delete" ? .delete : .update,
+                        kind: kind,
                         message: (result["message"] as? String) ?? "rejected"))
             }
         }
