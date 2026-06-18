@@ -8,7 +8,6 @@ public enum DemoNetworkScenario: String, CaseIterable, Identifiable {
     case fastStable
     case slowNetwork
     case flakyNetwork
-    case offline
 
     public var id: String { rawValue }
 
@@ -17,7 +16,6 @@ public enum DemoNetworkScenario: String, CaseIterable, Identifiable {
         case .fastStable: "Fast Stable"
         case .slowNetwork: "Slow Network"
         case .flakyNetwork: "Flaky Network"
-        case .offline: "Offline"
         }
     }
 }
@@ -30,7 +28,7 @@ public enum DemoAPIError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .offline:
-            return "You are offline in this scenario preset."
+            return "The device is offline."
         case let .transient(endpoint):
             return "Transient network failure while calling \(endpoint)."
         case let .invalidPayload(message):
@@ -47,6 +45,12 @@ public final class FakeDemoAPIClient {
     }
 
     public var scenario: DemoNetworkScenario
+
+    /// Simulated airplane mode at the transport: when on, every endpoint is unreachable (throws
+    /// `.offline`), exactly like a device with no connectivity. This is where "offline" lives — the
+    /// link between app and server — not in business logic. The sync engine reacts to it (reads keep
+    /// serving the local cache, writes queue).
+    public var isOffline = false
 
     private let backend: DemoServerSimulator
     private let networkDelayMode: NetworkDelayMode
@@ -146,13 +150,22 @@ public final class FakeDemoAPIClient {
         try backend.deleteTask(taskID: taskID)
     }
 
+    /// POST /sync/upload — the batched offline push. Returns the per-operation `results` array.
+    public func upload(operations: [[String: Any]]) async throws -> [[String: Any]] {
+        try await networkGate(endpoint: "POST /sync/upload")
+        let response = try backend.upload(operations: operations)
+        return (response["results"] as? [[String: Any]]) ?? []
+    }
+
     private func networkGate(endpoint: String) async throws {
+        if isOffline {
+            throw DemoAPIError.offline
+        }
+
         requestCounter += 1
         let callIndex = requestCounter
 
         switch scenario {
-        case .offline:
-            throw DemoAPIError.offline
         case .flakyNetwork:
             if ((callIndex + endpoint.count) % 5) == 0 {
                 throw DemoAPIError.transient(endpoint: endpoint)
@@ -167,7 +180,6 @@ public final class FakeDemoAPIClient {
         case .fastStable: 150
         case .slowNetwork: 950
         case .flakyNetwork: 450
-        case .offline: 0
         }
 
         let isMutation = endpoint.hasPrefix("PATCH ") || endpoint.hasPrefix("POST ") || endpoint.hasPrefix("PUT ") || endpoint.hasPrefix("DELETE ")

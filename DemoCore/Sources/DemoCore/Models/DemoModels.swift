@@ -85,6 +85,17 @@ public final class Task {
     public var createdAt: Date
     public var updatedAt: Date
 
+    // Imported from the server's `remote_id` (so a synced row knows its server id for later
+    // update/delete addressing); never exported back.
+    @RemoteKey("remote_id")
+    @NotExport
+    public var syncRemoteID: String?
+
+    // Not `isDeleted`: that name collides with PersistentModel's built-in context-deletion flag,
+    // which silently shadows a stored property of the same name.
+    @NotExport
+    public var isLocallyDeleted: Bool?
+
     @NotExport
     public var project: Project?
 
@@ -115,6 +126,8 @@ public final class Task {
         stateLabel: String = "",
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
+        syncRemoteID: String? = nil,
+        isLocallyDeleted: Bool? = nil,
         project: Project? = nil,
         author: User? = nil,
         assignee: User? = nil,
@@ -132,6 +145,8 @@ public final class Task {
         self.stateLabel = stateLabel
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.syncRemoteID = syncRemoteID
+        self.isLocallyDeleted = isLocallyDeleted
         self.project = project
         self.author = author
         self.assignee = assignee
@@ -139,6 +154,12 @@ public final class Task {
         self.watchers = watchers
         self.items = items
     }
+}
+
+extension Task: SyncOfflineModel {
+    public var syncLocalID: String { id }
+    public var syncUpdatedAt: Date { updatedAt }
+    public var syncIsDeleted: Bool { isLocallyDeleted ?? false }
 }
 
 @Syncable

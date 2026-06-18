@@ -9,10 +9,7 @@ import SwiftData
 /// `syncRemoteID` is the server's id — `nil` until the row has been pushed and acknowledged (the
 /// push driver assigns it). `syncUpdatedAt` drives last-writer-wins; `syncIsDeleted` is a
 /// soft-delete that survives until the deletion is pushed (then the row is hard-deleted).
-///
-/// `package` while the push feature is built out; promoted to `public` (with README docs) once it
-/// is consumer-usable.
-package protocol SyncOfflineModel: PersistentModel {
+public protocol SyncOfflineModel: PersistentModel {
     var syncLocalID: String { get }
     var syncRemoteID: String? { get set }
     var syncUpdatedAt: Date { get }
@@ -20,34 +17,34 @@ package protocol SyncOfflineModel: PersistentModel {
 }
 
 /// The local rows pending a push, partitioned by operation (live models, for applying results).
-package struct SyncPendingChanges<Model: SyncOfflineModel> {
-    package let inserts: [Model]
-    package let updates: [Model]
-    package let deletes: [Model]
+public struct SyncPendingChanges<Model: SyncOfflineModel> {
+    public let inserts: [Model]
+    public let updates: [Model]
+    public let deletes: [Model]
 
-    package var isEmpty: Bool { inserts.isEmpty && updates.isEmpty && deletes.isEmpty }
+    public var isEmpty: Bool { inserts.isEmpty && updates.isEmpty && deletes.isEmpty }
 }
 
 /// The `syncLocalID`s to push, partitioned by operation. This — not the live models — is what the
 /// async uploader receives, so SwiftData objects never cross into a network call (the
 /// "never pass a model across contexts" rule). It's `Sendable`; the app maps each id to its payload.
-package struct SyncPushBatch: Sendable {
-    package let inserts: [String]
-    package let updates: [String]
-    package let deletes: [String]
+public struct SyncPushBatch: Sendable {
+    public let inserts: [String]
+    public let updates: [String]
+    public let deletes: [String]
 
-    package var isEmpty: Bool { inserts.isEmpty && updates.isEmpty && deletes.isEmpty }
+    public var isEmpty: Bool { inserts.isEmpty && updates.isEmpty && deletes.isEmpty }
 }
 
 /// One pushed item the server rejected. SwiftSync surfaces these so the app can let the user act on
 /// them (discard / edit / retry) rather than silently retrying forever.
-package struct SyncPushFailure: Equatable, Sendable {
-    package enum Operation: String, Equatable, Sendable { case insert, update, delete }
-    package let localID: String
-    package let operation: Operation
-    package let message: String
+public struct SyncPushFailure: Equatable, Sendable {
+    public enum Operation: String, Equatable, Sendable { case insert, update, delete }
+    public let localID: String
+    public let operation: Operation
+    public let message: String
 
-    package init(localID: String, operation: Operation, message: String) {
+    public init(localID: String, operation: Operation, message: String) {
         self.localID = localID
         self.operation = operation
         self.message = message
@@ -56,14 +53,14 @@ package struct SyncPushFailure: Equatable, Sendable {
 
 /// What the app's uploader reports back after talking to the server: the server-assigned ids for
 /// inserted rows, which updates/deletes were accepted, and any per-item failures.
-package struct SyncPushResponse: Sendable {
+public struct SyncPushResponse: Sendable {
     /// insert's `syncLocalID` → server-assigned `syncRemoteID`.
-    package var assignedRemoteIDs: [String: String]
-    package var confirmedUpdateLocalIDs: Set<String>
-    package var confirmedDeleteLocalIDs: Set<String>
-    package var failures: [SyncPushFailure]
+    public var assignedRemoteIDs: [String: String]
+    public var confirmedUpdateLocalIDs: Set<String>
+    public var confirmedDeleteLocalIDs: Set<String>
+    public var failures: [SyncPushFailure]
 
-    package init(
+    public init(
         assignedRemoteIDs: [String: String] = [:],
         confirmedUpdateLocalIDs: Set<String> = [],
         confirmedDeleteLocalIDs: Set<String> = [],
@@ -77,12 +74,12 @@ package struct SyncPushResponse: Sendable {
 }
 
 /// Result of a push pass. Advance the caller's stored "last synced" cursor to `cursor` on success.
-package struct SyncPushSummary {
-    package let insertedCount: Int
-    package let updatedCount: Int
-    package let deletedCount: Int
-    package let failures: [SyncPushFailure]
-    package let cursor: Date
+public struct SyncPushSummary {
+    public let insertedCount: Int
+    public let updatedCount: Int
+    public let deletedCount: Int
+    public let failures: [SyncPushFailure]
+    public let cursor: Date
 }
 
 extension SwiftSync {
@@ -93,7 +90,7 @@ extension SwiftSync {
     /// - **update**: synced (`syncRemoteID != nil`), not deleted, edited since the last sync.
     /// - **delete**: soft-deleted *and* known to the server (a row inserted-then-deleted locally
     ///   never reached the server, so it's dropped, not pushed).
-    package static func pendingChanges<Model: SyncOfflineModel>(
+    public static func pendingChanges<Model: SyncOfflineModel>(
         for _: Model.Type,
         in context: ModelContext,
         changedSince: Date
@@ -123,7 +120,7 @@ extension SwiftSync {
     /// cursor to `summary.cursor`: it only moves forward when *every* pending update was
     /// acknowledged, so an unacknowledged update is safely re-detected on the next push.
     @discardableResult
-    package static func push<Model: SyncOfflineModel>(
+    public static func push<Model: SyncOfflineModel>(
         for _: Model.Type,
         in context: ModelContext,
         changedSince: Date,

@@ -146,9 +146,9 @@ public final class DemoServerSimulator {
     public func getTaskDetailPayload(taskID: String) throws -> [String: Any]? {
         let rows = try self.sqlite.query(
             """
-            SELECT id, project_id, assignee_id, author_id, title, description, state, created_at, updated_at
+            SELECT id, remote_id, project_id, assignee_id, author_id, title, description, state, created_at, updated_at
             FROM tasks
-            WHERE id = ?
+            WHERE id = ? AND deleted_at IS NULL
             LIMIT 1
             """,
             bind: { stmt in
@@ -556,6 +556,171 @@ public final class DemoServerSimulator {
         )
     }
 
+    // MARK: - POST /sync/upload (offline batch push)
+    // See docs/project/upload-endpoint-contract.md. A flat, op-tagged operation list; per-operation
+    // results (no all-or-nothing). The server mints an opaque `remote_id`; `localId` (the task's `id`)
+    // is the stable client key and the idempotency key.
+
+    public func upload(operations: [[String: Any]]) throws -> [String: Any] {
+        let results = operations.map(applyUploadOperation(_:))
+        return ["results": results, "cursor": iso8601(Date().timeIntervalSince1970)]
+    }
+
+    private func applyUploadOperation(_ payload: [String: Any]) -> [String: Any] {
+        do {
+            switch payload["operation"] as? String {
+            case "insert": return try uploadInsert(payload)
+            case "update": return try uploadUpdate(payload)
+            case "delete": return try uploadDelete(payload)
+            case .none:
+                return rejected(payload, code: "missing_operation", message: "operation is required")
+            case .some(let other):
+                return rejected(payload, code: "unknown_operation", message: "unknown operation '\(other)'")
+            }
+        } catch let error as DemoBackendError {
+            return rejected(payload, code: "rejected", message: error.errorDescription ?? "rejected")
+        } catch {
+            return rejected(payload, code: "error", message: "\(error)")
+        }
+    }
+
+    private func uploadInsert(_ payload: [String: Any]) throws -> [String: Any] {
+        try requireTasksType(payload)
+        guard let localID = payload["localId"] as? String, !localID.isEmpty else {
+            throw DemoBackendError.validation(message: "localId is required for insert")
+        }
+        // Idempotency: a row already keyed by this localId ⇒ return its remote_id (retry-safe).
+        if try !exists(in: "tasks", id: localID) {
+            guard let data = payload["data"] as? [String: Any] else {
+                throw DemoBackendError.validation(message: "data is required for insert")
+            }
+            var body = data
+            body["id"] = localID
+            _ = try createTask(body: body)
+        }
+        let remote = try ensureRemoteID(forLocalID: localID)
+        return ["operation": "insert", "localId": localID, "remoteId": remote, "status": "applied"]
+    }
+
+    private func uploadUpdate(_ payload: [String: Any]) throws -> [String: Any] {
+        try requireTasksType(payload)
+        let remote = try requireRemoteID(payload)
+        let incoming = try requireUpdatedAt(payload)
+        guard let localID = try localID(forRemoteID: remote) else {
+            throw DemoBackendError.notFound(entity: "task", id: remote)
+        }
+        if try isStale(localID: localID, incoming: incoming) {
+            return [
+                "operation": "update", "remoteId": remote, "status": "stale",
+                "server": try getTaskDetailPayload(taskID: localID) ?? NSNull(),
+            ]
+        }
+        guard var body = payload["data"] as? [String: Any] else {
+            throw DemoBackendError.validation(message: "data is required for update")
+        }
+        body["id"] = localID
+        _ = try updateTask(taskID: localID, body: body)
+        return ["operation": "update", "remoteId": remote, "status": "applied"]
+    }
+
+    private func uploadDelete(_ payload: [String: Any]) throws -> [String: Any] {
+        try requireTasksType(payload)
+        let remote = try requireRemoteID(payload)
+        let incoming = try requireUpdatedAt(payload)
+        guard let localID = try localID(forRemoteID: remote) else {
+            // Already absent ⇒ idempotent success.
+            return ["operation": "delete", "remoteId": remote, "status": "applied"]
+        }
+        // Last-writer-wins applies to deletes too: an older delete must not erase a newer server edit.
+        if try isStale(localID: localID, incoming: incoming) {
+            return [
+                "operation": "delete", "remoteId": remote, "status": "stale",
+                "server": try getTaskDetailPayload(taskID: localID) ?? NSNull(),
+            ]
+        }
+        suspendAmbientMutationsAfterWrite()
+        try self.sqlite.execute(
+            "UPDATE tasks SET deleted_at = ? WHERE id = ?",
+            bind: { stmt in
+                self.sqlite.bind(double: Date().timeIntervalSince1970, at: 1, in: stmt)
+                self.sqlite.bind(text: localID, at: 2, in: stmt)
+            }
+        )
+        return ["operation": "delete", "remoteId": remote, "status": "applied"]
+    }
+
+    private func requireTasksType(_ payload: [String: Any]) throws {
+        guard (payload["type"] as? String) == "tasks" else {
+            throw DemoBackendError.validation(message: "unsupported type (only 'tasks')")
+        }
+    }
+
+    private func requireRemoteID(_ payload: [String: Any]) throws -> String {
+        guard let remote = payload["remoteId"] as? String, !remote.isEmpty else {
+            throw DemoBackendError.validation(message: "remoteId is required")
+        }
+        return remote
+    }
+
+    private func requireUpdatedAt(_ payload: [String: Any]) throws -> Date {
+        guard let date = try parseISO8601(payload["updatedAt"]) else {
+            throw DemoBackendError.validation(message: "updatedAt is required (ISO 8601)")
+        }
+        return date
+    }
+
+    private func ensureRemoteID(forLocalID localID: String) throws -> String {
+        let rows = try self.sqlite.query(
+            "SELECT remote_id FROM tasks WHERE id = ? LIMIT 1",
+            bind: { stmt in self.sqlite.bind(text: localID, at: 1, in: stmt) }
+        )
+        if let existing = rows.first?.nullableString("remote_id") { return existing }
+        let remote = "srv-\(UUID().uuidString.lowercased())"
+        try self.sqlite.execute(
+            "UPDATE tasks SET remote_id = ? WHERE id = ?",
+            bind: { stmt in
+                self.sqlite.bind(text: remote, at: 1, in: stmt)
+                self.sqlite.bind(text: localID, at: 2, in: stmt)
+            }
+        )
+        return remote
+    }
+
+    private func localID(forRemoteID remote: String) throws -> String? {
+        // Match the minted remote_id, or fall back to id for pre-upload rows whose remote_id the
+        // payload coalesced to their id.
+        let rows = try self.sqlite.query(
+            """
+            SELECT id FROM tasks
+            WHERE (remote_id = ? OR (remote_id IS NULL AND id = ?)) AND deleted_at IS NULL
+            LIMIT 1
+            """,
+            bind: { stmt in
+                self.sqlite.bind(text: remote, at: 1, in: stmt)
+                self.sqlite.bind(text: remote, at: 2, in: stmt)
+            }
+        )
+        return rows.first.map { $0.string("id") }
+    }
+
+    private func isStale(localID: String, incoming: Date) throws -> Bool {
+        let rows = try self.sqlite.query(
+            "SELECT updated_at FROM tasks WHERE id = ? LIMIT 1",
+            bind: { stmt in self.sqlite.bind(text: localID, at: 1, in: stmt) }
+        )
+        guard let stored = rows.first?.double("updated_at") else { return false }
+        // Contract: an incoming write older *or equal* loses (server wins ties).
+        return incoming.timeIntervalSince1970 <= stored
+    }
+
+    private func rejected(_ payload: [String: Any], code: String, message: String) -> [String: Any] {
+        var result: [String: Any] = ["status": "rejected", "code": code, "message": message]
+        if let operation = payload["operation"] as? String { result["operation"] = operation }
+        if let localID = payload["localId"] as? String { result["localId"] = localID }
+        if let remoteID = payload["remoteId"] as? String { result["remoteId"] = remoteID }
+        return result
+    }
+
     private func applyAmbientProjectMutation(projectID: String, step: Int) throws {
         guard try exists(in: "projects", id: projectID) else { return }
 
@@ -580,11 +745,14 @@ public final class DemoServerSimulator {
         whereClause: String,
         bind: ((OpaquePointer?) throws -> Void)?
     ) throws -> [[String: Any]] {
+        let scoped =
+            whereClause.isEmpty
+            ? "WHERE tasks.deleted_at IS NULL" : "\(whereClause) AND tasks.deleted_at IS NULL"
         let rows = try self.sqlite.query(
             """
-            SELECT tasks.id, tasks.project_id, tasks.assignee_id, tasks.author_id, tasks.title, tasks.description, tasks.state, tasks.created_at, tasks.updated_at
+            SELECT tasks.id, tasks.remote_id, tasks.project_id, tasks.assignee_id, tasks.author_id, tasks.title, tasks.description, tasks.state, tasks.created_at, tasks.updated_at
             FROM tasks
-            \(whereClause)
+            \(scoped)
             ORDER BY tasks.id ASC
             """,
             bind: bind
@@ -671,6 +839,9 @@ public final class DemoServerSimulator {
         let stateID = row.string("state")
         return [
             "id": taskID,
+            // Rows created before the upload path (seed / per-resource POST) have no minted
+            // remote_id; their own id is their canonical server id, so coalesce to it.
+            "remote_id": row.nullableString("remote_id") ?? taskID,
             "project_id": row.string("project_id"),
             "assignee_id": row.nullableString("assignee_id") ?? NSNull(),
             "reviewer_ids": try reviewerIDsFor(taskID: taskID),
@@ -937,6 +1108,8 @@ public final class DemoServerSimulator {
 
             CREATE TABLE IF NOT EXISTS tasks (
                 id TEXT PRIMARY KEY,
+                remote_id TEXT NULL,
+                deleted_at REAL NULL,
                 project_id TEXT NOT NULL,
                 assignee_id TEXT NULL,
                 author_id TEXT NOT NULL,

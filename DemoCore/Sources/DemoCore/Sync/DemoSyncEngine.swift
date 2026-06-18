@@ -22,6 +22,20 @@ public final class DemoSyncEngine {
 
     public private(set) var isSyncing = false
 
+    /// Simulated airplane mode. The state lives at the transport (`apiClient`); this mirror drives it
+    /// and lets the UI bind to it. While offline, pulls keep serving the local cache, task edits queue
+    /// locally, and push is held — reconciled on reconnect.
+    public var isOffline = false {
+        didSet { apiClient.isOffline = isOffline }
+    }
+
+    public private(set) var pendingChangeCount = 0
+
+    /// Last point local state was reconciled with the server. Edits after this are pending updates;
+    /// advanced after every inbound pull (so freshly-pulled rows aren't mistaken for local edits) and
+    /// after a successful push.
+    private var syncCursor = Date()
+
     private var inFlightOperations: Set<String> = []
 
     private let syncContainer: SyncContainer
@@ -33,31 +47,49 @@ public final class DemoSyncEngine {
     }
 
     public func syncProjects() async throws {
-        try await runOperation("projects") {
-            try await syncProjectsData()
+        try await pull("projects") {
+            try await self.syncProjectsData()
         }
     }
 
     public func syncProjectTasks(projectID: String) async throws {
-        try await runOperation("projectTasks-\(projectID)") {
-            try await syncProjectTasksData(projectID: projectID)
+        try await pull("projectTasks-\(projectID)") {
+            try await self.syncProjectTasksData(projectID: projectID)
         }
     }
 
     public func syncTaskDetail(taskID: String) async throws {
-        try await runOperation("taskDetail-\(taskID)") {
-            try await syncTaskDetailData(taskID: taskID)
+        try await pull("taskDetail-\(taskID)") {
+            try await self.syncTaskDetailData(taskID: taskID)
         }
     }
 
     public func syncTaskFormMetadata() async throws {
-        try await runOperation("taskFormMetadata") {
-            try await syncUsersData()
-            try await syncTaskStatesData()
+        try await pull("taskFormMetadata") {
+            try await self.syncUsersData()
+            try await self.syncTaskStatesData()
+        }
+    }
+
+    /// Run an inbound pull, tolerating a dead transport: while offline the refresh is skipped and the
+    /// UI keeps reading the local cache (a failed refresh is a non-event, never a surfaced error).
+    private func pull(_ key: String, _ operation: () async throws -> Void) async throws {
+        do {
+            try await runOperation(key, operation)
+        } catch DemoAPIError.offline {
+            // Offline: keep serving what's already in the local store.
         }
     }
 
     public func createTask(body: DemoSyncPayload, projectID: String) async throws {
+        if isOffline {
+            guard try project(withID: projectID) != nil else {
+                throw SyncTaskDetailError.missingProject(projectID)
+            }
+            try await syncContainer.sync(item: body, as: Task.self)
+            refreshPendingCount()
+            return
+        }
         try await runOperation("createTask-\(projectID)") {
             let created = try await apiClient.createTask(body: body)
             try await syncProjectTasksData(projectID: projectID)
@@ -68,6 +100,15 @@ public final class DemoSyncEngine {
     }
 
     public func updateTask(taskID: String, projectID: String?, body: DemoSyncPayload) async throws {
+        if isOffline {
+            try await syncContainer.sync(item: body, as: Task.self)
+            if let task = try task(withID: taskID) {
+                task.updatedAt = Date()
+                try syncContainer.mainContext.save()
+            }
+            refreshPendingCount()
+            return
+        }
         try await runOperation("updateTask-\(taskID)") {
             _ = try await apiClient.updateTask(taskID: taskID, body: body)
             try await syncTaskAfterMutation(taskID: taskID, projectID: projectID)
@@ -75,6 +116,15 @@ public final class DemoSyncEngine {
     }
 
     public func deleteTask(taskID: String, projectID: String) async throws {
+        if isOffline {
+            if let task = try task(withID: taskID) {
+                task.isLocallyDeleted = true
+                task.updatedAt = Date()
+                try syncContainer.mainContext.save()
+            }
+            refreshPendingCount()
+            return
+        }
         try await runOperation("deleteTask-\(taskID)") {
             try await apiClient.deleteTask(taskID: taskID)
             try await syncProjectTasksData(projectID: projectID)
@@ -93,6 +143,118 @@ public final class DemoSyncEngine {
             _ = try await self.apiClient.replaceTaskWatchers(taskID: taskID, watcherIDs: watcherIDs)
             try await self.syncTaskAfterMutation(taskID: taskID, projectID: projectID)
         }
+    }
+
+    /// Push every locally-pending task change to the server and apply the result. Returns `nil` while
+    /// offline (no network) or if a push is already in flight.
+    @discardableResult
+    public func pushPendingChanges() async throws -> SyncPushSummary? {
+        guard !isOffline else { return nil }
+        let key = "push"
+        guard !inFlightOperations.contains(key) else { return nil }
+
+        inFlightOperations.insert(key)
+        isSyncing = true
+        defer {
+            inFlightOperations.remove(key)
+            isSyncing = !inFlightOperations.isEmpty
+        }
+
+        let summary = try await SwiftSync.push(
+            for: Task.self,
+            in: syncContainer.mainContext,
+            changedSince: syncCursor,
+            upload: { batch in try await self.upload(batch) }
+        )
+        syncCursor = summary.cursor
+        refreshPendingCount()
+        return summary
+    }
+
+    /// Serialize the pending batch into the `/sync/upload` operation list, POST it once, and map the
+    /// per-operation results back into a `SyncPushResponse`. Inserts carry the `localId` + full
+    /// resource; updates/deletes carry the server-assigned `remoteId` (from `syncRemoteID`). A `stale`
+    /// result means the server won last-writer-wins — adopt its state locally and treat the row as
+    /// resolved so it isn't re-sent.
+    private func upload(_ batch: SyncPushBatch) async throws -> SyncPushResponse {
+        var operations: [[String: Any]] = []
+        var remoteToLocal: [String: String] = [:]
+
+        for localID in batch.inserts {
+            guard let task = try task(withID: localID) else { continue }
+            let data = syncContainer.export(task)
+            operations.append([
+                "operation": "insert", "type": "tasks", "localId": localID,
+                "updatedAt": data["updated_at"] ?? "", "data": data,
+            ])
+        }
+        for localID in batch.updates {
+            guard let task = try task(withID: localID), let remote = task.syncRemoteID else { continue }
+            remoteToLocal[remote] = localID
+            let data = syncContainer.export(task)
+            operations.append([
+                "operation": "update", "type": "tasks", "remoteId": remote,
+                "updatedAt": data["updated_at"] ?? "", "data": data,
+            ])
+        }
+        for localID in batch.deletes {
+            guard let task = try task(withID: localID), let remote = task.syncRemoteID else { continue }
+            remoteToLocal[remote] = localID
+            let data = syncContainer.export(task)
+            operations.append([
+                "operation": "delete", "type": "tasks", "remoteId": remote,
+                "updatedAt": data["updated_at"] ?? "",
+            ])
+        }
+
+        let results = try await apiClient.upload(operations: operations)
+
+        var response = SyncPushResponse()
+        for result in results {
+            let operation = result["operation"] as? String
+            let status = result["status"] as? String
+            let remoteID = result["remoteId"] as? String
+            let localID = (result["localId"] as? String) ?? remoteID.flatMap { remoteToLocal[$0] }
+            switch (operation, status) {
+            case ("insert", "applied"):
+                if let localID, let remoteID { response.assignedRemoteIDs[localID] = remoteID }
+            case ("update", "applied"), ("update", "stale"):
+                if let localID { response.confirmedUpdateLocalIDs.insert(localID) }
+                if status == "stale", let server = result["server"] as? [String: Any] {
+                    try? await syncContainer.sync(item: DemoSyncPayload(dictionary: server), as: Task.self)
+                }
+            case ("delete", "applied"):
+                if let localID { response.confirmedDeleteLocalIDs.insert(localID) }
+            case ("delete", "stale"):
+                // The server has a newer edit — the delete lost LWW. Abandon the tombstone and adopt
+                // the server's state so the row reappears with the winning version (no re-send loop).
+                if let localID, let server = result["server"] as? [String: Any] {
+                    try? await syncContainer.sync(item: DemoSyncPayload(dictionary: server), as: Task.self)
+                    if let task = try task(withID: localID) { task.isLocallyDeleted = false }
+                }
+            default:
+                let operationKind: SyncPushFailure.Operation =
+                    operation == "insert" ? .insert : (operation == "delete" ? .delete : .update)
+                response.failures.append(
+                    SyncPushFailure(
+                        localID: localID ?? remoteID ?? "", operation: operationKind,
+                        message: (result["message"] as? String) ?? "rejected"))
+            }
+        }
+        return response
+    }
+
+    private func refreshPendingCount() {
+        let pending = try? SwiftSync.pendingChanges(
+            for: Task.self, in: syncContainer.mainContext, changedSince: syncCursor)
+        pendingChangeCount = pending.map { $0.inserts.count + $0.updates.count + $0.deletes.count } ?? 0
+    }
+
+    /// After an inbound pull, advance the cursor so freshly-pulled rows aren't mistaken for local
+    /// edits, and refresh the pending count. (`syncRemoteID` is populated from `remote_id` on import.)
+    private func markPulled() {
+        syncCursor = Date()
+        refreshPendingCount()
     }
 
     private func syncProjectsData() async throws {
@@ -130,6 +292,7 @@ public final class DemoSyncEngine {
             parent: project,
             relationship: \Task.project
         )
+        markPulled()
         try await syncProjectsData()
     }
 
@@ -153,6 +316,7 @@ public final class DemoSyncEngine {
             throw SyncTaskDetailError.missingProject(projectID)
         }
         try await syncContainer.sync(item: payload, as: Task.self)
+        markPulled()
     }
 
     private func syncTaskAfterMutation(taskID: String, projectID: String?) async throws {

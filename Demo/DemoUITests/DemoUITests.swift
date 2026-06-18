@@ -310,6 +310,103 @@ final class DemoUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["task.watcher.\(DemoSeedUserID.liamBrown)"].exists)
         XCTAssertFalse(app.staticTexts["task.watcher.\(DemoSeedUserID.ethanLee)"].exists)
     }
+
+    // User journey: create a task offline (reference data is cached), then sync on reconnect.
+    @MainActor
+    func testOfflineCreateQueuesThenSyncsOnReconnect() throws {
+        let app = configuredApp()
+        app.launch()
+
+        // Online: the home screen warms reference data (users + task states) into the cache.
+        openProject(app, id: DemoSeedProjectID.accountSecurity)
+        XCTAssertTrue(
+            app.staticTexts["Add session timeout controls to account settings"].waitForExistence(timeout: 2))
+        goBack(app)
+
+        let toggle = app.buttons["offline-toggle"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 2))
+        toggle.tap()
+        XCTAssertEqual(app.buttons["offline-toggle"].label, "Offline")
+
+        // Create a task offline. With reference data cached, the form fills its defaults and Create enables.
+        openProject(app, id: DemoSeedProjectID.accountSecurity)
+        openCreateTaskForm(app)
+        let title = uniqueTitle(prefix: "Offline Created")
+        replaceText(in: app.textFields["task-form.title"], with: title, app: app)
+        XCTAssertTrue(app.buttons["task-form.save"].isEnabled, "offline create works with cached reference data")
+        app.buttons["task-form.save"].tap()
+        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 1))
+
+        // It appears locally and is queued.
+        XCTAssertTrue(findAfterScrolling(app.staticTexts[title], in: app))
+        goBack(app)
+        XCTAssertTrue(app.staticTexts["pending-count"].waitForExistence(timeout: 2), "the create is queued")
+
+        // Reconnect and sync.
+        app.buttons["offline-toggle"].tap()
+        let syncNow = app.buttons["sync-now"]
+        XCTAssertTrue(syncNow.isEnabled)
+        syncNow.tap()
+        let okButton = app.alerts.buttons["OK"]
+        XCTAssertTrue(okButton.waitForExistence(timeout: 5))
+        okButton.tap()
+        XCTAssertTrue(app.staticTexts["pending-count"].waitForNonExistence(timeout: 3))
+
+        // It survived the sync: reopening online (a real refresh) still shows it.
+        openProject(app, id: DemoSeedProjectID.accountSecurity)
+        XCTAssertTrue(findAfterScrolling(app.staticTexts[title], in: app))
+    }
+
+    // User journey: work offline, queue a change, then sync on reconnect.
+    @MainActor
+    func testOfflineDeleteQueuesThenSyncsOnReconnect() throws {
+        let app = configuredApp()
+        app.launch()
+
+        let doomedTitle = "Add session timeout controls to account settings"
+
+        // Online: open the project so its tasks are cached locally.
+        openProject(app, id: DemoSeedProjectID.accountSecurity)
+        XCTAssertTrue(app.staticTexts[doomedTitle].waitForExistence(timeout: 2))
+        goBack(app)
+
+        // Go offline (the toggle lives on the projects list).
+        let toggle = app.buttons["offline-toggle"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 2))
+        XCTAssertEqual(toggle.label, "Online")
+        toggle.tap()
+        XCTAssertEqual(app.buttons["offline-toggle"].label, "Offline")
+
+        // Reopen the project offline: cached tasks still render (a dead network is not a blank screen).
+        openProject(app, id: DemoSeedProjectID.accountSecurity)
+        XCTAssertTrue(app.staticTexts[doomedTitle].exists, "cached tasks remain visible offline")
+
+        // Delete a task offline: it leaves the list and becomes a pending change.
+        deleteTaskFromProject(app, id: DemoSeedTaskID.sessionTimeout)
+        XCTAssertTrue(app.staticTexts[doomedTitle].waitForNonExistence(timeout: 2))
+        goBack(app)
+
+        XCTAssertTrue(app.staticTexts["pending-count"].waitForExistence(timeout: 2), "the delete is queued")
+        XCTAssertFalse(app.buttons["sync-now"].isEnabled, "cannot push while offline")
+
+        // Reconnect and sync.
+        app.buttons["offline-toggle"].tap()
+        XCTAssertEqual(app.buttons["offline-toggle"].label, "Online")
+        let syncNow = app.buttons["sync-now"]
+        XCTAssertTrue(syncNow.isEnabled)
+        syncNow.tap()
+
+        // The "Synced" confirmation appears; dismiss it and the pending indicator clears.
+        let okButton = app.alerts.buttons["OK"]
+        XCTAssertTrue(okButton.waitForExistence(timeout: 5))
+        okButton.tap()
+        XCTAssertTrue(app.staticTexts["pending-count"].waitForNonExistence(timeout: 3))
+
+        // The deletion held: reopening online (a real server refresh) does not bring it back.
+        openProject(app, id: DemoSeedProjectID.accountSecurity)
+        XCTAssertTrue(app.staticTexts["Write QA item list for forced re-auth scenarios"].waitForExistence(timeout: 2))
+        XCTAssertFalse(app.staticTexts[doomedTitle].exists)
+    }
 }
 
 private extension DemoUITests {
