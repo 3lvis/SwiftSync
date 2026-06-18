@@ -59,20 +59,64 @@ branch. Work through them systematically; mark complete by deleting the line (pe
 - [ ] Un-skip a small, fast benchmark subset and add a thresholded perf-regression gate;
       `log()` anything intentionally excluded so coverage isn't silently truncated.
 
-### Phase 7 — Define the production-sync story (design-first)
+### Phase 7 — Production-sync story (foundation shipped)
 
-The gap: SwiftSync is inbound-only (server → local, read-reactive); production sync adds the
-outbound/offline side (local edits flow back). Design-first and substantial — deferred here from
-Phase 4. Full design in [`production-sync-design.md`](production-sync-design.md): offline queue in
-the DB, last-writer-wins, a visible/actionable failures table, offline-safe migrations, CloudKit out,
-break-freely versioning; observability TBD.
+SwiftSync was inbound-only (server → local, read-reactive); production sync adds the outbound/offline
+side (local edits flow back). The **foundation shipped in #622**: offline queue (pending changes are a
+query over the store — no save-interception; the `didSave` spike was explored and discarded), two-id
+upsert push contract (`localId` stable key + server-minted `remoteId`), last-writer-wins on
+`updatedAt` (including tombstone revival), and a visible/actionable **failures inbox** (edit-to-retry /
+discard), with auto-sync on reconnect. Full design in
+[`production-sync-design.md`](production-sync-design.md); the History API stays an optional later
+optimisation (efficient deltas), not the foundation.
 
-Decided: **identity + change detection** use a `localId` + `remoteId` + `updatedAt` model — detection
-is a query over the store (no save-interception; a `didSave`-interception spike was explored and
-discarded as unnecessary), and conflicts resolve by latest `updatedAt`. The History API is an optional
-later optimisation (efficient deltas / delete tombstones), not the foundation.
+Still open:
 
-- [ ] Study prior art (the old `Sync`, WatermelonDB, PouchDB–CouchDB replication, Realm sync), then
-      design the public outbound seam — syncable-model contract, pending queue, push hook, failures
-      table — and build it with its first real use.
-- [ ] Break each accepted area into its own implementation PR.
+- [ ] Formal prior-art scan of the sync *protocol* (PowerSync, CouchDB/PouchDB replication,
+      WatermelonDB, Realm/Firestore) before hardening the push/pull contract further — pick
+      deliberately for our constraints (this gates the Phase 8 middleware seam).
+- [ ] Offline-safe migrations + break-freely versioning of the pending-change/queue format.
+
+### Phase 8 — Outbound sync → best-in-class (adapted from `code/3lvis/ios/Networking` roadmap, items 2–4)
+
+Three hardening items on top of the Phase 7 foundation. Each is driven by the demo as the forcing
+function — a user-facing capability → a backend contract → the app supports it → that pulls the
+feature into SwiftSync. Build each seam with its first real use, never speculatively.
+
+- [ ] **Typed failure taxonomy.** Replace `SyncPushFailure`'s bare `message: String` with a
+      categorized failure (`validation` / `staleConflict` / `transport` / `serverRejected`),
+      preserving the underlying cause, plus a conservative `isRetryable`. Lets the failures inbox
+      distinguish "fix this field" from "transient, will retry," and feeds the retry policy below.
+      *Demo:* the inbox renders a fixable validation error differently from a transient one.
+      (↔ Networking roadmap item 2 — categorize by where it failed, keep the cause, derive `isRetryable`.)
+
+- [ ] **Sync observability — event stream + built-in logging.** A multi-consumer `events()`
+      `AsyncStream` emitting per-sync/per-operation outcomes (started/completed, applied/stale/rejected,
+      counts, duration), plus scoped built-in logging (debug shows, release redacts). Makes conflicts and
+      failures observable instead of guesswork (the conflict/tombstone bugs this cycle were caught by
+      hand-instrumentation that this would make first-class).
+      *Demo:* a "sync activity" view. (↔ Networking roadmap item 3 — one `events()` hook + lossless
+      built-in logging with one redaction rule.)
+
+- [ ] **Push middleware — retry + auth refresh.** Formalize auto-sync-on-reconnect into a retry policy
+      (exponential backoff + full jitter + `Retry-After`), safe because the upsert is idempotent (keyed
+      on `localId`); single-flight credential refresh for concurrent auth failures (the 401 stampede);
+      the `upload` closure is the interceptor seam. Consumes the `isRetryable` from the failure taxonomy.
+      *Demo:* a "flaky network" toggle → backed-off retries; an "expired token" → one refresh + replay.
+      (↔ Networking roadmap items 4b/4c — async-`next` interceptor onion, single-flight `RefreshCoordinator`,
+      idempotent-methods-only retry.)
+
+**Priority (across the open Phase 7 + Phase 8 items), by leverage and dependency:**
+
+1. **8.1 Typed failure taxonomy** — smallest, hard-unblocks 8.3 (retry consumes `isRetryable`), and
+   immediately upgrades the shipped failures inbox. Best effort/leverage ratio.
+2. **8.2 Sync observability** — independent and high-leverage; gives eyes for building the riskier
+   middleware (this cycle's conflict/tombstone bugs were caught by hand-instrumentation).
+3. **7a Sync-protocol prior-art scan** — cheap, gates 8.3's seam design; do it right before, not early.
+4. **8.3 Push middleware (retry + auth refresh)** — the big one (a PR series); unblocked by 8.1 + 7a,
+   observable via 8.2.
+5. **7b Offline-safe queue migrations** — deferred: the queue format can still break freely (no shipped
+   consumers with persisted data), so versioning earns its place only once there's data to protect.
+
+Each item is its own PR (some a short series). Core stays dependency-free; any concrete transport/bridge
+is a separate SPM product (↔ Networking items 5–6).
