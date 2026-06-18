@@ -31,6 +31,9 @@ public final class DemoSyncEngine {
 
     public private(set) var pendingChangeCount = 0
 
+    /// Rows the server rejected (a failure reason is set). Drives the failures inbox.
+    public private(set) var failedChangeCount = 0
+
     /// Last point local state was reconciled with the server. Edits after this are pending updates;
     /// advanced after every inbound pull (so freshly-pulled rows aren't mistaken for local edits) and
     /// after a successful push.
@@ -286,6 +289,35 @@ public final class DemoSyncEngine {
         let pending = try? SwiftSync.pendingChanges(
             for: Task.self, in: syncContainer.mainContext, changedSince: syncCursor)
         pendingChangeCount = pending.map { $0.inserts.count + $0.updates.count + $0.deletes.count } ?? 0
+
+        let failed = try? syncContainer.mainContext.fetch(
+            FetchDescriptor<Task>(predicate: #Predicate { $0.syncFailureReason != nil }))
+        failedChangeCount = failed?.count ?? 0
+    }
+
+    /// Tasks the server rejected (a failure reason is set), newest first — the failures inbox.
+    public func failedTasks() -> [Task] {
+        (try? syncContainer.mainContext.fetch(
+            FetchDescriptor<Task>(
+                predicate: #Predicate { $0.syncFailureReason != nil },
+                sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]))) ?? []
+    }
+
+    /// Resolve a rejected change: drop a never-synced row, or restore the server's version of an
+    /// edited row (abandoning the local edit) and clear its failure.
+    public func discardFailedChange(taskID: String) async throws {
+        guard let task = try task(withID: taskID) else { return }
+        if task.syncRemoteID == nil {
+            syncContainer.mainContext.delete(task)
+            try syncContainer.mainContext.save()
+        } else {
+            try await syncTaskDetail(taskID: taskID)
+            if let refreshed = try self.task(withID: taskID) {
+                refreshed.syncFailureReason = nil
+                try syncContainer.mainContext.save()
+            }
+        }
+        refreshPendingCount()
     }
 
     /// After an inbound pull, advance the cursor so freshly-pulled rows aren't mistaken for local

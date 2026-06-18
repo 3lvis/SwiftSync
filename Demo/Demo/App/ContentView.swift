@@ -5,6 +5,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Bindable var runtime: DemoRuntime
+    @State private var showingFailures = false
 
     private var engine: DemoSyncEngine { runtime.syncEngine }
 
@@ -33,6 +34,9 @@ struct ContentView: View {
                     _Concurrency.Task { try? await engine.pushPendingChanges() }
                 }
             }
+            .sheet(isPresented: $showingFailures) {
+                FailuresSheet(syncContainer: runtime.syncContainer, syncEngine: engine)
+            }
     }
 
     private var offlineBar: some View {
@@ -55,6 +59,18 @@ struct ContentView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("pending-count")
+            }
+
+            if engine.failedChangeCount > 0 {
+                if engine.pendingChangeCount > 0 { Spacer().frame(width: 12) }
+                Button {
+                    showingFailures = true
+                } label: {
+                    Label("\(engine.failedChangeCount) failed", systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote)
+                }
+                .tint(.red)
+                .accessibilityIdentifier("failures-button")
             }
         }
         .padding(.horizontal)

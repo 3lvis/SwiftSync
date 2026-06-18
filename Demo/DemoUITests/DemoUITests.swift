@@ -353,6 +353,36 @@ final class DemoUITests: XCTestCase {
         XCTAssertTrue(findAfterScrolling(app.staticTexts[title], in: app))
     }
 
+    // User journey: a rejected offline edit lands in the failures inbox; discard resolves it.
+    @MainActor
+    func testRejectedOfflineEditAppearsInFailuresInboxAndDiscards() throws {
+        let app = configuredApp()
+        app.launch()
+        openTaskDetail(
+            app, projectID: DemoSeedProjectID.accountSecurity, taskID: DemoSeedTaskID.sessionTimeout)
+
+        // Offline: rename the task to a title the server will reject (too long).
+        app.buttons["offline-toggle"].tap()
+        openEditTaskForm(app)
+        replaceText(in: app.textFields["task-form.title"], with: String(repeating: "A", count: 100), app: app)
+        app.buttons["task-form.save"].tap()
+        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 2))
+
+        // Reconnect: auto-sync pushes it, the server rejects it, and it surfaces in the inbox.
+        app.buttons["offline-toggle"].tap()
+        let failuresButton = app.buttons["failures-button"]
+        XCTAssertTrue(
+            failuresButton.waitForExistence(timeout: 5), "a rejected change surfaces in the failures inbox")
+        failuresButton.tap()
+
+        let discard = app.buttons["failure.discard.\(DemoSeedTaskID.sessionTimeout)"]
+        XCTAssertTrue(discard.waitForExistence(timeout: 2), "the failed task is listed with its reason")
+        discard.tap()
+
+        // Discarding resolves the failure: the row leaves the inbox.
+        XCTAssertTrue(discard.waitForNonExistence(timeout: 5), "discard clears the failure")
+    }
+
     // User journey: edit a task's reviewers offline, then sync on reconnect.
     @MainActor
     func testOfflineAddReviewerSyncsOnReconnect() throws {

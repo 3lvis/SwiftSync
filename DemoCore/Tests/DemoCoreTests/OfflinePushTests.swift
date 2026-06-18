@@ -108,6 +108,37 @@ final class OfflinePushTests: XCTestCase {
     }
 
     @MainActor
+    func testDiscardFailedChangeRestoresServerStateAndClearsFailure() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        let taskID = DemoSeedData.SeedIDs.Tasks.sessionTimeout
+        try await engine.syncProjectTasks(projectID: projectID)
+        let originalTitle = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext)).title
+
+        // Offline over-long rename → reject on push → failure recorded.
+        engine.isOffline = true
+        let task = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        var dictionary = syncContainer.export(task)
+        dictionary["title"] = String(repeating: "A", count: 100)
+        try await engine.updateTask(
+            taskID: taskID, projectID: projectID, body: try DemoSyncPayload(dictionary: dictionary))
+        engine.isOffline = false
+        _ = try await engine.pushPendingChanges()
+        XCTAssertNotNil(try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext)).syncFailureReason)
+
+        // Discard: restores the server's title and clears the failure.
+        try await engine.discardFailedChange(taskID: taskID)
+        let discarded = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        XCTAssertNil(discarded.syncFailureReason, "discard clears the failure")
+        XCTAssertEqual(discarded.title, originalTitle, "discard restores the server's version")
+        XCTAssertEqual(engine.failedChangeCount, 0)
+    }
+
+    @MainActor
     func testPushWhileOfflineIsANoOp() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
