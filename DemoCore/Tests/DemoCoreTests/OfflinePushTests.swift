@@ -40,11 +40,11 @@ final class OfflinePushTests: XCTestCase {
         XCTAssertEqual(engine.pendingChangeCount, 0)
 
         let synced = try XCTUnwrap(fetchTask(id: "OFFLINE-CREATE-1", in: syncContainer.mainContext))
-        let remoteID = try XCTUnwrap(synced.syncRemoteID, "push stamps the server-minted remote id")
-        XCTAssertNotEqual(remoteID, "OFFLINE-CREATE-1", "the server mints its own id, distinct from localId")
-        XCTAssertTrue(remoteID.hasPrefix("srv-"))
+        // Single-id upsert: the row's id *is* its server id, so the push marks it synced by stamping
+        // syncRemoteID = id (no distinct minted id).
+        XCTAssertEqual(synced.syncRemoteID, "OFFLINE-CREATE-1", "push marks the row synced under its own id")
         let backendDetail = try await apiClient.getTaskDetail(taskID: "OFFLINE-CREATE-1")
-        XCTAssertNotNil(backendDetail, "the row reached the backend, keyed by its localId")
+        XCTAssertNotNil(backendDetail, "the row reached the backend, keyed by its id")
     }
 
     @MainActor
@@ -139,6 +139,49 @@ final class OfflinePushTests: XCTestCase {
     }
 
     @MainActor
+    func testEditingAFailedInsertReinsertsInsteadOf404() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        let localID = "FAILED-INSERT-1"
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        // Offline create with an over-long title → the insert is rejected on push.
+        engine.isOffline = true
+        let template = try XCTUnwrap(
+            fetchTask(id: DemoSeedData.SeedIDs.Tasks.sessionTimeout, in: syncContainer.mainContext))
+        var createDictionary = syncContainer.export(template)
+        createDictionary["id"] = localID
+        createDictionary["title"] = String(repeating: "A", count: 100)
+        createDictionary.removeValue(forKey: "items")
+        try await engine.createTask(
+            body: try DemoSyncPayload(dictionary: createDictionary), projectID: projectID)
+
+        engine.isOffline = false
+        _ = try await engine.pushPendingChanges()
+        let failed = try XCTUnwrap(fetchTask(id: localID, in: syncContainer.mainContext))
+        XCTAssertNotNil(failed.syncFailureReason, "the rejected insert is flagged")
+        XCTAssertNil(failed.syncRemoteID, "it never reached the server")
+
+        // Edit it to a valid title (online): a never-synced row must be re-inserted, not PUT/404'd.
+        var fixDictionary = syncContainer.export(failed)
+        fixDictionary["title"] = "Fixed"
+        fixDictionary.removeValue(forKey: "items")
+        try await engine.updateTask(
+            taskID: localID, projectID: projectID, body: try DemoSyncPayload(dictionary: fixDictionary))
+
+        let fixed = try XCTUnwrap(fetchTask(id: localID, in: syncContainer.mainContext))
+        XCTAssertNotNil(fixed.syncRemoteID, "the corrected task is inserted on the server")
+        XCTAssertNil(fixed.syncFailureReason, "the failure is resolved")
+        XCTAssertEqual(fixed.title, "Fixed")
+        let backendDetail = try await apiClient.getTaskDetail(taskID: localID)
+        XCTAssertNotNil(backendDetail, "it now exists on the server")
+    }
+
+    @MainActor
     func testPushWhileOfflineIsANoOp() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
@@ -187,9 +230,10 @@ final class OfflinePushTests: XCTestCase {
         // A task appears on the server that this client has never seen.
         _ = try backend.upload(operations: [
             [
-                "operation": "insert", "type": "tasks", "localId": "SERVER-ONLY-1",
+                "operation": "upsert", "type": "tasks", "id": "SERVER-ONLY-1",
                 "updatedAt": "2026-06-16T20:00:00.000Z",
                 "data": [
+                    "id": "SERVER-ONLY-1",
                     "project_id": projectID, "author_id": DemoSeedData.SeedIDs.Users.avaMartinez,
                     "title": "Created on the server", "description": "x", "state": ["id": "todo"],
                     "created_at": "2026-06-16T20:00:00.000Z", "updated_at": "2026-06-16T20:00:00.000Z",
