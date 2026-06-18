@@ -377,8 +377,7 @@ final class SyncQueryPublisherTests: XCTestCase {
 
         // runOnMain: true applies on the main context, so the edit lands on the already-registered
         // instance at once. A background-context sync (runOnMain: false) would leave this instance
-        // stale until SwiftData's cross-context merge catches up on an idle main runloop — the offline
-        // edit-doesn't-update-the-list bug.
+        // stale until SwiftData's cross-context merge catches up on an idle main runloop.
         try await container.sync(item: ["id": "t1", "title": "Edited"], as: PubTask.self, runOnMain: true)
 
         XCTAssertEqual(row.title, "Edited")
