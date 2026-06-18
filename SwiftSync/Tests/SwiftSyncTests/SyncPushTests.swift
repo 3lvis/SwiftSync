@@ -9,6 +9,7 @@ final class OfflineNote: SyncOfflineModel {
     var syncRemoteID: String?
     var syncUpdatedAt: Date
     var syncIsDeleted: Bool
+    var syncFailureReason: String?
     var title: String
 
     init(

@@ -1048,10 +1048,16 @@ public final class DemoServerSimulator {
         return rows.map { $0.string("id") }
     }
 
+    private static let maxTitleLength = 80
+
     private func validatedNonEmpty(_ value: String, field: String) throws -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             throw DemoBackendError.validation(message: "\(field) must not be empty")
+        }
+        guard trimmed.count <= Self.maxTitleLength else {
+            throw DemoBackendError.validation(
+                message: "\(field) must be \(Self.maxTitleLength) characters or fewer")
         }
         return trimmed
     }

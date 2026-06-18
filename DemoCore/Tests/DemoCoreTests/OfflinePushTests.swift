@@ -78,6 +78,36 @@ final class OfflinePushTests: XCTestCase {
     }
 
     @MainActor
+    func testRejectedPushPersistsFailureReasonOnTheRow() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        let taskID = DemoSeedData.SeedIDs.Tasks.sessionTimeout
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        // Offline: rename the task to an over-long title the server will reject.
+        engine.isOffline = true
+        let task = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        var dictionary = syncContainer.export(task)
+        dictionary["title"] = String(repeating: "A", count: 100)
+        try await engine.updateTask(
+            taskID: taskID, projectID: projectID, body: try DemoSyncPayload(dictionary: dictionary))
+
+        // Reconnect + push: the server rejects, and the failure is recorded on the row.
+        engine.isOffline = false
+        let pushResult = try await engine.pushPendingChanges()
+        let summary = try XCTUnwrap(pushResult)
+        XCTAssertEqual(summary.failures.count, 1)
+
+        let failed = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        let reason = try XCTUnwrap(failed.syncFailureReason, "the rejection is persisted on the row")
+        XCTAssertTrue(reason.contains("80 characters"), "the failure carries the server's reason: \(reason)")
+    }
+
+    @MainActor
     func testPushWhileOfflineIsANoOp() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()

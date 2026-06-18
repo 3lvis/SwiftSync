@@ -96,6 +96,11 @@ public final class Task {
     @NotExport
     public var isLocallyDeleted: Bool?
 
+    // Set by the push driver when the server rejects this row; cleared on a successful push. Local
+    // bookkeeping, never exported.
+    @NotExport
+    public var syncFailureReason: String?
+
     @NotExport
     public var project: Project?
 
@@ -128,6 +133,7 @@ public final class Task {
         updatedAt: Date = Date(),
         syncRemoteID: String? = nil,
         isLocallyDeleted: Bool? = nil,
+        syncFailureReason: String? = nil,
         project: Project? = nil,
         author: User? = nil,
         assignee: User? = nil,
@@ -147,6 +153,7 @@ public final class Task {
         self.updatedAt = updatedAt
         self.syncRemoteID = syncRemoteID
         self.isLocallyDeleted = isLocallyDeleted
+        self.syncFailureReason = syncFailureReason
         self.project = project
         self.author = author
         self.assignee = assignee
