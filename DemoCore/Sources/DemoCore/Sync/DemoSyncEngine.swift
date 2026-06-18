@@ -89,7 +89,7 @@ public final class DemoSyncEngine {
             guard try project(withID: projectID) != nil else {
                 throw SyncTaskDetailError.missingProject(projectID)
             }
-            try await syncContainer.sync(item: body, as: Task.self, immediate: true)
+            try await syncContainer.sync(item: body, as: Task.self, runOnMain: true)
             refreshPendingCount()
             return
         }
@@ -107,7 +107,7 @@ public final class DemoSyncEngine {
         // must be re-inserted. Apply locally so it stays a pending insert; online, push to (re)insert.
         let neverSynced = (try task(withID: taskID))?.syncRemoteID == nil
         if isOffline || neverSynced {
-            try await syncContainer.sync(item: body, as: Task.self, immediate: true)
+            try await syncContainer.sync(item: body, as: Task.self, runOnMain: true)
             if let task = try task(withID: taskID) {
                 task.updatedAt = Date()
                 task.syncFailureReason = nil  // the corrected edit gets a fresh attempt
@@ -261,7 +261,7 @@ public final class DemoSyncEngine {
                 if let localID { response.confirmedUpdateLocalIDs.insert(localID) }
                 if status == "stale", let server = result["server"] as? [String: Any] {
                     try? await syncContainer.sync(
-                        item: DemoSyncPayload(dictionary: server), as: Task.self, immediate: true)
+                        item: DemoSyncPayload(dictionary: server), as: Task.self, runOnMain: true)
                 }
             case ("delete", "applied"):
                 if let localID { response.confirmedDeleteLocalIDs.insert(localID) }
@@ -270,7 +270,7 @@ public final class DemoSyncEngine {
                 // the server's state so the row reappears with the winning version (no re-send loop).
                 if let localID, let server = result["server"] as? [String: Any] {
                     try? await syncContainer.sync(
-                        item: DemoSyncPayload(dictionary: server), as: Task.self, immediate: true)
+                        item: DemoSyncPayload(dictionary: server), as: Task.self, runOnMain: true)
                     if let task = try task(withID: localID) { task.isLocallyDeleted = false }
                 }
             default:
@@ -393,7 +393,7 @@ public final class DemoSyncEngine {
         guard try project(withID: projectID) != nil else {
             throw SyncTaskDetailError.missingProject(projectID)
         }
-        try await syncContainer.sync(item: payload, as: Task.self)
+        try await syncContainer.sync(item: payload, as: Task.self, runOnMain: false)
         markPulled()
     }
 

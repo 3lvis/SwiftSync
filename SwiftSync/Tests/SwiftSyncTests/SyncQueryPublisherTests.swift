@@ -363,10 +363,10 @@ final class SyncQueryPublisherTests: XCTestCase {
         XCTFail("Timed out waiting for condition: \(description)")
     }
 
-    // MARK: - Immediate (local) writes land in place
+    // MARK: - runOnMain (local) writes land in place
 
     @MainActor
-    func testImmediateSyncUpdatesRegisteredRowInPlace() async throws {
+    func testRunOnMainSyncUpdatesRegisteredRowInPlace() async throws {
         let container = try makeContainer(modelTypes: PubTask.self)
         container.mainContext.insert(PubTask(id: "t1", title: "Original"))
         try container.mainContext.save()
@@ -375,11 +375,11 @@ final class SyncQueryPublisherTests: XCTestCase {
         let row = try XCTUnwrap(
             container.mainContext.fetch(FetchDescriptor<PubTask>()).first { $0.id == "t1" })
 
-        // immediate: true applies on the main context, so the edit lands on the already-registered
-        // instance at once. A background-context sync (immediate: false) would leave this instance
+        // runOnMain: true applies on the main context, so the edit lands on the already-registered
+        // instance at once. A background-context sync (runOnMain: false) would leave this instance
         // stale until SwiftData's cross-context merge catches up on an idle main runloop — the offline
         // edit-doesn't-update-the-list bug.
-        try await container.sync(item: ["id": "t1", "title": "Edited"], as: PubTask.self, immediate: true)
+        try await container.sync(item: ["id": "t1", "title": "Edited"], as: PubTask.self, runOnMain: true)
 
         XCTAssertEqual(row.title, "Edited")
     }

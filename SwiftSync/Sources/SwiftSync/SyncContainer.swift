@@ -149,20 +149,23 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
 
     /// Sync a single object.
     ///
-    /// Set `immediate: true` for a *local* write (a UI/offline create or edit) that must be visible at
-    /// once: it is applied directly to `mainContext` on the main actor, mutating the row in place so
-    /// live queries update synchronously. Leave it `false` (default) for a server/background sync — that
-    /// imports on a background context off the main thread (its changes reach `mainContext` via the
-    /// did-save bridge). The split exists because SwiftData has no `mergeChanges(fromContextDidSave:)`,
-    /// so a background-context *update* doesn't promptly refresh an already-registered `mainContext`
-    /// row (the merge is gated on an idle main runloop) — `immediate` sidesteps that for local edits.
+    /// `runOnMain` has **no default** so every caller makes the choice deliberately:
+    /// - `true` for a *small, single-object local write* (a UI/offline create or edit) that must be
+    ///   visible at once: the import runs on the main actor against `mainContext`, mutating the row in
+    ///   place so live queries update synchronously. Only for small writes — it occupies the main thread.
+    /// - `false` for a server/background sync: it imports on a background context off the main thread
+    ///   (changes reach `mainContext` via the did-save bridge), so a large pull never blocks the UI.
+    ///
+    /// The split exists because SwiftData has no `mergeChanges(fromContextDidSave:)`, so a
+    /// background-context *update* doesn't promptly refresh an already-registered `mainContext` row
+    /// (the merge is gated on an idle main runloop) — running a local edit on main sidesteps that.
     public func sync<Model: SyncUpdatableModel>(
         item: [String: Any],
         as model: Model.Type,
         relationshipOperations: SyncRelationshipOperations = .all,
-        immediate: Bool = false
+        runOnMain: Bool
     ) async throws {
-        if immediate {
+        if runOnMain {
             try await syncIntoMainContext(
                 UncheckedSendableBox(item), as: model, relationshipOperations: relationshipOperations)
         } else {
@@ -199,13 +202,13 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         item: Payload,
         as model: Model.Type,
         relationshipOperations: SyncRelationshipOperations = .all,
-        immediate: Bool = false
+        runOnMain: Bool
     ) async throws {
         try await sync(
             item: item.toSyncPayloadDictionary(),
             as: model,
             relationshipOperations: relationshipOperations,
-            immediate: immediate
+            runOnMain: runOnMain
         )
     }
 
