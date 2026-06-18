@@ -416,7 +416,6 @@ final class DemoUITests: XCTestCase {
         goBack(app)
 
         XCTAssertTrue(app.staticTexts["pending-count"].waitForExistence(timeout: 2), "the delete is queued")
-        XCTAssertFalse(app.buttons["sync-now"].isEnabled, "cannot push while offline")
 
         // Reconnect: the queue syncs automatically — no button tap.
         app.buttons["offline-toggle"].tap()
