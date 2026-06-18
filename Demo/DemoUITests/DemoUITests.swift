@@ -342,15 +342,11 @@ final class DemoUITests: XCTestCase {
         goBack(app)
         XCTAssertTrue(app.staticTexts["pending-count"].waitForExistence(timeout: 2), "the create is queued")
 
-        // Reconnect and sync.
+        // Reconnect: the queue syncs automatically — no button tap.
         app.buttons["offline-toggle"].tap()
-        let syncNow = app.buttons["sync-now"]
-        XCTAssertTrue(syncNow.isEnabled)
-        syncNow.tap()
-        let okButton = app.alerts.buttons["OK"]
-        XCTAssertTrue(okButton.waitForExistence(timeout: 5))
-        okButton.tap()
-        XCTAssertTrue(app.staticTexts["pending-count"].waitForNonExistence(timeout: 3))
+        XCTAssertTrue(
+            app.staticTexts["pending-count"].waitForNonExistence(timeout: 5),
+            "reconnecting auto-syncs the queue")
 
         // It survived the sync: reopening online (a real refresh) still shows it.
         openProject(app, id: DemoSeedProjectID.accountSecurity)
@@ -389,18 +385,12 @@ final class DemoUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["pending-count"].waitForExistence(timeout: 2), "the delete is queued")
         XCTAssertFalse(app.buttons["sync-now"].isEnabled, "cannot push while offline")
 
-        // Reconnect and sync.
+        // Reconnect: the queue syncs automatically — no button tap.
         app.buttons["offline-toggle"].tap()
         XCTAssertEqual(app.buttons["offline-toggle"].label, "Online")
-        let syncNow = app.buttons["sync-now"]
-        XCTAssertTrue(syncNow.isEnabled)
-        syncNow.tap()
-
-        // The "Synced" confirmation appears; dismiss it and the pending indicator clears.
-        let okButton = app.alerts.buttons["OK"]
-        XCTAssertTrue(okButton.waitForExistence(timeout: 5))
-        okButton.tap()
-        XCTAssertTrue(app.staticTexts["pending-count"].waitForNonExistence(timeout: 3))
+        XCTAssertTrue(
+            app.staticTexts["pending-count"].waitForNonExistence(timeout: 5),
+            "reconnecting auto-syncs the queue")
 
         // The deletion held: reopening online (a real server refresh) does not bring it back.
         openProject(app, id: DemoSeedProjectID.accountSecurity)

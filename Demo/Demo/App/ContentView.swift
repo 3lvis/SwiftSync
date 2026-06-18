@@ -31,6 +31,17 @@ struct ContentView: View {
             .alert(item: $syncResult) { result in
                 Alert(title: Text(result.title), message: Text(result.message), dismissButton: .default(Text("OK")))
             }
+            // Reconnecting drains the offline queue automatically (silently — the manual "Sync now"
+            // button is for explicit/retry pushes and keeps its result alert).
+            .onChange(of: engine.isOffline) { _, isNowOffline in
+                if !isNowOffline && engine.pendingChangeCount > 0 {
+                    autoSync()
+                }
+            }
+    }
+
+    private func autoSync() {
+        _Concurrency.Task { try? await engine.pushPendingChanges() }
     }
 
     private var offlineBar: some View {
