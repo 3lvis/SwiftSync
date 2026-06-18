@@ -223,6 +223,52 @@ final class OfflinePushTests: XCTestCase {
     }
 
     @MainActor
+    func testConflictStaleAdoptionReflectsServerStateImmediately() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("stale-adopt-\(UUID().uuidString).sqlite")
+        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
+        let backend = try DemoServerSimulator(databaseURL: url, seedData: DemoSeedData.generate())
+        let apiClient = FakeDemoAPIClient(backend: backend)
+        let syncContainer = try makeSyncContainer()
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        let taskID = DemoSeedData.SeedIDs.Tasks.sessionTimeout
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        // A detail view holds the registered main-context row.
+        let held = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+
+        // Offline edit first (timestamp T1).
+        engine.isOffline = true
+        var localEdit = syncContainer.export(held)
+        localEdit["title"] = "Local edit"
+        localEdit.removeValue(forKey: "items")
+        try await engine.updateTask(
+            taskID: taskID, projectID: projectID, body: try DemoSyncPayload(dictionary: localEdit))
+
+        // Then another client advances the server's copy (timestamp T2 > T1), so our edit loses LWW.
+        let serverTitle = "Server wins \(UUID().uuidString.prefix(6))"
+        var serverData = syncContainer.export(held)
+        serverData["title"] = serverTitle
+        serverData["updated_at"] = "2099-01-01T00:00:00.000Z"
+        serverData.removeValue(forKey: "items")
+        _ = try backend.upload(operations: [
+            [
+                "operation": "upsert", "type": "tasks", "localId": taskID,
+                "updatedAt": "2099-01-01T00:00:00.000Z", "data": serverData,
+            ]
+        ])
+
+        // Reconnect and push → server returns stale; the engine adopts the server's version.
+        engine.isOffline = false
+        _ = try await engine.pushPendingChanges()
+
+        // The held row must show the adopted server value at once — not the stale local edit.
+        XCTAssertEqual(held.title, serverTitle, "conflict resolution must reflect on the live row immediately")
+    }
+
+    @MainActor
     func testOfflineEditOfCreatedTaskUpdatesTitleAndKeepsProjectLink() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()

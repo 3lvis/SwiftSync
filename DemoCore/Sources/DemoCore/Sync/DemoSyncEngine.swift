@@ -260,7 +260,8 @@ public final class DemoSyncEngine {
                 if let localID, let remoteID { response.assignedRemoteIDs[localID] = remoteID }
                 if let localID { response.confirmedUpdateLocalIDs.insert(localID) }
                 if status == "stale", let server = result["server"] as? [String: Any] {
-                    try? await syncContainer.sync(item: DemoSyncPayload(dictionary: server), as: Task.self)
+                    try? await syncContainer.sync(
+                        item: DemoSyncPayload(dictionary: server), as: Task.self, immediate: true)
                 }
             case ("delete", "applied"):
                 if let localID { response.confirmedDeleteLocalIDs.insert(localID) }
@@ -268,7 +269,8 @@ public final class DemoSyncEngine {
                 // The server has a newer edit — the delete lost LWW. Abandon the tombstone and adopt
                 // the server's state so the row reappears with the winning version (no re-send loop).
                 if let localID, let server = result["server"] as? [String: Any] {
-                    try? await syncContainer.sync(item: DemoSyncPayload(dictionary: server), as: Task.self)
+                    try? await syncContainer.sync(
+                        item: DemoSyncPayload(dictionary: server), as: Task.self, immediate: true)
                     if let task = try task(withID: localID) { task.isLocallyDeleted = false }
                 }
             default:
