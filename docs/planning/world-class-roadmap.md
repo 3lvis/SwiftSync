@@ -106,7 +106,17 @@ feature into SwiftSync. Build each seam with its first real use, never speculati
       (↔ Networking roadmap items 4b/4c — async-`next` interceptor onion, single-flight `RefreshCoordinator`,
       idempotent-methods-only retry.)
 
-Sequencing: failure taxonomy first (the retry policy consumes its `isRetryable`); observability and
-middleware then in either order, the middleware after the Phase 7 prior-art scan. Each is its own PR
-(some a short series). Kept core dependency-free; any concrete transport/bridge stays a separate SPM
-product (↔ Networking items 5–6).
+**Priority (across the open Phase 7 + Phase 8 items), by leverage and dependency:**
+
+1. **8.1 Typed failure taxonomy** — smallest, hard-unblocks 8.3 (retry consumes `isRetryable`), and
+   immediately upgrades the shipped failures inbox. Best effort/leverage ratio.
+2. **8.2 Sync observability** — independent and high-leverage; gives eyes for building the riskier
+   middleware (this cycle's conflict/tombstone bugs were caught by hand-instrumentation).
+3. **7a Sync-protocol prior-art scan** — cheap, gates 8.3's seam design; do it right before, not early.
+4. **8.3 Push middleware (retry + auth refresh)** — the big one (a PR series); unblocked by 8.1 + 7a,
+   observable via 8.2.
+5. **7b Offline-safe queue migrations** — deferred: the queue format can still break freely (no shipped
+   consumers with persisted data), so versioning earns its place only once there's data to protect.
+
+Each item is its own PR (some a short series). Core stays dependency-free; any concrete transport/bridge
+is a separate SPM product (↔ Networking items 5–6).
