@@ -148,17 +148,27 @@ extension SwiftSync {
         let failureReasons = Dictionary(
             response.failures.map { ($0.localID, $0.message) }, uniquingKeysWith: { first, _ in first })
 
+        // Clear a persisted failure only on *actual* success (remote id assigned / confirmed update /
+        // confirmed delete). A row the response neither acknowledged nor freshly failed is still
+        // pending — same as the cursor logic below treats it — so leave its existing marker untouched
+        // rather than silently dropping it from the failures inbox.
         var insertedCount = 0
         for insert in pending.inserts {
             if let remoteID = response.assignedRemoteIDs[insert.syncLocalID] {
                 insert.syncRemoteID = remoteID
                 insertedCount += 1
+                insert.syncFailureReason = nil
+            } else if let reason = failureReasons[insert.syncLocalID] {
+                insert.syncFailureReason = reason
             }
-            insert.syncFailureReason = failureReasons[insert.syncLocalID]
         }
 
         for update in pending.updates {
-            update.syncFailureReason = failureReasons[update.syncLocalID]
+            if response.confirmedUpdateLocalIDs.contains(update.syncLocalID) {
+                update.syncFailureReason = nil
+            } else if let reason = failureReasons[update.syncLocalID] {
+                update.syncFailureReason = reason
+            }
         }
 
         var deletedCount = 0
@@ -166,8 +176,8 @@ extension SwiftSync {
             if response.confirmedDeleteLocalIDs.contains(delete.syncLocalID) {
                 context.delete(delete)
                 deletedCount += 1
-            } else {
-                delete.syncFailureReason = failureReasons[delete.syncLocalID]
+            } else if let reason = failureReasons[delete.syncLocalID] {
+                delete.syncFailureReason = reason
             }
         }
 

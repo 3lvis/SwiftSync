@@ -178,7 +178,47 @@ final class SyncPushTests: XCTestCase {
         XCTAssertEqual(stillPending.updates.map(\.syncLocalID), ["u1"])
     }
 
-    /// P2: `updatedCount` must reflect only rows that were actually in this push batch, not whatever
+    /// A persisted failure must clear only on *actual* success, never merely because the server's
+    /// response didn't mention the row. An unacknowledged row is still pending (the cursor logic agrees
+    /// — it doesn't advance past it), so silently dropping its failure marker would make it vanish from
+    /// the failures inbox while still unsynced.
+    @MainActor
+    func testPushKeepsFailureReasonForUnacknowledgedRows() async throws {
+        let context = ModelContext(
+            try ModelContainer(
+                for: OfflineNote.self,
+                configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
+        let lastSync = Date(timeIntervalSince1970: 1_000)
+        let edited = Date(timeIntervalSince1970: 1_500)
+
+        // An insert and an update, both already flagged from a prior push.
+        let insert = OfflineNote(
+            syncLocalID: "c1", syncRemoteID: nil, syncUpdatedAt: edited, syncIsDeleted: false,
+            title: "failed insert")
+        insert.syncFailureReason = "422 invalid"
+        context.insert(insert)
+        let update = OfflineNote(
+            syncLocalID: "u1", syncRemoteID: "r-u1", syncUpdatedAt: edited, syncIsDeleted: false,
+            title: "failed update")
+        update.syncFailureReason = "500 server error"
+        context.insert(update)
+        try context.save()
+
+        // The next push returns nothing for either row — neither acknowledged nor freshly failed.
+        _ = try await SwiftSync.push(
+            for: OfflineNote.self, in: context, changedSince: lastSync,
+            now: Date(timeIntervalSince1970: 2_000)
+        ) { _ in SyncPushResponse() }
+
+        let rows = Dictionary(
+            uniqueKeysWithValues: try context.fetch(FetchDescriptor<OfflineNote>()).map { ($0.syncLocalID, $0) })
+        XCTAssertEqual(
+            rows["c1"]?.syncFailureReason, "422 invalid", "an unacknowledged insert keeps its failure")
+        XCTAssertEqual(
+            rows["u1"]?.syncFailureReason, "500 server error", "an unacknowledged update keeps its failure")
+    }
+
+    /// `updatedCount` must reflect only rows that were actually in this push batch, not whatever
     /// ids the server echoed back.
     @MainActor
     func testPushUpdatedCountIgnoresIDsOutsideTheBatch() async throws {

@@ -122,6 +122,14 @@ public final class DemoSyncEngine {
         try await runOperation("updateTask-\(taskID)") {
             _ = try await apiClient.updateTask(taskID: taskID, body: body)
             try await syncTaskAfterMutation(taskID: taskID, projectID: projectID)
+            // A successful online edit resolves any prior failure on this row (e.g. fixing a rejected
+            // offline edit from the failures inbox). syncFailureReason is @NotExport, so the server
+            // refresh won't clear it — do it explicitly.
+            if let task = try task(withID: taskID), task.syncFailureReason != nil {
+                task.syncFailureReason = nil
+                try syncContainer.mainContext.save()
+                refreshPendingCount()
+            }
         }
     }
 
@@ -212,25 +220,26 @@ public final class DemoSyncEngine {
 
     /// Serialize the pending batch into the `/sync/upload` operation list, POST it once, and map the
     /// per-operation results back into a `SyncPushResponse`. Every created-or-edited row is an `upsert`
-    /// keyed by its `id` (the server find-by-id → update-else-creates); tombstones are a `delete` by
-    /// the same `id`. A `stale` result means the server won last-writer-wins — adopt its state locally
-    /// and treat the row as resolved so it isn't re-sent.
+    /// keyed by its stable `localId` (the server find-by-localId → update-else-creates, minting and
+    /// returning a distinct `remoteId` on first create); tombstones are a `delete` by the same
+    /// `localId`. A `stale` result means the server won last-writer-wins — adopt its state locally and
+    /// treat the row as resolved so it isn't re-sent.
     private func upload(_ batch: SyncPushBatch) async throws -> SyncPushResponse {
         var operations: [[String: Any]] = []
 
-        for id in batch.inserts + batch.updates {
-            guard let task = try task(withID: id) else { continue }
+        for localID in batch.inserts + batch.updates {
+            guard let task = try task(withID: localID) else { continue }
             let data = taskData(task)
             operations.append([
-                "operation": "upsert", "type": "tasks", "id": id,
+                "operation": "upsert", "type": "tasks", "localId": localID,
                 "updatedAt": data["updated_at"] ?? "", "data": data,
             ])
         }
-        for id in batch.deletes {
-            guard let task = try task(withID: id) else { continue }
+        for localID in batch.deletes {
+            guard let task = try task(withID: localID) else { continue }
             let data = syncContainer.export(task)
             operations.append([
-                "operation": "delete", "type": "tasks", "id": id,
+                "operation": "delete", "type": "tasks", "localId": localID,
                 "updatedAt": data["updated_at"] ?? "",
             ])
         }
@@ -241,31 +250,31 @@ public final class DemoSyncEngine {
         for result in results {
             let operation = result["operation"] as? String
             let status = result["status"] as? String
-            let id = result["id"] as? String
+            let localID = result["localId"] as? String
+            let remoteID = result["remoteId"] as? String
             switch (operation, status) {
             case ("upsert", "applied"), ("upsert", "stale"):
-                // An applied upsert resolves both inserts (stamp syncRemoteID = id) and updates;
-                // SyncSync scopes each field to its own batch slice, so populating both is safe.
-                if let id {
-                    response.assignedRemoteIDs[id] = id
-                    response.confirmedUpdateLocalIDs.insert(id)
-                }
+                // An applied upsert resolves both inserts (stamp the server-minted remoteId) and
+                // updates; SwiftSync scopes each field to its own batch slice, so populating both is
+                // safe.
+                if let localID, let remoteID { response.assignedRemoteIDs[localID] = remoteID }
+                if let localID { response.confirmedUpdateLocalIDs.insert(localID) }
                 if status == "stale", let server = result["server"] as? [String: Any] {
                     try? await syncContainer.sync(item: DemoSyncPayload(dictionary: server), as: Task.self)
                 }
             case ("delete", "applied"):
-                if let id { response.confirmedDeleteLocalIDs.insert(id) }
+                if let localID { response.confirmedDeleteLocalIDs.insert(localID) }
             case ("delete", "stale"):
                 // The server has a newer edit — the delete lost LWW. Abandon the tombstone and adopt
                 // the server's state so the row reappears with the winning version (no re-send loop).
-                if let id, let server = result["server"] as? [String: Any] {
+                if let localID, let server = result["server"] as? [String: Any] {
                     try? await syncContainer.sync(item: DemoSyncPayload(dictionary: server), as: Task.self)
-                    if let task = try task(withID: id) { task.isLocallyDeleted = false }
+                    if let task = try task(withID: localID) { task.isLocallyDeleted = false }
                 }
             default:
                 response.failures.append(
                     SyncPushFailure(
-                        localID: id ?? "",
+                        localID: localID ?? "",
                         operation: operation == "delete" ? .delete : .update,
                         message: (result["message"] as? String) ?? "rejected"))
             }

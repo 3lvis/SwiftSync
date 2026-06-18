@@ -40,11 +40,11 @@ final class OfflinePushTests: XCTestCase {
         XCTAssertEqual(engine.pendingChangeCount, 0)
 
         let synced = try XCTUnwrap(fetchTask(id: "OFFLINE-CREATE-1", in: syncContainer.mainContext))
-        // Single-id upsert: the row's id *is* its server id, so the push marks it synced by stamping
-        // syncRemoteID = id (no distinct minted id).
-        XCTAssertEqual(synced.syncRemoteID, "OFFLINE-CREATE-1", "push marks the row synced under its own id")
+        let remoteID = try XCTUnwrap(synced.syncRemoteID, "push stamps the server-minted remote id")
+        XCTAssertNotEqual(remoteID, "OFFLINE-CREATE-1", "the server mints its own id, distinct from localId")
+        XCTAssertTrue(remoteID.hasPrefix("srv-"))
         let backendDetail = try await apiClient.getTaskDetail(taskID: "OFFLINE-CREATE-1")
-        XCTAssertNotNil(backendDetail, "the row reached the backend, keyed by its id")
+        XCTAssertNotNil(backendDetail, "the row reached the backend, keyed by its localId")
     }
 
     @MainActor
@@ -182,6 +182,47 @@ final class OfflinePushTests: XCTestCase {
     }
 
     @MainActor
+    func testEditingAFailedSyncedRowOnlineClearsFailure() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        let taskID = DemoSeedData.SeedIDs.Tasks.sessionTimeout
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        // Offline edit of an already-synced row to an over-long title → the update is rejected on push.
+        engine.isOffline = true
+        let synced = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        XCTAssertNotNil(synced.syncRemoteID, "precondition: the row is already synced")
+        var badDictionary = syncContainer.export(synced)
+        badDictionary["title"] = String(repeating: "A", count: 100)
+        badDictionary.removeValue(forKey: "items")
+        try await engine.updateTask(
+            taskID: taskID, projectID: projectID, body: try DemoSyncPayload(dictionary: badDictionary))
+
+        engine.isOffline = false
+        _ = try await engine.pushPendingChanges()
+        let failed = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        XCTAssertNotNil(failed.syncFailureReason, "the rejected edit is flagged")
+        XCTAssertNotNil(failed.syncRemoteID, "it is still a synced row, not a fresh insert")
+        XCTAssertEqual(engine.failedChangeCount, 1)
+
+        // Fix it with a valid title while online: the corrected save must resolve the failure.
+        var fixDictionary = syncContainer.export(failed)
+        fixDictionary["title"] = "Fixed online"
+        fixDictionary.removeValue(forKey: "items")
+        try await engine.updateTask(
+            taskID: taskID, projectID: projectID, body: try DemoSyncPayload(dictionary: fixDictionary))
+
+        let fixed = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        XCTAssertNil(fixed.syncFailureReason, "the failure clears once the corrected edit saves")
+        XCTAssertEqual(engine.failedChangeCount, 0, "the row leaves the failures inbox")
+        XCTAssertEqual(fixed.title, "Fixed online")
+    }
+
+    @MainActor
     func testPushWhileOfflineIsANoOp() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
@@ -230,7 +271,7 @@ final class OfflinePushTests: XCTestCase {
         // A task appears on the server that this client has never seen.
         _ = try backend.upload(operations: [
             [
-                "operation": "upsert", "type": "tasks", "id": "SERVER-ONLY-1",
+                "operation": "upsert", "type": "tasks", "localId": "SERVER-ONLY-1",
                 "updatedAt": "2026-06-16T20:00:00.000Z",
                 "data": [
                     "id": "SERVER-ONLY-1",

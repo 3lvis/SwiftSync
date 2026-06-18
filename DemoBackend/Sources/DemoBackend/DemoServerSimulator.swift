@@ -563,8 +563,9 @@ public final class DemoServerSimulator {
 
     // MARK: - POST /sync/upload (offline batch push)
     // See docs/project/upload-endpoint-contract.md. A flat, op-tagged operation list; per-operation
-    // results (no all-or-nothing). Operations are keyed by the client's `id` (single-id upsert):
-    // `upsert` is find-by-id → update-else-create, `delete` tombstones by id. Both are idempotent.
+    // results (no all-or-nothing). Operations are keyed by the client's stable `localId`; the server
+    // mints (and returns) a distinct `remoteId` on first create. `upsert` is find-by-localId →
+    // update-else-create, `delete` tombstones by localId. Both are idempotent.
 
     public func upload(operations: [[String: Any]]) throws -> [String: Any] {
         let results = operations.map(applyUploadOperation(_:))
@@ -588,52 +589,58 @@ public final class DemoServerSimulator {
         }
     }
 
-    /// Insert-or-update keyed by the client's `id`: the row's id *is* its id (no minted second id).
-    /// Found ⇒ update (last-writer-wins); absent ⇒ create. Idempotent — re-sending converges.
+    /// Insert-or-update keyed by the client's stable `localId`. Found ⇒ update (last-writer-wins);
+    /// absent ⇒ create. The server mints its own `remoteId` on first create and returns it (the same
+    /// one on every subsequent upsert) — addressing by `localId` means a never-synced row still
+    /// upserts cleanly. Idempotent: re-sending converges, no duplicate row.
     private func uploadUpsert(_ payload: [String: Any]) throws -> [String: Any] {
         try requireTasksType(payload)
-        let id = try requireID(payload)
+        let localID = try requireLocalID(payload)
         let incoming = try requireUpdatedAt(payload)
         guard let data = payload["data"] as? [String: Any] else {
             throw DemoBackendError.validation(message: "data is required for upsert")
         }
         var body = data
-        body["id"] = id
+        body["id"] = localID
 
-        if try exists(in: "tasks", id: id) {
-            if try isStale(taskID: id, incoming: incoming) {
+        if try exists(in: "tasks", id: localID) {
+            if try isStale(localID: localID, incoming: incoming) {
                 return [
-                    "operation": "upsert", "id": id, "status": "stale",
-                    "server": try getTaskDetailPayload(taskID: id) ?? NSNull(),
+                    "operation": "upsert", "localId": localID,
+                    "remoteId": try ensureRemoteID(forLocalID: localID), "status": "stale",
+                    "server": try getTaskDetailPayload(taskID: localID) ?? NSNull(),
                 ]
             }
-            _ = try updateTask(taskID: id, body: body)
+            _ = try updateTask(taskID: localID, body: body)
         } else {
             _ = try createTask(body: body)
         }
         // Relationship edits (reviewers/watchers) ride in the same operation when present.
         if let reviewerIDs = data["reviewer_ids"] as? [String] {
-            _ = try replaceTaskReviewers(taskID: id, reviewerIDs: reviewerIDs)
+            _ = try replaceTaskReviewers(taskID: localID, reviewerIDs: reviewerIDs)
         }
         if let watcherIDs = data["watcher_ids"] as? [String] {
-            _ = try replaceTaskWatchers(taskID: id, watcherIDs: watcherIDs)
+            _ = try replaceTaskWatchers(taskID: localID, watcherIDs: watcherIDs)
         }
-        return ["operation": "upsert", "id": id, "status": "applied"]
+        return [
+            "operation": "upsert", "localId": localID,
+            "remoteId": try ensureRemoteID(forLocalID: localID), "status": "applied",
+        ]
     }
 
     private func uploadDelete(_ payload: [String: Any]) throws -> [String: Any] {
         try requireTasksType(payload)
-        let id = try requireID(payload)
+        let localID = try requireLocalID(payload)
         let incoming = try requireUpdatedAt(payload)
-        guard try exists(in: "tasks", id: id) else {
-            // Already absent ⇒ idempotent success.
-            return ["operation": "delete", "id": id, "status": "applied"]
+        guard try exists(in: "tasks", id: localID) else {
+            // Already absent (or never synced) ⇒ idempotent success.
+            return ["operation": "delete", "localId": localID, "status": "applied"]
         }
         // Last-writer-wins applies to deletes too: an older delete must not erase a newer server edit.
-        if try isStale(taskID: id, incoming: incoming) {
+        if try isStale(localID: localID, incoming: incoming) {
             return [
-                "operation": "delete", "id": id, "status": "stale",
-                "server": try getTaskDetailPayload(taskID: id) ?? NSNull(),
+                "operation": "delete", "localId": localID, "status": "stale",
+                "server": try getTaskDetailPayload(taskID: localID) ?? NSNull(),
             ]
         }
         suspendAmbientMutationsAfterWrite()
@@ -641,10 +648,10 @@ public final class DemoServerSimulator {
             "UPDATE tasks SET deleted_at = ? WHERE id = ?",
             bind: { stmt in
                 self.sqlite.bind(double: Date().timeIntervalSince1970, at: 1, in: stmt)
-                self.sqlite.bind(text: id, at: 2, in: stmt)
+                self.sqlite.bind(text: localID, at: 2, in: stmt)
             }
         )
-        return ["operation": "delete", "id": id, "status": "applied"]
+        return ["operation": "delete", "localId": localID, "status": "applied"]
     }
 
     private func requireTasksType(_ payload: [String: Any]) throws {
@@ -653,11 +660,11 @@ public final class DemoServerSimulator {
         }
     }
 
-    private func requireID(_ payload: [String: Any]) throws -> String {
-        guard let id = payload["id"] as? String, !id.isEmpty else {
-            throw DemoBackendError.validation(message: "id is required")
+    private func requireLocalID(_ payload: [String: Any]) throws -> String {
+        guard let localID = payload["localId"] as? String, !localID.isEmpty else {
+            throw DemoBackendError.validation(message: "localId is required")
         }
-        return id
+        return localID
     }
 
     private func requireUpdatedAt(_ payload: [String: Any]) throws -> Date {
@@ -667,10 +674,29 @@ public final class DemoServerSimulator {
         return date
     }
 
-    private func isStale(taskID: String, incoming: Date) throws -> Bool {
+    /// The server's own id for a row, minted (and persisted) on first sight, returned unchanged after.
+    /// Opaque to the client; distinct from `localId` so the demo exercises a backend that owns its PKs.
+    private func ensureRemoteID(forLocalID localID: String) throws -> String {
+        let rows = try self.sqlite.query(
+            "SELECT remote_id FROM tasks WHERE id = ? LIMIT 1",
+            bind: { stmt in self.sqlite.bind(text: localID, at: 1, in: stmt) }
+        )
+        if let existing = rows.first?.nullableString("remote_id") { return existing }
+        let remote = "srv-\(UUID().uuidString.lowercased())"
+        try self.sqlite.execute(
+            "UPDATE tasks SET remote_id = ? WHERE id = ?",
+            bind: { stmt in
+                self.sqlite.bind(text: remote, at: 1, in: stmt)
+                self.sqlite.bind(text: localID, at: 2, in: stmt)
+            }
+        )
+        return remote
+    }
+
+    private func isStale(localID: String, incoming: Date) throws -> Bool {
         let rows = try self.sqlite.query(
             "SELECT updated_at FROM tasks WHERE id = ? LIMIT 1",
-            bind: { stmt in self.sqlite.bind(text: taskID, at: 1, in: stmt) }
+            bind: { stmt in self.sqlite.bind(text: localID, at: 1, in: stmt) }
         )
         guard let stored = rows.first?.double("updated_at") else { return false }
         // Contract: an incoming write older *or equal* loses (server wins ties).
@@ -680,7 +706,7 @@ public final class DemoServerSimulator {
     private func rejected(_ payload: [String: Any], code: String, message: String) -> [String: Any] {
         var result: [String: Any] = ["status": "rejected", "code": code, "message": message]
         if let operation = payload["operation"] as? String { result["operation"] = operation }
-        if let id = payload["id"] as? String { result["id"] = id }
+        if let localID = payload["localId"] as? String { result["localId"] = localID }
         return result
     }
 
@@ -802,9 +828,9 @@ public final class DemoServerSimulator {
         let stateID = row.string("state")
         return [
             "id": taskID,
-            // Single-id upsert model: a row's own id is its canonical server id. We still echo
-            // remote_id (= id) so the client's @RemoteKey("remote_id") "synced" marker is set.
-            "remote_id": taskID,
+            // Rows created before the upload path (seed / per-resource POST) have no minted
+            // remote_id; their own id is their canonical server id, so coalesce to it.
+            "remote_id": row.nullableString("remote_id") ?? taskID,
             "project_id": row.string("project_id"),
             "assignee_id": row.nullableString("assignee_id") ?? NSNull(),
             "reviewer_ids": try reviewerIDsFor(taskID: taskID),

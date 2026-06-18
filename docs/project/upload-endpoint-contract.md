@@ -17,31 +17,33 @@ POST /sync/upload
 
 A single batched request carrying all pending local changes. Returns a per-operation result list.
 
-## Identity: one client-owned id
+## Identity: two ids, addressed by `localId`
 
-Every syncable row has a single id, **client-generated and stable forever**. SwiftSync mints it (a
-UUID) the moment the row is created offline, and it is the row's identity on both sides: the key the
-server upserts on, the key inbound sync matches on, and the idempotency key.
+Every syncable row has two ids:
 
-This is the price of admission for offline push (see the iOS conventions' "be opinionated"): the
-backend must accept client-supplied ids for synced resources rather than minting its own. In exchange
-there is **no second id and no client-side id rewrite** — the Core Data id-mutation hazard never
-arises, and `upsert`/`delete` address rows by the same id the client already holds.
+- **`localId`** — client-generated, stable forever, **never changes**. SwiftSync mints it (a UUID) the
+  moment the row is created offline. It is the key every operation is addressed by, the key inbound
+  sync matches on, and the **idempotency key**.
+- **`remoteId`** — a second id the server **mints** for the row on first create and **returns**.
+  **Opaque to SwiftSync** — a UUID, an integer, a slug; carried as a string at the boundary (an
+  integer-PK backend just stringifies). `nil` on the client until the first upsert is acknowledged.
 
-(The alternative — the server minting a distinct `remoteId` so SwiftSync can reach legacy integer-PK
-backends — is the two-id variant described in `production-sync-design.md`. The demo deliberately takes
-the simpler single-id path; SwiftSync's push core supports both because `syncRemoteID` is just "the id
-the server acknowledged," which here equals the client id.)
+The server minting its own `remoteId` is what lets SwiftSync work with conventional backends —
+including legacy integer-PK ones — not just greenfield UUID schemas. But **`localId` is the stable
+identity the two sides agree on and the key every operation addresses**: because `localId` never
+changes, there is **no client-side id rewrite** (sidestepping the Core Data id-mutation hazard), and a
+row that has never been acknowledged (no `remoteId` yet) still upserts and deletes cleanly — there is
+nothing that must be addressed by `remoteId`.
 
 ## Request
 
 ```json
 {
   "operations": [
-    { "operation": "upsert", "type": "tasks", "id": "0c1f…",
+    { "operation": "upsert", "type": "tasks", "localId": "0c1f…",
       "updatedAt": "2026-06-16T20:00:00Z", "data": { "id": "0c1f…", "title": "Draft", "state": {"id": "todo"} } },
 
-    { "operation": "delete", "type": "tasks", "id": "7710",
+    { "operation": "delete", "type": "tasks", "localId": "7710",
       "updatedAt": "2026-06-16T20:02:00Z" }
   ]
 }
@@ -53,14 +55,16 @@ Per operation:
 |---|---|---|
 | `operation` | `"upsert"` | `"delete"` |
 | `type` | resource name (consumer-chosen) | same |
-| `id` | **required** | **required** |
+| `localId` | **required** | **required** |
 | `updatedAt` | required (ISO 8601) | required |
-| `data` | full resource (includes `id`) | — |
+| `data` | full resource | — |
 
 - **One operation for create and edit.** SwiftSync still classifies a local row as a fresh insert
   (never acknowledged) or an edit (acknowledged, since changed) for *its own* bookkeeping, but both go
-  on the wire as `upsert`: the server does find-by-`id` → update-else-create. A consumer never has to
-  distinguish "does the server already have this?" — that's exactly what the id is for.
+  on the wire as `upsert`: the server does find-by-`localId` → update-else-create, minting a `remoteId`
+  on the create branch. A consumer never has to distinguish "does the server already have this?" — and
+  a never-acknowledged row needs no `remoteId` to be edited, which is exactly why edit-after-failed-
+  insert can't 404.
 - **`data` is the full resource, not a delta.** SwiftSync has no field-level dirty tracking
   (`export(row)` emits the whole object), so an upsert sends every field. The server applies them
   under SwiftSync's payload semantics: a present field is set, an explicit `null` clears it.
@@ -68,14 +72,15 @@ Per operation:
 
 ## Semantics
 
-### Idempotency — keyed on the client `id`
+### Idempotency — keyed on `localId`
 
 The client may resend an operation it never got a response for (network drop). The server **must not**
-create a duplicate. Because `upsert` is keyed on `id`:
+create a duplicate. Because every operation is keyed on the stable `localId`:
 
-- A resent create whose row already exists takes the update branch; an identical `updatedAt` loses the
-  LWW tie (below) and returns `stale` — a converged no-op, not a duplicate and not a failure.
-- A resent delete on an already-tombstoned (or absent) row returns `applied` — idempotent.
+- A resent create whose row already exists takes the update branch and returns the **same** `remoteId`;
+  an identical `updatedAt` loses the LWW tie (below) and returns `stale` — a converged no-op, not a
+  duplicate and not a failure.
+- A resent delete on an already-tombstoned (or never-created) row returns `applied` — idempotent.
 
 Upserts and deletes are therefore safe to retry indefinitely.
 
@@ -128,12 +133,12 @@ A per-operation result list (partial success — one bad row never blocks the ba
 ```json
 {
   "results": [
-    { "operation": "upsert", "id": "0c1f…", "status": "applied" },
-    { "operation": "upsert", "id": "8842", "status": "stale",
-      "server": { "id": "8842", "title": "Edited elsewhere",
+    { "operation": "upsert", "localId": "0c1f…", "remoteId": "srv-8843", "status": "applied" },
+    { "operation": "upsert", "localId": "8842", "remoteId": "srv-8842", "status": "stale",
+      "server": { "remote_id": "srv-8842", "title": "Edited elsewhere",
                   "updatedAt": "2026-06-16T20:05:00Z" } },
-    { "operation": "delete", "id": "7710", "status": "applied" },
-    { "operation": "upsert", "id": "9001", "status": "rejected",
+    { "operation": "delete", "localId": "7710", "status": "applied" },
+    { "operation": "upsert", "localId": "9001", "status": "rejected",
       "code": "validation", "message": "title must not be empty" }
   ],
   "cursor": "2026-06-16T20:02:00Z"
@@ -142,11 +147,12 @@ A per-operation result list (partial success — one bad row never blocks the ba
 
 | `status` | meaning | SwiftSync reaction |
 |---|---|---|
-| `applied` | written (LWW won, or idempotent re-ack) | confirm; mark the row synced under its `id` |
+| `applied` | written (LWW won, or idempotent re-ack) | confirm; stamp the returned `remoteId` onto the row |
 | `stale` | the client write lost LWW; `server` carries current truth | adopt the server state locally |
 | `rejected` | permanent/validation failure | surface `message` (+ `code`) in the failures inbox (discard / edit / retry) |
 
-- Each result echoes the operation's `id` so SwiftSync can map it back onto the right row.
+- Each result echoes the operation's `localId` so SwiftSync can map it back onto the right row; an
+  `upsert` also carries the server-minted `remoteId` (the same one on every subsequent upsert).
 - `rejected` carries a human-readable `message` and an optional machine `code`.
 - `cursor` is an **opaque** string (a timestamp or token — the server decides). The client feeds it to
   the pull side; SwiftSync treats it as opaque.
@@ -162,8 +168,8 @@ inbound direction is SwiftSync's existing `sync` (server → SwiftData). Push an
 It is one custom controller action:
 
 1. Parse `operations`, group by `type`.
-2. Per operation: resolve the row by `(type, id)`, apply LWW, upsert / tombstone via the ORM's bulk
-   primitive.
+2. Per operation: resolve the row by `(type, localId)`, apply LWW, upsert (minting/returning a
+   `remoteId` on create) / tombstone via the ORM's bulk primitive.
 3. Return the per-operation `results` + a `cursor`.
 
 Existing per-resource endpoints are untouched — this sits beside them. A real backend scopes every
