@@ -21,7 +21,7 @@ final class HistoryRow {
 final class OfflineHistoryTests: XCTestCase {
     /// The core of the SwiftData-History design: `pendingChanges` reads the store's change history,
     /// counts only locally-authored changes (ignoring inbound/pull writes), and recovers a deleted
-    /// row's id from the history tombstone — all with zero offline fields on the model and no side table.
+    /// row's id from the history tombstone — with zero offline fields on the model.
     func testPendingChangesReadsLocalHistoryAndIgnoresInbound() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("offline-history-\(UUID().uuidString)", isDirectory: true)
