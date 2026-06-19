@@ -82,13 +82,14 @@ struct FailuresSheet: View {
     private func badgeLabel(_ kind: SyncFailureKind) -> String {
         switch kind {
         case .validation: return "Needs a fix"
-        case .server, .transport: return "Temporary"
-        case .conflict: return "Conflict"
+        case .server: return "Server error"
         }
     }
 
     private func badgeColor(_ kind: SyncFailureKind) -> Color {
-        // Validation is the user's to fix (prominent); a retryable one is transient (calmer).
-        kind.isRetryable ? Color(.systemGray) : .orange
+        switch kind {
+        case .validation: return .orange  // the user's to fix
+        case .server: return .red
+        }
     }
 }

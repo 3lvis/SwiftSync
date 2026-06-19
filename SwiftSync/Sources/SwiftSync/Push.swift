@@ -44,27 +44,17 @@ public struct SyncPushBatch: Sendable {
 
 /// One pushed item the server rejected. SwiftSync surfaces these so the app can let the user act on
 /// them (discard / edit / retry) rather than silently retrying forever.
-/// Why a push operation failed, categorized so the consumer can react without parsing `message`.
-/// The consumer classifies the server's result into one of these when it builds a `SyncPushFailure`.
+/// Why a push operation was rejected, categorized so the consumer can react without parsing `message`.
+/// The consumer classifies the server's per-operation result into one of these when it builds a
+/// `SyncPushFailure`. Only the rejection classes that a push *produces* live here — transient
+/// transport failures throw from the upload closure (rows stay pending to retry) rather than landing
+/// as a per-row failure, and a lost conflict is adopted, not failed. Retry-oriented classes arrive
+/// with the retry policy that consumes them.
 public enum SyncFailureKind: String, Equatable, Sendable {
-    /// The payload was rejected as invalid (bad field, constraint) — a fix is required; retrying as-is
-    /// won't help.
+    /// The payload was rejected as invalid (bad field, constraint) — the user must fix it.
     case validation
-    /// The server rejected it for a server-side/unspecified reason (5xx, generic rejection).
+    /// The server rejected it for a non-validation reason the client can't resolve by editing.
     case server
-    /// The request never got a usable response (network/transport). Worth retrying.
-    case transport
-    /// The write lost last-writer-wins; the server's version was adopted. Not a retry.
-    case conflict
-
-    /// A conservative retry hint: only transient classes (`transport`, `server`). `validation` needs a
-    /// fix and `conflict` was already resolved by adopting server state, so neither is retried.
-    public var isRetryable: Bool {
-        switch self {
-        case .transport, .server: return true
-        case .validation, .conflict: return false
-        }
-    }
 }
 
 public struct SyncPushFailure: Equatable, Sendable {
@@ -73,9 +63,6 @@ public struct SyncPushFailure: Equatable, Sendable {
     public let operation: Operation
     public let kind: SyncFailureKind
     public let message: String
-
-    /// Whether re-attempting this push is worthwhile (delegates to `kind`).
-    public var isRetryable: Bool { kind.isRetryable }
 
     public init(localID: String, operation: Operation, kind: SyncFailureKind, message: String) {
         self.localID = localID

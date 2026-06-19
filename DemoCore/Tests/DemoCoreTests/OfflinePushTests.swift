@@ -107,8 +107,7 @@ final class OfflinePushTests: XCTestCase {
         XCTAssertTrue(reason.contains("80 characters"), "the failure carries the server's reason: \(reason)")
         XCTAssertEqual(
             failed.syncFailureKind, SyncFailureKind.validation.rawValue,
-            "an over-long title is a validation rejection, not a transient one")
-        XCTAssertEqual(summary.failures.first?.isRetryable, false, "a validation failure is not retryable")
+            "an over-long title is a validation rejection, not a generic server one")
     }
 
     @MainActor
