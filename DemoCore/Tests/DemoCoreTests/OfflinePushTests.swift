@@ -372,6 +372,48 @@ final class OfflinePushTests: XCTestCase {
     }
 
     @MainActor
+    func testRejectedOfflineCreatedTaskSurvivesProjectPull() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        // Offline-create a task the server will reject (too-long title), then push: it stays a
+        // never-synced local row (no remote id) flagged as failed.
+        var body = try createBody(
+            from: DemoSeedData.SeedIDs.Tasks.sessionTimeout, newID: "OFFLINE-REJECT-1", in: syncContainer)
+        body = try mutating(body) { $0["title"] = String(repeating: "A", count: 100) }
+        engine.isOffline = true
+        try await engine.createTask(body: body, projectID: projectID)
+        engine.isOffline = false
+        let pushResult = try await engine.pushPendingChanges()
+        let summary = try XCTUnwrap(pushResult)
+        XCTAssertEqual(summary.failures.count, 1)
+        let failed = try XCTUnwrap(fetchTask(id: "OFFLINE-REJECT-1", in: syncContainer.mainContext))
+        XCTAssertNil(failed.syncRemoteID, "the rejected create never got a server id")
+
+        // Re-pull the project's authoritative task set (what happens on relaunch / reopening the
+        // project). The server's list omits the never-accepted row — it must NOT be pruned.
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        let survivor = try fetchTask(id: "OFFLINE-REJECT-1", in: syncContainer.mainContext)
+        XCTAssertNotNil(
+            survivor,
+            "a rejected offline-created task must survive an inbound project pull, not silently vanish")
+    }
+
+    private func mutating(_ body: DemoSyncPayload, _ transform: (inout [String: Any]) -> Void) throws
+        -> DemoSyncPayload
+    {
+        var dictionary = body.toSyncPayloadDictionary()
+        transform(&dictionary)
+        return try DemoSyncPayload(dictionary: dictionary)
+    }
+
+    @MainActor
     private func createBody(from templateID: String, newID: String, in syncContainer: SyncContainer) throws
         -> DemoSyncPayload
     {

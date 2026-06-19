@@ -105,6 +105,7 @@ extension SwiftSync {
                 try throwIfCancelled()
                 syncProfile("delete-missing") {
                     for (key, row) in index where !seenKeys.contains(key) {
+                        if inboundPruneShouldPreserve(row, pendingChangesSince: nil) { continue }
                         context.delete(row)
                         changed = true
                     }
@@ -336,6 +337,7 @@ extension SwiftSync {
         relationship: ReferenceWritableKeyPath<Model, Parent?>,
         keyStyle: KeyStyle = .snakeCase,
         relationshipOperations: SyncRelationshipOperations = .all,
+        pendingChangesSince: Date? = nil,
         isolation: isolated (any Actor)? = #isolation
     ) async throws {
         try await sync(
@@ -346,7 +348,8 @@ extension SwiftSync {
             parentRelationship: relationship,
             isGlobal: syncIdentityHasUniqueAttribute(Model.self),
             keyStyle: keyStyle,
-            relationshipOperations: relationshipOperations
+            relationshipOperations: relationshipOperations,
+            pendingChangesSince: pendingChangesSince
         )
     }
 
@@ -359,6 +362,7 @@ extension SwiftSync {
         isGlobal: Bool,
         keyStyle: KeyStyle,
         relationshipOperations: SyncRelationshipOperations,
+        pendingChangesSince: Date?,
         isolation: isolated (any Actor)? = #isolation
     ) async throws {
         let lease = await acquireSyncLease(for: context)
@@ -566,6 +570,9 @@ extension SwiftSync {
                         if seenKeys.contains(key) {
                             continue
                         }
+                        if inboundPruneShouldPreserve(row, pendingChangesSince: pendingChangesSince) {
+                            continue
+                        }
                         context.delete(row)
                         changed = true
                     }
@@ -588,6 +595,23 @@ extension SwiftSync {
             await releaseSyncLease(lease)
             throw error
         }
+    }
+
+    /// Whether an inbound full-set pull's `delete-missing` pass must keep `row` even though the
+    /// server's payload omitted it — the inbound/outbound boundary. A `SyncOfflineModel` row the server
+    /// has never acknowledged (`syncRemoteID == nil`) was never created server-side, so its absence is
+    /// expected, not a deletion; and a row edited locally since the last sync (`syncUpdatedAt >
+    /// pendingChangesSince`) carries an un-pushed change an inbound prune would silently destroy. A
+    /// pending tombstone is *not* preserved: the server omitting it means the deletion already agrees,
+    /// so pruning is correct. Non-offline models are never preserved (no outbound queue to protect).
+    private static func inboundPruneShouldPreserve<Model: SyncUpdatableModel>(
+        _ row: Model, pendingChangesSince: Date?
+    ) -> Bool {
+        guard let offline = row as? any SyncOfflineModel else { return false }
+        if offline.syncIsDeleted { return false }
+        if offline.syncRemoteID == nil { return true }
+        if let pendingChangesSince, offline.syncUpdatedAt > pendingChangesSince { return true }
+        return false
     }
 
     private static func resolveParent<Parent: PersistentModel>(

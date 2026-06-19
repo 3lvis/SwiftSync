@@ -122,12 +122,18 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         )
     }
 
+    /// `pendingChangesSince` is the caller's last-synced cursor. When provided, the inbound full-set
+    /// pull's prune (`delete-missing`) preserves rows with un-pushed local changes — a never-synced
+    /// insert, or a row edited locally after the cursor — instead of deleting them because the server's
+    /// payload omitted them. Pass it whenever the model also participates in offline push
+    /// (`SyncOfflineModel`); omit it (`nil`) for read-only inbound models.
     public func sync<Model: SyncUpdatableModel, Parent: PersistentModel>(
         payload: [Any],
         as model: Model.Type,
         parent: Parent,
         relationship: ReferenceWritableKeyPath<Model, Parent?>,
-        relationshipOperations: SyncRelationshipOperations = .all
+        relationshipOperations: SyncRelationshipOperations = .all,
+        pendingChangesSince: Date? = nil
     ) async throws {
         let context = ModelContext(modelContainer)
         try await SwiftSync.sync(
@@ -137,7 +143,8 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             parent: parent,
             relationship: relationship,
             keyStyle: keyStyle,
-            relationshipOperations: relationshipOperations
+            relationshipOperations: relationshipOperations,
+            pendingChangesSince: pendingChangesSince
         )
     }
 
@@ -146,14 +153,16 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         as model: Model.Type,
         parent: Parent,
         relationship: ReferenceWritableKeyPath<Model, Parent?>,
-        relationshipOperations: SyncRelationshipOperations = .all
+        relationshipOperations: SyncRelationshipOperations = .all,
+        pendingChangesSince: Date? = nil
     ) async throws {
         try await sync(
             payload: payload.map { $0.toSyncPayloadDictionary() },
             as: model,
             parent: parent,
             relationship: relationship,
-            relationshipOperations: relationshipOperations
+            relationshipOperations: relationshipOperations,
+            pendingChangesSince: pendingChangesSince
         )
     }
 

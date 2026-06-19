@@ -368,7 +368,8 @@ public final class DemoSyncEngine {
             payload: payload,
             as: Task.self,
             parent: project,
-            relationship: \Task.project
+            relationship: \Task.project,
+            pendingChangesSince: syncCursor
         )
         markPulled()
         try await syncProjectsData()
