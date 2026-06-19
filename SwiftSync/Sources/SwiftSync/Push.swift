@@ -1,10 +1,9 @@
 import Foundation
 import SwiftData
 
-/// The bookmark into the store's change history. Persist it (it's `Codable`) as your "last pushed"
-/// cursor; the next push reads only changes after it. Replaces a per-row "dirty" flag entirely —
-/// SwiftData's own history *is* the change log.
-public typealias SyncCursor = DefaultHistoryToken
+/// SwiftSync's internal history bookmark: the `DefaultHistoryToken` of a model type's last push.
+/// Owned and persisted by SwiftSync (see `SyncCursorRecord`); never handled by the consumer.
+typealias SyncCursor = DefaultHistoryToken
 
 extension SwiftSync {
     /// The transaction author SwiftSync stamps on inbound (pull) writes, so the push side can tell

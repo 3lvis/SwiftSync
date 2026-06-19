@@ -14,9 +14,8 @@ extension SwiftSync {
         do {
             try throwIfCancelled()
             try await withRelationshipLookupCache {
-                // Rows with un-pushed local changes — computed before applying, so an inbound pull
-                // honors pending local edits (LWW) and never prunes a never-pushed local insert. Empty
-                // for models whose identity is not .preserveValueOnDeletion (plain pull, server authoritative).
+                // Gathered before applying, so the pull honors pending local edits and never prunes a
+                // never-pushed local insert. Empty for non-offline models (see offlineDirtyPersistentIDs).
                 let dirtyPIDs = offlineDirtyPersistentIDs(for: Model.self, in: context)
                 let entries = try syncProfile("normalize-payload") {
                     try normalize(payload: payload, model: Model.self)
@@ -370,9 +369,8 @@ extension SwiftSync {
         do {
             try throwIfCancelled()
             try await withRelationshipLookupCache {
-                // Rows with un-pushed local changes — computed before applying, so an inbound pull
-                // honors pending local edits (LWW) and never prunes a never-pushed local insert. Empty
-                // for models whose identity is not .preserveValueOnDeletion (plain pull, server authoritative).
+                // Gathered before applying, so the pull honors pending local edits and never prunes a
+                // never-pushed local insert. Empty for non-offline models (see offlineDirtyPersistentIDs).
                 let dirtyPIDs = offlineDirtyPersistentIDs(for: Model.self, in: context)
                 let entries = try syncProfile("normalize-payload") {
                     try normalize(payload: payload, model: Model.self)

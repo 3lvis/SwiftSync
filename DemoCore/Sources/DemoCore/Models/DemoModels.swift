@@ -66,9 +66,9 @@ public final class TaskStateOption {
 @Syncable
 @Model
 public final class Task {
-    // `.preserveValueOnDeletion` keeps the id readable in the store's delete history, so a plain
-    // `context.delete(task)` is enough for the push side to recover the deleted row's localID. The
-    // @Syncable macro can add this to the primary key automatically; annotated here for the spike.
+    // `.preserveValueOnDeletion` keeps the id readable in the store's delete history (so a plain
+    // `context.delete` lets the push side recover the deleted id) and is how SwiftSync marks this
+    // model as offline-pushable.
     @Attribute(.unique, .preserveValueOnDeletion) public var id: String
 
     public var projectID: String
