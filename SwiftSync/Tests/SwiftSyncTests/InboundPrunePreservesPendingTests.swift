@@ -3,10 +3,8 @@ import XCTest
 
 @testable import SwiftSync
 
-// A model that is both inbound-syncable (`SyncUpdatableModel`) and offline-pushable
-// (`SyncOfflineModel`), scoped under a parent — the exact shape that exposes the inbound-pull /
-// outbound-queue collision: a full-set pull's `delete-missing` pass must not delete rows that have
-// un-acknowledged local changes.
+// Both inbound-syncable (`SyncUpdatableModel`) and offline-pushable (`SyncOfflineModel`) under a
+// parent — the shape that exposes the inbound-pull / outbound-queue collision these tests guard.
 @Model
 final class PruneProject {
     @Attribute(.unique) var id: String
@@ -86,11 +84,10 @@ final class InboundPrunePreservesPendingTests: XCTestCase {
         let project = PruneProject(id: "p1")
         context.insert(project)
         context.insert(PruneTask(id: "t-server", title: "from server", remoteID: "r1", project: project))
-        // A local-only insert the server has never seen (e.g. created offline, rejected on push).
+        // A local-only insert the server has never seen (offline-created, rejected on push).
         context.insert(PruneTask(id: "t-local", title: "offline created", remoteID: nil, project: project))
         try context.save()
 
-        // Pull the project's authoritative task set — it omits the local-only row.
         try await SwiftSync.sync(
             payload: [["id": "t-server", "title": "from server"]],
             as: PruneTask.self, in: context, parent: project, relationship: \PruneTask.project)
@@ -111,9 +108,8 @@ final class InboundPrunePreservesPendingTests: XCTestCase {
 
         let project = PruneProject(id: "p1")
         context.insert(project)
-        // A row the server knows about (`remoteID` set). The server omits it → it was genuinely deleted
-        // server-side, so the prune must still remove it. (A local edit to such a row is kept safe by
-        // pushing before pulling — it would be present in the payload — not by this prune.)
+        // A row the server knows about (`remoteID` set) that the server then omits → genuinely deleted
+        // server-side, so the prune must still remove it.
         context.insert(
             PruneTask(id: "t-synced", title: "synced", remoteID: "r1", project: project))
         try context.save()

@@ -105,7 +105,7 @@ extension SwiftSync {
                 try throwIfCancelled()
                 syncProfile("delete-missing") {
                     for (key, row) in index where !seenKeys.contains(key) {
-                        if inboundPruneShouldPreserve(row) { continue }
+                        if isUnsyncedLocalInsert(row) { continue }
                         context.delete(row)
                         changed = true
                     }
@@ -567,7 +567,7 @@ extension SwiftSync {
                         if seenKeys.contains(key) {
                             continue
                         }
-                        if inboundPruneShouldPreserve(row) {
+                        if isUnsyncedLocalInsert(row) {
                             continue
                         }
                         context.delete(row)
@@ -594,14 +594,9 @@ extension SwiftSync {
         }
     }
 
-    /// Whether a full-set pull's `delete-missing` pass must keep `row` even though the server's payload
-    /// omitted it. This is a correctness invariant of reconciliation, not offline policy: a
-    /// `SyncOfflineModel` row with no `syncRemoteID` was never created server-side, so it isn't part of
-    /// the server's namespace and its absence carries no "deleted" signal — pruning it would destroy a
-    /// never-uploaded local row. (Local *edits* to already-synced rows are kept safe by the consumer
-    /// pushing before pulling, so they're present in the pull and never judged here.) A local tombstone
-    /// is pruned: the server omitting it agrees with the intended deletion.
-    private static func inboundPruneShouldPreserve<Model: SyncUpdatableModel>(_ row: Model) -> Bool {
+    /// A live local row the server has never acknowledged (`syncRemoteID == nil`, not a tombstone).
+    /// `delete-missing` skips these: the server omitting a row it never created is not a deletion.
+    private static func isUnsyncedLocalInsert<Model: SyncUpdatableModel>(_ row: Model) -> Bool {
         guard let offline = row as? any SyncOfflineModel else { return false }
         if offline.syncIsDeleted { return false }
         return offline.syncRemoteID == nil

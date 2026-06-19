@@ -351,11 +351,8 @@ public final class DemoSyncEngine {
     }
 
     private func syncProjectTasksData(projectID: String) async throws {
-        // Push before pull (the cache → push → pull order): drain pending local changes first so the
-        // server's authoritative task set already reflects them. A successful push makes the row
-        // present in the pull below; a never-synced row (e.g. a rejected insert) stays absent but is
-        // protected by the pull's "never delete a row the server has never seen" invariant. Best-effort
-        // — a failed drain must not block the refresh.
+        // Push before pull: a pending change must reach the server before the pull's prune judges it,
+        // else it looks like a server-side deletion. Best-effort — a failed drain must not block the refresh.
         _ = try? await pushPendingChanges()
 
         let payload = try await apiClient.getProjectTasks(projectID: projectID)

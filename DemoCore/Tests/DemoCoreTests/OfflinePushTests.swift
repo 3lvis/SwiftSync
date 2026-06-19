@@ -381,8 +381,7 @@ final class OfflinePushTests: XCTestCase {
         let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
         try await engine.syncProjectTasks(projectID: projectID)
 
-        // Offline-create a task the server will reject (too-long title), then push: it stays a
-        // never-synced local row (no remote id) flagged as failed.
+        // Offline-create a task the server will reject (too-long title); it stays a never-synced row.
         var body = try createBody(
             from: DemoSeedData.SeedIDs.Tasks.sessionTimeout, newID: "OFFLINE-REJECT-1", in: syncContainer)
         body = try mutating(body) { $0["title"] = String(repeating: "A", count: 100) }
@@ -395,8 +394,7 @@ final class OfflinePushTests: XCTestCase {
         let failed = try XCTUnwrap(fetchTask(id: "OFFLINE-REJECT-1", in: syncContainer.mainContext))
         XCTAssertNil(failed.syncRemoteID, "the rejected create never got a server id")
 
-        // Re-pull the project's authoritative task set (what happens on relaunch / reopening the
-        // project). The server's list omits the never-accepted row — it must NOT be pruned.
+        // Re-pull the project's task set (as on relaunch); the server omits the never-accepted row.
         try await engine.syncProjectTasks(projectID: projectID)
 
         let survivor = try fetchTask(id: "OFFLINE-REJECT-1", in: syncContainer.mainContext)
@@ -416,7 +414,6 @@ final class OfflinePushTests: XCTestCase {
         let taskID = DemoSeedData.SeedIDs.Tasks.sessionTimeout
         try await engine.syncProjectTasks(projectID: projectID)
 
-        // Offline: edit the task's title — a pending update, not yet pushed.
         engine.isOffline = true
         let task = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
         let body = try mutating(try DemoSyncPayload(dictionary: syncContainer.export(task))) {
@@ -428,10 +425,8 @@ final class OfflinePushTests: XCTestCase {
         engine.isOffline = false
         try await apiClient.deleteTask(taskID: taskID)
 
-        // Reconnect and refresh. syncProjectTasks pushes before it pulls: the pending edit is uploaded
-        // as an upsert keyed by localId, which re-creates the server-deleted row, so the subsequent
-        // pull sees it as present rather than absent. The edit wins by resurrection — no prune guard,
-        // no cursor needed.
+        // syncProjectTasks pushes before it pulls, so the pending edit is upserted (re-creating the
+        // server-deleted row) and the pull then sees it present, not absent.
         try await engine.syncProjectTasks(projectID: projectID)
 
         let survivor = try XCTUnwrap(
