@@ -465,6 +465,45 @@ final class OfflinePushTests: XCTestCase {
         XCTAssertNotNil(row.syncFailureReason, "it stays flagged for the user to resolve")
     }
 
+    @MainActor
+    func testNewerServerVersionOverwritesPollutedLocalEdit() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        let taskID = DemoSeedData.SeedIDs.Tasks.sessionTimeout
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        // Pollute: offline edit to an invalid (too-long) title the server rejects on push.
+        engine.isOffline = true
+        let task = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        let invalidBody = try mutating(try DemoSyncPayload(dictionary: syncContainer.export(task))) {
+            $0["title"] = String(repeating: "A", count: 100)
+        }
+        try await engine.updateTask(taskID: taskID, projectID: projectID, body: invalidBody)
+        engine.isOffline = false
+        _ = try await engine.pushPendingChanges()
+        XCTAssertNotNil(
+            try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext)).syncFailureReason,
+            "the row is polluted (a failed local edit)")
+
+        // Another client updates that task server-side to a newer, valid version.
+        let serverTitle = "server's newer title"
+        let currentDetail = try await apiClient.getTaskDetail(taskID: taskID)
+        let current = try XCTUnwrap(currentDetail)
+        let serverBody = try mutating(current) { $0["title"] = serverTitle }
+        _ = try await apiClient.updateTask(taskID: taskID, body: serverBody)
+
+        // Refresh: the newer server version must win and overwrite the polluted local edit (LWW).
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        let row = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        XCTAssertEqual(
+            row.title, serverTitle, "a newer server version overwrites even a polluted local edit")
+    }
+
     private func mutating(_ body: DemoSyncPayload, _ transform: (inout [String: Any]) -> Void) throws
         -> DemoSyncPayload
     {
