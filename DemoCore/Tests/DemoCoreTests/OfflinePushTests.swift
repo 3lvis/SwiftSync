@@ -504,6 +504,45 @@ final class OfflinePushTests: XCTestCase {
             row.title, serverTitle, "a newer server version overwrites even a polluted local edit")
     }
 
+    @MainActor
+    func testPollutedRowDoesNotBlockSiblingRefresh() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        let pollutedID = DemoSeedData.SeedIDs.Tasks.sessionTimeout
+        let siblingID = DemoSeedData.SeedIDs.Tasks.securityPolicyPatch
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        // Pollute one task: an offline edit to an invalid title the server rejects on push.
+        engine.isOffline = true
+        let polluted = try XCTUnwrap(fetchTask(id: pollutedID, in: syncContainer.mainContext))
+        let invalidTitle = String(repeating: "A", count: 100)
+        let invalidBody = try mutating(try DemoSyncPayload(dictionary: syncContainer.export(polluted))) {
+            $0["title"] = invalidTitle
+        }
+        try await engine.updateTask(taskID: pollutedID, projectID: projectID, body: invalidBody)
+        engine.isOffline = false
+        _ = try await engine.pushPendingChanges()
+
+        // A *different* task in the same project is updated server-side.
+        let siblingTitle = "server-updated sibling"
+        let siblingDetail = try await apiClient.getTaskDetail(taskID: siblingID)
+        let siblingBody = try mutating(try XCTUnwrap(siblingDetail)) { $0["title"] = siblingTitle }
+        _ = try await apiClient.updateTask(taskID: siblingID, body: siblingBody)
+
+        // Refresh: the polluted row's local edit is preserved (LWW), and the sibling still picks up the
+        // server update — one conflicted row must not block the whole project's refresh.
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        let pollutedRow = try XCTUnwrap(fetchTask(id: pollutedID, in: syncContainer.mainContext))
+        let siblingRow = try XCTUnwrap(fetchTask(id: siblingID, in: syncContainer.mainContext))
+        XCTAssertEqual(pollutedRow.title, invalidTitle, "the conflicted row keeps its local edit")
+        XCTAssertEqual(siblingRow.title, siblingTitle, "a sibling row still refreshes — the pull isn't blocked")
+    }
+
     private func mutating(_ body: DemoSyncPayload, _ transform: (inout [String: Any]) -> Void) throws
         -> DemoSyncPayload
     {

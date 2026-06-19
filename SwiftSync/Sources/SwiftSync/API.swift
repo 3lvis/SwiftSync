@@ -58,7 +58,7 @@ extension SwiftSync {
 
                     if let row = index[key] {
                         let didApplyFields = try syncProfile("apply-fields") {
-                            try row.apply(payloadModel)
+                            try applyHonoringLocalEdit(payloadModel, to: row)
                         }
                         if didApplyFields {
                             changed = true
@@ -465,7 +465,7 @@ extension SwiftSync {
                             }
                         }
                         let didApplyFields = try syncProfile("apply-fields") {
-                            try row.apply(payloadModel)
+                            try applyHonoringLocalEdit(payloadModel, to: row)
                         }
                         if didApplyFields {
                             changed = true
@@ -503,7 +503,7 @@ extension SwiftSync {
                                 }
                             }
                             let didApplyFields = try syncProfile("apply-fields") {
-                                try movedRow.apply(payloadModel)
+                                try applyHonoringLocalEdit(payloadModel, to: movedRow)
                             }
                             if didApplyFields {
                                 changed = true
@@ -600,6 +600,23 @@ extension SwiftSync {
         guard let offline = row as? any SyncOfflineModel else { return false }
         if offline.syncIsDeleted { return false }
         return offline.syncRemoteID == nil
+    }
+
+    /// Apply a server `payload` onto an existing `row`, honoring last-writer-wins for offline rows: if
+    /// the local row carries an edit newer than the server's version (`syncUpdatedAt` greater than the
+    /// incoming one), the un-pushed local edit wins and the older server fields are not applied — so an
+    /// inbound pull can't clobber a pending local edit. Mirrors the server-side upsert's
+    /// "older-or-equal loses". Returns whether `row` changed.
+    private static func applyHonoringLocalEdit<Model: SyncUpdatableModel>(
+        _ payload: SyncPayload, to row: Model
+    ) throws -> Bool {
+        if let local = row as? any SyncOfflineModel,
+            let incoming = (try? Model.make(from: payload)) as? any SyncOfflineModel,
+            local.syncUpdatedAt > incoming.syncUpdatedAt
+        {
+            return false
+        }
+        return try row.apply(payload)
     }
 
     private static func resolveParent<Parent: PersistentModel>(
