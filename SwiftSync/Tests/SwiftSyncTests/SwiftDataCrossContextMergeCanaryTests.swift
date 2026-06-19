@@ -1,7 +1,17 @@
 import SwiftData
 import XCTest
 
-@testable import SwiftSync
+// Pure-SwiftData reproduction — no SwiftSync — of the failure SwiftSync works around with its
+// `immediate` flag (commit 5d00aa39). SwiftData has no `mergeChanges(fromContextDidSave:)`, so a save
+// on one `ModelContext` does not refresh an already-registered instance on another (e.g. the
+// `mainContext` row a SwiftUI view holds). That is the "offline edit doesn't update the list" bug;
+// SwiftSync sidesteps it by applying local writes on the main context. This test isolates the raw
+// SwiftData mechanics, with nothing from SwiftSync involved.
+//
+// ⛔️ DO NOT MERGE. It asserts the behavior we *want* (a cross-context save reflected on the registered
+// instance), so it is RED today and turns GREEN the day SwiftData merges cross-context saves promptly —
+// the signal that the `immediate`/main-apply workaround can be retired. Lives on its PR only; the branch
+// must never reach `master` (a red test would block the CI gate).
 
 @Model
 final class CrossContextCanaryNote {
@@ -14,46 +24,32 @@ final class CrossContextCanaryNote {
 }
 
 final class SwiftDataCrossContextMergeCanaryTests: XCTestCase {
-    /// ⛔️ DO NOT MERGE — a standing tracking test that intentionally **fails today**, and whose branch
-    /// must never reach `master` (a red test would block the CI gate). It lives only on its PR.
-    ///
-    /// SwiftData has no `mergeChanges(fromContextDidSave:)`, so a save on one `ModelContext` does not
-    /// refresh an already-registered instance on another (e.g. the `mainContext` instance a SwiftUI view
-    /// holds). That gap is the only reason single-object `sync(item:)` applies on the main thread.
-    ///
-    /// This is the same problem the predecessor Core Data `Sync` library solved with one call —
-    /// `mainContext.mergeChanges(fromContextDidSave:)` on `NSManagedObjectContextDidSave` (its
-    /// `DataStack`, commit `f8b0f5a0`). `mergeChanges` is `NSManagedObjectContext` API that `ModelContext`
-    /// does not expose (nor `automaticallyMergesChangesFromParent`, nor a public `refresh`), so the
-    /// one-line fix can't be ported — this canary waits for SwiftData to ship an equivalent.
-    ///
-    /// This asserts the behavior we *want* — a cross-context save promptly reflected on the registered
-    /// instance — so it is **red on the PR today**. The day a newer SwiftData merges promptly, CI on the
-    /// PR turns **green**: the signal to merge this and move single-object (and inbound) sync off the
-    /// main thread.
     @MainActor
-    func testCrossContextSavePromptlyRefreshesRegisteredInstance() throws {
+    func testCrossContextSaveRefreshesRegisteredInstance() throws {
         let container = try ModelContainer(
             for: CrossContextCanaryNote.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true))
 
+        // A view holds a row registered in the main context.
         let mainContext = container.mainContext
         mainContext.insert(CrossContextCanaryNote(id: "n1", title: "Original"))
         try mainContext.save()
-
-        // The instance a live query / SwiftUI view would be holding.
         let registered = try XCTUnwrap(mainContext.fetch(FetchDescriptor<CrossContextCanaryNote>()).first)
 
-        // Update the same row through a separate context and save — with no runloop turn in between.
-        let otherContext = ModelContext(container)
-        let other = try XCTUnwrap(otherContext.fetch(FetchDescriptor<CrossContextCanaryNote>()).first)
-        other.title = "Edited"
-        try otherContext.save()
+        // A second context — the "background import" path — edits the same row and saves.
+        let backgroundContext = ModelContext(container)
+        let background = try XCTUnwrap(
+            backgroundContext.fetch(FetchDescriptor<CrossContextCanaryNote>()).first)
+        background.title = "Edited"
+        try backgroundContext.save()
 
+        // The behavior we want: the registered instance reflects the saved edit. Fails today — SwiftData
+        // does not merge the background save into it. Passes when SwiftData gains a prompt cross-context
+        // merge, at which point the immediate/main-apply workaround can be retired.
         XCTAssertEqual(
             registered.title, "Edited",
-            "Expected to FAIL today: SwiftData did not merge the cross-context save into the registered "
-                + "mainContext instance. When this passes, SwiftData merges promptly — single-object "
-                + "sync(item:) (and inbound sync) can move off the main thread, and this PR can merge.")
+            "Expected to FAIL today: SwiftData did not merge the background-context save into the "
+                + "registered mainContext instance. When this passes, the immediate/main-apply workaround "
+                + "can be retired.")
     }
 }
