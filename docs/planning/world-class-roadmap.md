@@ -5,6 +5,9 @@ the source of truth for that effort. Each open item is sized to be a single work
 branch. Work through them systematically; mark complete by deleting the line (per
 `docs/planning` cleanup rules) once merged.
 
+Companion: [`api-surface-review.md`](api-surface-review.md) — a prioritized pass at keeping the public
+API minimal (macros + convention over configuration), worked one item at a time.
+
 ## Baseline (2026-06-14)
 
 - Root `swift test`: 149 tests pass, 9 benchmark skips. DemoCore: 21. DemoBackend: 21.
