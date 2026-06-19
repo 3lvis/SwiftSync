@@ -372,6 +372,181 @@ final class OfflinePushTests: XCTestCase {
     }
 
     @MainActor
+    func testRejectedOfflineCreatedTaskSurvivesProjectPull() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        // Offline-create a task the server will reject (too-long title); it stays a never-synced row.
+        var body = try createBody(
+            from: DemoSeedData.SeedIDs.Tasks.sessionTimeout, newID: "OFFLINE-REJECT-1", in: syncContainer)
+        body = try mutating(body) { $0["title"] = String(repeating: "A", count: 100) }
+        engine.isOffline = true
+        try await engine.createTask(body: body, projectID: projectID)
+        engine.isOffline = false
+        let pushResult = try await engine.pushPendingChanges()
+        let summary = try XCTUnwrap(pushResult)
+        XCTAssertEqual(summary.failures.count, 1)
+        let failed = try XCTUnwrap(fetchTask(id: "OFFLINE-REJECT-1", in: syncContainer.mainContext))
+        XCTAssertNil(failed.syncRemoteID, "the rejected create never got a server id")
+
+        // Re-pull the project's task set (as on relaunch); the server omits the never-accepted row.
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        let survivor = try fetchTask(id: "OFFLINE-REJECT-1", in: syncContainer.mainContext)
+        XCTAssertNotNil(
+            survivor,
+            "a rejected offline-created task must survive an inbound project pull, not silently vanish")
+    }
+
+    @MainActor
+    func testOfflineEditSurvivesServerSideDeleteOnReconnect() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        let taskID = DemoSeedData.SeedIDs.Tasks.sessionTimeout
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        engine.isOffline = true
+        let task = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        let body = try mutating(try DemoSyncPayload(dictionary: syncContainer.export(task))) {
+            $0["title"] = "edited offline"
+        }
+        try await engine.updateTask(taskID: taskID, projectID: projectID, body: body)
+
+        // Meanwhile the server hard-deletes that task (another client / admin removed it).
+        engine.isOffline = false
+        try await apiClient.deleteTask(taskID: taskID)
+
+        // syncProjectTasks pushes before it pulls, so the pending edit is upserted (re-creating the
+        // server-deleted row) and the pull then sees it present, not absent.
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        let survivor = try XCTUnwrap(
+            fetchTask(id: taskID, in: syncContainer.mainContext),
+            "an offline edit must survive a server-side delete on reconnect, not vanish")
+        XCTAssertEqual(survivor.title, "edited offline", "the local edit is preserved")
+    }
+
+    @MainActor
+    func testFailedOfflineEditIsNotClobberedByProjectRefresh() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        let taskID = DemoSeedData.SeedIDs.Tasks.sessionTimeout
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        // Offline: edit a synced task to an invalid (too-long) title the server will reject on push.
+        engine.isOffline = true
+        let task = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        let invalidTitle = String(repeating: "A", count: 100)
+        let body = try mutating(try DemoSyncPayload(dictionary: syncContainer.export(task))) {
+            $0["title"] = invalidTitle
+        }
+        try await engine.updateTask(taskID: taskID, projectID: projectID, body: body)
+        engine.isOffline = false
+
+        // The push rejects the edit, so the server still holds the pre-edit title.
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        let row = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        XCTAssertEqual(row.title, invalidTitle, "the failed local edit must not be clobbered by the pull")
+        XCTAssertNotNil(row.syncFailureReason, "it stays flagged for the user to resolve")
+    }
+
+    @MainActor
+    func testNewerServerVersionOverwritesPollutedLocalEdit() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        let taskID = DemoSeedData.SeedIDs.Tasks.sessionTimeout
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        // Pollute: offline edit to an invalid (too-long) title the server rejects on push.
+        engine.isOffline = true
+        let task = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        let invalidBody = try mutating(try DemoSyncPayload(dictionary: syncContainer.export(task))) {
+            $0["title"] = String(repeating: "A", count: 100)
+        }
+        try await engine.updateTask(taskID: taskID, projectID: projectID, body: invalidBody)
+        engine.isOffline = false
+        _ = try await engine.pushPendingChanges()
+        XCTAssertNotNil(
+            try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext)).syncFailureReason,
+            "the row is polluted (a failed local edit)")
+
+        // Another client updates that task server-side to a newer, valid version.
+        let serverTitle = "server's newer title"
+        let currentDetail = try await apiClient.getTaskDetail(taskID: taskID)
+        let current = try XCTUnwrap(currentDetail)
+        let serverBody = try mutating(current) { $0["title"] = serverTitle }
+        _ = try await apiClient.updateTask(taskID: taskID, body: serverBody)
+
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        let row = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        XCTAssertEqual(
+            row.title, serverTitle, "a newer server version overwrites even a polluted local edit")
+    }
+
+    @MainActor
+    func testPollutedRowDoesNotBlockSiblingRefresh() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        let pollutedID = DemoSeedData.SeedIDs.Tasks.sessionTimeout
+        let siblingID = DemoSeedData.SeedIDs.Tasks.securityPolicyPatch
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        // Pollute one task: an offline edit to an invalid title the server rejects on push.
+        engine.isOffline = true
+        let polluted = try XCTUnwrap(fetchTask(id: pollutedID, in: syncContainer.mainContext))
+        let invalidTitle = String(repeating: "A", count: 100)
+        let invalidBody = try mutating(try DemoSyncPayload(dictionary: syncContainer.export(polluted))) {
+            $0["title"] = invalidTitle
+        }
+        try await engine.updateTask(taskID: pollutedID, projectID: projectID, body: invalidBody)
+        engine.isOffline = false
+        _ = try await engine.pushPendingChanges()
+
+        let siblingTitle = "server-updated sibling"
+        let siblingDetail = try await apiClient.getTaskDetail(taskID: siblingID)
+        let siblingBody = try mutating(try XCTUnwrap(siblingDetail)) { $0["title"] = siblingTitle }
+        _ = try await apiClient.updateTask(taskID: siblingID, body: siblingBody)
+
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        let pollutedRow = try XCTUnwrap(fetchTask(id: pollutedID, in: syncContainer.mainContext))
+        let siblingRow = try XCTUnwrap(fetchTask(id: siblingID, in: syncContainer.mainContext))
+        XCTAssertEqual(pollutedRow.title, invalidTitle, "the conflicted row keeps its local edit")
+        XCTAssertEqual(siblingRow.title, siblingTitle, "a sibling row still refreshes — the pull isn't blocked")
+    }
+
+    private func mutating(_ body: DemoSyncPayload, _ transform: (inout [String: Any]) -> Void) throws
+        -> DemoSyncPayload
+    {
+        var dictionary = body.toSyncPayloadDictionary()
+        transform(&dictionary)
+        return try DemoSyncPayload(dictionary: dictionary)
+    }
+
+    @MainActor
     private func createBody(from templateID: String, newID: String, in syncContainer: SyncContainer) throws
         -> DemoSyncPayload
     {

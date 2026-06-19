@@ -58,7 +58,7 @@ extension SwiftSync {
 
                     if let row = index[key] {
                         let didApplyFields = try syncProfile("apply-fields") {
-                            try row.apply(payloadModel)
+                            try applyHonoringLocalEdit(payloadModel, to: row)
                         }
                         if didApplyFields {
                             changed = true
@@ -105,6 +105,7 @@ extension SwiftSync {
                 try throwIfCancelled()
                 syncProfile("delete-missing") {
                     for (key, row) in index where !seenKeys.contains(key) {
+                        if isUnsyncedLocalInsert(row) { continue }
                         context.delete(row)
                         changed = true
                     }
@@ -464,7 +465,7 @@ extension SwiftSync {
                             }
                         }
                         let didApplyFields = try syncProfile("apply-fields") {
-                            try row.apply(payloadModel)
+                            try applyHonoringLocalEdit(payloadModel, to: row)
                         }
                         if didApplyFields {
                             changed = true
@@ -502,7 +503,7 @@ extension SwiftSync {
                                 }
                             }
                             let didApplyFields = try syncProfile("apply-fields") {
-                                try movedRow.apply(payloadModel)
+                                try applyHonoringLocalEdit(payloadModel, to: movedRow)
                             }
                             if didApplyFields {
                                 changed = true
@@ -566,6 +567,9 @@ extension SwiftSync {
                         if seenKeys.contains(key) {
                             continue
                         }
+                        if isUnsyncedLocalInsert(row) {
+                            continue
+                        }
                         context.delete(row)
                         changed = true
                     }
@@ -588,6 +592,32 @@ extension SwiftSync {
             await releaseSyncLease(lease)
             throw error
         }
+    }
+
+    /// A live local row the server has never acknowledged (`syncRemoteID == nil`, not a tombstone).
+    /// `delete-missing` skips these: the server omitting a row it never created is not a deletion.
+    private static func isUnsyncedLocalInsert<Model: SyncUpdatableModel>(_ row: Model) -> Bool {
+        guard let offline = row as? any SyncOfflineModel else { return false }
+        if offline.syncIsDeleted { return false }
+        return offline.syncRemoteID == nil
+    }
+
+    /// Apply a server `payload` onto `row`, but skip the overwrite when an offline row's local edit is
+    /// newer than the incoming version — so an inbound pull can't clobber a pending local edit.
+    /// Last-writer-wins, mirroring the server-side upsert's "older-or-equal loses". The incoming
+    /// timestamp is read straight from the payload under the conventional `updatedAt` key (the same one
+    /// `SyncOfflineModel.syncUpdatedAt` reflects) — no model is constructed; an unparseable/absent one
+    /// just falls through to a normal apply.
+    private static func applyHonoringLocalEdit<Model: SyncUpdatableModel>(
+        _ payload: SyncPayload, to row: Model
+    ) throws -> Bool {
+        if let local = row as? any SyncOfflineModel,
+            let incoming = payload.value(for: "updatedAt", as: Date.self),
+            local.syncUpdatedAt > incoming
+        {
+            return false
+        }
+        return try row.apply(payload)
     }
 
     private static func resolveParent<Parent: PersistentModel>(

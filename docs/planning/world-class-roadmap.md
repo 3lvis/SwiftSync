@@ -76,6 +76,11 @@ Still open:
       WatermelonDB, Realm/Firestore) before hardening the push/pull contract further — pick
       deliberately for our constraints (this gates the Phase 8 middleware seam).
 - [ ] Offline-safe migrations + break-freely versioning of the pending-change/queue format.
+- [ ] Generalize the inbound last-writer-wins read. The pull's per-row LWW (which stops a refresh from
+      clobbering an un-pushed local edit) reads the incoming timestamp from the payload under the
+      conventional `updatedAt` key. An offline model whose timestamp uses a `@RemoteKey` rename silently
+      skips LWW (degrades to plain apply). Generalizing needs macro support to surface the model's
+      timestamp key — add it only when a real consumer hits the rename case; don't add public API for it.
 
 ### Phase 8 — Outbound sync → best-in-class (adapted from `code/3lvis/ios/Networking` roadmap, items 2–4)
 
