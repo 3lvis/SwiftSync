@@ -6,7 +6,7 @@ import SwiftData
 /// this records the last-pushed `DefaultHistoryToken` so the pull can tell un-pushed local edits from
 /// already-pushed ones. O(model types) rows, written once per push — no per-row, no pull-path cost.
 @Model
-final class SyncCursorRecord {
+final class PushWatermarkRecord {
     @Attribute(.unique) var modelTypeName: String
     /// A JSON-encoded `DefaultHistoryToken`. Stored as `Data` because the token is a `Codable` value,
     /// not a `@Model`, so SwiftData can't persist it directly.
@@ -19,23 +19,25 @@ final class SyncCursorRecord {
 }
 
 extension SwiftSync {
-    static func storedCursor<Model>(for _: Model.Type, in context: ModelContext) -> DefaultHistoryToken? {
+    static func pushWatermark<Model>(for _: Model.Type, in context: ModelContext) -> DefaultHistoryToken? {
         let typeName = String(reflecting: Model.self)
-        var descriptor = FetchDescriptor<SyncCursorRecord>(predicate: #Predicate { $0.modelTypeName == typeName })
+        var descriptor = FetchDescriptor<PushWatermarkRecord>(predicate: #Predicate { $0.modelTypeName == typeName })
         descriptor.fetchLimit = 1
         guard let record = try? context.fetch(descriptor).first else { return nil }
         return try? JSONDecoder().decode(DefaultHistoryToken.self, from: record.tokenData)
     }
 
-    static func storeCursor<Model>(_ cursor: DefaultHistoryToken, for _: Model.Type, in context: ModelContext) throws {
+    static func setPushWatermark<Model>(_ watermark: DefaultHistoryToken, for _: Model.Type, in context: ModelContext)
+        throws
+    {
         let typeName = String(reflecting: Model.self)
-        guard let data = try? JSONEncoder().encode(cursor) else { return }
-        var descriptor = FetchDescriptor<SyncCursorRecord>(predicate: #Predicate { $0.modelTypeName == typeName })
+        guard let data = try? JSONEncoder().encode(watermark) else { return }
+        var descriptor = FetchDescriptor<PushWatermarkRecord>(predicate: #Predicate { $0.modelTypeName == typeName })
         descriptor.fetchLimit = 1
         if let record = try context.fetch(descriptor).first {
             record.tokenData = data
         } else {
-            context.insert(SyncCursorRecord(modelTypeName: typeName, tokenData: data))
+            context.insert(PushWatermarkRecord(modelTypeName: typeName, tokenData: data))
         }
         try context.save()
     }

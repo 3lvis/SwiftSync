@@ -29,8 +29,8 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     ) throws {
         try Self._validateSchema(modelTypes: modelTypes)
         // SwiftSync's per-type push bookmark (O(model types) rows). Registered so consumers never
-        // declare or manage a sync cursor.
-        let schema = Schema(modelTypes + [SyncCursorRecord.self])
+        // declare or manage a sync watermark.
+        let schema = Schema(modelTypes + [PushWatermarkRecord.self])
         self.modelContainer = try Self._recoverContainerInitialization(
             recoverOnFailure: recoverOnFailure,
             configurations: configurations,
