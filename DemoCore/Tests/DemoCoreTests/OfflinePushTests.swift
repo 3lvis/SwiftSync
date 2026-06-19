@@ -405,6 +405,40 @@ final class OfflinePushTests: XCTestCase {
             "a rejected offline-created task must survive an inbound project pull, not silently vanish")
     }
 
+    @MainActor
+    func testOfflineEditSurvivesServerSideDeleteOnReconnect() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        let taskID = DemoSeedData.SeedIDs.Tasks.sessionTimeout
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        // Offline: edit the task's title — a pending update, not yet pushed.
+        engine.isOffline = true
+        let task = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        let body = try mutating(try DemoSyncPayload(dictionary: syncContainer.export(task))) {
+            $0["title"] = "edited offline"
+        }
+        try await engine.updateTask(taskID: taskID, projectID: projectID, body: body)
+
+        // Meanwhile the server hard-deletes that task (another client / admin removed it).
+        engine.isOffline = false
+        try await apiClient.deleteTask(taskID: taskID)
+
+        // Reconnect pull: the server's task set no longer includes it. The un-pushed local edit was
+        // made after the last sync, so the prune must preserve it — the user keeps their work instead
+        // of silently losing it to a server-side delete. This is exactly what `pendingChangesSince` buys.
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        let survivor = try XCTUnwrap(
+            fetchTask(id: taskID, in: syncContainer.mainContext),
+            "an offline edit must survive a server-side delete on reconnect, not vanish")
+        XCTAssertEqual(survivor.title, "edited offline", "the local edit is preserved")
+    }
+
     private func mutating(_ body: DemoSyncPayload, _ transform: (inout [String: Any]) -> Void) throws
         -> DemoSyncPayload
     {
