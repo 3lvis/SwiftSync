@@ -1,10 +1,6 @@
 import Foundation
 import SwiftData
 
-/// SwiftSync's internal history bookmark: the `DefaultHistoryToken` of a model type's last push.
-/// Owned and persisted by SwiftSync (see `SyncCursorRecord`); never handled by the consumer.
-typealias SyncCursor = DefaultHistoryToken
-
 extension SwiftSync {
     /// The transaction author SwiftSync stamps on inbound (pull) writes, so the push side can tell
     /// server-applied changes from genuine local edits and never push pulled rows back. Local edits
@@ -84,7 +80,7 @@ extension SwiftSync {
     static func pendingChanges<Model: SyncUpdatableModel>(
         for _: Model.Type,
         in context: ModelContext,
-        since cursor: SyncCursor?
+        since cursor: DefaultHistoryToken?
     ) throws -> SyncPendingChanges where Model.SyncID == String {
         let transactions = try localTransactions(since: cursor, in: context)
         // No local changes since the cursor → nothing to push. Return before the live-row fetch so the
@@ -226,7 +222,7 @@ extension SwiftSync {
     /// Trim inbound (pull-authored) history up to and including `token`. Only inbound transactions are
     /// removed — local-authored history is the un-pushed-changes signal and a different model type may
     /// still need its own un-pushed local changes, so those are never trimmed here.
-    static func trimInboundHistory(throughInclusive token: SyncCursor, in context: ModelContext) throws {
+    static func trimInboundHistory(throughInclusive token: DefaultHistoryToken, in context: ModelContext) throws {
         let inbound = inboundAuthor
         try context.deleteHistory(
             HistoryDescriptor<DefaultHistoryTransaction>(
@@ -234,7 +230,7 @@ extension SwiftSync {
     }
 
     /// History transactions since `cursor` that were *not* authored by the inbound (pull) writer.
-    static func localTransactions(since cursor: SyncCursor?, in context: ModelContext) throws
+    static func localTransactions(since cursor: DefaultHistoryToken?, in context: ModelContext) throws
         -> [DefaultHistoryTransaction]
     {
         // A local write leaves `author` nil; in predicate/SQL semantics `nil != "inbound"` is NULL
@@ -252,7 +248,7 @@ extension SwiftSync {
     }
 
     /// The newest history token in the store, used to advance the cursor after a fully-acknowledged push.
-    static func latestToken(in context: ModelContext) throws -> SyncCursor? {
+    static func latestToken(in context: ModelContext) throws -> DefaultHistoryToken? {
         try context.fetchHistory(HistoryDescriptor<DefaultHistoryTransaction>()).last?.token
     }
 }

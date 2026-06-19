@@ -19,15 +19,15 @@ final class SyncCursorRecord {
 }
 
 extension SwiftSync {
-    static func storedCursor<Model>(for _: Model.Type, in context: ModelContext) -> SyncCursor? {
+    static func storedCursor<Model>(for _: Model.Type, in context: ModelContext) -> DefaultHistoryToken? {
         let typeName = String(reflecting: Model.self)
         var descriptor = FetchDescriptor<SyncCursorRecord>(predicate: #Predicate { $0.modelTypeName == typeName })
         descriptor.fetchLimit = 1
         guard let record = try? context.fetch(descriptor).first else { return nil }
-        return try? JSONDecoder().decode(SyncCursor.self, from: record.tokenData)
+        return try? JSONDecoder().decode(DefaultHistoryToken.self, from: record.tokenData)
     }
 
-    static func storeCursor<Model>(_ cursor: SyncCursor, for _: Model.Type, in context: ModelContext) throws {
+    static func storeCursor<Model>(_ cursor: DefaultHistoryToken, for _: Model.Type, in context: ModelContext) throws {
         let typeName = String(reflecting: Model.self)
         guard let data = try? JSONEncoder().encode(cursor) else { return }
         var descriptor = FetchDescriptor<SyncCursorRecord>(predicate: #Predicate { $0.modelTypeName == typeName })
