@@ -435,6 +435,36 @@ final class OfflinePushTests: XCTestCase {
         XCTAssertEqual(survivor.title, "edited offline", "the local edit is preserved")
     }
 
+    @MainActor
+    func testFailedOfflineEditIsNotClobberedByProjectRefresh() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        let taskID = DemoSeedData.SeedIDs.Tasks.sessionTimeout
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        // Offline: edit a synced task to an invalid (too-long) title the server will reject on push.
+        engine.isOffline = true
+        let task = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        let invalidTitle = String(repeating: "A", count: 100)
+        let body = try mutating(try DemoSyncPayload(dictionary: syncContainer.export(task))) {
+            $0["title"] = invalidTitle
+        }
+        try await engine.updateTask(taskID: taskID, projectID: projectID, body: body)
+        engine.isOffline = false
+
+        // Refresh: the drain rejects the edit, so the server still holds the pre-edit title. The pull
+        // must not overwrite the un-pushed local edit with that stale server version.
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        let row = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        XCTAssertEqual(row.title, invalidTitle, "the failed local edit must not be clobbered by the pull")
+        XCTAssertNotNil(row.syncFailureReason, "it stays flagged for the user to resolve")
+    }
+
     private func mutating(_ body: DemoSyncPayload, _ transform: (inout [String: Any]) -> Void) throws
         -> DemoSyncPayload
     {

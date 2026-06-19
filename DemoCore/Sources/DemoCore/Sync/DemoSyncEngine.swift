@@ -353,7 +353,14 @@ public final class DemoSyncEngine {
     private func syncProjectTasksData(projectID: String) async throws {
         // Push before pull: a pending change must reach the server before the pull's prune judges it,
         // else it looks like a server-side deletion. Best-effort — a failed drain must not block the refresh.
-        _ = try? await pushPendingChanges()
+        let drain = try? await pushPendingChanges()
+
+        // If the drain left a rejected change for a task in this project, defer the pull: the server
+        // still holds the pre-edit version, and applying it would clobber the un-pushed local edit (and
+        // strand its failure marker). The failures inbox resolves it; a later pull proceeds once clean.
+        if let drain, try drain.failures.contains(where: { try task(withID: $0.localID)?.projectID == projectID }) {
+            return
+        }
 
         let payload = try await apiClient.getProjectTasks(projectID: projectID)
         let userRowsBeforeSync = try localUserCount()
