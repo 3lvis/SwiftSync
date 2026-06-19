@@ -28,7 +28,9 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         configurations: ModelConfiguration...
     ) throws {
         try Self._validateSchema(modelTypes: modelTypes)
-        let schema = Schema(modelTypes)
+        // SwiftSync's per-type push bookmark (O(model types) rows). Registered so consumers never
+        // declare or manage a sync cursor.
+        let schema = Schema(modelTypes + [SyncCursorRecord.self])
         self.modelContainer = try Self._recoverContainerInitialization(
             recoverOnFailure: recoverOnFailure,
             configurations: configurations,
@@ -70,6 +72,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         let context = ModelContext(modelContainer)
+        context.author = SwiftSync.inboundAuthor
         try await SwiftSync.sync(
             payload: payload,
             as: model,
@@ -99,6 +102,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         let context = ModelContext(modelContainer)
+        context.author = SwiftSync.inboundAuthor
         try await SwiftSync.sync(
             payload: payload,
             as: model,
@@ -147,6 +151,13 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         as model: Model.Type,
         relationshipOperations: SyncRelationshipOperations
     ) async throws {
+        // This inbound apply lands on `mainContext`, so scope the inbound author to just this save and
+        // restore it — otherwise later *local* writes on mainContext would inherit the inbound author
+        // and be wrongly excluded from the push dirty-set. Safe because mainContext work is serialized
+        // on the main actor.
+        let previousAuthor = mainContext.author
+        mainContext.author = SwiftSync.inboundAuthor
+        defer { mainContext.author = previousAuthor }
         try await SwiftSync.sync(
             item: item.value,
             as: model,
@@ -176,6 +187,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         let context = ModelContext(modelContainer)
+        context.author = SwiftSync.inboundAuthor
         try await SwiftSync.sync(
             item: item,
             as: model,

@@ -102,12 +102,14 @@ public final class ProjectsViewMachine {
     }
 
     public func send(_ event: ScreenLoadEvent) {
-        loadMachine.send(event, run: { [syncEngine] in
-            try await syncEngine.syncProjects()
-            // Warm reference data (users + task states) on the home screen so it is cached for
-            // offline task creation — otherwise the new-task form has no options while offline.
-            try await syncEngine.syncTaskFormMetadata()
-        })
+        loadMachine.send(
+            event,
+            run: { [syncEngine] in
+                try await syncEngine.syncProjects()
+                // Warm reference data (users + task states) on the home screen so it is cached for
+                // offline task creation — otherwise the new-task form has no options while offline.
+                try await syncEngine.syncTaskFormMetadata()
+            })
     }
 
 }
@@ -121,7 +123,9 @@ public final class ProjectViewMachine {
         projectPublisher.rows.first(where: { $0.id == projectID })
     }
     public var tasks: [Task] {
-        taskPublisher.rows.filter { $0.isLocallyDeleted != true }
+        // Offline-deleted tasks are hard-deleted (their deletion lives in store history), so they're
+        // already absent from the publisher — no soft-delete flag to filter on.
+        taskPublisher.rows
     }
     public var contentState: ProjectDetailContentState {
         resolveProjectDetailContentState(
@@ -160,7 +164,7 @@ public final class ProjectViewMachine {
             in: syncContainer,
             sortBy: [
                 SortDescriptor(\Task.updatedAt, order: .reverse),
-                SortDescriptor(\Task.id)
+                SortDescriptor(\Task.id),
             ]
         )
         self.loadMachine = ScreenLoadMachine { error in
@@ -179,9 +183,11 @@ public final class ProjectViewMachine {
     }
 
     public func send(_ event: ScreenLoadEvent) {
-        loadMachine.send(event, run: { [syncEngine, projectID] in
-            try await syncEngine.syncProjectTasks(projectID: projectID)
-        })
+        loadMachine.send(
+            event,
+            run: { [syncEngine, projectID] in
+                try await syncEngine.syncProjectTasks(projectID: projectID)
+            })
     }
 
     public func sendDelete(_ event: DeleteEvent) {
@@ -266,9 +272,11 @@ public final class TaskViewMachine {
     }
 
     public func send(_ event: ScreenLoadEvent) {
-        loadMachine.send(event, run: { [syncEngine, taskID] in
-            try await syncEngine.syncTaskDetail(taskID: taskID)
-        })
+        loadMachine.send(
+            event,
+            run: { [syncEngine, taskID] in
+                try await syncEngine.syncTaskDetail(taskID: taskID)
+            })
     }
 }
 
@@ -339,12 +347,14 @@ public final class TaskFormSheetMachine {
                 refreshMetadataSnapshot()
             }
 
-            metadataLoadMachine.send(loadEvent, run: { [syncEngine] in
-                try await syncEngine.syncTaskFormMetadata()
-                await MainActor.run {
-                    self.refreshMetadataSnapshot()
-                }
-            })
+            metadataLoadMachine.send(
+                loadEvent,
+                run: { [syncEngine] in
+                    try await syncEngine.syncTaskFormMetadata()
+                    await MainActor.run {
+                        self.refreshMetadataSnapshot()
+                    }
+                })
 
         case .save(let mode, let draft, let onSuccess):
             applyDefaultsIfNeeded(to: draft)
@@ -484,17 +494,20 @@ public final class TaskFormSheetMachine {
 
     public func applyDefaultsIfNeeded(to draft: Task) {
         if !taskStateOptions.isEmpty,
-           (draft.state.isEmpty || !taskStateOptions.contains(where: { $0.id == draft.state })),
-           let first = taskStateOptions.first {
+            draft.state.isEmpty || !taskStateOptions.contains(where: { $0.id == draft.state }),
+            let first = taskStateOptions.first
+        {
             draft.state = first.id
             draft.stateLabel = first.label
         }
 
         if !users.isEmpty,
-           (draft.authorID.isEmpty || !users.contains(where: { $0.id == draft.authorID })) {
-            draft.authorID = draft.assigneeID.flatMap { id in
-                users.contains(where: { $0.id == id }) ? id : nil
-            } ?? users.first?.id ?? ""
+            draft.authorID.isEmpty || !users.contains(where: { $0.id == draft.authorID })
+        {
+            draft.authorID =
+                draft.assigneeID.flatMap { id in
+                    users.contains(where: { $0.id == id }) ? id : nil
+                } ?? users.first?.id ?? ""
         }
     }
 

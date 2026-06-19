@@ -41,11 +41,6 @@ public final class DemoSyncEngine {
     /// Rows the server rejected (a failure reason is set). Drives the failures inbox.
     public private(set) var failedChangeCount = 0
 
-    /// Last point local state was reconciled with the server. Edits after this are pending updates;
-    /// advanced after every inbound pull (so freshly-pulled rows aren't mistaken for local edits) and
-    /// after a successful push.
-    private var syncCursor = Date()
-
     private var inFlightOperations: Set<String> = []
 
     private let syncContainer: SyncContainer
@@ -93,10 +88,10 @@ public final class DemoSyncEngine {
 
     public func createTask(body: DemoSyncPayload, projectID: String) async throws {
         if isOffline {
-            guard try project(withID: projectID) != nil else {
+            guard let project = try project(withID: projectID) else {
                 throw SyncTaskDetailError.missingProject(projectID)
             }
-            try await syncContainer.sync(item: body, as: Task.self)
+            try applyLocalTask(body, project: project)
             refreshPendingCount()
             return
         }
@@ -111,10 +106,10 @@ public final class DemoSyncEngine {
 
     public func updateTask(taskID: String, projectID: String?, body: DemoSyncPayload) async throws {
         // A row the server doesn't have yet (offline-created, or a rejected insert) can't be PUT — it
-        // must be re-inserted. Apply locally so it stays a pending insert; online, push to (re)insert.
-        let neverSynced = (try task(withID: taskID))?.syncRemoteID == nil
+        // must be (re)sent as an upsert. Apply locally so it stays a pending change; online, push it.
+        let neverSynced = isNeverPushed(taskID)
         if isOffline || neverSynced {
-            try await syncContainer.sync(item: body, as: Task.self)
+            try applyLocalTask(body)
             if let task = try task(withID: taskID) {
                 task.updatedAt = Date()
                 task.syncFailureReason = nil  // the corrected edit gets a fresh attempt
@@ -142,9 +137,10 @@ public final class DemoSyncEngine {
 
     public func deleteTask(taskID: String, projectID: String) async throws {
         if isOffline {
+            // Hard-delete locally: the row leaves the UI at once, and its id survives in store history
+            // (identity is .preserveValueOnDeletion) so the deletion is recovered and pushed later.
             if let task = try task(withID: taskID) {
-                task.isLocallyDeleted = true
-                task.updatedAt = Date()
+                syncContainer.mainContext.delete(task)
                 try syncContainer.mainContext.save()
             }
             refreshPendingCount()
@@ -217,13 +213,33 @@ public final class DemoSyncEngine {
         let summary = try await SwiftSync.push(
             for: Task.self,
             in: syncContainer.mainContext,
-            changedSince: syncCursor,
             upload: { batch in try await self.upload(batch) }
         )
-        syncCursor = summary.cursor
         try annotateFailures(from: summary)
         refreshPendingCount()
         return summary
+    }
+
+    /// Apply a payload to the local store as a *local* edit (default author), so it's tracked as a
+    /// pending change — unlike `syncContainer.sync(item:)`, which stamps writes as inbound (pulled).
+    /// Reuses the `@Syncable`-generated `make`/`apply`, so no field mapping is duplicated here.
+    private func applyLocalTask(_ body: DemoSyncPayload, project: Project? = nil) throws {
+        let payload = SyncPayload(values: body.toSyncPayloadDictionary(), keyStyle: syncContainer.keyStyle)
+        let context = syncContainer.mainContext
+        if let id = payload.value(for: "id", as: String.self), let existing = try task(withID: id) {
+            _ = try existing.apply(payload)
+        } else {
+            let created = try Task.make(from: payload)
+            context.insert(created)
+            if let project { created.project = project }
+        }
+        try context.save()
+    }
+
+    /// A task whose only history is a never-pushed local insert (it's in the pending-insert set).
+    private func isNeverPushed(_ taskID: String) -> Bool {
+        let pending = try? SwiftSync.pendingChanges(for: Task.self, in: syncContainer.mainContext)
+        return pending?.inserts.contains(taskID) ?? false
     }
 
     /// Reflect a push's outcome onto the inbox: stamp `syncFailureReason` on each rejected row and
@@ -260,11 +276,11 @@ public final class DemoSyncEngine {
             ])
         }
         for localID in batch.deletes {
-            guard let task = try task(withID: localID) else { continue }
-            let data = syncContainer.export(task)
+            // The row is already hard-deleted locally — its id is recovered from store history — so the
+            // delete can't fetch the gone task. Stamp the deletion time now for the server's LWW check.
             operations.append([
                 "operation": "delete", "type": "tasks", "localId": localID,
-                "updatedAt": data["updated_at"] ?? "",
+                "updatedAt": syncContainer.dateFormatter.string(from: Date()),
             ])
         }
 
@@ -275,27 +291,27 @@ public final class DemoSyncEngine {
             let operation = result["operation"] as? String
             let status = result["status"] as? String
             let localID = result["localId"] as? String
-            let remoteID = result["remoteId"] as? String
             switch (operation, status) {
             case ("upsert", "applied"), ("upsert", "stale"):
-                // An applied upsert resolves both inserts (stamp the server-minted remoteId) and
-                // updates; SwiftSync scopes each field to its own batch slice, so populating both is
-                // safe.
-                if let localID, let remoteID { response.assignedRemoteIDs[localID] = remoteID }
-                if let localID { response.confirmedUpdateLocalIDs.insert(localID) }
+                // Under the collapsed id model the localId is the identity the server adopts, so an
+                // applied upsert just acknowledges the row — there's no server id to map home.
+                if let localID { response.confirmedLocalIDs.insert(localID) }
                 if status == "stale", let server = result["server"] as? [String: Any] {
                     try? await syncContainer.sync(
                         item: DemoSyncPayload(dictionary: server), as: Task.self)
                 }
             case ("delete", "applied"):
-                if let localID { response.confirmedDeleteLocalIDs.insert(localID) }
+                if let localID { response.confirmedLocalIDs.insert(localID) }
             case ("delete", "stale"):
-                // The server has a newer edit — the delete lost LWW. Abandon the tombstone and adopt
-                // the server's state so the row reappears with the winning version (no re-send loop).
-                if let localID, let server = result["server"] as? [String: Any] {
-                    try? await syncContainer.sync(
-                        item: DemoSyncPayload(dictionary: server), as: Task.self)
-                    if let task = try task(withID: localID) { task.isLocallyDeleted = false }
+                // The server has a newer edit — the delete lost LWW. Adopt the server's state so the
+                // row reappears with the winning version (the inbound sync re-creates the hard-deleted
+                // row); acknowledge the tombstone so it isn't re-sent.
+                if let localID {
+                    if let server = result["server"] as? [String: Any] {
+                        try? await syncContainer.sync(
+                            item: DemoSyncPayload(dictionary: server), as: Task.self)
+                    }
+                    response.confirmedLocalIDs.insert(localID)
                 }
             default:
                 // Bubble the backend's rejection up as this app's own error. SwiftSync carries it
@@ -322,13 +338,14 @@ public final class DemoSyncEngine {
     }
 
     private func refreshPendingCount() {
-        let pending = try? SwiftSync.pendingChanges(
-            for: Task.self, in: syncContainer.mainContext, changedSince: syncCursor)
+        let pending = try? SwiftSync.pendingChanges(for: Task.self, in: syncContainer.mainContext)
         // A rejected row stays pending in the queue (pure-bubble) but reads as *failed*, not *pending* —
         // otherwise the same task is counted twice ("1 pending, 1 failed"). Pending is the queue minus
-        // whatever is currently surfaced in the failures inbox.
-        let pendingRows = pending.map { $0.inserts + $0.updates + $0.deletes } ?? []
-        pendingChangeCount = pendingRows.filter { $0.syncFailureReason == nil }.count
+        // whatever is currently surfaced in the failures inbox. A deleted row is gone from the store, so
+        // it can't carry a failure reason — count it as pending regardless.
+        let pendingIDs = pending.map { $0.inserts + $0.updates + $0.deletes } ?? []
+        let failedIDs = Set(failedTasks().map(\.id))
+        pendingChangeCount = pendingIDs.filter { !failedIDs.contains($0) }.count
 
         let failed = try? syncContainer.mainContext.fetch(
             FetchDescriptor<Task>(predicate: #Predicate { $0.syncFailureReason != nil }))
@@ -347,7 +364,7 @@ public final class DemoSyncEngine {
     /// edited row (abandoning the local edit) and clear its failure.
     public func discardFailedChange(taskID: String) async throws {
         guard let task = try task(withID: taskID) else { return }
-        if task.syncRemoteID == nil {
+        if isNeverPushed(taskID) {
             syncContainer.mainContext.delete(task)
             try syncContainer.mainContext.save()
         } else {
@@ -360,10 +377,9 @@ public final class DemoSyncEngine {
         refreshPendingCount()
     }
 
-    /// After an inbound pull, advance the cursor so freshly-pulled rows aren't mistaken for local
-    /// edits, and refresh the pending count. (`syncRemoteID` is populated from `remote_id` on import.)
+    /// After an inbound pull, refresh the pending count. Freshly-pulled rows aren't mistaken for local
+    /// edits because the pull stamps them with the inbound author, which the push side filters out.
     private func markPulled() {
-        syncCursor = Date()
         refreshPendingCount()
     }
 
