@@ -302,6 +302,50 @@ final class OfflinePushTests: XCTestCase {
         XCTAssertEqual(edited.project?.id, projectID, "the edit must not drop the project link")
     }
 
+    /// Only `Task` is marked offline, yet a `Task`↔`User` relationship edit made offline (assigning
+    /// reviewers) round-trips: assigning a person is a local *Task* update — the linked `User` is
+    /// pull-only and never needs to be offline. After reconnect+push the server has the new reviewers,
+    /// proven by a fresh pull bringing the same set back.
+    @MainActor
+    func testOfflineReviewerAssignmentRoundTripsThroughPush() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("offline-people-\(UUID().uuidString).sqlite")
+        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
+        let backend = try DemoServerSimulator(databaseURL: url, seedData: DemoSeedData.generate())
+        let apiClient = FakeDemoAPIClient(backend: backend)
+        let syncContainer = try makeSyncContainer()
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        let taskID = DemoSeedData.SeedIDs.Tasks.sessionTimeout
+        try await engine.syncProjectTasks(projectID: projectID)
+        try await engine.syncTaskFormMetadata()  // ensure the users to assign are cached locally
+
+        let newReviewers = [DemoSeedData.SeedIDs.Users.miaPatel, DemoSeedData.SeedIDs.Users.ethanLee]
+
+        // Offline: assign people. Mutates the Task (its reviewers + updatedAt) → a pending Task update.
+        engine.isOffline = true
+        try await engine.replaceTaskReviewers(taskID: taskID, projectID: projectID, reviewerIDs: newReviewers)
+        let offline = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        XCTAssertEqual(Set(offline.reviewers.map(\.id)), Set(newReviewers), "applied locally while offline")
+        XCTAssertEqual(engine.pendingChangeCount, 1, "the relationship edit is a pending Task update")
+
+        // Reconnect + push: reviewer_ids travel in the upsert and the server accepts it.
+        engine.isOffline = false
+        let pushResult = try await engine.pushPendingChanges()
+        let summary = try XCTUnwrap(pushResult)
+        XCTAssertTrue(summary.failures.isEmpty)
+        XCTAssertEqual(engine.pendingChangeCount, 0, "the assignment was acknowledged")
+
+        // Prove the server stored it: a fresh pull (which overwrites local reviewers from the server)
+        // brings the same set back.
+        try await engine.syncTaskDetail(taskID: taskID)
+        let pulled = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        XCTAssertEqual(
+            Set(pulled.reviewers.map(\.id)), Set(newReviewers),
+            "the offline assignment round-tripped: pushed to the server and pulled back")
+    }
+
     @MainActor
     func testPushWhileOfflineIsANoOp() async throws {
         let seed = DemoSeedData.generate()
