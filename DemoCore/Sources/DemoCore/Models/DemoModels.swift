@@ -96,6 +96,9 @@ public final class Task {
     @NotExport
     public var isLocallyDeleted: Bool?
 
+    // Demo-owned: the engine annotates this from `summary.failures` after a push and clears it on a
+    // later success, so the failures inbox is a query for rows where it's set. SwiftSync itself
+    // persists no failure state — failures bubble up via `SyncPushSummary.failures`.
     @NotExport
     public var syncFailureReason: String?
 

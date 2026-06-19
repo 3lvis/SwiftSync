@@ -3,6 +3,13 @@ import Observation
 import SwiftData
 @preconcurrency import SwiftSync
 
+/// The backend's rejection of a pushed row, bubbled up through `SyncPushFailure.error`. This is the
+/// app's own error type — SwiftSync carries it verbatim and never interprets it.
+public struct DemoUploadRejection: LocalizedError, Sendable {
+    public let message: String
+    public var errorDescription: String? { message }
+}
+
 @MainActor
 @Observable
 public final class DemoSyncEngine {
@@ -214,8 +221,25 @@ public final class DemoSyncEngine {
             upload: { batch in try await self.upload(batch) }
         )
         syncCursor = summary.cursor
+        try annotateFailures(from: summary)
         refreshPendingCount()
         return summary
+    }
+
+    /// Reflect a push's outcome onto the inbox: stamp `syncFailureReason` on each rejected row and
+    /// clear it from any row that no longer fails (it succeeded, or its corrected edit went through).
+    /// SwiftSync persists nothing — the failures inbox is entirely this app's concern.
+    private func annotateFailures(from summary: SyncPushSummary) throws {
+        let reasonsByLocalID = Dictionary(
+            summary.failures.map { ($0.localID, $0.error.localizedDescription) },
+            uniquingKeysWith: { first, _ in first })
+        for task in failedTasks() where reasonsByLocalID[task.id] == nil {
+            task.syncFailureReason = nil
+        }
+        for (localID, reason) in reasonsByLocalID {
+            if let task = try task(withID: localID) { task.syncFailureReason = reason }
+        }
+        try syncContainer.mainContext.save()
     }
 
     /// Serialize the pending batch into the `/sync/upload` operation list, POST it once, and map the
@@ -274,11 +298,15 @@ public final class DemoSyncEngine {
                     if let task = try task(withID: localID) { task.isLocallyDeleted = false }
                 }
             default:
+                // Bubble the backend's rejection up as this app's own error. SwiftSync carries it
+                // verbatim in `summary.failures` without interpreting it; the engine reads it back to
+                // annotate the inbox.
                 response.failures.append(
                     SyncPushFailure(
                         localID: localID ?? "",
                         operation: operation == "delete" ? .delete : .update,
-                        message: (result["message"] as? String) ?? "rejected"))
+                        error: DemoUploadRejection(
+                            message: (result["message"] as? String) ?? "rejected")))
             }
         }
         return response
@@ -296,7 +324,11 @@ public final class DemoSyncEngine {
     private func refreshPendingCount() {
         let pending = try? SwiftSync.pendingChanges(
             for: Task.self, in: syncContainer.mainContext, changedSince: syncCursor)
-        pendingChangeCount = pending.map { $0.inserts.count + $0.updates.count + $0.deletes.count } ?? 0
+        // A rejected row stays pending in the queue (pure-bubble) but reads as *failed*, not *pending* —
+        // otherwise the same task is counted twice ("1 pending, 1 failed"). Pending is the queue minus
+        // whatever is currently surfaced in the failures inbox.
+        let pendingRows = pending.map { $0.inserts + $0.updates + $0.deletes } ?? []
+        pendingChangeCount = pendingRows.filter { $0.syncFailureReason == nil }.count
 
         let failed = try? syncContainer.mainContext.fetch(
             FetchDescriptor<Task>(predicate: #Predicate { $0.syncFailureReason != nil }))

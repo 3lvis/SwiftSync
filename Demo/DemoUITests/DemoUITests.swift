@@ -418,6 +418,7 @@ final class DemoUITests: XCTestCase {
 
         let discard = app.buttons["failure.discard.\(DemoSeedTaskID.sessionTimeout)"]
         XCTAssertTrue(discard.waitForExistence(timeout: 2), "the failed task is listed with its reason")
+
         discard.tap()
 
         // Discarding resolves the failure: the row leaves the inbox.

@@ -29,10 +29,10 @@ git history is the memory.
 
 1. [x] ~~Remove `SyncContext` + local-write `sync(item:)`~~ — **done** (single-object `sync(item:)` applies on main, bulk off-main; `SyncContext` deleted)
 2. [ ] Macro-generate `SyncOfflineModel` — the flagship "magic" move
-3. [ ] Drop `syncFailureReason` from the protocol — rides pure-bubble (#624)
+3. [x] ~~Drop `syncFailureReason` from the protocol~~ — **done** (#624: removed from `SyncOfflineModel`)
 4. [ ] Generalize the inbound LWW timestamp key — convention today, macro later
 5. [ ] Tighten the push response seam (5 public structs)
-6. [ ] Unify the three error types into `SyncError` — rides #624
+6. [x] ~~Unify the three error types into `SyncError`~~ — **done** (#624: `SchemaValidationError` + `ObjectiveCInitializationExceptionError` folded into `SyncError`)
 7. [ ] Demote the reactive publishers to `internal`
 
 ---
@@ -100,21 +100,12 @@ coordination with #3 (don't generate a field that's being removed).
 
 ---
 
-## 3. Drop `syncFailureReason` from `SyncOfflineModel`
+## 3. Drop `syncFailureReason` from `SyncOfflineModel` — ✅ done (#624)
 
-**Context.** `syncFailureReason` is library-persisted per-row failure state. The pure-bubble redesign
-(PR #624, not yet merged) establishes that **the library persists no per-row failure state** — failures
-bubble up via `SyncPushSummary.failures` and the *consumer* owns any inbox.
-
-**Target.** Remove the requirement from the protocol. A consumer that wants a failures inbox annotates
-its own demo-owned field — not a SwiftSync requirement.
-
-**Dependency.** Rides #624. When that merges, this requirement is gone. **Coordinate with #2** — do not
-macro-generate a field that #624 is deleting.
-
-**Decision needed.** Merge order of #624 relative to the #2 macro work.
-
-**Scope/risk.** Mostly carried by #624; the macro work in #2 must assume it's gone.
+Pure-bubble (#624) removed `syncFailureReason` from `SyncOfflineModel`: the library persists no per-row
+failure state — failures bubble up via `SyncPushSummary.failures` and the consumer owns any inbox (the
+demo annotates its own `@NotExport` field). One fewer hand-written protocol requirement. **Note for #2:**
+the macro must not generate this field — it's gone.
 
 ---
 
@@ -154,16 +145,11 @@ clear reduction.
 
 ---
 
-## 6. Unify the three error types into `SyncError`
+## 6. Unify the three error types into `SyncError` — ✅ done (#624)
 
-**Context.** `SyncError` + `SchemaValidationError` + `ObjectiveCInitializationExceptionError` are all
-public on `master`. One error currency is enough.
-
-**Target.** Collapse to `SyncError` (the #624 branch already does this).
-
-**Dependency.** Rides #624.
-
-**Scope/risk.** Surface *reduction*; low risk; carried by #624.
+Pure-bubble (#624) folded `SchemaValidationError` and `ObjectiveCInitializationExceptionError` into
+`SyncError` (`.schemaValidation` / `.containerInitialization` cases) — one error currency, −2 public
+structs.
 
 ---
 
