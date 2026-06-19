@@ -89,7 +89,9 @@
 
 ## Pre-Commit Checkpoint
 
-- **Do not commit unless the user explicitly asks.**
+- This is a personally-responsible repo (`3lvis` remote), so the global rule applies: commit and open a
+  **draft** PR proactively once a branch is a complete, green unit — no need to ask first or show the
+  title/body. **Never merge without an explicit ask.**
 - Before every commit:
   - run `git status --short`
   - confirm only intended files are staged
