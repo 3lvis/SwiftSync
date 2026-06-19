@@ -6,7 +6,7 @@ import SwiftData
 /// this records the last-pushed `DefaultHistoryToken` so the pull can tell un-pushed local edits from
 /// already-pushed ones. O(model types) rows, written once per push — no per-row, no pull-path cost.
 @Model
-final class PushWatermarkRecord {
+final class PushHistoryTokenRecord {
     @Attribute(.unique) var modelTypeName: String
     /// A JSON-encoded `DefaultHistoryToken`. Stored as `Data` because the token is a `Codable` value,
     /// not a `@Model`, so SwiftData can't persist it directly.
@@ -19,25 +19,27 @@ final class PushWatermarkRecord {
 }
 
 extension SwiftSync {
-    static func pushWatermark<Model>(for _: Model.Type, in context: ModelContext) -> DefaultHistoryToken? {
+    static func lastPushedHistoryToken<Model>(for _: Model.Type, in context: ModelContext) -> DefaultHistoryToken? {
         let typeName = String(reflecting: Model.self)
-        var descriptor = FetchDescriptor<PushWatermarkRecord>(predicate: #Predicate { $0.modelTypeName == typeName })
+        var descriptor = FetchDescriptor<PushHistoryTokenRecord>(predicate: #Predicate { $0.modelTypeName == typeName })
         descriptor.fetchLimit = 1
         guard let record = try? context.fetch(descriptor).first else { return nil }
         return try? JSONDecoder().decode(DefaultHistoryToken.self, from: record.tokenData)
     }
 
-    static func setPushWatermark<Model>(_ watermark: DefaultHistoryToken, for _: Model.Type, in context: ModelContext)
+    static func setLastPushedHistoryToken<Model>(
+        _ token: DefaultHistoryToken, for _: Model.Type, in context: ModelContext
+    )
         throws
     {
         let typeName = String(reflecting: Model.self)
-        guard let data = try? JSONEncoder().encode(watermark) else { return }
-        var descriptor = FetchDescriptor<PushWatermarkRecord>(predicate: #Predicate { $0.modelTypeName == typeName })
+        guard let data = try? JSONEncoder().encode(token) else { return }
+        var descriptor = FetchDescriptor<PushHistoryTokenRecord>(predicate: #Predicate { $0.modelTypeName == typeName })
         descriptor.fetchLimit = 1
         if let record = try context.fetch(descriptor).first {
             record.tokenData = data
         } else {
-            context.insert(PushWatermarkRecord(modelTypeName: typeName, tokenData: data))
+            context.insert(PushHistoryTokenRecord(modelTypeName: typeName, tokenData: data))
         }
         try context.save()
     }

@@ -28,9 +28,9 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         configurations: ModelConfiguration...
     ) throws {
         try Self._validateSchema(modelTypes: modelTypes)
-        // SwiftSync's per-type push bookmark (O(model types) rows). Registered so consumers never
-        // declare or manage a sync watermark.
-        let schema = Schema(modelTypes + [PushWatermarkRecord.self])
+        // SwiftSync's per-type last-pushed history token (O(model types) rows). Registered so consumers
+        // never declare or manage it.
+        let schema = Schema(modelTypes + [PushHistoryTokenRecord.self])
         self.modelContainer = try Self._recoverContainerInitialization(
             recoverOnFailure: recoverOnFailure,
             configurations: configurations,

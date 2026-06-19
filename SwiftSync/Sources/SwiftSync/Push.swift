@@ -54,8 +54,8 @@ public struct SyncPushResponse: Sendable {
     }
 }
 
-/// Result of a push pass. SwiftSync advances its own per-type watermark internally on a fully-acknowledged
-/// push, so there is no watermark for the caller to persist — just the counts and any per-row failures.
+/// Result of a push pass. SwiftSync advances its own per-type token internally on a fully-acknowledged
+/// push, so there is no token for the caller to persist — just the counts and any per-row failures.
 public struct SyncPushSummary: Sendable {
     public let insertedCount: Int
     public let updatedCount: Int
@@ -65,7 +65,7 @@ public struct SyncPushSummary: Sendable {
 
 extension SwiftSync {
     /// The local changes pending a push, read straight from SwiftData history since SwiftSync's stored
-    /// per-type watermark: transactions authored by anyone other than the inbound (pull) author. A row
+    /// per-type token: transactions authored by anyone other than the inbound (pull) author. A row
     /// inserted then edited collapses to a single insert; a row deleted after editing collapses to a
     /// delete (its `localID` recovered from the history tombstone — mark the identity
     /// `.preserveValueOnDeletion`).
@@ -74,16 +74,17 @@ extension SwiftSync {
         in context: ModelContext
     ) throws -> SyncPendingChanges where Model.SyncID == String {
         try requireOfflineCapable(Model.self, in: context)
-        return try pendingChanges(for: Model.self, in: context, since: pushWatermark(for: Model.self, in: context))
+        return try pendingChanges(
+            for: Model.self, in: context, since: lastPushedHistoryToken(for: Model.self, in: context))
     }
 
     static func pendingChanges<Model: SyncUpdatableModel>(
         for _: Model.Type,
         in context: ModelContext,
-        since watermark: DefaultHistoryToken?
+        since token: DefaultHistoryToken?
     ) throws -> SyncPendingChanges where Model.SyncID == String {
-        let transactions = try localTransactions(since: watermark, in: context)
-        // No local changes since the watermark → nothing to push. Return before the live-row fetch so the
+        let transactions = try localTransactions(since: token, in: context)
+        // No local changes since the token → nothing to push. Return before the live-row fetch so the
         // common "nothing pending" case is O(history query), not O(table size).
         guard !transactions.isEmpty else {
             return SyncPendingChanges(inserts: [], updates: [], deletes: [])
@@ -149,11 +150,11 @@ extension SwiftSync {
         return SyncPendingChanges(inserts: inserts, updates: updates, deletes: deletes)
     }
 
-    /// Drive one push: read pending changes from history (since SwiftSync's stored per-type watermark),
+    /// Drive one push: read pending changes from history (since the model type's last-pushed token),
     /// hand their ids to the app's `upload` closure (the app owns the network call), then — only when
-    /// *every* pending change was acknowledged — advance the stored watermark to the latest token and trim
-    /// the now-redundant inbound history. SwiftSync writes no per-row state on push; an unacknowledged
-    /// change simply stays past the watermark and is re-detected next push.
+    /// *every* pending change was acknowledged — advance the last-pushed token to the current history
+    /// head and trim the now-redundant inbound history. SwiftSync writes no per-row state on push; an
+    /// unacknowledged change simply stays past the token and is re-detected next push.
     @discardableResult
     public static func push<Model: SyncUpdatableModel>(
         for _: Model.Type,
@@ -162,8 +163,8 @@ extension SwiftSync {
         upload: (SyncPushBatch) async throws -> SyncPushResponse
     ) async throws -> SyncPushSummary where Model.SyncID == String {
         try requireOfflineCapable(Model.self, in: context)
-        let watermark = pushWatermark(for: Model.self, in: context)
-        let pending = try pendingChanges(for: Model.self, in: context, since: watermark)
+        let token = lastPushedHistoryToken(for: Model.self, in: context)
+        let pending = try pendingChanges(for: Model.self, in: context, since: token)
         guard !pending.isEmpty else {
             return SyncPushSummary(insertedCount: 0, updatedCount: 0, deletedCount: 0, failures: [])
         }
@@ -175,7 +176,7 @@ extension SwiftSync {
         let acknowledgedEverything = response.failures.isEmpty && allIDs.isSubset(of: response.confirmedLocalIDs)
 
         if acknowledgedEverything, let latest = try latestHistoryToken(in: context) {
-            try setPushWatermark(latest, for: Model.self, in: context)
+            try setLastPushedHistoryToken(latest, for: Model.self, in: context)
             try? trimInboundHistory(throughInclusive: latest, in: context)
         }
 
@@ -199,13 +200,14 @@ extension SwiftSync {
     }
 
     /// The persistent identifiers of rows with **un-pushed local changes** for `Model` — local-authored
-    /// history since the stored watermark. The pull uses this to preserve never-pushed local inserts from
+    /// history since the stored token. The pull uses this to preserve never-pushed local inserts from
     /// delete-missing and to keep a newer local edit from being clobbered (last-writer-wins). Reads
     /// persistent ids (not localIDs), so it needs no `SyncID == String` constraint.
     static func locallyDirtyPersistentIDs<Model: SyncUpdatableModel>(
         for _: Model.Type, in context: ModelContext
     ) throws -> Set<PersistentIdentifier> {
-        let transactions = try localTransactions(since: pushWatermark(for: Model.self, in: context), in: context)
+        let transactions = try localTransactions(
+            since: lastPushedHistoryToken(for: Model.self, in: context), in: context)
         var ids: Set<PersistentIdentifier> = []
         for transaction in transactions {
             for change in transaction.changes {
@@ -229,17 +231,17 @@ extension SwiftSync {
                 predicate: #Predicate { $0.token <= token && $0.author == inbound }))
     }
 
-    /// History transactions since `watermark` that were *not* authored by the inbound (pull) writer.
-    static func localTransactions(since watermark: DefaultHistoryToken?, in context: ModelContext) throws
+    /// History transactions since `token` that were *not* authored by the inbound (pull) writer.
+    static func localTransactions(since token: DefaultHistoryToken?, in context: ModelContext) throws
         -> [DefaultHistoryTransaction]
     {
         // A local write leaves `author` nil; in predicate/SQL semantics `nil != "inbound"` is NULL
         // (not true), which would wrongly exclude local changes. Match "nil OR not inbound" explicitly.
         let inbound = inboundAuthor
         var descriptor = HistoryDescriptor<DefaultHistoryTransaction>()
-        if let watermark {
+        if let token {
             descriptor.predicate = #Predicate {
-                $0.token > watermark && ($0.author == nil || $0.author != inbound)
+                $0.token > token && ($0.author == nil || $0.author != inbound)
             }
         } else {
             descriptor.predicate = #Predicate { $0.author == nil || $0.author != inbound }
@@ -247,7 +249,7 @@ extension SwiftSync {
         return try context.fetchHistory(descriptor)
     }
 
-    /// The newest history token in the store, used to advance the watermark after a fully-acknowledged push.
+    /// The newest history token in the store, used to advance the token after a fully-acknowledged push.
     static func latestHistoryToken(in context: ModelContext) throws -> DefaultHistoryToken? {
         try context.fetchHistory(HistoryDescriptor<DefaultHistoryTransaction>()).last?.token
     }
