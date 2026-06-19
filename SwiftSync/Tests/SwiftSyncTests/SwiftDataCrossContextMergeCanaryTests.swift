@@ -21,6 +21,12 @@ final class SwiftDataCrossContextMergeCanaryTests: XCTestCase {
     /// refresh an already-registered instance on another (e.g. the `mainContext` instance a SwiftUI view
     /// holds). That gap is the only reason single-object `sync(item:)` applies on the main thread.
     ///
+    /// This is the same problem the predecessor Core Data `Sync` library solved with one call —
+    /// `mainContext.mergeChanges(fromContextDidSave:)` on `NSManagedObjectContextDidSave` (its
+    /// `DataStack`, commit `f8b0f5a0`). `mergeChanges` is `NSManagedObjectContext` API that `ModelContext`
+    /// does not expose (nor `automaticallyMergesChangesFromParent`, nor a public `refresh`), so the
+    /// one-line fix can't be ported — this canary waits for SwiftData to ship an equivalent.
+    ///
     /// This asserts the behavior we *want* — a cross-context save promptly reflected on the registered
     /// instance — so it is **red on the PR today**. The day a newer SwiftData merges promptly, CI on the
     /// PR turns **green**: the signal to merge this and move single-object (and inbound) sync off the
