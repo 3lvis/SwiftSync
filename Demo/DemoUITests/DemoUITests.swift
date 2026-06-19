@@ -51,10 +51,8 @@ private enum DemoSeedTaskID {
 }
 
 final class DemoUITests: XCTestCase {
-    /// How long to wait for the task form to dismiss after a successful save. A save that edits
-    /// reviewers/watchers fans out to several simulated-latency round-trips, so the old 0.5s budget was
-    /// too tight and failed even though the save is correct (~0.6–0.9s to dismiss). 1s clears it with
-    /// margin while still asserting the form actually closes.
+    /// A people-edit save runs three sequential refresh cycles, so the form dismisses just past the old
+    /// 0.5s budget (which flaked); 1s asserts the form closes without re-introducing the flake.
     private let saveDismissTimeout: TimeInterval = 1
 
     override func setUpWithError() throws {
