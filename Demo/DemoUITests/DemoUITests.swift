@@ -51,6 +51,10 @@ private enum DemoSeedTaskID {
 }
 
 final class DemoUITests: XCTestCase {
+    /// A people-edit save runs three sequential refresh cycles, so the form dismisses just past the old
+    /// 0.5s budget (which flaked); 1s asserts the form closes without re-introducing the flake.
+    private let saveDismissTimeout: TimeInterval = 1
+
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
@@ -91,7 +95,7 @@ final class DemoUITests: XCTestCase {
         replaceText(in: app.textFields["task-form.description"], with: "   ", app: app)
         app.buttons["task-form.save"].tap()
 
-        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 0.5))
+        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout))
         XCTAssertEqual(detailElement(app, id: "task.title").label, updatedTitle)
         XCTAssertEqual(detailElement(app, id: "task.description").label, normalizedDescription)
 
@@ -157,7 +161,7 @@ final class DemoUITests: XCTestCase {
         app.buttons["task-form.items.1.delete"].tap()
         app.buttons["task-form.save"].tap()
 
-        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 0.5))
+        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout))
         XCTAssertTrue(findAfterScrolling(app.staticTexts[renamedItemTitle], in: app))
         XCTAssertTrue(findAfterScrolling(app.staticTexts[addedItemTitle], in: app))
         XCTAssertFalse(app.staticTexts[deletedItemTitle].exists)
@@ -181,7 +185,7 @@ final class DemoUITests: XCTestCase {
         addPerson(app, role: "watchers", userID: DemoSeedUserID.sofiaGarcia)
         app.buttons["task-form.save"].tap()
 
-        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 0.5))
+        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout))
         XCTAssertEqual(detailElement(app, id: "task.assignee").label, "Mia Patel")
 
         goBack(app)
@@ -214,7 +218,7 @@ final class DemoUITests: XCTestCase {
         tapAfterScrolling(app.buttons["task-form.assignee.option.\(DemoSeedUserID.miaPatel)"], in: app)
         app.buttons["task-form.save"].tap()
 
-        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 0.5))
+        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout))
         XCTAssertEqual(detailElement(app, id: "task.assignee").label, "Mia Patel")
 
         goBack(app)
@@ -249,7 +253,7 @@ final class DemoUITests: XCTestCase {
         replaceText(in: app.textFields["task-form.title"], with: draftTitle, app: app)
         app.buttons["task-form.cancel"].tap()
 
-        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 0.5))
+        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout))
         XCTAssertFalse(app.staticTexts[draftTitle].exists)
     }
 
@@ -272,7 +276,7 @@ final class DemoUITests: XCTestCase {
         replaceText(in: app.textFields["task-form.title"], with: editedTitle, app: app)
         app.buttons["task-form.cancel"].tap()
 
-        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 0.5))
+        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout))
         XCTAssertEqual(detailElement(app, id: "task.title").label, originalTitle)
 
         goBack(app)
@@ -300,7 +304,7 @@ final class DemoUITests: XCTestCase {
         tapAfterScrolling(app.buttons["task-form.watchers.delete.\(DemoSeedUserID.ethanLee)"], in: app)
         app.buttons["task-form.save"].tap()
 
-        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 0.5))
+        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout))
 
         goBack(app)
         openTask(app, id: DemoSeedTaskID.duplicatePushFix)
