@@ -105,7 +105,7 @@ extension SwiftSync {
                 try throwIfCancelled()
                 syncProfile("delete-missing") {
                     for (key, row) in index where !seenKeys.contains(key) {
-                        if inboundPruneShouldPreserve(row, pendingChangesSince: nil) { continue }
+                        if inboundPruneShouldPreserve(row) { continue }
                         context.delete(row)
                         changed = true
                     }
@@ -337,7 +337,6 @@ extension SwiftSync {
         relationship: ReferenceWritableKeyPath<Model, Parent?>,
         keyStyle: KeyStyle = .snakeCase,
         relationshipOperations: SyncRelationshipOperations = .all,
-        pendingChangesSince: Date? = nil,
         isolation: isolated (any Actor)? = #isolation
     ) async throws {
         try await sync(
@@ -348,8 +347,7 @@ extension SwiftSync {
             parentRelationship: relationship,
             isGlobal: syncIdentityHasUniqueAttribute(Model.self),
             keyStyle: keyStyle,
-            relationshipOperations: relationshipOperations,
-            pendingChangesSince: pendingChangesSince
+            relationshipOperations: relationshipOperations
         )
     }
 
@@ -362,7 +360,6 @@ extension SwiftSync {
         isGlobal: Bool,
         keyStyle: KeyStyle,
         relationshipOperations: SyncRelationshipOperations,
-        pendingChangesSince: Date?,
         isolation: isolated (any Actor)? = #isolation
     ) async throws {
         let lease = await acquireSyncLease(for: context)
@@ -570,7 +567,7 @@ extension SwiftSync {
                         if seenKeys.contains(key) {
                             continue
                         }
-                        if inboundPruneShouldPreserve(row, pendingChangesSince: pendingChangesSince) {
+                        if inboundPruneShouldPreserve(row) {
                             continue
                         }
                         context.delete(row)
@@ -597,21 +594,17 @@ extension SwiftSync {
         }
     }
 
-    /// Whether an inbound full-set pull's `delete-missing` pass must keep `row` even though the
-    /// server's payload omitted it — the inbound/outbound boundary. A `SyncOfflineModel` row the server
-    /// has never acknowledged (`syncRemoteID == nil`) was never created server-side, so its absence is
-    /// expected, not a deletion; and a row edited locally since the last sync (`syncUpdatedAt >
-    /// pendingChangesSince`) carries an un-pushed change an inbound prune would silently destroy. A
-    /// pending tombstone is *not* preserved: the server omitting it means the deletion already agrees,
-    /// so pruning is correct. Non-offline models are never preserved (no outbound queue to protect).
-    private static func inboundPruneShouldPreserve<Model: SyncUpdatableModel>(
-        _ row: Model, pendingChangesSince: Date?
-    ) -> Bool {
+    /// Whether a full-set pull's `delete-missing` pass must keep `row` even though the server's payload
+    /// omitted it. This is a correctness invariant of reconciliation, not offline policy: a
+    /// `SyncOfflineModel` row with no `syncRemoteID` was never created server-side, so it isn't part of
+    /// the server's namespace and its absence carries no "deleted" signal — pruning it would destroy a
+    /// never-uploaded local row. (Local *edits* to already-synced rows are kept safe by the consumer
+    /// pushing before pulling, so they're present in the pull and never judged here.) A local tombstone
+    /// is pruned: the server omitting it agrees with the intended deletion.
+    private static func inboundPruneShouldPreserve<Model: SyncUpdatableModel>(_ row: Model) -> Bool {
         guard let offline = row as? any SyncOfflineModel else { return false }
         if offline.syncIsDeleted { return false }
-        if offline.syncRemoteID == nil { return true }
-        if let pendingChangesSince, offline.syncUpdatedAt > pendingChangesSince { return true }
-        return false
+        return offline.syncRemoteID == nil
     }
 
     private static func resolveParent<Parent: PersistentModel>(

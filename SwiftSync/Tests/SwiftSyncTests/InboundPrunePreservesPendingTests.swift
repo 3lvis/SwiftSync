@@ -103,54 +103,26 @@ final class InboundPrunePreservesPendingTests: XCTestCase {
     }
 
     @MainActor
-    func testParentScopedPullKeepsLocallyEditedRowWhenCursorGiven() async throws {
+    func testParentScopedPullStillPrunesSyncedServerDeletedRow() async throws {
         let container = try ModelContainer(
             for: PruneProject.self, PruneTask.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         let context = ModelContext(container)
 
-        let cursor = Date(timeIntervalSince1970: 1_000)
         let project = PruneProject(id: "p1")
         context.insert(project)
-        // A synced row with a local edit *after* the cursor — a pending update not yet pushed.
+        // A row the server knows about (`remoteID` set). The server omits it → it was genuinely deleted
+        // server-side, so the prune must still remove it. (A local edit to such a row is kept safe by
+        // pushing before pulling — it would be present in the payload — not by this prune.)
         context.insert(
-            PruneTask(
-                id: "t-edited", title: "local edit", remoteID: "r1",
-                updatedAt: Date(timeIntervalSince1970: 2_000), project: project))
-        try context.save()
-
-        // The server's set omits it (e.g. deleted server-side). The local edit must win, not vanish.
-        try await SwiftSync.sync(
-            payload: [], as: PruneTask.self, in: context, parent: project,
-            relationship: \PruneTask.project, pendingChangesSince: cursor)
-
-        let ids = Set(try context.fetch(FetchDescriptor<PruneTask>()).map(\.id))
-        XCTAssertTrue(ids.contains("t-edited"), "a row edited after the cursor must survive the prune")
-    }
-
-    @MainActor
-    func testParentScopedPullStillPrunesCleanServerDeletedRow() async throws {
-        let container = try ModelContainer(
-            for: PruneProject.self, PruneTask.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true))
-        let context = ModelContext(container)
-
-        let cursor = Date(timeIntervalSince1970: 1_000)
-        let project = PruneProject(id: "p1")
-        context.insert(project)
-        // A fully-synced, locally-untouched row (updated before the cursor). Server omits it → it was
-        // genuinely deleted server-side, so the prune must still remove it.
-        context.insert(
-            PruneTask(
-                id: "t-clean", title: "clean", remoteID: "r1",
-                updatedAt: Date(timeIntervalSince1970: 500), project: project))
+            PruneTask(id: "t-synced", title: "synced", remoteID: "r1", project: project))
         try context.save()
 
         try await SwiftSync.sync(
             payload: [], as: PruneTask.self, in: context, parent: project,
-            relationship: \PruneTask.project, pendingChangesSince: cursor)
+            relationship: \PruneTask.project)
 
         let ids = Set(try context.fetch(FetchDescriptor<PruneTask>()).map(\.id))
-        XCTAssertFalse(ids.contains("t-clean"), "a clean, server-deleted row must still be pruned")
+        XCTAssertFalse(ids.contains("t-synced"), "a server-known row the server deleted must be pruned")
     }
 }

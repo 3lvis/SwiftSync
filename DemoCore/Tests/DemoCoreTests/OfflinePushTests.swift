@@ -428,9 +428,10 @@ final class OfflinePushTests: XCTestCase {
         engine.isOffline = false
         try await apiClient.deleteTask(taskID: taskID)
 
-        // Reconnect pull: the server's task set no longer includes it. The un-pushed local edit was
-        // made after the last sync, so the prune must preserve it — the user keeps their work instead
-        // of silently losing it to a server-side delete. This is exactly what `pendingChangesSince` buys.
+        // Reconnect and refresh. syncProjectTasks pushes before it pulls: the pending edit is uploaded
+        // as an upsert keyed by localId, which re-creates the server-deleted row, so the subsequent
+        // pull sees it as present rather than absent. The edit wins by resurrection — no prune guard,
+        // no cursor needed.
         try await engine.syncProjectTasks(projectID: projectID)
 
         let survivor = try XCTUnwrap(
