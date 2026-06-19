@@ -14,19 +14,19 @@ final class CrossContextCanaryNote {
 }
 
 final class SwiftDataCrossContextMergeCanaryTests: XCTestCase {
-    /// CANARY for the SwiftData limitation SwiftSync works around. SwiftData has no
-    /// `mergeChanges(fromContextDidSave:)`, so a save on one `ModelContext` does **not** promptly refresh
-    /// an already-registered instance on another context (e.g. the `mainContext` instance a SwiftUI view
-    /// holds). That gap is the *only* reason single-object `sync(item:)` applies on the main thread
-    /// (see the PR that removed `SyncContext`).
+    /// ⛔️ DO NOT MERGE — a standing tracking test that intentionally **fails today**, and whose branch
+    /// must never reach `master` (a red test would block the CI gate). It lives only on its PR.
     ///
-    /// The test asserts the *broken* behavior inside `XCTExpectFailure`: today the registered instance
-    /// stays stale, the inner assertion fails, and the expectation is satisfied (this test passes). If a
-    /// future SwiftData merges cross-context saves promptly, the inner assertion will start **passing** —
-    /// the expectation is then unmet and this test **fails**, signalling that single-object (and inbound)
-    /// sync can move off the main thread.
+    /// SwiftData has no `mergeChanges(fromContextDidSave:)`, so a save on one `ModelContext` does not
+    /// refresh an already-registered instance on another (e.g. the `mainContext` instance a SwiftUI view
+    /// holds). That gap is the only reason single-object `sync(item:)` applies on the main thread.
+    ///
+    /// This asserts the behavior we *want* — a cross-context save promptly reflected on the registered
+    /// instance — so it is **red on the PR today**. The day a newer SwiftData merges promptly, CI on the
+    /// PR turns **green**: the signal to merge this and move single-object (and inbound) sync off the
+    /// main thread.
     @MainActor
-    func testCrossContextSaveDoesNotPromptlyRefreshRegisteredInstance() throws {
+    func testCrossContextSavePromptlyRefreshesRegisteredInstance() throws {
         let container = try ModelContainer(
             for: CrossContextCanaryNote.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true))
@@ -44,13 +44,10 @@ final class SwiftDataCrossContextMergeCanaryTests: XCTestCase {
         other.title = "Edited"
         try otherContext.save()
 
-        XCTExpectFailure(
-            "SwiftData still does not auto-merge a cross-context save into a registered mainContext instance"
-        ) {
-            XCTAssertEqual(
-                registered.title, "Edited",
-                "If this passes, SwiftData now merges cross-context saves promptly — single-object "
-                    + "sync(item:) (and inbound sync) can move off the main thread.")
-        }
+        XCTAssertEqual(
+            registered.title, "Edited",
+            "Expected to FAIL today: SwiftData did not merge the cross-context save into the registered "
+                + "mainContext instance. When this passes, SwiftData merges promptly — single-object "
+                + "sync(item:) (and inbound sync) can move off the main thread, and this PR can merge.")
     }
 }
