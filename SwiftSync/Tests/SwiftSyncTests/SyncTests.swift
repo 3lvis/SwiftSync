@@ -1446,7 +1446,7 @@ final class SyncTests: XCTestCase {
         try await container.sync(payload: [SendableUserPayload(id: 9, fullName: "Initial")], as: User.self)
 
         try await container.sync(
-            item: SendableUserPayload(id: 9, fullName: "Updated"), as: User.self, context: .background)
+            item: SendableUserPayload(id: 9, fullName: "Updated"), as: User.self)
 
         let users = try container.mainContext.fetch(FetchDescriptor<User>())
         XCTAssertEqual(users.count, 1)
