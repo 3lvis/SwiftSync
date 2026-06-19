@@ -602,17 +602,18 @@ extension SwiftSync {
         return offline.syncRemoteID == nil
     }
 
-    /// Apply a server `payload` onto an existing `row`, honoring last-writer-wins for offline rows: if
-    /// the local row carries an edit newer than the server's version (`syncUpdatedAt` greater than the
-    /// incoming one), the un-pushed local edit wins and the older server fields are not applied — so an
-    /// inbound pull can't clobber a pending local edit. Mirrors the server-side upsert's
-    /// "older-or-equal loses". Returns whether `row` changed.
+    /// Apply a server `payload` onto `row`, but skip the overwrite when an offline row's local edit is
+    /// newer than the incoming version — so an inbound pull can't clobber a pending local edit.
+    /// Last-writer-wins, mirroring the server-side upsert's "older-or-equal loses". The incoming
+    /// timestamp is read straight from the payload under the conventional `updatedAt` key (the same one
+    /// `SyncOfflineModel.syncUpdatedAt` reflects) — no model is constructed; an unparseable/absent one
+    /// just falls through to a normal apply.
     private static func applyHonoringLocalEdit<Model: SyncUpdatableModel>(
         _ payload: SyncPayload, to row: Model
     ) throws -> Bool {
         if let local = row as? any SyncOfflineModel,
-            let incoming = (try? Model.make(from: payload)) as? any SyncOfflineModel,
-            local.syncUpdatedAt > incoming.syncUpdatedAt
+            let incoming = payload.value(for: "updatedAt", as: Date.self),
+            local.syncUpdatedAt > incoming
         {
             return false
         }

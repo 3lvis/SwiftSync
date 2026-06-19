@@ -456,8 +456,7 @@ final class OfflinePushTests: XCTestCase {
         try await engine.updateTask(taskID: taskID, projectID: projectID, body: body)
         engine.isOffline = false
 
-        // Refresh: the drain rejects the edit, so the server still holds the pre-edit title. The pull
-        // must not overwrite the un-pushed local edit with that stale server version.
+        // The push rejects the edit, so the server still holds the pre-edit title.
         try await engine.syncProjectTasks(projectID: projectID)
 
         let row = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
@@ -496,7 +495,6 @@ final class OfflinePushTests: XCTestCase {
         let serverBody = try mutating(current) { $0["title"] = serverTitle }
         _ = try await apiClient.updateTask(taskID: taskID, body: serverBody)
 
-        // Refresh: the newer server version must win and overwrite the polluted local edit (LWW).
         try await engine.syncProjectTasks(projectID: projectID)
 
         let row = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
@@ -527,14 +525,11 @@ final class OfflinePushTests: XCTestCase {
         engine.isOffline = false
         _ = try await engine.pushPendingChanges()
 
-        // A *different* task in the same project is updated server-side.
         let siblingTitle = "server-updated sibling"
         let siblingDetail = try await apiClient.getTaskDetail(taskID: siblingID)
         let siblingBody = try mutating(try XCTUnwrap(siblingDetail)) { $0["title"] = siblingTitle }
         _ = try await apiClient.updateTask(taskID: siblingID, body: siblingBody)
 
-        // Refresh: the polluted row's local edit is preserved (LWW), and the sibling still picks up the
-        // server update — one conflicted row must not block the whole project's refresh.
         try await engine.syncProjectTasks(projectID: projectID)
 
         let pollutedRow = try XCTUnwrap(fetchTask(id: pollutedID, in: syncContainer.mainContext))
