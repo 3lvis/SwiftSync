@@ -27,7 +27,7 @@ git history is the memory.
 
 ## Priority order (highest leverage / lowest risk first)
 
-1. [ ] Remove `SyncContext` + local-write `sync(item:)` — surface removal, self-contained
+1. [x] ~~Remove `SyncContext` + local-write `sync(item:)`~~ — **done** (single-object `sync(item:)` applies on main, bulk off-main; `SyncContext` deleted)
 2. [ ] Macro-generate `SyncOfflineModel` — the flagship "magic" move
 3. [ ] Drop `syncFailureReason` from the protocol — rides pure-bubble (#624)
 4. [ ] Generalize the inbound LWW timestamp key — convention today, macro later
@@ -37,37 +37,14 @@ git history is the memory.
 
 ---
 
-## 1. Remove `SyncContext` + the local-write `sync(item:)` overloads
+## 1. Remove `SyncContext` + the local-write `sync(item:)` overloads — ✅ done
 
-**Context.** `SyncContext` (`.main` / `.background`) plus a *mandatory* `context:` parameter on the two
-single-object `sync(item:…)` overloads was added (it replaced an earlier `runOnMain: Bool`) to route a
-*local* write onto `mainContext` (immediate visibility) versus an *inbound* sync onto a background
-context. This leaks a `ModelContext`-routing decision into the public API. **A consumer should never
-have to reason about which `ModelContext` a write lands in — that is the library's job.**
-
-**First principles.** The offline design is *"pending changes are a query over the store — no
-save-interception."* So a local write is just **mutate your `@Model` on `mainContext` and save** (plain
-SwiftData, already visible); the `pendingChanges` query then detects it (insert = `syncRemoteID == nil`,
-edit = `syncUpdatedAt > cursor`, delete = tombstone). **Local writes don't need to go through SwiftSync
-at all.** Inbound sync (`sync(payload:)`) is the only thing that needs a context, and it should always
-run off-main *internally* with no consumer choice.
-
-**Current surface.** `public enum SyncContext`; `2×` `public func sync(item:…, context: SyncContext)`.
-
-**Target.** Delete `SyncContext` and the local-write `sync(item:)` path. Inbound sync picks its context
-internally. Document "local writes = direct model mutation + save" as the supported pattern.
-
-**Evidence it's a convenience, not a necessity.** The demo is already inconsistent: offline *people*
-edits mutate the model directly (`applyLocalPeople`), while offline *create/update* route through
-`sync(item:context:.main)` purely to reuse the dict→model `apply` mapping.
-
-**Decision needed.** Confirm no apply-time behavior (relationship resolution, field coercion) that local
-create/update actually depend on. If a dict→model convenience is still wanted, provide it without
-exposing a context (or have the consumer set fields directly).
-
-**Scope/risk.** Small, self-contained; removes public surface this work introduced. Touches
-`SyncContainer` + the demo engine's offline `createTask`/`updateTask`. Existing offline tests must stay
-green. **Recommended first** — highest confidence, removes surface, no macro work.
+Resolved via the **convention** "single object → main, bulk → off-main" (chosen over the purist
+"local writes never touch sync" — it removed the surface with minimal churn and kept the useful
+dict→model apply). `SyncContext` is deleted; the two single-object `sync(item:)` overloads dropped the
+`context:` parameter and always apply on `mainContext` (a single row is small, so the immediate
+visibility is worth the negligible main-thread cost); bulk `sync(payload:)` stays off-main. All callers
+just dropped the `context:` arg. No consumer reasons about `ModelContext` anymore.
 
 ---
 

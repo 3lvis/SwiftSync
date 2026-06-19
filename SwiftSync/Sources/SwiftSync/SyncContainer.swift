@@ -9,16 +9,6 @@ struct UncheckedSendableBox<Value>: @unchecked Sendable {
     init(_ value: Value) { self.value = value }
 }
 
-/// Which `ModelContext` a single-object `sync` writes into.
-public enum SyncContext: Sendable {
-    /// Apply on the main actor against `mainContext`: the row mutates in place, so live queries reflect
-    /// it at once. Occupies the main thread, so use it only for small, single-object local writes.
-    case main
-    /// Import on a background context off the main thread; changes merge into `mainContext` via the
-    /// did-save bridge (gated on an idle main runloop). The right choice for server/inbound syncs.
-    case background
-}
-
 public final class SyncContainer: NSObject, @unchecked Sendable {
     public struct SchemaValidationError: LocalizedError, Sendable {
         public let message: String
@@ -157,36 +147,21 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         )
     }
 
-    /// `context` has **no default** so every caller chooses deliberately (see `SyncContext`): `.main`
-    /// for a small local write that must be visible at once, `.background` for a server/inbound sync.
-    /// The split exists because SwiftData has no `mergeChanges(fromContextDidSave:)`, so a
-    /// background-context *update* doesn't promptly refresh an already-registered `mainContext` row
-    /// (the merge is gated on an idle main runloop) — writing a local edit on `.main` sidesteps that.
+    /// Import a single object. A single row is small, so it applies on `mainContext` (on the main
+    /// actor) and the change is visible to live queries at once — unlike bulk `sync(payload:)`, which
+    /// runs off-main. (SwiftData has no `mergeChanges(fromContextDidSave:)`, so an off-main *update*
+    /// wouldn't promptly refresh an already-registered `mainContext` row; for a single object, applying
+    /// on main sidesteps that without a meaningful main-thread cost.) The payload rides in an
+    /// unchecked-Sendable box so it can cross to the main actor; it is only read there, so the box is sound.
     public func sync<Model: SyncUpdatableModel>(
         item: [String: Any],
         as model: Model.Type,
-        relationshipOperations: SyncRelationshipOperations = .all,
-        context: SyncContext
+        relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
-        switch context {
-        case .main:
-            try await syncIntoMainContext(
-                UncheckedSendableBox(item), as: model, relationshipOperations: relationshipOperations)
-        case .background:
-            let backgroundContext = ModelContext(modelContainer)
-            try await SwiftSync.sync(
-                item: item,
-                as: model,
-                in: backgroundContext,
-                keyStyle: keyStyle,
-                relationshipOperations: relationshipOperations
-            )
-        }
+        try await syncIntoMainContext(
+            UncheckedSendableBox(item), as: model, relationshipOperations: relationshipOperations)
     }
 
-    /// Import a single object straight into `mainContext` on the main actor (for immediate local
-    /// writes). The payload rides in an unchecked-Sendable box so it can cross to the main actor; it is
-    /// only read on the main actor here, so the box is sound.
     @MainActor
     private func syncIntoMainContext<Model: SyncUpdatableModel>(
         _ item: UncheckedSendableBox<[String: Any]>,
@@ -205,14 +180,12 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     public func sync<Model: SyncUpdatableModel, Payload: SyncPayloadConvertible>(
         item: Payload,
         as model: Model.Type,
-        relationshipOperations: SyncRelationshipOperations = .all,
-        context: SyncContext
+        relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
         try await sync(
             item: item.toSyncPayloadDictionary(),
             as: model,
-            relationshipOperations: relationshipOperations,
-            context: context
+            relationshipOperations: relationshipOperations
         )
     }
 

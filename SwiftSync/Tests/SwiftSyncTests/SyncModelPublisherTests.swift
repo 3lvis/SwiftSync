@@ -57,8 +57,7 @@ final class SyncModelPublisherTests: XCTestCase {
 
         try await syncContainer.sync(
             item: ["id": "t1", "title": "Alpha", "assignee_id": "u1"],
-            as: ModelPubTask.self,
-            context: .background
+            as: ModelPubTask.self
         )
 
         try await waitUntil {
@@ -96,8 +95,7 @@ final class SyncModelPublisherTests: XCTestCase {
 
         try await syncContainer.sync(
             item: ["id": "t1", "title": "Alpha", "assignee_id": "u1"],
-            as: ModelPubTask.self,
-            context: .background
+            as: ModelPubTask.self
         )
 
         try await waitUntil {
