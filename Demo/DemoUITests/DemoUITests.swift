@@ -419,12 +419,6 @@ final class DemoUITests: XCTestCase {
         let discard = app.buttons["failure.discard.\(DemoSeedTaskID.sessionTimeout)"]
         XCTAssertTrue(discard.waitForExistence(timeout: 2), "the failed task is listed with its reason")
 
-        // The inbox categorizes it: an over-long title is a validation failure ("Needs a fix"),
-        // not a transient one.
-        let kindBadge = app.staticTexts["failure.kind.\(DemoSeedTaskID.sessionTimeout)"]
-        XCTAssertTrue(kindBadge.exists)
-        XCTAssertEqual(kindBadge.label, "Needs a fix")
-
         discard.tap()
 
         // Discarding resolves the failure: the row leaves the inbox.

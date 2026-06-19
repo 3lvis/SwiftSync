@@ -14,12 +14,6 @@ public protocol SyncOfflineModel: PersistentModel {
     var syncRemoteID: String? { get set }
     var syncUpdatedAt: Date { get }
     var syncIsDeleted: Bool { get }
-    /// Why the server last rejected this row's push (`nil` if none). `push` stamps it on a per-item
-    /// failure and clears it on success, so a failures inbox is just a query for rows where it's set.
-    var syncFailureReason: String? { get set }
-    /// The `SyncFailureKind` rawValue paired with `syncFailureReason` — stamped and cleared together by
-    /// `push`, so the inbox can categorize a failure (validation vs transient) without parsing the text.
-    var syncFailureKind: String? { get set }
 }
 
 /// The local rows pending a push, partitioned by operation (live models, for applying results).
@@ -42,33 +36,20 @@ public struct SyncPushBatch: Sendable {
     public var isEmpty: Bool { inserts.isEmpty && updates.isEmpty && deletes.isEmpty }
 }
 
-/// One pushed item the server rejected. SwiftSync surfaces these so the app can let the user act on
-/// them (discard / edit / retry) rather than silently retrying forever.
-/// Why a push operation was rejected, categorized so the consumer can react without parsing `message`.
-/// The consumer classifies the server's per-operation result into one of these when it builds a
-/// `SyncPushFailure`. Only the rejection classes that a push *produces* live here — transient
-/// transport failures throw from the upload closure (rows stay pending to retry) rather than landing
-/// as a per-row failure, and a lost conflict is adopted, not failed. Retry-oriented classes arrive
-/// with the retry policy that consumes them.
-public enum SyncFailureKind: String, Equatable, Sendable {
-    /// The payload was rejected as invalid (bad field, constraint) — the user must fix it.
-    case validation
-    /// The server rejected it for a non-validation reason the client can't resolve by editing.
-    case server
-}
-
-public struct SyncPushFailure: Equatable, Sendable {
+/// One pushed item the server rejected, returned in `SyncPushSummary.failures` so the app can let the
+/// user act on it (discard / edit / retry) rather than silently retrying forever. `error` is the
+/// consumer's own error from its `upload` closure, bubbled up verbatim — SwiftSync never interprets,
+/// categorizes, or persists it; the failed row simply stays pending and is re-detected next push.
+public struct SyncPushFailure: Sendable {
     public enum Operation: String, Equatable, Sendable { case insert, update, delete }
     public let localID: String
     public let operation: Operation
-    public let kind: SyncFailureKind
-    public let message: String
+    public let error: any Error & Sendable
 
-    public init(localID: String, operation: Operation, kind: SyncFailureKind, message: String) {
+    public init(localID: String, operation: Operation, error: any Error & Sendable) {
         self.localID = localID
         self.operation = operation
-        self.kind = kind
-        self.message = message
+        self.error = error
     }
 }
 
@@ -137,9 +118,11 @@ extension SwiftSync {
     /// Drive one push: detect pending changes, hand their ids (a Sendable `SyncPushBatch`) to the
     /// app's `upload` closure (the app owns the network call), then apply the server's response
     /// locally — stamp server-assigned `syncRemoteID`s onto inserted rows, hard-delete confirmed
-    /// deletes — and report failures for the app to surface. Always advance your "last synced"
-    /// cursor to `summary.cursor`: it only moves forward when *every* pending update was
-    /// acknowledged, so an unacknowledged update is safely re-detected on the next push.
+    /// deletes — and **return** the per-row failures for the app to handle. SwiftSync persists no
+    /// failure state on rows: a rejected/unacknowledged row simply stays pending (so it's re-detected
+    /// next push), and the app decides what to do with `summary.failures` (surface, annotate, drop).
+    /// Always advance your "last synced" cursor to `summary.cursor`: it only moves forward when *every*
+    /// pending update was acknowledged, so an unacknowledged update is safely re-detected next push.
     @discardableResult
     public static func push<Model: SyncOfflineModel>(
         for _: Model.Type,
@@ -161,33 +144,15 @@ extension SwiftSync {
             deletes: pending.deletes.map(\.syncLocalID))
         let response = try await upload(batch)
 
-        let failuresByLocalID = Dictionary(
-            response.failures.map { ($0.localID, $0) }, uniquingKeysWith: { first, _ in first })
-
-        // Clear a persisted failure only on *actual* success (remote id assigned / confirmed update /
-        // confirmed delete). A row the response neither acknowledged nor freshly failed is still
-        // pending — same as the cursor logic below treats it — so leave its existing marker untouched
-        // rather than silently dropping it from the failures inbox. Reason and kind always move together.
+        // Apply only *successes* to the store; rejected/unacknowledged rows are left pending (insert →
+        // syncRemoteID stays nil; update → still changed vs cursor; delete → isDeleted stays true) so
+        // they're re-detected next push. SwiftSync persists no failure state — `summary.failures` is
+        // returned for the app to handle.
         var insertedCount = 0
         for insert in pending.inserts {
             if let remoteID = response.assignedRemoteIDs[insert.syncLocalID] {
                 insert.syncRemoteID = remoteID
                 insertedCount += 1
-                insert.syncFailureReason = nil
-                insert.syncFailureKind = nil
-            } else if let failure = failuresByLocalID[insert.syncLocalID] {
-                insert.syncFailureReason = failure.message
-                insert.syncFailureKind = failure.kind.rawValue
-            }
-        }
-
-        for update in pending.updates {
-            if response.confirmedUpdateLocalIDs.contains(update.syncLocalID) {
-                update.syncFailureReason = nil
-                update.syncFailureKind = nil
-            } else if let failure = failuresByLocalID[update.syncLocalID] {
-                update.syncFailureReason = failure.message
-                update.syncFailureKind = failure.kind.rawValue
             }
         }
 
@@ -196,9 +161,6 @@ extension SwiftSync {
             if response.confirmedDeleteLocalIDs.contains(delete.syncLocalID) {
                 context.delete(delete)
                 deletedCount += 1
-            } else if let failure = failuresByLocalID[delete.syncLocalID] {
-                delete.syncFailureReason = failure.message
-                delete.syncFailureKind = failure.kind.rawValue
             }
         }
 

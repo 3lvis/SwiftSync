@@ -10,27 +10,6 @@ struct UncheckedSendableBox<Value>: @unchecked Sendable {
 }
 
 public final class SyncContainer: NSObject, @unchecked Sendable {
-    public struct SchemaValidationError: LocalizedError, Sendable {
-        public let message: String
-
-        public var errorDescription: String? { message }
-
-        public init(message: String) {
-            self.message = message
-        }
-    }
-
-    public struct ObjectiveCInitializationExceptionError: LocalizedError, Sendable {
-        public let name: String?
-        public let reason: String?
-
-        public var errorDescription: String? {
-            if let reason, !reason.isEmpty { return reason }
-            if let name, !name.isEmpty { return name }
-            return "Objective-C exception during ModelContainer initialization."
-        }
-    }
-
     static let didSaveChangesNotification = Notification.Name("SwiftSync.SyncContainer.didSaveChanges")
     static let changedIdentifiersUserInfoKey = "changedIdentifiers"
     static let changedModelTypeNamesUserInfoKey = "changedModelTypeNames"
@@ -287,7 +266,9 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             let userInfo = nsError.userInfo
             let name = userInfo[SwiftSyncObjCExceptionNameKey] as? String
             let reason = userInfo[SwiftSyncObjCExceptionReasonKey] as? String ?? nsError.localizedDescription
-            throw ObjectiveCInitializationExceptionError(name: name, reason: reason)
+            let detail = [name, reason].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ": ")
+            throw SyncError.containerInitialization(
+                reason: detail.isEmpty ? "Objective-C exception during ModelContainer initialization." : detail)
         }
 
         if let swiftResult {
@@ -329,8 +310,8 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             guard !hasAnchor else { continue }
 
             let reciprocalList = reciprocalToMany.map(\.fullName).joined(separator: ", ")
-            throw SchemaValidationError(
-                message:
+            throw SyncError.schemaValidation(
+                reason:
                     """
                     Invalid many-to-many relationship pair with zero explicit inverse anchors. \
                     Found \(relationship.fullName) <-> [\(reciprocalList)]. \
@@ -360,8 +341,8 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             guard let entity = entitiesByName[String(describing: modelType)] else { continue }
 
             for constraint in entity.uniquenessConstraints where constraint != [identityName] {
-                throw SchemaValidationError(
-                    message: """
+                throw SyncError.schemaValidation(
+                    reason: """
                         \(String(reflecting: modelType)) declares a uniqueness constraint on \(constraint), \
                         which is not the sync identity ("\(identityName)"). A unique constraint on a \
                         non-identity property causes silent data loss during sync: SwiftData's \

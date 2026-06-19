@@ -85,46 +85,38 @@ Still open:
       skips LWW (degrades to plain apply). Generalizing needs macro support to surface the model's
       timestamp key — add it only when a real consumer hits the rename case; don't add public API for it.
 
-### Phase 8 — Outbound sync → best-in-class (adapted from `code/3lvis/ios/Networking` roadmap, items 2–4)
+### Phase 8 — Failure handling (one coherent concern)
 
-Three hardening items on top of the Phase 7 foundation. Each is driven by the demo as the forcing
-function — a user-facing capability → a backend contract → the app supports it → that pulls the
-feature into SwiftSync. Build each seam with its first real use, never speculatively.
+How SwiftSync **represents, reports, and surfaces** failure is a single design, not three tasks.
+(Splitting it into taxonomy / observability / retry produced speculative pieces — `isRetryable` and a
+library-carried error `code` with no real consumer.) Prior art is unanimous (PowerSync, WatermelonDB,
+CloudKit/`NSPersistentCloudKitContainer`): **errors bubble up; the library persists no per-row failure
+state; failed rows stay pending and retry; surfacing is an event stream; the inbox is an app concern.**
 
-- [ ] **Typed failure taxonomy.** Replace `SyncPushFailure`'s bare `message: String` with a
-      categorized failure (`validation` / `staleConflict` / `transport` / `serverRejected`),
-      preserving the underlying cause, plus a conservative `isRetryable`. Lets the failures inbox
-      distinguish "fix this field" from "transient, will retry," and feeds the retry policy below.
-      *Demo:* the inbox renders a fixable validation error differently from a transient one.
-      (↔ Networking roadmap item 2 — categorize by where it failed, keep the cause, derive `isRetryable`.)
+- [ ] **Represent + report (pure-bubble).** One `SyncError` currency for everything SwiftSync throws
+      (`.invalidPayload` / `.cancelled` / `.schemaValidation` / `.containerInitialization`). For per-row
+      *partial* push rejections, `push()` returns the outcomes (`failures: [{localID, operation, error}]`)
+      and marks succeeded rows synced / leaves failed rows pending — it persists **nothing** on models
+      (no `syncFailureReason`/`syncFailureCode` on `SyncOfflineModel`). The consumer owns any inbox
+      persistence and reads the backend's own error in its `upload` closure. *Demo:* the engine annotates
+      its own `Task` field from `summary.failures` and clears it on a later successful push.
 
-- [ ] **Sync observability — event stream + built-in logging.** A multi-consumer `events()`
-      `AsyncStream` emitting per-sync/per-operation outcomes (started/completed, applied/stale/rejected,
-      counts, duration), plus scoped built-in logging (debug shows, release redacts). Makes conflicts and
-      failures observable instead of guesswork (the conflict/tombstone bugs this cycle were caught by
-      hand-instrumentation that this would make first-class).
-      *Demo:* a "sync activity" view. (↔ Networking roadmap item 3 — one `events()` hook + lossless
-      built-in logging with one redaction rule.)
+- [ ] **Surface (observability).** A multi-consumer `events()` `AsyncStream` emitting per-sync outcomes
+      (started/completed, applied/stale/rejected, counts, duration) — the prior-art surfacing channel
+      (NSPCC's `eventChangedNotification`). The demo's failures view and "sync activity" build on it.
+      Same concern as the bubble above; lands with or right after it. (↔ Networking roadmap item 3.)
 
-- [ ] **Push middleware — retry + auth refresh.** Formalize auto-sync-on-reconnect into a retry policy
-      (exponential backoff + full jitter + `Retry-After`), safe because the upsert is idempotent (keyed
-      on `localId`); single-flight credential refresh for concurrent auth failures (the 401 stampede);
-      the `upload` closure is the interceptor seam. Consumes the `isRetryable` from the failure taxonomy.
-      *Demo:* a "flaky network" toggle → backed-off retries; an "expired token" → one refresh + replay.
-      (↔ Networking roadmap items 4b/4c — async-`next` interceptor onion, single-flight `RefreshCoordinator`,
-      idempotent-methods-only retry.)
+**Out of SwiftSync — resilience.** Retry/backoff/`Retry-After`/auth-refresh are the *networking layer's*
+job (the `code/3lvis/ios/Networking` interceptors, wired into the consumer's `upload` closure), by the
+same "a sync library doesn't own the network" principle that keeps it from categorizing errors. Not a
+SwiftSync feature.
 
-**Priority (across the open Phase 7 + Phase 8 items), by leverage and dependency:**
+### Phase 9 — Still open (genuinely separate)
 
-1. **8.1 Typed failure taxonomy** — smallest, hard-unblocks 8.3 (retry consumes `isRetryable`), and
-   immediately upgrades the shipped failures inbox. Best effort/leverage ratio.
-2. **8.2 Sync observability** — independent and high-leverage; gives eyes for building the riskier
-   middleware (this cycle's conflict/tombstone bugs were caught by hand-instrumentation).
-3. **7a Sync-protocol prior-art scan** — cheap, gates 8.3's seam design; do it right before, not early.
-4. **8.3 Push middleware (retry + auth refresh)** — the big one (a PR series); unblocked by 8.1 + 7a,
-   observable via 8.2.
-5. **7b Offline-safe queue migrations** — deferred: the queue format can still break freely (no shipped
-   consumers with persisted data), so versioning earns its place only once there's data to protect.
+- [ ] **7a → Sync-protocol prior-art scan** — largely done (PowerSync / WatermelonDB / CouchDB-PouchDB /
+      CloudKit reviewed for the failure model); finish for the pull/cursor contract if hardened further.
+- [ ] **7b → Offline-safe queue migrations + versioning** — deferred until there are shipped consumers
+      with persisted queues to protect (the format can still break freely).
 
 Each item is its own PR (some a short series). Core stays dependency-free; any concrete transport/bridge
 is a separate SPM product (↔ Networking items 5–6).

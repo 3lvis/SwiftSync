@@ -155,7 +155,10 @@ final class SyncFeatureInteropTests: XCTestCase {
                 configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         ) { error in
             XCTAssertTrue(
-                error is SyncContainer.SchemaValidationError,
+                {
+                    if case SyncError.schemaValidation = error { return true }
+                    return false
+                }(),
                 "expected SchemaValidationError, got \(error)")
         }
     }
@@ -169,7 +172,10 @@ final class SyncFeatureInteropTests: XCTestCase {
                 configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         ) { error in
             XCTAssertTrue(
-                error is SyncContainer.SchemaValidationError,
+                {
+                    if case SyncError.schemaValidation = error { return true }
+                    return false
+                }(),
                 "expected SchemaValidationError, got \(error)")
         }
     }

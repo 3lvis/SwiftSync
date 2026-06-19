@@ -103,11 +103,14 @@ final class OfflinePushTests: XCTestCase {
         XCTAssertEqual(summary.failures.count, 1)
 
         let failed = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
-        let reason = try XCTUnwrap(failed.syncFailureReason, "the rejection is persisted on the row")
+        let reason = try XCTUnwrap(
+            failed.syncFailureReason, "the engine annotates the row from the bubbled failure")
         XCTAssertTrue(reason.contains("80 characters"), "the failure carries the server's reason: \(reason)")
-        XCTAssertEqual(
-            failed.syncFailureKind, SyncFailureKind.validation.rawValue,
-            "an over-long title is a validation rejection, not a generic server one")
+
+        // A rejected row stays pending in the queue (pure-bubble), but it must read as *failed*, not
+        // *pending* — otherwise the status bar double-counts the same task as "1 pending, 1 failed".
+        XCTAssertEqual(engine.failedChangeCount, 1)
+        XCTAssertEqual(engine.pendingChangeCount, 0, "a failed row is not also counted as pending")
     }
 
     @MainActor

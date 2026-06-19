@@ -1273,9 +1273,19 @@ public struct SyncPayload {
     }
 }
 
+/// The single error currency for SwiftSync: every SwiftSync operation that can fail throws one of
+/// these, so a consumer catches one type. (Per-operation push *rejections* are partial-success data,
+/// reported as `SyncPushFailure` in the response rather than thrown — see `push`.)
 public enum SyncError: Error, Sendable, Equatable {
+    /// A payload couldn't be decoded into the model (missing or invalid field).
     case invalidPayload(model: String, reason: String)
+    /// The operation was cancelled (task cancellation).
     case cancelled
+    /// A model's schema is invalid for sync (e.g. an unanchored many-to-many, or a uniqueness
+    /// constraint off the sync identity).
+    case schemaValidation(reason: String)
+    /// The `ModelContainer` failed to initialize; `reason` carries the underlying cause.
+    case containerInitialization(reason: String)
 }
 
 extension SyncError: LocalizedError {
@@ -1285,6 +1295,10 @@ extension SyncError: LocalizedError {
             return "Invalid payload for \(model): \(reason)"
         case .cancelled:
             return "Sync was cancelled."
+        case .schemaValidation(let reason):
+            return reason
+        case .containerInitialization(let reason):
+            return reason
         }
     }
 }

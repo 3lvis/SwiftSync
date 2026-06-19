@@ -583,14 +583,7 @@ public final class DemoServerSimulator {
                 return rejected(payload, code: "unknown_operation", message: "unknown operation '\(other)'")
             }
         } catch let error as DemoBackendError {
-            // A bad field/reference is the client's to fix (validation); other backend errors are
-            // server-side. The result code lets the client categorize without parsing the message.
-            let code: String
-            switch error {
-            case .validation, .invalidReference: code = "validation"
-            default: code = "rejected"
-            }
-            return rejected(payload, code: code, message: error.errorDescription ?? "rejected")
+            return rejected(payload, code: "rejected", message: error.errorDescription ?? "rejected")
         } catch {
             return rejected(payload, code: "error", message: "\(error)")
         }

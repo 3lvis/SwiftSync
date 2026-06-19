@@ -9,8 +9,6 @@ final class OfflineNote: SyncOfflineModel {
     var syncRemoteID: String?
     var syncUpdatedAt: Date
     var syncIsDeleted: Bool
-    var syncFailureReason: String?
-    var syncFailureKind: String?
     var title: String
 
     init(
@@ -23,6 +21,10 @@ final class OfflineNote: SyncOfflineModel {
         self.syncIsDeleted = syncIsDeleted
         self.title = title
     }
+}
+
+private struct PushTestError: Error, Equatable, Sendable {
+    let message: String
 }
 
 final class SyncPushTests: XCTestCase {
@@ -119,12 +121,15 @@ final class SyncPushTests: XCTestCase {
         XCTAssertEqual(summary.cursor, now)
     }
 
+    /// Pure-bubble: `push` returns per-row failures verbatim (the consumer's own error) and persists
+    /// **nothing** on the model — the rejected row simply stays pending so it's re-detected next push.
     @MainActor
     func testPushSurfacesFailures() async throws {
         let context = ModelContext(
             try ModelContainer(
                 for: OfflineNote.self,
                 configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
+        let lastSync = Date(timeIntervalSince1970: 1_000)
         context.insert(
             OfflineNote(
                 syncLocalID: "c1", syncRemoteID: nil, syncUpdatedAt: Date(timeIntervalSince1970: 1_500),
@@ -132,24 +137,27 @@ final class SyncPushTests: XCTestCase {
         try context.save()
 
         let summary = try await SwiftSync.push(
-            for: OfflineNote.self, in: context, changedSince: Date(timeIntervalSince1970: 1_000)
+            for: OfflineNote.self, in: context, changedSince: lastSync
         ) { _ in
             SyncPushResponse(failures: [
-                SyncPushFailure(localID: "c1", operation: .insert, kind: .validation, message: "422 invalid")
+                SyncPushFailure(
+                    localID: "c1", operation: .insert, error: PushTestError(message: "422 invalid"))
             ])
         }
 
+        XCTAssertEqual(summary.failures.count, 1)
+        XCTAssertEqual(summary.failures.first?.localID, "c1")
+        XCTAssertEqual(summary.failures.first?.operation, .insert)
         XCTAssertEqual(
-            summary.failures,
-            [
-                SyncPushFailure(localID: "c1", operation: .insert, kind: .validation, message: "422 invalid")
-            ])
+            summary.failures.first?.error as? PushTestError, PushTestError(message: "422 invalid"),
+            "the consumer's error bubbles up verbatim")
+
         let rows = try context.fetch(FetchDescriptor<OfflineNote>())
         XCTAssertNil(rows.first?.syncRemoteID, "a rejected insert keeps no remote id and stays local")
-        XCTAssertEqual(rows.first?.syncFailureReason, "422 invalid")
+        let stillPending = try SwiftSync.pendingChanges(
+            for: OfflineNote.self, in: context, changedSince: lastSync)
         XCTAssertEqual(
-            rows.first?.syncFailureKind, "validation",
-            "push stamps the failure kind so the inbox can categorize without parsing the message")
+            stillPending.inserts.map(\.syncLocalID), ["c1"], "the rejected insert stays pending")
     }
 
     /// P1: a failed (or unacknowledged) update is cursor-gated, so the cursor must NOT advance past
@@ -172,7 +180,7 @@ final class SyncPushTests: XCTestCase {
             for: OfflineNote.self, in: context, changedSince: lastSync, now: now
         ) { _ in
             SyncPushResponse(failures: [
-                SyncPushFailure(localID: "u1", operation: .update, kind: .server, message: "500")
+                SyncPushFailure(localID: "u1", operation: .update, error: PushTestError(message: "500"))
             ])
         }
 
@@ -181,46 +189,6 @@ final class SyncPushTests: XCTestCase {
         let stillPending = try SwiftSync.pendingChanges(
             for: OfflineNote.self, in: context, changedSince: summary.cursor)
         XCTAssertEqual(stillPending.updates.map(\.syncLocalID), ["u1"])
-    }
-
-    /// A persisted failure must clear only on *actual* success, never merely because the server's
-    /// response didn't mention the row. An unacknowledged row is still pending (the cursor logic agrees
-    /// — it doesn't advance past it), so silently dropping its failure marker would make it vanish from
-    /// the failures inbox while still unsynced.
-    @MainActor
-    func testPushKeepsFailureReasonForUnacknowledgedRows() async throws {
-        let context = ModelContext(
-            try ModelContainer(
-                for: OfflineNote.self,
-                configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
-        let lastSync = Date(timeIntervalSince1970: 1_000)
-        let edited = Date(timeIntervalSince1970: 1_500)
-
-        // An insert and an update, both already flagged from a prior push.
-        let insert = OfflineNote(
-            syncLocalID: "c1", syncRemoteID: nil, syncUpdatedAt: edited, syncIsDeleted: false,
-            title: "failed insert")
-        insert.syncFailureReason = "422 invalid"
-        context.insert(insert)
-        let update = OfflineNote(
-            syncLocalID: "u1", syncRemoteID: "r-u1", syncUpdatedAt: edited, syncIsDeleted: false,
-            title: "failed update")
-        update.syncFailureReason = "500 server error"
-        context.insert(update)
-        try context.save()
-
-        // The next push returns nothing for either row — neither acknowledged nor freshly failed.
-        _ = try await SwiftSync.push(
-            for: OfflineNote.self, in: context, changedSince: lastSync,
-            now: Date(timeIntervalSince1970: 2_000)
-        ) { _ in SyncPushResponse() }
-
-        let rows = Dictionary(
-            uniqueKeysWithValues: try context.fetch(FetchDescriptor<OfflineNote>()).map { ($0.syncLocalID, $0) })
-        XCTAssertEqual(
-            rows["c1"]?.syncFailureReason, "422 invalid", "an unacknowledged insert keeps its failure")
-        XCTAssertEqual(
-            rows["u1"]?.syncFailureReason, "500 server error", "an unacknowledged update keeps its failure")
     }
 
     /// `updatedCount` must reflect only rows that were actually in this push batch, not whatever
