@@ -219,6 +219,13 @@ public final class DemoServerSimulator {
     @discardableResult
     public func replaceTaskReviewers(publicID: String, reviewerIDs: [String]) throws -> [String: Any]? {
         guard let rowID = try taskRowID(forPublicID: publicID, includeTombstoned: true) else { return nil }
+        return try replaceReviewers(rowID: rowID, reviewerIDs: reviewerIDs)
+    }
+
+    /// Int-keyed internal so callers that already resolved the row (e.g. `uploadUpsert`) don't re-resolve
+    /// the public_id.
+    @discardableResult
+    private func replaceReviewers(rowID: Int, reviewerIDs: [String]) throws -> [String: Any]? {
         let uniqueReviewerIDs = Array(Set(reviewerIDs)).sorted()
         for reviewerID in uniqueReviewerIDs where !(try exists(in: "users", id: reviewerID)) {
             throw DemoBackendError.invalidReference(entity: "reviewer_id", id: reviewerID)
@@ -275,6 +282,11 @@ public final class DemoServerSimulator {
     @discardableResult
     public func replaceTaskWatchers(publicID: String, watcherIDs: [String]) throws -> [String: Any]? {
         guard let rowID = try taskRowID(forPublicID: publicID, includeTombstoned: true) else { return nil }
+        return try replaceWatchers(rowID: rowID, watcherIDs: watcherIDs)
+    }
+
+    @discardableResult
+    private func replaceWatchers(rowID: Int, watcherIDs: [String]) throws -> [String: Any]? {
         let uniqueWatcherIDs = Array(Set(watcherIDs)).sorted()
         for watcherID in uniqueWatcherIDs where !(try exists(in: "users", id: watcherID)) {
             throw DemoBackendError.invalidReference(entity: "watcher_id", id: watcherID)
@@ -630,6 +642,7 @@ public final class DemoServerSimulator {
         var body = data
         body["id"] = localID
 
+        let rowID: Int
         if let existingID = try taskRowID(forPublicID: localID, includeTombstoned: true) {
             if try isStale(rowID: existingID, incoming: incoming) {
                 return [
@@ -644,15 +657,21 @@ public final class DemoServerSimulator {
                 bind: { stmt in self.sqlite.bind(int: existingID, at: 1, in: stmt) }
             )
             _ = try updateTaskInternal(rowID: existingID, body: body)
+            rowID = existingID
         } else {
             _ = try createTask(body: body)
+            guard let createdID = try taskRowID(forPublicID: localID) else {
+                throw DemoBackendError.notFound(entity: "task", id: localID)
+            }
+            rowID = createdID
         }
-        // Relationship edits (reviewers/watchers) ride in the same operation when present.
+        // Relationship edits (reviewers/watchers) ride in the same operation when present. They reuse the
+        // already-resolved row id, so they don't re-look-up the public_id.
         if let reviewerIDs = data["reviewer_ids"] as? [String] {
-            _ = try replaceTaskReviewers(publicID: localID, reviewerIDs: reviewerIDs)
+            _ = try replaceReviewers(rowID: rowID, reviewerIDs: reviewerIDs)
         }
         if let watcherIDs = data["watcher_ids"] as? [String] {
-            _ = try replaceTaskWatchers(publicID: localID, watcherIDs: watcherIDs)
+            _ = try replaceWatchers(rowID: rowID, watcherIDs: watcherIDs)
         }
         return ["operation": "upsert", "localId": localID, "status": "applied"]
     }
