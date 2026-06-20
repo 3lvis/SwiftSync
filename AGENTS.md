@@ -111,5 +111,5 @@
 - Exception: if a task changes `Demo/Demo/**`, run the relevant demo app build even if the user did not explicitly ask for `xcodebuild`.
 - CI is split by the draft/ready signal:
   - **Every push (draft included)** runs the fast tier in `ci.yml`: swift-format, macOS `swift test` (×3 packages), the warnings gate, doc-links, and the perf subset.
-  - **Only when a PR is marked ready for review** does the slow simulator tier in `ios-regression.yml` run: the iOS dirty-tracking regression and the `DemoUITests` UI suite. They skip on drafts (a skipped check still reports success) and there is no master-push run — this tier is pre-merge only.
-- So mark a PR **ready** to trigger the iOS regression + UI tests, then verify them green before merging. If a task touches `Core.swift`, `MacrosImplementation/`, or `SyncableMacro.swift`, note in the plan that marking the PR ready will run that simulator tier.
+  - **Only when a PR is marked ready for review** does the slow simulator tier in `ios-regression.yml` run — one `iOS Simulator Tests` job that runs both the `DemoUITests` UI suite and the iOS-specific dirty-tracking regression (`DirtyTrackingGapTests`) on a simulator. It skips on drafts (a skipped check still reports success) and there is no master-push run — this tier is pre-merge only.
+- So mark a PR **ready** to trigger the `iOS Simulator Tests` gate, then verify it green before merging. If a task touches `Core.swift`, `MacrosImplementation/`, or `SyncableMacro.swift`, note in the plan that marking the PR ready will run that simulator tier.
