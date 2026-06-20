@@ -69,6 +69,16 @@ site, so we relocate real duplication rather than shuffling app intent around.
 **Done when:** a short Fold/Keep/Collapse inventory is recorded here and the baseline test set is
 identified.
 
+**Result (done).** Callers traced across `ScreenMachines` + the Demo app:
+- **Fold:** `pushPendingChanges` (engine) + the manual reconnect drain in `ContentView.onChange(of: isOffline)`;
+  `pendingChangeCount` / `failedChangeCount` (read by `ContentView` badges + `FailuresSheet`) → library-derived;
+  `annotateFailures` / `refreshPendingCount`; `inFlightOperations` / `runOperation` / `pull` de-dup + offline-swallow.
+- **Keep:** the write methods' online/offline branching (called by `ScreenMachines`); the pull data methods
+  (which endpoint, scoping, backfills); `discardFailedChange` (app inbox action); `failedTasks()` (inbox query);
+  the `isOffline` toggle (app UI — becomes the reachability signal); the wire format (`upload`/`taskData`).
+- **Baseline tests:** DemoCore `OfflinePushTests` (offline create/update/delete/discard round-trips) + the
+  DemoUITests offline flow + SwiftSync `OfflinePushTests`/`OfflineHistoryTests`.
+
 ---
 
 ## Section 2 — Extract the transport as a registered `SyncBackend`
