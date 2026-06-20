@@ -368,57 +368,34 @@ public final class TaskFormSheetMachine {
 
             guard saveMachine.send(.submit) else { return }
 
-            let body = syncContainer.export(draft)
+            var body = syncContainer.export(draft)
             let capturedReviewerIDs = draft.reviewers.map(\.id).sorted()
             let capturedWatcherIDs = draft.watchers.map(\.id).sorted()
 
-            var reviewersChanged = false
-            var watchersChanged = false
-            if case .edit(let originalTask) = mode {
-                let originalReviewerIDs = Set(originalTask.reviewers.map(\.id))
-                let originalWatcherIDs = Set(originalTask.watchers.map(\.id))
-                reviewersChanged = Set(capturedReviewerIDs) != originalReviewerIDs
-                watchersChanged = Set(capturedWatcherIDs) != originalWatcherIDs
+            // reviewers/watchers are @NotExport, so add them to the body explicitly — and only when
+            // changed, so a non-people edit doesn't churn them.
+            switch mode {
+            case .create:
+                if !capturedReviewerIDs.isEmpty { body["reviewer_ids"] = capturedReviewerIDs }
+                if !capturedWatcherIDs.isEmpty { body["watcher_ids"] = capturedWatcherIDs }
+            case .edit(let originalTask):
+                if Set(capturedReviewerIDs) != Set(originalTask.reviewers.map(\.id)) {
+                    body["reviewer_ids"] = capturedReviewerIDs
+                }
+                if Set(capturedWatcherIDs) != Set(originalTask.watchers.map(\.id)) {
+                    body["watcher_ids"] = capturedWatcherIDs
+                }
             }
+            let requestBody = body
 
             _Concurrency.Task {
                 do {
+                    let payload = try DemoSyncPayload(dictionary: requestBody)
                     switch mode {
                     case .create(let projectID):
-                        let createPayload = try DemoSyncPayload(dictionary: body)
-                        try await syncEngine.createTask(body: createPayload, projectID: projectID)
-                        if !capturedReviewerIDs.isEmpty {
-                            try await syncEngine.replaceTaskReviewers(
-                                taskID: draft.id,
-                                projectID: projectID,
-                                reviewerIDs: capturedReviewerIDs
-                            )
-                        }
-                        if !capturedWatcherIDs.isEmpty {
-                            try await syncEngine.replaceTaskWatchers(
-                                taskID: draft.id,
-                                projectID: projectID,
-                                watcherIDs: capturedWatcherIDs
-                            )
-                        }
-
+                        try await syncEngine.createTask(body: payload, projectID: projectID)
                     case .edit(let task):
-                        let updatePayload = try DemoSyncPayload(dictionary: body)
-                        try await syncEngine.updateTask(taskID: task.id, projectID: task.projectID, body: updatePayload)
-                        if reviewersChanged {
-                            try await syncEngine.replaceTaskReviewers(
-                                taskID: task.id,
-                                projectID: task.projectID,
-                                reviewerIDs: capturedReviewerIDs
-                            )
-                        }
-                        if watchersChanged {
-                            try await syncEngine.replaceTaskWatchers(
-                                taskID: task.id,
-                                projectID: task.projectID,
-                                watcherIDs: capturedWatcherIDs
-                            )
-                        }
+                        try await syncEngine.updateTask(taskID: task.id, projectID: task.projectID, body: payload)
                     }
                     await MainActor.run {
                         _ = saveMachine.send(.success)

@@ -224,15 +224,23 @@ public final class DemoSyncEngine {
     /// pending change — unlike `syncContainer.sync(item:)`, which stamps writes as inbound (pulled).
     /// Reuses the `@Syncable`-generated `make`/`apply`, so no field mapping is duplicated here.
     private func applyLocalTask(_ body: DemoSyncPayload, project: Project? = nil) throws {
-        let payload = SyncPayload(values: body.toSyncPayloadDictionary(), keyStyle: syncContainer.keyStyle)
+        let values = body.toSyncPayloadDictionary()
+        let payload = SyncPayload(values: values, keyStyle: syncContainer.keyStyle)
         let context = syncContainer.mainContext
-        if let id = payload.value(for: "id", as: String.self), let existing = try task(withID: id) {
+        let task: Task
+        if let id = payload.value(for: "id", as: String.self), let existing = try self.task(withID: id) {
             _ = try existing.apply(payload)
+            task = existing
         } else {
             let created = try Task.make(from: payload)
             context.insert(created)
             if let project { created.project = project }
+            task = created
         }
+        // reviewers/watchers are @NotExport, so apply()/make() won't set them from the body. Apply the
+        // relationships explicitly so an offline people edit shows locally before any server round-trip.
+        if let reviewerIDs = values["reviewer_ids"] as? [String] { task.reviewers = try users(for: reviewerIDs) }
+        if let watcherIDs = values["watcher_ids"] as? [String] { task.watchers = try users(for: watcherIDs) }
         try context.save()
     }
 

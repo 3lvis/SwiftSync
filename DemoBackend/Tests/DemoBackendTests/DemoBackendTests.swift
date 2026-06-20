@@ -604,6 +604,41 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(updated["created_at"] as? String, before?["created_at"] as? String)
     }
 
+    func testUpdateTaskFromBodyHonorsReviewerAndWatcherIDs() throws {
+        let url = makeTemporaryDatabaseURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
+
+        let before = try XCTUnwrap(backend.getTaskDetailPayload(publicID: taskID))
+        XCTAssertEqual(before["reviewer_ids"] as? [String], [userID])
+        XCTAssertEqual(before["watcher_ids"] as? [String], [userID])
+
+        let cleared = try backend.updateTask(
+            publicID: taskID,
+            body: [
+                "title": "t", "description": "d", "state": ["id": "todo"],
+                "reviewer_ids": [], "watcher_ids": [],
+            ])
+        XCTAssertEqual(cleared["reviewer_ids"] as? [String], [])
+        XCTAssertEqual(cleared["watcher_ids"] as? [String], [])
+
+        let reset = try backend.updateTask(
+            publicID: taskID,
+            body: [
+                "title": "t", "description": "d", "state": ["id": "todo"],
+                "reviewer_ids": [userID], "watcher_ids": [userID],
+            ])
+        XCTAssertEqual(reset["reviewer_ids"] as? [String], [userID])
+        XCTAssertEqual(reset["watcher_ids"] as? [String], [userID])
+
+        let titleOnly = try backend.updateTask(
+            publicID: taskID,
+            body: ["title": "t2", "description": "d", "state": ["id": "todo"]])
+        XCTAssertEqual(titleOnly["reviewer_ids"] as? [String], [userID])
+        XCTAssertEqual(titleOnly["watcher_ids"] as? [String], [userID])
+    }
+
     func testUpdateTaskFromBodyDictAllowsClearingDescriptionToNull() throws {
         let url = makeTemporaryDatabaseURL()
         defer { try? FileManager.default.removeItem(at: url) }

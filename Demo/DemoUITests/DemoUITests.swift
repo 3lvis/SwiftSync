@@ -53,7 +53,9 @@ private enum DemoSeedTaskID {
 final class DemoUITests: XCTestCase {
     /// A people-edit save runs three sequential refresh cycles, so the form dismisses just past the old
     /// 0.5s budget (which flaked); 1s asserts the form closes without re-introducing the flake.
-    private let saveDismissTimeout: TimeInterval = 1
+    // One-round-trip save → the form dismisses well under a second; 3s is jitter headroom. waitForNonExistence
+    // returns on dismiss, so a passing test isn't slowed and a real failure still fails fast.
+    private let saveDismissTimeout: TimeInterval = 3
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -339,7 +341,7 @@ final class DemoUITests: XCTestCase {
         replaceText(in: app.textFields["task-form.title"], with: title, app: app)
         XCTAssertTrue(app.buttons["task-form.save"].isEnabled, "offline create works with cached reference data")
         app.buttons["task-form.save"].tap()
-        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 1))
+        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout))
 
         // It appears locally and is queued.
         XCTAssertTrue(findAfterScrolling(app.staticTexts[title], in: app))
@@ -378,7 +380,7 @@ final class DemoUITests: XCTestCase {
         openCreateTaskForm(app)
         replaceText(in: app.textFields["task-form.title"], with: originalTitle, app: app)
         app.buttons["task-form.save"].tap()
-        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 1))
+        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout))
         XCTAssertTrue(findAfterScrolling(app.staticTexts[originalTitle], in: app))
 
         // Open it and rename it offline.
@@ -387,7 +389,7 @@ final class DemoUITests: XCTestCase {
         openEditTaskForm(app)
         replaceText(in: app.textFields["task-form.title"], with: updatedTitle, app: app)
         app.buttons["task-form.save"].tap()
-        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 1))
+        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout))
         XCTAssertEqual(detailElement(app, id: "task.title").label, updatedTitle, "the detail shows the new title")
 
         // Back on the project list, the row reflects the edit — not the stale original title.
@@ -411,7 +413,7 @@ final class DemoUITests: XCTestCase {
         openEditTaskForm(app)
         replaceText(in: app.textFields["task-form.title"], with: String(repeating: "A", count: 100), app: app)
         app.buttons["task-form.save"].tap()
-        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 2))
+        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout))
 
         // Reconnect: auto-sync pushes it, the server rejects it, and it surfaces in the inbox.
         app.buttons["offline-toggle"].tap()
@@ -447,7 +449,8 @@ final class DemoUITests: XCTestCase {
         addPerson(app, role: "reviewers", userID: DemoSeedUserID.sofiaGarcia)
         app.buttons["task-form.save"].tap()
         XCTAssertTrue(
-            app.buttons["task-form.save"].waitForNonExistence(timeout: 2), "an offline edit saves locally")
+            app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout),
+            "an offline edit saves locally")
         XCTAssertTrue(findAfterScrolling(app.staticTexts["task.reviewer.\(DemoSeedUserID.sofiaGarcia)"], in: app))
 
         // Reconnect → the change auto-syncs.

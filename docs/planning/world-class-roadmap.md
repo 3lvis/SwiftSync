@@ -123,25 +123,14 @@ is a separate SPM product (↔ Networking items 5–6).
 
 ### Demo app — follow-ups
 
-- [ ] **Consolidate the online people-edit save into one round-trip.** Editing a task's assignee +
-      reviewers + watchers and saving currently fires **three serial server round-trips** —
-      `DemoSyncEngine.updateTask` → `replaceTaskReviewers` → `replaceTaskWatchers` (driven from the
-      task-form save in `ScreenMachines.swift`, the `_Concurrency.Task` that awaits all three) — and each
-      one calls `syncTaskAfterMutation` (a project-tasks pull + a task-detail pull). So one save ≈ 3
-      mutations + ~6 pulls, all serial. Measured cost with the UI-test network delay disabled is only
-      ~41ms (vs ~18ms for a single update), so it's invisible in tests — but against a **real network**
-      it's 3× serial latency for one save, and it's why the people-edit UI tests needed a looser
-      save-dismiss budget (PR #631 set `saveDismissTimeout` to 1s as a band-aid).
-      **Fix:** carry `reviewer_ids`/`watcher_ids` in the single `updateTask` upsert body (the offline
-      `DemoSyncEngine.taskData` upload path already does exactly this — `export` omits the `@NotExport`
-      reviewers/watchers, so it adds them explicitly), then do **one** `syncTaskAfterMutation`. Drop the
-      separate online `replaceTaskReviewers`/`replaceTaskWatchers` round-trips (or make them local-apply
-      + a single push).
-      **Prerequisite:** the demo backend's task-update endpoint (`DemoServerSimulator`) must honor
-      `reviewer_ids`/`watcher_ids` in the task body (today only the `/sync/upload` upsert path does).
-      **Done when:** a people-edit save is one server round-trip, and the people-edit UI tests pass at the
-      original tight `0.5s` save-dismiss timeout (the right reason), letting `saveDismissTimeout` shrink.
-      Demo-only — no SwiftSync library change.
+- [x] **Consolidate the online people-edit save into one round-trip.** Done: `updateTask`/`createTask`
+      now honor `reviewer_ids`/`watcher_ids` in the task body (the `.save` handler in `ScreenMachines.swift`
+      adds the `@NotExport` people to the body and drops the separate `replaceTaskReviewers`/
+      `replaceTaskWatchers` calls), so a people edit is a single server round-trip. The offline local
+      apply (`applyLocalTask`) sets the `@NotExport` reviewers/watchers relationships from the body, since
+      `apply()` won't — so an offline people edit shows before any round-trip. UI save-dismiss waits were
+      unified on one `saveDismissTimeout` (3s — sized for a one-round-trip save plus CI jitter, not a
+      bloated ceiling: `waitForNonExistence` returns on dismiss, so a real failure still fails fast).
 
 ### Offline / two-id identity model — follow-ups (PR #632)
 

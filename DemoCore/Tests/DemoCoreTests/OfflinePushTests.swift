@@ -302,6 +302,39 @@ final class OfflinePushTests: XCTestCase {
         XCTAssertEqual(edited.project?.id, projectID, "the edit must not drop the project link")
     }
 
+    /// Regression: an offline `updateTask` with `reviewer_ids` must apply reviewers locally (`apply()`
+    /// skips the `@NotExport` relationship, so there's no server round-trip to reflect it).
+    @MainActor
+    func testOfflineUpdateTaskWithReviewerIDsAppliesLocally() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("offline-update-people-\(UUID().uuidString).sqlite")
+        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
+        let backend = try DemoServerSimulator(databaseURL: url, seedData: DemoSeedData.generate())
+        let apiClient = FakeDemoAPIClient(backend: backend)
+        let syncContainer = try makeSyncContainer()
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        let taskID = DemoSeedData.SeedIDs.Tasks.sessionTimeout
+        try await engine.syncProjectTasks(projectID: projectID)
+        try await engine.syncTaskDetail(taskID: taskID)
+        try await engine.syncTaskFormMetadata()  // cache the users to assign
+
+        let task = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        let newReviewers = [DemoSeedData.SeedIDs.Users.miaPatel, DemoSeedData.SeedIDs.Users.ethanLee].sorted()
+
+        engine.isOffline = true
+        var body = syncContainer.export(task)
+        body["reviewer_ids"] = newReviewers
+        try await engine.updateTask(
+            taskID: taskID, projectID: projectID, body: try DemoSyncPayload(dictionary: body))
+
+        let offline = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        XCTAssertEqual(
+            offline.reviewers.map(\.id).sorted(), newReviewers,
+            "an offline updateTask with reviewer_ids must apply the reviewers to the local row")
+    }
+
     /// Only `Task` is marked offline, yet a `Task`↔`User` relationship edit made offline (assigning
     /// reviewers) round-trips: assigning a person is a local *Task* update — the linked `User` is
     /// pull-only and never needs to be offline. After reconnect+push the server has the new reviewers,
