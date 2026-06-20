@@ -19,6 +19,22 @@ final class PushHistoryTokenRecord {
 }
 
 extension SwiftSync {
+    /// `push` writes `PushHistoryTokenRecord` to advance its bookmark once the upload is acknowledged.
+    /// `SyncContainer` registers that model automatically; a caller who builds their own `ModelContainer`
+    /// may not. Validate it's in the schema *before* the upload, so an acknowledged server write is never
+    /// stranded by a token write that throws afterward.
+    static func requireOfflinePushBookkeeping(in context: ModelContext) throws {
+        let name = String(describing: PushHistoryTokenRecord.self)
+        guard context.container.schema.entities.contains(where: { $0.name == name }) else {
+            throw SyncError.schemaValidation(
+                reason: """
+                    Offline push needs SwiftSync's bookkeeping model (\(name)) in the context's schema, \
+                    but it is missing. Build the container with SyncContainer, which registers it \
+                    automatically, so an acknowledged upload is never lost to a failed token write.
+                    """)
+        }
+    }
+
     static func lastPushedHistoryToken<Model>(for _: Model.Type, in context: ModelContext) -> DefaultHistoryToken? {
         let typeName = String(reflecting: Model.self)
         var descriptor = FetchDescriptor<PushHistoryTokenRecord>(predicate: #Predicate { $0.modelTypeName == typeName })

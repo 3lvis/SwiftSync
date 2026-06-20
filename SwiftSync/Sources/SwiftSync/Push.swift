@@ -83,7 +83,18 @@ extension SwiftSync {
         in context: ModelContext,
         since token: DefaultHistoryToken?
     ) throws -> SyncPendingChanges where Model.SyncID == String {
-        let transactions = try localTransactions(since: token, in: context)
+        try pendingChanges(from: localTransactions(since: token, in: context), for: Model.self, in: context)
+    }
+
+    /// Partition an already-read slice of local history into pending inserts/updates/deletes. Split out
+    /// so `push` can capture the history boundary from the *same* read it derives the batch from — and
+    /// advance only to that boundary — instead of re-reading after the upload await (which would let a
+    /// concurrent local write slip behind the token and never be pushed).
+    static func pendingChanges<Model: SyncUpdatableModel>(
+        from transactions: [DefaultHistoryTransaction],
+        for _: Model.Type,
+        in context: ModelContext
+    ) throws -> SyncPendingChanges where Model.SyncID == String {
         // No local changes since the token → nothing to push. Return before the live-row fetch so the
         // common "nothing pending" case is O(history query), not O(table size).
         guard !transactions.isEmpty else {
@@ -163,11 +174,20 @@ extension SwiftSync {
         upload: (SyncPushBatch) async throws -> SyncPushResponse
     ) async throws -> SyncPushSummary where Model.SyncID == String {
         try requireOfflineCapable(Model.self, in: context)
+        // Fail before the upload, not after: advancing the token writes the hidden bookkeeping model, and
+        // if it isn't in this context's schema that write throws *after* the server already applied the
+        // upload — stranding the server ahead of local state.
+        try requireOfflinePushBookkeeping(in: context)
         let token = lastPushedHistoryToken(for: Model.self, in: context)
-        let pending = try pendingChanges(for: Model.self, in: context, since: token)
+        let transactions = try localTransactions(since: token, in: context)
+        let pending = try pendingChanges(from: transactions, for: Model.self, in: context)
         guard !pending.isEmpty else {
             return SyncPushSummary(insertedCount: 0, updatedCount: 0, deletedCount: 0, failures: [])
         }
+        // The history head as observed *before* the upload — the batch covers exactly the changes up to
+        // here. Advancing only to this boundary leaves any write that lands during the upload await past
+        // the token, so it is re-detected next push instead of being silently swallowed.
+        let boundary = transactions.last?.token
 
         let batch = SyncPushBatch(inserts: pending.inserts, updates: pending.updates, deletes: pending.deletes)
         let response = try await upload(batch)
@@ -175,9 +195,9 @@ extension SwiftSync {
         let allIDs = Set(pending.inserts + pending.updates + pending.deletes)
         let acknowledgedEverything = response.failures.isEmpty && allIDs.isSubset(of: response.confirmedLocalIDs)
 
-        if acknowledgedEverything, let latest = try latestHistoryToken(in: context) {
-            try setLastPushedHistoryToken(latest, for: Model.self, in: context)
-            try? trimInboundHistory(throughInclusive: latest, in: context)
+        if acknowledgedEverything, let boundary {
+            try setLastPushedHistoryToken(boundary, for: Model.self, in: context)
+            try? trimInboundHistory(throughInclusive: boundary, in: context)
         }
 
         func confirmed(_ ids: [String]) -> Int { ids.filter { response.confirmedLocalIDs.contains($0) }.count }
@@ -247,10 +267,5 @@ extension SwiftSync {
             descriptor.predicate = #Predicate { $0.author == nil || $0.author != inbound }
         }
         return try context.fetchHistory(descriptor)
-    }
-
-    /// The newest history token in the store, used to advance the token after a fully-acknowledged push.
-    static func latestHistoryToken(in context: ModelContext) throws -> DefaultHistoryToken? {
-        try context.fetchHistory(HistoryDescriptor<DefaultHistoryTransaction>()).last?.token
     }
 }

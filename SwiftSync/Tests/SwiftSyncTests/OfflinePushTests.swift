@@ -133,6 +133,60 @@ final class OfflinePushTests: XCTestCase {
         XCTAssertEqual(summary.updatedCount, 1, "only the in-batch update counts, not server echoes")
     }
 
+    /// A local write that lands *during* the `upload` await is not in the uploaded batch. The token must
+    /// advance only to the boundary captured before upload, so that write stays pending — never swallowed
+    /// behind an advanced token and permanently missed.
+    func testLocalWriteDuringUploadStaysPending() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        context.insert(PushNote(id: "p1", title: "first"))
+        try context.save()
+
+        let summary = try await SwiftSync.push(for: PushNote.self, in: context) { batch in
+            XCTAssertEqual(batch.inserts, ["p1"])
+            // A new local row appears after the batch was captured, while "uploading".
+            context.insert(PushNote(id: "p2", title: "during upload"))
+            try context.save()
+            return self.confirmAll(batch)
+        }
+
+        XCTAssertEqual(summary.insertedCount, 1)
+        XCTAssertEqual(
+            try SwiftSync.pendingChanges(for: PushNote.self, in: context).inserts, ["p2"],
+            "a local write during upload must survive the token advance")
+    }
+
+    /// `push` records its last-pushed token after the upload is acknowledged. If SwiftSync's hidden
+    /// bookkeeping model isn't in the schema (the caller built their own container instead of using
+    /// `SyncContainer`), that write would throw *after* the server already applied the upload — stranding
+    /// the server ahead of local state. Push must fail fast, before uploading.
+    func testPushFailsBeforeUploadingWhenBookkeepingModelMissing() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("no-bookkeeping-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        // Built WITHOUT SyncContainer → PushHistoryTokenRecord is absent from the schema.
+        let container = try ModelContainer(
+            for: PushNote.self,
+            configurations: ModelConfiguration(url: directory.appendingPathComponent("store.sqlite")))
+        let context = ModelContext(container)
+        context.insert(PushNote(id: "x", title: "t"))
+        try context.save()
+
+        var uploadCalled = false
+        do {
+            _ = try await SwiftSync.push(for: PushNote.self, in: context) { batch in
+                uploadCalled = true
+                return self.confirmAll(batch)
+            }
+            XCTFail("expected push to throw when the bookkeeping model is not registered")
+        } catch {
+            // Expected: push throws rather than completing a stranded upload.
+        }
+        XCTAssertFalse(
+            uploadCalled, "push must fail before uploading, so an acknowledged server write is never stranded")
+    }
+
     private func mutate(_ context: ModelContext, _ body: ([PushNote]) -> Void) throws {
         body(try context.fetch(FetchDescriptor<PushNote>()))
         try context.save()
