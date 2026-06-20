@@ -61,6 +61,15 @@ API minimal (macros + convention over configuration), worked one item at a time.
 - [ ] Add a docs gate: DocC build success + doc link-check (depends on Phases 2–3).
 - [ ] Un-skip a small, fast benchmark subset and add a thresholded perf-regression gate;
       `log()` anything intentionally excluded so coverage isn't silently truncated.
+- [ ] **API-breakage gate (do at first release / tag time).** Once there's a published tag to diff
+      against, add `swift package diagnose-api-breaking-changes <last-tag>` as a CI gate on the
+      **SwiftSync** library: it serializes the public API surface (via `swift-api-digester`) and fails the
+      PR on any source-breaking change (removed/renamed public symbol, changed signature, dropped
+      conformance). Intentional breaks go in `--breakage-allowlist-path`. This is the Apple-style,
+      high-signal check for a library — pairs with Phase 5 and `api-surface-review.md`, and is far more
+      on-brand than a coverage %. Canonical implementation: the reusable `swiftlang/github-workflows`
+      `soundness.yml` (`api_breakage_check`). It only becomes meaningful with a baseline tag, so it's
+      gated on the first release, not now.
 
 ### Phase 7 — Production-sync story (foundation shipped)
 
