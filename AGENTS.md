@@ -113,3 +113,13 @@
   - **Every push (draft included)** runs the fast tier in `ci.yml`: swift-format, macOS `swift test` (×3 packages), the warnings gate, doc-links, and the perf subset.
   - **Only when a PR is marked ready for review** does the slow simulator tier in `ios-regression.yml` run — one `iOS Simulator Tests` job that runs both the `DemoUITests` UI suite and the iOS-specific dirty-tracking regression (`DirtyTrackingGapTests`) on a simulator. It skips on drafts (a skipped check still reports success) and there is no master-push run — this tier is pre-merge only.
 - So mark a PR **ready** to trigger the `iOS Simulator Tests` gate, then verify it green before merging. If a task touches `Core.swift`, `MacrosImplementation/`, or `SyncableMacro.swift`, note in the plan that marking the PR ready will run that simulator tier.
+
+### UI tests are a last resort (very expensive)
+
+A `DemoUITests` test boots a simulator and builds the app — the costliest thing in CI. Keep one only when nothing cheaper can catch the regression.
+
+- **A UI test owns its timeouts inline.** No shared timeout constant across tests; each `waitForExistence`/`waitForNonExistence` carries a value sized for that test's own operation, at the call site.
+- **No green-at-birth tests.** A test earns its place only by having been red before the fix it guards (the red-first rule, applied to UI tests too). A test that passed at creation, guarding no demonstrated failure, is removed.
+- **Prefer the cheapest layer that reproduces the failure.** Before adding or keeping a UI test, try to make the core failure reproduce as a DemoCore/DemoBackend/SwiftSync unit test. If a unit catches it, the UI test is redundant — drop it (precedent: the dirty-tracking regression was driven down from a UI test into `DirtyTrackingGapTests`).
+- **Keep a UI test only with a strong, documented reason** — it exercises something units genuinely can't (view hierarchy, cross-screen navigation, a SwiftUI binding/reactivity path, a gesture/dismiss affordance) and you tried and failed to pin it to a unit. State the reason in a one-line comment on the test.
+- Ongoing systematic effort + per-test trial log: `docs/planning/ui-test-trial.md`.
