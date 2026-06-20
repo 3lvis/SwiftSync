@@ -255,40 +255,40 @@ public final class DemoSyncEngine {
     /// clear it from any row that no longer fails (it succeeded, or its corrected edit went through).
     /// SwiftSync persists nothing — the failures inbox is entirely this app's concern.
     private func annotateFailures(_ failures: [SyncPushFailure]) throws {
-        let reasonsByLocalID = Dictionary(
-            failures.map { ($0.localID, $0.error.localizedDescription) },
+        let reasonsByID = Dictionary(
+            failures.map { ($0.id, $0.error.localizedDescription) },
             uniquingKeysWith: { first, _ in first })
-        for task in failedTasks() where reasonsByLocalID[task.id] == nil {
+        for task in failedTasks() where reasonsByID[task.id] == nil {
             task.syncFailureReason = nil
         }
-        for (localID, reason) in reasonsByLocalID {
-            if let task = try task(withID: localID) { task.syncFailureReason = reason }
+        for (id, reason) in reasonsByID {
+            if let task = try task(withID: id) { task.syncFailureReason = reason }
         }
         try syncContainer.mainContext.save()
     }
 
     /// Serialize the pending batch into the `/sync/upload` operation list, POST it once, and return only
     /// the per-row failures — SwiftSync confirms everything else by complement. Every created-or-edited
-    /// row is an `upsert` keyed by its stable `localId` (the server find-by-localId → update-else-creates,
-    /// adopting that `localId` as the row's identity — no distinct server id comes back); tombstones are a
-    /// `delete` by the same `localId`. A `stale` result means the server won last-writer-wins — adopt its
-    /// state locally and treat the row as resolved (not a failure) so it isn't re-sent.
+    /// row is an `upsert` keyed by its stable `id` (the server find-by-id → update-else-creates, adopting
+    /// that `id` as the row's `public_id` — no distinct server id comes back); tombstones are a `delete`
+    /// by the same `id`. A `stale` result means the server won last-writer-wins — adopt its state locally
+    /// and treat the row as resolved (not a failure) so it isn't re-sent.
     private func upload(_ pending: SyncPendingChanges) async throws -> [SyncPushFailure] {
         var operations: [[String: Any]] = []
 
-        for localID in pending.inserts + pending.updates {
-            guard let task = try task(withID: localID) else { continue }
+        for id in pending.inserts + pending.updates {
+            guard let task = try task(withID: id) else { continue }
             let data = taskData(task)
             operations.append([
-                "operation": "upsert", "type": "tasks", "localId": localID,
+                "operation": "upsert", "type": "tasks", "id": id,
                 "updatedAt": data["updated_at"] ?? "", "data": data,
             ])
         }
-        for localID in pending.deletes {
+        for id in pending.deletes {
             // The row is already hard-deleted locally — its id is recovered from store history — so the
             // delete can't fetch the gone task. Stamp the deletion time now for the server's LWW check.
             operations.append([
-                "operation": "delete", "type": "tasks", "localId": localID,
+                "operation": "delete", "type": "tasks", "id": id,
                 "updatedAt": syncContainer.dateFormatter.string(from: Date()),
             ])
         }
@@ -299,7 +299,7 @@ public final class DemoSyncEngine {
         for result in results {
             let operation = result["operation"] as? String
             let status = result["status"] as? String
-            let localID = result["localId"] as? String
+            let id = result["id"] as? String
             switch (operation, status) {
             case ("upsert", "stale"), ("delete", "stale"):
                 // The server won last-writer-wins — adopt its state locally (the inbound sync re-creates a
@@ -316,7 +316,7 @@ public final class DemoSyncEngine {
                 // the inbox.
                 failures.append(
                     SyncPushFailure(
-                        localID: localID ?? "",
+                        id: id ?? "",
                         error: DemoUploadRejection(
                             message: (result["message"] as? String) ?? "rejected")))
             }

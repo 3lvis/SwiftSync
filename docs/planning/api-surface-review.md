@@ -140,8 +140,11 @@ redundant; only the **failures** carry information the library can't derive.
 - `SyncPushBatch` merged into `SyncPendingChanges` — one type is both the return of `pendingChanges(...)`
   and the value `withPendingChanges(...)` hands the `process` closure.
 - `SyncPushResponse` **deleted** — `upload` now returns `[SyncPushFailure]` directly.
-- `SyncPushFailure` shrank to `{ localID, error }` — the `Operation` enum/field went (the operation is
-  the library's to know from the batch, not the consumer's to report).
+- `SyncPushFailure` shrank to `{ id, error }` — the `Operation` enum/field went (the operation is
+  the library's to know from the batch, not the consumer's to report). Its `id` field was renamed from
+  `localID` (a vestige of the deleted two-id `localId`+`remoteId` model); the library deals in one `id`,
+  matching the model's `@Attribute(.unique) var id`. The demo's `/sync/upload` wire key followed suit
+  (`"localId"` → `"id"`); the backend keeps `public_id` internally, where the int-PK contrast is real.
 - `SyncPushSummary` **deleted** — the method returns `[SyncPushFailure]` (the same value the closure
   returns). Its three counts (`insertedCount`/`updatedCount`/`deletedCount`) had no consumer; the demo only
   ever read `.failures`. Counts are derivable by complement if a consumer ever needs them.

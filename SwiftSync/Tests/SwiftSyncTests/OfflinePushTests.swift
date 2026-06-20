@@ -83,10 +83,10 @@ final class OfflinePushTests: XCTestCase {
         try context.save()
 
         let failures = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context) { _ in
-            [SyncPushFailure(localID: "c1", error: PushTestError(message: "422"))]
+            [SyncPushFailure(id: "c1", error: PushTestError(message: "422"))]
         }
 
-        XCTAssertEqual(failures.first?.localID, "c1")
+        XCTAssertEqual(failures.first?.id, "c1")
         XCTAssertEqual(failures.first?.error as? PushTestError, PushTestError(message: "422"))
         XCTAssertEqual(try SwiftSync.pendingChanges(for: PushNote.self, in: context).inserts, ["c1"])
     }
@@ -103,7 +103,7 @@ final class OfflinePushTests: XCTestCase {
         try context.save()
 
         _ = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context) { _ in
-            [SyncPushFailure(localID: "u1", error: PushTestError(message: "500"))]
+            [SyncPushFailure(id: "u1", error: PushTestError(message: "500"))]
         }
         XCTAssertEqual(
             try SwiftSync.pendingChanges(for: PushNote.self, in: context).updates, ["u1"],
@@ -121,9 +121,9 @@ final class OfflinePushTests: XCTestCase {
         try context.save()
 
         let failures = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context) { _ in
-            [SyncPushFailure(localID: "c2", error: PushTestError(message: "422"))]
+            [SyncPushFailure(id: "c2", error: PushTestError(message: "422"))]
         }
-        XCTAssertEqual(failures.map(\.localID), ["c2"])
+        XCTAssertEqual(failures.map(\.id), ["c2"])
         XCTAssertEqual(
             try SwiftSync.pendingChanges(for: PushNote.self, in: context).inserts.sorted(), ["c1", "c2"],
             "a failure freezes the token, so even the accepted row is re-detected")

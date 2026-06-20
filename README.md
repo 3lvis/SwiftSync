@@ -635,8 +635,8 @@ The identity is the only id: it's client-generated and the backend adopts it, so
 
 ```swift
 let failures = try await SwiftSync.withPendingChanges(for: Task.self, in: syncContainer.mainContext) { pending in
-  // map pending.inserts / pending.updates / pending.deletes (the localIDs) to upsert/delete
-  // requests, call your API, and return a SyncPushFailure for each rejected localID
+  // map pending.inserts / pending.updates / pending.deletes (the ids) to upsert/delete
+  // requests, call your API, and return a SyncPushFailure for each rejected id
   try await api.push(pending)
 }
 // No history token to persist — SwiftSync owns it. `failures` is empty on a fully clean pass.

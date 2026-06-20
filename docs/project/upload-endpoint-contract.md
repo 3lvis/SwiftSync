@@ -1,5 +1,11 @@
 # Upload Endpoint Contract
 
+> ⚠️ **Stale — pending rewrite.** This describes the original two-id (`localId` + server-minted
+> `remoteId`) protocol. The shipped model **collapsed to one id**: the client id *is* the row's identity
+> and the backend adopts it as its `public_id` (no `remoteId`), and the demo's `/sync/upload` wire key is
+> now `"id"`, not `"localId"`. See `docs/planning/offline-history-design.md` for the current model. This
+> doc is tracked for a refresh in the roadmap's docs follow-ups.
+
 The wire contract for SwiftSync's **push** (local → server). A general-purpose backend
 (Django/Rails/Laravel/Spring) adds this as one thin "offline layer" endpoint *beside* its normal
 per-resource routes — backed by the framework's bulk-upsert primitive (`upsert_all` / `upsert()` /
