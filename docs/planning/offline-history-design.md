@@ -62,8 +62,8 @@ cursor and trims the now-redundant inbound history.
 - `Push.swift`: `SyncCursor` (= `DefaultHistoryToken`), `SwiftSync.inboundAuthor`, history-based
   `pendingChanges(for:in:)` / `push(for:in:upload:)` (cursor internal, no `changedSince`/return cursor),
   `locallyDirtyPersistentIDs`, `trimInboundHistory`, `localTransactions`, `latestToken`. The
-  insert-then-delete-before-push case is dropped (server never saw it). `upload` returns
-  `[SyncPushFailure]` (confirmations derived by complement); `SyncPushSummary` drops `cursor`.
+  insert-then-delete-before-push case is dropped (server never saw it). Both `upload` and `push` return
+  `[SyncPushFailure]` (confirmations derived by complement; no summary/cursor for the caller to handle).
 - `SyncCursorStore.swift`: internal `SyncCursorRecord` (per-type token) + read/write helpers.
 - `OfflineDetection.swift`: `identityPreservesValueOnDeletion` (the opt-in check) + `requireOfflineCapable`
   (push/pending throw a clear diagnostic if the identity isn't `.preserveValueOnDeletion`).

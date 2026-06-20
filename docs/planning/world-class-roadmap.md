@@ -97,11 +97,11 @@ state; failed rows stay pending and retry; surfacing is an event stream; the inb
 
 - [ ] **Represent + report (pure-bubble).** One `SyncError` currency for everything SwiftSync throws
       (`.invalidPayload` / `.cancelled` / `.schemaValidation` / `.containerInitialization`). For per-row
-      *partial* push rejections, `push()` returns the outcomes (`failures: [{localID, error}]`)
+      *partial* push rejections, `push()` returns the rejected rows (`[SyncPushFailure]` of `{localID, error}`)
       and marks succeeded rows synced / leaves failed rows pending — it persists **nothing** on models
       (no `syncFailureReason`/`syncFailureCode` on `SyncOfflineModel`). The consumer owns any inbox
       persistence and reads the backend's own error in its `upload` closure. *Demo:* the engine annotates
-      its own `Task` field from `summary.failures` and clears it on a later successful push.
+      its own `Task` field from the returned failures and clears it on a later successful push.
 
 - [ ] **Surface (observability).** A multi-consumer `events()` `AsyncStream` emitting per-sync outcomes
       (started/completed, applied/stale/rejected, counts, duration) — the prior-art surfacing channel

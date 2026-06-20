@@ -31,7 +31,7 @@ git history is the memory.
 2. [x] ~~Macro-generate `SyncOfflineModel`~~ — **superseded**: offline now rides SwiftData History, so there is no `SyncOfflineModel` to generate. Models carry zero offline fields; offline is opted in by marking the identity `@Attribute(.preserveValueOnDeletion)`. See `docs/planning/offline-history-design.md`.
 3. [x] ~~Drop `syncFailureReason` from the protocol~~ — **done** (#624: removed from `SyncOfflineModel`)
 4. [x] ~~Generalize the inbound LWW timestamp key~~ — **stale**: superseded by the history dirty-set (see §4)
-5. [x] ~~Tighten the push response seam~~ — **done**: 5 push structs → 3 (`SyncPendingChanges`, `SyncPushFailure`, `SyncPushSummary`); `upload` returns only `[SyncPushFailure]` (see §5)
+5. [x] ~~Tighten the push response seam~~ — **done**: 5 push structs → 2 (`SyncPendingChanges`, `SyncPushFailure`); both `upload` and `push` deal only in `[SyncPushFailure]` (see §5)
 6. [x] ~~Unify the three error types into `SyncError`~~ — **done** (#624: `SchemaValidationError` + `ObjectiveCInitializationExceptionError` folded into `SyncError`)
 7. [ ] Demote the reactive publishers to `internal`
 
@@ -103,7 +103,7 @@ coordination with #3 (don't generate a field that's being removed).
 ## 3. Drop `syncFailureReason` from `SyncOfflineModel` — ✅ done (#624)
 
 Pure-bubble (#624) removed `syncFailureReason` from `SyncOfflineModel`: the library persists no per-row
-failure state — failures bubble up via `SyncPushSummary.failures` and the consumer owns any inbox (the
+failure state — failures bubble up as `push`'s `[SyncPushFailure]` return and the consumer owns any inbox (the
 demo annotates its own `@NotExport` field). One fewer hand-written protocol requirement. **Note for #2:**
 the macro must not generate this field — it's gone.
 
@@ -136,17 +136,18 @@ identity the server adopts (an idempotent upsert — no server-assigned ids to m
 are derivable: `confirmed = batch − failures`. Asking the consumer to echo back which ids succeeded was
 redundant; only the **failures** carry information the library can't derive.
 
-**Now (5 structs → 3).**
+**Now (5 structs → 2).**
 - `SyncPushBatch` merged into `SyncPendingChanges` — one type is both the return of `pendingChanges(...)`
   and the value `push(...)` hands `upload`.
 - `SyncPushResponse` **deleted** — `upload` now returns `[SyncPushFailure]` directly.
 - `SyncPushFailure` shrank to `{ localID, error }` — the `Operation` enum/field went (the operation is
   the library's to know from the batch, not the consumer's to report).
-- `SyncPushSummary` unchanged (`insertedCount` / `updatedCount` / `deletedCount` / `failures`); counts are
-  now computed by complement.
+- `SyncPushSummary` **deleted** — `push` returns `[SyncPushFailure]` (the same value `upload` returns). Its
+  three counts (`insertedCount`/`updatedCount`/`deletedCount`) had no consumer; the demo only ever read
+  `.failures`. Counts are derivable by complement if a consumer ever needs them.
 - `inboundAuthor` demoted `public` → `internal` (consumer never referenced it).
 
-Surviving public push surface: `SyncPendingChanges`, `SyncPushFailure`, `SyncPushSummary`. The token still
+Surviving public push surface: `SyncPendingChanges` (in) and `SyncPushFailure` (out). The token still
 advances (and inbound history is trimmed) only when `upload` reports **no** failures — same at-least-once
 semantics, smaller seam.
 

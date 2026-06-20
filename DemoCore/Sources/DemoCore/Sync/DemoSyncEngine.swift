@@ -198,7 +198,7 @@ public final class DemoSyncEngine {
     /// Push every locally-pending task change to the server and apply the result. Returns `nil` while
     /// offline (no network) or if a push is already in flight.
     @discardableResult
-    public func pushPendingChanges() async throws -> SyncPushSummary? {
+    public func pushPendingChanges() async throws -> [SyncPushFailure]? {
         guard !isOffline else { return nil }
         let key = "push"
         guard !inFlightOperations.contains(key) else { return nil }
@@ -210,14 +210,14 @@ public final class DemoSyncEngine {
             isSyncing = !inFlightOperations.isEmpty
         }
 
-        let summary = try await SwiftSync.push(
+        let failures = try await SwiftSync.push(
             for: Task.self,
             in: syncContainer.mainContext,
             upload: { pending in try await self.upload(pending) }
         )
-        try annotateFailures(from: summary)
+        try annotateFailures(failures)
         refreshPendingCount()
-        return summary
+        return failures
     }
 
     /// Apply a payload to the local store as a *local* edit (default author), so it's tracked as a
@@ -253,9 +253,9 @@ public final class DemoSyncEngine {
     /// Reflect a push's outcome onto the inbox: stamp `syncFailureReason` on each rejected row and
     /// clear it from any row that no longer fails (it succeeded, or its corrected edit went through).
     /// SwiftSync persists nothing — the failures inbox is entirely this app's concern.
-    private func annotateFailures(from summary: SyncPushSummary) throws {
+    private func annotateFailures(_ failures: [SyncPushFailure]) throws {
         let reasonsByLocalID = Dictionary(
-            summary.failures.map { ($0.localID, $0.error.localizedDescription) },
+            failures.map { ($0.localID, $0.error.localizedDescription) },
             uniquingKeysWith: { first, _ in first })
         for task in failedTasks() where reasonsByLocalID[task.id] == nil {
             task.syncFailureReason = nil
@@ -310,9 +310,9 @@ public final class DemoSyncEngine {
             case ("upsert", "applied"), ("delete", "applied"):
                 break
             default:
-                // Bubble the backend's rejection up as this app's own error. SwiftSync carries it
-                // verbatim in `summary.failures` without interpreting it; the engine reads it back to
-                // annotate the inbox.
+                // Bubble the backend's rejection up as this app's own error. SwiftSync returns the
+                // failures verbatim without interpreting them; the engine reads them back to annotate
+                // the inbox.
                 failures.append(
                     SyncPushFailure(
                         localID: localID ?? "",

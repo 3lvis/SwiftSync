@@ -34,15 +34,6 @@ public struct SyncPushFailure: Sendable {
     }
 }
 
-/// Result of a push pass. SwiftSync advances its own per-type token internally on a fully-acknowledged
-/// push, so there is no token for the caller to persist — just the counts and any per-row failures.
-public struct SyncPushSummary: Sendable {
-    public let insertedCount: Int
-    public let updatedCount: Int
-    public let deletedCount: Int
-    public let failures: [SyncPushFailure]
-}
-
 extension SwiftSync {
     /// The local changes pending a push, read straight from SwiftData history since SwiftSync's stored
     /// per-type token: transactions authored by anyone other than the inbound (pull) author. A row
@@ -151,34 +142,23 @@ extension SwiftSync {
         in context: ModelContext,
         isolation: isolated (any Actor)? = #isolation,
         upload: (SyncPendingChanges) async throws -> [SyncPushFailure]
-    ) async throws -> SyncPushSummary where Model.SyncID == String {
+    ) async throws -> [SyncPushFailure] where Model.SyncID == String {
         try requireOfflineCapable(Model.self, in: context)
         try requireOfflinePushBookkeeping(in: context)
         let token = lastPushedHistoryToken(for: Model.self, in: context)
         let transactions = try localTransactions(since: token, in: context)
         let pending = try pendingChanges(from: transactions, for: Model.self, in: context)
-        guard !pending.isEmpty else {
-            return SyncPushSummary(insertedCount: 0, updatedCount: 0, deletedCount: 0, failures: [])
-        }
+        guard !pending.isEmpty else { return [] }
         // The history head observed *before* the upload. Advancing only to here leaves any write that
         // lands during the upload await past the token, so it's re-detected next push, not swallowed.
         let boundary = transactions.last?.token
 
-        // The uploader reports only failures; everything else in the batch is confirmed by complement.
         let failures = try await upload(pending)
-        let failedIDs = Set(failures.map(\.localID))
-
         if failures.isEmpty, let boundary {
             try setLastPushedHistoryToken(boundary, for: Model.self, in: context)
             try? trimInboundHistory(throughInclusive: boundary, in: context)
         }
-
-        func confirmed(_ ids: [String]) -> Int { ids.filter { !failedIDs.contains($0) }.count }
-        return SyncPushSummary(
-            insertedCount: confirmed(pending.inserts),
-            updatedCount: confirmed(pending.updates),
-            deletedCount: confirmed(pending.deletes),
-            failures: failures)
+        return failures
     }
 
     /// Dirty persistent ids for the pull, but only for models that opted into offline round-trip by

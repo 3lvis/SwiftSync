@@ -65,13 +65,12 @@ final class OfflinePushTests: XCTestCase {
         context.insert(PushNote(id: "c1", title: "insert"))
         try context.save()
 
-        let summary = try await SwiftSync.push(for: PushNote.self, in: context) { pending in
+        let failures = try await SwiftSync.push(for: PushNote.self, in: context) { pending in
             XCTAssertEqual(pending.inserts, ["c1"])
             return []
         }
 
-        XCTAssertEqual(summary.insertedCount, 1)
-        XCTAssertTrue(summary.failures.isEmpty)
+        XCTAssertTrue(failures.isEmpty)
         XCTAssertTrue(try SwiftSync.pendingChanges(for: PushNote.self, in: context).isEmpty)
     }
 
@@ -83,12 +82,12 @@ final class OfflinePushTests: XCTestCase {
         context.insert(PushNote(id: "c1", title: "rejected"))
         try context.save()
 
-        let summary = try await SwiftSync.push(for: PushNote.self, in: context) { _ in
+        let failures = try await SwiftSync.push(for: PushNote.self, in: context) { _ in
             [SyncPushFailure(localID: "c1", error: PushTestError(message: "422"))]
         }
 
-        XCTAssertEqual(summary.failures.first?.localID, "c1")
-        XCTAssertEqual(summary.failures.first?.error as? PushTestError, PushTestError(message: "422"))
+        XCTAssertEqual(failures.first?.localID, "c1")
+        XCTAssertEqual(failures.first?.error as? PushTestError, PushTestError(message: "422"))
         XCTAssertEqual(try SwiftSync.pendingChanges(for: PushNote.self, in: context).inserts, ["c1"])
     }
 
@@ -113,22 +112,23 @@ final class OfflinePushTests: XCTestCase {
 
     /// Counts are the batch minus the reported failures: a partial rejection confirms the rest by
     /// complement. Because *any* failure freezes the token, even the confirmed rows stay pending and are
-    /// re-detected next push (at-least-once).
-    func testCountsAreBatchMinusFailures() async throws {
+    /// Any failure freezes the token (all-or-nothing): the rejected row comes back in the returned
+    /// failures, and even the row the server accepted stays pending and is re-detected next push
+    /// (at-least-once).
+    func testPartialFailureFreezesTheTokenForTheWholeBatch() async throws {
         let container = try makeContainer()
         let context = container.mainContext
         context.insert(PushNote(id: "c1", title: "ok"))
         context.insert(PushNote(id: "c2", title: "rejected"))
         try context.save()
 
-        let summary = try await SwiftSync.push(for: PushNote.self, in: context) { _ in
+        let failures = try await SwiftSync.push(for: PushNote.self, in: context) { _ in
             [SyncPushFailure(localID: "c2", error: PushTestError(message: "422"))]
         }
-        XCTAssertEqual(summary.insertedCount, 1, "c1 confirmed by complement; c2 failed")
-        XCTAssertEqual(summary.failures.map(\.localID), ["c2"])
+        XCTAssertEqual(failures.map(\.localID), ["c2"])
         XCTAssertEqual(
             try SwiftSync.pendingChanges(for: PushNote.self, in: context).inserts.sorted(), ["c1", "c2"],
-            "a failure freezes the token, so even the confirmed row is re-detected")
+            "a failure freezes the token, so even the accepted row is re-detected")
     }
 
     /// A local write during the upload await wasn't in the batch, so the token must not advance past it:
@@ -139,7 +139,7 @@ final class OfflinePushTests: XCTestCase {
         context.insert(PushNote(id: "p1", title: "first"))
         try context.save()
 
-        let summary = try await SwiftSync.push(for: PushNote.self, in: context) { pending in
+        let failures = try await SwiftSync.push(for: PushNote.self, in: context) { pending in
             XCTAssertEqual(pending.inserts, ["p1"])
             // A new local row appears after the batch was captured, while "uploading".
             context.insert(PushNote(id: "p2", title: "during upload"))
@@ -147,7 +147,7 @@ final class OfflinePushTests: XCTestCase {
             return []
         }
 
-        XCTAssertEqual(summary.insertedCount, 1)
+        XCTAssertTrue(failures.isEmpty)
         XCTAssertEqual(
             try SwiftSync.pendingChanges(for: PushNote.self, in: context).inserts, ["p2"],
             "a local write during upload must survive the token advance")
