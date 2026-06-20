@@ -629,9 +629,9 @@ final class Task {
 
 The identity is the only id: it's client-generated and the backend adopts it, so push is an idempotent **upsert** keyed by that id — there is no separate server id to map home. Make local edits with plain SwiftData (`context.insert` / mutate / `context.delete`); SwiftSync tracks them via history.
 
-`pendingChanges` partitions the un-pushed local changes (history authored by you, since SwiftSync's internal per-type cursor) into inserts, updates, and deletes. A row inserted *and* deleted before it was ever pushed is dropped (the server never saw it).
+`pendingChanges` partitions the un-pushed local changes (history authored by you, since SwiftSync's internal per-type history token) into inserts, updates, and deletes. A row inserted *and* deleted before it was ever pushed is dropped (the server never saw it).
 
-`push` drives one pass. It hands the pending ids to your `upload` closure as a `Sendable` `SyncPushBatch` (so SwiftData objects never cross into a network call — you own the request), then — only when every change is acknowledged — advances its internal cursor and trims the redundant history. It writes no per-row state; an unacknowledged change stays pending and is re-detected next push. Per-item failures come back in `summary.failures` for you to surface (discard / edit / retry).
+`push` drives one pass. It hands the pending ids to your `upload` closure as a `Sendable` `SyncPushBatch` (so SwiftData objects never cross into a network call — you own the request), then — only when every change is acknowledged — advances its internal history token and trims the redundant history. It writes no per-row state; an unacknowledged change stays pending and is re-detected next push. Per-item failures come back in `summary.failures` for you to surface (discard / edit / retry).
 
 ```swift
 let summary = try await SwiftSync.push(
@@ -643,7 +643,7 @@ let summary = try await SwiftSync.push(
     try await api.push(batch)
   }
 )
-// No cursor to persist — SwiftSync owns it. Inspect summary.failures / counts.
+// No history token to persist — SwiftSync owns it. Inspect summary.failures / counts.
 ```
 
 Inbound pulls are tagged internally so a freshly-pulled row is never mistaken for a local edit; an un-pushed local insert survives a pull that omits it, and a newer local edit isn't clobbered by an older server version (last-writer-wins). Offline requires a persistent store (history is unavailable to ephemeral stores).
