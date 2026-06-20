@@ -399,40 +399,6 @@ final class DemoUITests: XCTestCase {
         XCTAssertTrue(discard.waitForNonExistence(timeout: 5), "discard clears the failure")
     }
 
-    // User journey: edit a task's reviewers offline, then sync on reconnect.
-    @MainActor
-    func testOfflineAddReviewerSyncsOnReconnect() throws {
-        let app = configuredApp()
-        app.launch()
-
-        // Online: open the task so it + reference data are cached.
-        openTaskDetail(
-            app, projectID: DemoSeedProjectID.notificationsReliability,
-            taskID: DemoSeedTaskID.duplicatePushFix)
-
-        // Go offline and add a reviewer.
-        app.buttons["offline-toggle"].tap()
-        XCTAssertEqual(app.buttons["offline-toggle"].label, "Offline")
-        openEditTaskForm(app)
-        addPerson(app, role: "reviewers", userID: DemoSeedUserID.sofiaGarcia)
-        app.buttons["task-form.save"].tap()
-        XCTAssertTrue(
-            app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout),
-            "an offline edit saves locally")
-        XCTAssertTrue(findAfterScrolling(app.staticTexts["task.reviewer.\(DemoSeedUserID.sofiaGarcia)"], in: app))
-
-        // Reconnect → the change auto-syncs.
-        app.buttons["offline-toggle"].tap()
-        XCTAssertTrue(
-            app.staticTexts["pending-count"].waitForNonExistence(timeout: 5),
-            "reconnecting auto-syncs the reviewer change")
-
-        // Persisted on the server: reopen the task (a real refresh) and the reviewer is still there.
-        goBack(app)
-        openTask(app, id: DemoSeedTaskID.duplicatePushFix)
-        XCTAssertTrue(findAfterScrolling(app.staticTexts["task.reviewer.\(DemoSeedUserID.sofiaGarcia)"], in: app))
-    }
-
     // User journey: work offline, queue a change, then sync on reconnect.
     @MainActor
     func testOfflineDeleteQueuesThenSyncsOnReconnect() throws {

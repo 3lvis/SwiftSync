@@ -119,3 +119,9 @@ verdict, PR.)
   which drives the same machine with a richer add+remove scenario and asserts the persisted set (verified
   green). UI-only residue (picker wiring, detail rendering) is generic SwiftUI, not a strong reason to keep
   the slowest/flakiest UI test. R3 → drop.
+- **#14 `testOfflineAddReviewerSyncsOnReconnect` → DROPPED.** Born green with #621 (demo workflow, not
+  red-first). It was actually the one that surfaced the offline `@NotExport` regression — but that's a
+  *unit* fact. Strengthened `OfflinePushTests.testOfflineReviewerEditViaUpdateBodyAppliesLocallyAndSyncsOnReconnect`
+  to drive the full journey through the real app path (offline `updateTask` with `reviewer_ids` → applies
+  locally → push → server holds it, proven by a fresh pull) — green. That unit now covers everything the
+  UI test asserted; UI-only residue is the offline-toggle button + pending-count badge. R3 → drop.

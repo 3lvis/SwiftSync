@@ -302,10 +302,12 @@ final class OfflinePushTests: XCTestCase {
         XCTAssertEqual(edited.project?.id, projectID, "the edit must not drop the project link")
     }
 
-    /// Regression: an offline `updateTask` with `reviewer_ids` must apply reviewers locally (`apply()`
-    /// skips the `@NotExport` relationship, so there's no server round-trip to reflect it).
+    /// The whole offline reviewer journey via the path the task-form save actually uses (reviewer_ids in
+    /// the `updateTask` body): it applies locally while offline — a regression guard, since `apply()`
+    /// skips the `@NotExport` relationship so nothing else would reflect it — then round-trips through
+    /// push so the server holds the new set, proven by a fresh pull bringing it back.
     @MainActor
-    func testOfflineUpdateTaskWithReviewerIDsAppliesLocally() async throws {
+    func testOfflineReviewerEditViaUpdateBodyAppliesLocallyAndSyncsOnReconnect() async throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("offline-update-people-\(UUID().uuidString).sqlite")
         addTeardownBlock { try? FileManager.default.removeItem(at: url) }
@@ -333,6 +335,18 @@ final class OfflinePushTests: XCTestCase {
         XCTAssertEqual(
             offline.reviewers.map(\.id).sorted(), newReviewers,
             "an offline updateTask with reviewer_ids must apply the reviewers to the local row")
+
+        engine.isOffline = false
+        let pushResult = try await engine.pushPendingChanges()
+        let summary = try XCTUnwrap(pushResult)
+        XCTAssertTrue(summary.failures.isEmpty)
+
+        // A fresh pull (server is authoritative) brings the same reviewers back.
+        try await engine.syncTaskDetail(taskID: taskID)
+        let pulled = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        XCTAssertEqual(
+            pulled.reviewers.map(\.id).sorted(), newReviewers,
+            "the offline reviewer edit persisted on the server")
     }
 
     /// Only `Task` is marked offline, yet a `Task`↔`User` relationship edit made offline (assigning
