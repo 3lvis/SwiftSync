@@ -117,3 +117,47 @@ jobs:
           swift test \
             --filter FetchStrategyBenchmarkTests/testGlobalBatchSyncBenchmarks \
             --filter FetchStrategyBenchmarkTests/testSingleItemSyncBenchmarks
+
+  core-coverage:
+    name: Core coverage gate (SwiftSync)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # need the PR base for the patch diff + the no-decrease base build
+
+      - name: Cache SPM
+        uses: actions/cache@v5
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-cov-${{ hashFiles('Package.resolved') }}
+          restore-keys: ${{ runner.os }}-spm-cov-
+
+      - name: Xcode Version
+        run: swift --version
+
+      # `swift test --show-codecov-path` only prints the path — it does NOT re-run tests. Run coverage
+      # for real first, then read the path, or the gate scores stale data.
+      - name: Coverage (HEAD)
+        run: |
+          swift test --enable-code-coverage
+          echo "HEAD_JSON=$(swift test --show-codecov-path)" >> "$GITHUB_ENV"
+
+      - name: Evaluate core coverage (informational)
+        run: python3 scripts/core_coverage.py evaluate --head "$HEAD_JSON"
+
+      - name: Patch gate — new SwiftSync core lines must be covered
+        if: github.event_name == 'pull_request'
+        run: |
+          python3 scripts/core_coverage.py patch \
+            --head "$HEAD_JSON" --diff-base "origin/${{ github.base_ref }}...HEAD"
+
+      - name: No-decrease gate — core coverage must not drop vs base
+        if: github.event_name == 'pull_request'
+        run: |
+          cp scripts/core_coverage.py "$RUNNER_TEMP/cc.py"
+          cp "$HEAD_JSON" "$RUNNER_TEMP/head.json"
+          git checkout --force "origin/${{ github.base_ref }}"
+          swift test --enable-code-coverage
+          python3 "$RUNNER_TEMP/cc.py" compare \
+            --head "$RUNNER_TEMP/head.json" --base "$(swift test --show-codecov-path)"
