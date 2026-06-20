@@ -82,6 +82,10 @@ optimisation (efficient deltas), not the foundation.
 
 Still open:
 
+- [ ] **Fold DemoSyncEngine's boilerplate into the library** — register a transport once, let the
+      library own the queue-drain / failure-surfacing / reconnect machinery, leaving the demo to
+      express only app intent. Keeps the demo's network-first online + queued offline write semantics.
+      Sectioned plan: [`sync-engine-fold.md`](sync-engine-fold.md). Stacked on the push-seam PRs.
 - [ ] Formal prior-art scan of the sync *protocol* (PowerSync, CouchDB/PouchDB replication,
       WatermelonDB, Realm/Firestore) before hardening the push/pull contract further — pick
       deliberately for our constraints (this gates the Phase 8 middleware seam).
