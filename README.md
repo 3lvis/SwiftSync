@@ -631,15 +631,15 @@ The identity is the only id: it's client-generated and the backend adopts it, so
 
 `pendingChanges` partitions the un-pushed local changes (history authored by you, since SwiftSync's internal per-type history token) into inserts, updates, and deletes. A row inserted *and* deleted before it was ever pushed is dropped (the server never saw it).
 
-`withPendingChanges` runs one pass inside a scope SwiftSync manages (the `with…` idiom: it sets up the pending changes, your closure does the work, it commits the bookmark on the way out). It hands your closure a `Sendable` `SyncPendingChanges` (so SwiftData objects never cross into a network call — you own the request); the closure does the network work and **returns the failures** (`[SyncPushFailure]`), which the method returns straight back to you. Everything else is confirmed by complement — the client id *is* the identity the server adopts, so a push is an idempotent upsert with no acknowledgements to echo back. Only when the closure reports **no** failures does it advance its internal history token and trim the redundant history. It writes no per-row state; a failed (or otherwise un-pushed) change stays pending and is re-detected next call. Surface the returned failures however you like (discard / edit / retry).
+`withPendingChanges` runs one pass inside a scope SwiftSync manages (the `with…` idiom: it sets up the pending changes, your closure does the work, it commits the bookmark on the way out). It hands your closure a `Sendable` `SyncPendingChanges` (so SwiftData objects never cross into a network call — you own the request); the closure does the network work and **returns a verdict for every pending id** — a `[String: SyncRowOutcome]` map where each id is `.confirmed` or `.rejected(error)`. Total accounting is the point: there's no "say nothing = success" default, so a row can't be silently dropped or confirmed by omission. If the map misses a pending id (or names one not in the batch), the method throws `SyncError.incompletePushAccounting` and advances nothing. Only on a fully clean pass (every row `.confirmed`) does it advance its internal history token and trim the redundant history — it writes no per-row state, so a `.rejected` (or otherwise un-pushed) change stays pending and is re-detected next call. The rejected rows come back as `[SyncPushFailure]` for you to surface (discard / edit / retry).
 
 ```swift
 let failures = try await SwiftSync.withPendingChanges(for: Task.self, in: syncContainer.mainContext) { pending in
-  // map pending.inserts / pending.updates / pending.deletes (the ids) to upsert/delete
-  // requests, call your API, and return a SyncPushFailure for each rejected id
-  try await api.push(pending)
+  // call your API for pending.inserts / pending.updates / pending.deletes (the ids), then return
+  // a verdict per id: .confirmed for accepted rows, .rejected(error) for rejected ones
+  try await api.push(pending)   // -> [String: SyncRowOutcome]
 }
-// No history token to persist — SwiftSync owns it. `failures` is empty on a fully clean pass.
+// No history token to persist — SwiftSync owns it. `failures` (the .rejected rows) is empty on a clean pass.
 ```
 
 Inbound pulls are tagged internally so a freshly-pulled row is never mistaken for a local edit; an un-pushed local insert survives a pull that omits it, and a newer local edit isn't clobbered by an older server version (last-writer-wins). Offline requires a persistent store (history is unavailable to ephemeral stores).

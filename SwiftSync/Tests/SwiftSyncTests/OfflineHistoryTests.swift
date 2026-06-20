@@ -49,7 +49,7 @@ final class OfflineHistoryTests: XCTestCase {
 
         // Push it so it's "synced" (token advances past its insert); now a later delete is a genuine
         // pending deletion rather than an insert-then-delete the server never saw.
-        _ = try await SwiftSync.withPendingChanges(for: HistoryRow.self, in: local) { _ in [] }
+        _ = try await SwiftSync.withPendingChanges(for: HistoryRow.self, in: local) { _ in ["local-1": .confirmed] }
 
         // Delete the synced row with a plain context.delete — the tombstone must yield its id.
         let row = try XCTUnwrap(

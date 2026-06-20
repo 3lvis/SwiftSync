@@ -136,7 +136,7 @@ identity the server adopts (an idempotent upsert — no server-assigned ids to m
 are derivable: `confirmed = batch − failures`. Asking the consumer to echo back which ids succeeded was
 redundant; only the **failures** carry information the library can't derive.
 
-**Now (5 structs → 2).**
+**Now (5 structs → 2, then +1 for the total-accounting refinement below).**
 - `SyncPushBatch` merged into `SyncPendingChanges` — one type is both the return of `pendingChanges(...)`
   and the value `withPendingChanges(...)` hands the `process` closure.
 - `SyncPushResponse` **deleted** — `upload` now returns `[SyncPushFailure]` directly.
@@ -155,9 +155,17 @@ redundant; only the **failures** carry information the library can't derive.
   term) became a trailing closure.
 - `inboundAuthor` demoted `public` → `internal` (consumer never referenced it).
 
-Surviving public push surface: `SyncPendingChanges` (in) and `SyncPushFailure` (out). The token still
-advances (and inbound history is trimmed) only when the `process` closure reports **no** failures — same
-at-least-once semantics, smaller seam.
+**Refinement — total accounting (safety).** Failure-only had a lossy *default*: a `process` closure that
+returned `[]` (or omitted a row) asserted "everything succeeded," so a mis-parsed response could silently
+advance the token past a rejected row. To make the wrong thing unrepresentable, `process` now returns a
+verdict for **every** pending id — `[String: SyncRowOutcome]` (`.confirmed` / `.rejected(error)`) — and
+`withPendingChanges` throws `SyncError.incompletePushAccounting` if the map doesn't cover exactly the
+pending ids. There's no silence-means-success path; a row can't be dropped or confirmed by omission. This
+adds back **one** public type (`SyncRowOutcome`), trading minimal surface for a no-silent-loss guarantee.
+
+Surviving public push surface: `SyncPendingChanges` (in), `SyncRowOutcome` (the per-id verdict), and
+`SyncPushFailure` (the `.rejected` rows, returned). The token advances (and inbound history is trimmed)
+only on a fully-`.confirmed` pass — same at-least-once semantics.
 
 ---
 

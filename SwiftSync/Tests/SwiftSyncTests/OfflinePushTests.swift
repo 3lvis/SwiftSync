@@ -29,7 +29,11 @@ final class OfflinePushTests: XCTestCase {
             configurations: ModelConfiguration(url: directory.appendingPathComponent("store.sqlite")))
     }
 
-    private func noFailures(_ pending: SyncPendingChanges) -> [SyncPushFailure] { [] }
+    /// Confirm every pending id — the total-accounting verdict map for a fully-successful push.
+    private func confirmAll(_ pending: SyncPendingChanges) -> [String: SyncRowOutcome] {
+        Dictionary(
+            uniqueKeysWithValues: (pending.inserts + pending.updates + pending.deletes).map { ($0, .confirmed) })
+    }
 
     /// History-derived partitioning: after a baseline push makes some rows "synced" (behind the
     /// token), a fresh round of local edits partitions into insert/update/delete — and a row inserted
@@ -41,7 +45,7 @@ final class OfflinePushTests: XCTestCase {
         for id in ["a", "b", "d"] { context.insert(PushNote(id: id, title: id)) }
         try context.save()
         // Baseline push: a, b, d become synced (token advances past their inserts).
-        _ = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context, process: noFailures)
+        _ = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context, process: confirmAll)
 
         try mutate(context) { $0.first { $0.id == "b" }?.title = "edited" }  // update
         try delete("d", in: context)  // delete
@@ -67,7 +71,7 @@ final class OfflinePushTests: XCTestCase {
 
         let failures = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context) { pending in
             XCTAssertEqual(pending.inserts, ["c1"])
-            return []
+            return ["c1": .confirmed]
         }
 
         XCTAssertTrue(failures.isEmpty)
@@ -83,7 +87,7 @@ final class OfflinePushTests: XCTestCase {
         try context.save()
 
         let failures = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context) { _ in
-            [SyncPushFailure(id: "c1", error: PushTestError(message: "422"))]
+            ["c1": .rejected(PushTestError(message: "422"))]
         }
 
         XCTAssertEqual(failures.first?.id, "c1")
@@ -97,13 +101,13 @@ final class OfflinePushTests: XCTestCase {
         let context = container.mainContext
         context.insert(PushNote(id: "u1", title: "v1"))
         try context.save()
-        _ = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context, process: noFailures)  // synced
+        _ = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context, process: confirmAll)  // synced
 
         try mutate(context) { $0.first { $0.id == "u1" }?.title = "v2" }
         try context.save()
 
         _ = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context) { _ in
-            [SyncPushFailure(id: "u1", error: PushTestError(message: "500"))]
+            ["u1": .rejected(PushTestError(message: "500"))]
         }
         XCTAssertEqual(
             try SwiftSync.pendingChanges(for: PushNote.self, in: context).updates, ["u1"],
@@ -121,12 +125,62 @@ final class OfflinePushTests: XCTestCase {
         try context.save()
 
         let failures = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context) { _ in
-            [SyncPushFailure(id: "c2", error: PushTestError(message: "422"))]
+            ["c1": .confirmed, "c2": .rejected(PushTestError(message: "422"))]
         }
         XCTAssertEqual(failures.map(\.id), ["c2"])
         XCTAssertEqual(
             try SwiftSync.pendingChanges(for: PushNote.self, in: context).inserts.sorted(), ["c1", "c2"],
             "a failure freezes the token, so even the accepted row is re-detected")
+    }
+
+    /// Total accounting: the verdict map must cover every pending id. Omitting one would confirm it by
+    /// omission (silent data loss), so the push throws `.incompletePushAccounting` and advances nothing —
+    /// both rows stay pending.
+    func testOmittingAPendingIDThrowsAndAdvancesNothing() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        context.insert(PushNote(id: "c1", title: "reported"))
+        context.insert(PushNote(id: "c2", title: "forgotten"))
+        try context.save()
+
+        do {
+            _ = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context) { _ in
+                ["c1": .confirmed]  // c2 omitted
+            }
+            XCTFail("expected withPendingChanges to throw when a pending id has no outcome")
+        } catch let error as SyncError {
+            guard case .incompletePushAccounting(let unaccounted, let unexpected) = error else {
+                return XCTFail("expected .incompletePushAccounting, got \(error)")
+            }
+            XCTAssertEqual(unaccounted, ["c2"])
+            XCTAssertTrue(unexpected.isEmpty)
+        }
+
+        XCTAssertEqual(
+            try SwiftSync.pendingChanges(for: PushNote.self, in: context).inserts.sorted(), ["c1", "c2"],
+            "an incomplete-accounting push must advance nothing")
+    }
+
+    /// A verdict for an id that isn't in the batch is a consumer bug — the push throws rather than
+    /// silently ignoring it.
+    func testReportingAnIDNotInTheBatchThrows() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        context.insert(PushNote(id: "c1", title: "real"))
+        try context.save()
+
+        do {
+            _ = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context) { _ in
+                ["c1": .confirmed, "ghost": .confirmed]
+            }
+            XCTFail("expected withPendingChanges to throw for an id not in the batch")
+        } catch let error as SyncError {
+            guard case .incompletePushAccounting(let unaccounted, let unexpected) = error else {
+                return XCTFail("expected .incompletePushAccounting, got \(error)")
+            }
+            XCTAssertTrue(unaccounted.isEmpty)
+            XCTAssertEqual(unexpected, ["ghost"])
+        }
     }
 
     /// A local write during the upload await wasn't in the batch, so the token must not advance past it:
@@ -142,7 +196,7 @@ final class OfflinePushTests: XCTestCase {
             // A new local row appears after the batch was captured, while "uploading".
             context.insert(PushNote(id: "p2", title: "during upload"))
             try context.save()
-            return []
+            return ["p1": .confirmed]
         }
 
         XCTAssertTrue(failures.isEmpty)
@@ -170,7 +224,7 @@ final class OfflinePushTests: XCTestCase {
         do {
             _ = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context) { _ in
                 uploadCalled = true
-                return []
+                return [:]
             }
             XCTFail("expected push to throw when the bookkeeping model is not registered")
         } catch {

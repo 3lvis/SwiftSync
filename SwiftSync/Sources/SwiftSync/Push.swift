@@ -20,10 +20,22 @@ public struct SyncPendingChanges: Sendable {
     public var isEmpty: Bool { inserts.isEmpty && updates.isEmpty && deletes.isEmpty }
 }
 
+/// The consumer's verdict for one pushed row, returned from `withPendingChanges`'s `process` closure.
+/// Every pending id must get exactly one — the library throws `SyncError.incompletePushAccounting` if any
+/// is missing (or extra), so a row can never be silently dropped or confirmed-by-omission.
+public enum SyncRowOutcome: Sendable {
+    /// The server accepted this row — or it was otherwise resolved (e.g. a stale row whose server state
+    /// you adopted locally). Either way it's done and the token may advance past it.
+    case confirmed
+    /// The server rejected this row; it stays pending and is re-detected next push. Carries the
+    /// consumer's own error verbatim, surfaced back as `SyncPushFailure`.
+    case rejected(any Error & Sendable)
+}
+
 /// One pushed row the server rejected: the row `id` to keep pending, and the consumer's own `error`
-/// bubbled up verbatim. Your `process` closure returns only these — everything else in the batch is treated
-/// as confirmed (the client id is the identity the backend adopts, so a push is an idempotent upsert with
-/// no server-assigned ids to map home). The operation is the library's to know, not yours.
+/// bubbled up verbatim. Derived from the `.rejected` verdicts in the `process` closure's outcome map and
+/// returned by `withPendingChanges` (the client id is the identity the backend adopts, so a push is an
+/// idempotent upsert with no server-assigned ids to map home). The operation is the library's to know.
 public struct SyncPushFailure: Sendable {
     public let id: String
     public let error: any Error & Sendable
@@ -131,19 +143,20 @@ extension SwiftSync {
     }
 
     /// Process this model type's locally-changed rows inside a scope SwiftSync manages. Reads what changed
-    /// since the last-pushed token, hands it to your `process` closure (you own the network call), and gets
-    /// back the rejected rows. Everything you *don't* return as a failure is treated as confirmed — the
-    /// client id is the identity the server adopts, so it's an idempotent upsert with nothing to
-    /// acknowledge. Only on a fully clean pass (no failures) does it advance the token and trim the
-    /// now-redundant inbound history. SwiftSync stores no per-row state: a failed — or any un-pushed —
-    /// change stays past the token and is re-detected next call. Returns the same failures your closure
-    /// returned (empty == clean).
+    /// since the last-pushed token, hands it to your `process` closure (you own the network call), and
+    /// requires back a verdict (`.confirmed` / `.rejected`) for **every** pending id. Total accounting is
+    /// the point: there's no "say nothing = success" default, so you can't silently drop or lose a row —
+    /// if the returned map omits a pending id (or names one not in the batch), this throws
+    /// `SyncError.incompletePushAccounting` and advances nothing. Only on a fully clean pass (every row
+    /// `.confirmed`) does it advance the token and trim the now-redundant inbound history. SwiftSync stores
+    /// no per-row state: a `.rejected` — or any un-pushed — change stays past the token and is re-detected
+    /// next call. Returns the rejected rows as `SyncPushFailure`s (empty == clean).
     @discardableResult
     public static func withPendingChanges<Model: SyncUpdatableModel>(
         for _: Model.Type,
         in context: ModelContext,
         isolation: isolated (any Actor)? = #isolation,
-        process: (SyncPendingChanges) async throws -> [SyncPushFailure]
+        process: (SyncPendingChanges) async throws -> [String: SyncRowOutcome]
     ) async throws -> [SyncPushFailure] where Model.SyncID == String {
         try requireOfflineCapable(Model.self, in: context)
         try requireOfflinePushBookkeeping(in: context)
@@ -156,7 +169,22 @@ extension SwiftSync {
         // await stays past the token and is re-detected next push, instead of being silently skipped.
         let uploadedThrough = transactions.last?.token
 
-        let failures = try await process(pending)
+        let outcomes = try await process(pending)
+
+        // Total accounting: the verdict map must cover exactly the pending ids. A missing id would
+        // otherwise be confirmed-by-omission (silent data loss); an extra id signals a consumer bug.
+        let expected = Set(pending.inserts + pending.updates + pending.deletes)
+        let reported = Set(outcomes.keys)
+        if expected != reported {
+            throw SyncError.incompletePushAccounting(
+                unaccounted: expected.subtracting(reported).sorted(),
+                unexpected: reported.subtracting(expected).sorted())
+        }
+
+        let failures = outcomes.compactMap { id, outcome -> SyncPushFailure? in
+            guard case .rejected(let error) = outcome else { return nil }
+            return SyncPushFailure(id: id, error: error)
+        }
         if failures.isEmpty, let uploadedThrough {
             try setLastPushedHistoryToken(uploadedThrough, for: Model.self, in: context)
             try? trimInboundHistory(through: uploadedThrough, in: context)

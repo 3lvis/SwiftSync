@@ -267,13 +267,13 @@ public final class DemoSyncEngine {
         try syncContainer.mainContext.save()
     }
 
-    /// Serialize the pending batch into the `/sync/upload` operation list, POST it once, and return only
-    /// the per-row failures — SwiftSync confirms everything else by complement. Every created-or-edited
-    /// row is an `upsert` keyed by its stable `id` (the server find-by-id → update-else-creates, adopting
-    /// that `id` as the row's `public_id` — no distinct server id comes back); tombstones are a `delete`
-    /// by the same `id`. A `stale` result means the server won last-writer-wins — adopt its state locally
-    /// and treat the row as resolved (not a failure) so it isn't re-sent.
-    private func upload(_ pending: SyncPendingChanges) async throws -> [SyncPushFailure] {
+    /// Serialize the pending batch into the `/sync/upload` operation list, POST it once, and return a
+    /// verdict for every row — SwiftSync requires total accounting. Every created-or-edited row is an
+    /// `upsert` keyed by its stable `id` (the server find-by-id → update-else-creates, adopting that `id`
+    /// as the row's `public_id` — no distinct server id comes back); tombstones are a `delete` by the same
+    /// `id`. A `stale` result means the server won last-writer-wins — adopt its state locally and report
+    /// `.confirmed` (resolved, not a failure) so it isn't re-sent.
+    private func upload(_ pending: SyncPendingChanges) async throws -> [String: SyncRowOutcome] {
         var operations: [[String: Any]] = []
 
         for id in pending.inserts + pending.updates {
@@ -295,33 +295,28 @@ public final class DemoSyncEngine {
 
         let results = try await apiClient.upload(operations: operations)
 
-        var failures: [SyncPushFailure] = []
+        var outcomes: [String: SyncRowOutcome] = [:]
         for result in results {
-            let operation = result["operation"] as? String
-            let status = result["status"] as? String
-            let id = result["id"] as? String
-            switch (operation, status) {
+            guard let id = result["id"] as? String else { continue }
+            switch (result["operation"] as? String, result["status"] as? String) {
             case ("upsert", "stale"), ("delete", "stale"):
                 // The server won last-writer-wins — adopt its state locally (the inbound sync re-creates a
-                // hard-deleted row when a delete loses) and treat the row as resolved, not a failure.
+                // hard-deleted row when a delete loses), then report the row resolved (not a failure).
                 if let server = result["server"] as? [String: Any] {
                     try? await syncContainer.sync(
                         item: DemoSyncPayload(dictionary: server), as: Task.self)
                 }
+                outcomes[id] = .confirmed
             case ("upsert", "applied"), ("delete", "applied"):
-                break
+                outcomes[id] = .confirmed
             default:
-                // Bubble the backend's rejection up as this app's own error. SwiftSync returns the
-                // failures verbatim without interpreting them; the engine reads them back to annotate
-                // the inbox.
-                failures.append(
-                    SyncPushFailure(
-                        id: id ?? "",
-                        error: DemoUploadRejection(
-                            message: (result["message"] as? String) ?? "rejected")))
+                // Bubble the backend's rejection up as this app's own error. SwiftSync carries it verbatim
+                // and returns it as a SyncPushFailure; the engine reads it back to annotate the inbox.
+                outcomes[id] = .rejected(
+                    DemoUploadRejection(message: (result["message"] as? String) ?? "rejected"))
             }
         }
-        return failures
+        return outcomes
     }
 
     /// The task's upload payload: its exported scalars plus `reviewer_ids`/`watcher_ids` (which are

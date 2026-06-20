@@ -1286,6 +1286,10 @@ public enum SyncError: Error, Sendable, Equatable {
     case schemaValidation(reason: String)
     /// The `ModelContainer` failed to initialize; `reason` carries the underlying cause.
     case containerInitialization(reason: String)
+    /// `withPendingChanges`'s `process` closure didn't return a verdict for exactly the pending ids:
+    /// `unaccounted` were pending but got no outcome (would be silent data loss); `unexpected` were
+    /// reported but weren't in the batch (a consumer bug). The push advances nothing.
+    case incompletePushAccounting(unaccounted: [String], unexpected: [String])
 }
 
 extension SyncError: LocalizedError {
@@ -1299,6 +1303,15 @@ extension SyncError: LocalizedError {
             return reason
         case .containerInitialization(let reason):
             return reason
+        case .incompletePushAccounting(let unaccounted, let unexpected):
+            var parts: [String] = []
+            if !unaccounted.isEmpty {
+                parts.append("no outcome reported for pending id(s): \(unaccounted.joined(separator: ", "))")
+            }
+            if !unexpected.isEmpty {
+                parts.append("outcome reported for id(s) not in the batch: \(unexpected.joined(separator: ", "))")
+            }
+            return "Push accounting incomplete — \(parts.joined(separator: "; "))."
         }
     }
 }
