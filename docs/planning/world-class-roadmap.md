@@ -142,3 +142,52 @@ is a separate SPM product (↔ Networking items 5–6).
       **Done when:** a people-edit save is one server round-trip, and the people-edit UI tests pass at the
       original tight `0.5s` save-dismiss timeout (the right reason), letting `saveDismissTimeout` shrink.
       Demo-only — no SwiftSync library change.
+
+### Offline / two-id identity model — follow-ups (PR #632)
+
+Grouped by layer. The identity model: the backend keeps its own internal `INTEGER PRIMARY KEY` (joins/FKs,
+**never exposed**); every row carries a `public_id` UUID that is the sole external identity (exposed as
+`"id"`, addressed by REST + `/sync/upload`). Client-originated rows adopt the client's id as `public_id`;
+server-origin rows get a server-minted UUID. The client deals only in `public_id`.
+
+**Layer: SwiftSync library (the product)**
+
+- [ ] **Local history growth / trimming.** Offline detection reads SwiftData history authored locally
+      since a per-type "last pushed" token (`PushHistoryTokenRecord`). On a successful push we advance the
+      token and trim **inbound** (pull-authored) history up to it (`trimInboundHistory`), but leave
+      already-pushed **local-authored** history in place (inbound-only trim avoids a cross-type token
+      hazard). So history accumulates with every local edit over the app's lifetime. *Fix:* a safe trim
+      policy for already-pushed local history (e.g. below the *minimum* token across all offline types),
+      and verify what SwiftData's DefaultStore already TTL-trims. *The one genuine product follow-up; slow
+      growth, not urgent.* (`Push.swift` / `PushHistoryTokenStore.swift`.)
+- [ ] **Macro can't auto-add `.preserveValueOnDeletion`.** Offline opt-in is marking the identity
+      `@Attribute(.unique, .preserveValueOnDeletion)`; a Swift peer/extension macro can't attach an
+      attribute to a stored property, so it's a documented requirement enforced at runtime
+      (`requireOfflineCapable` throws). *Known limitation, low priority* — revisit only if a macro role that
+      can inject it appears. (`MacrosImplementation` / `OfflineDetection.swift`.)
+
+**Layer: demo backend (`DemoServerSimulator`) — real-server fidelity, not the library**
+
+- [ ] **Item-update churn → reconcile items by `public_id`.** A task's items travel as a full array on each
+      update; the backend does *delete-all-items → re-insert the array*, so every item row + internal int
+      id is recreated on every edit (even unchanged ones), violating the "stable, immutable identity" rule.
+      *Fix:* upsert each incoming item by its `public_id` (update if present, insert if new), delete the
+      ones whose `public_id` isn't in the incoming set. *Most real of these — a correctness/consistency
+      gap, invisible today only because nothing downstream depends on item-id stability yet.*
+- [ ] **Atomic upsert.** `/sync/upload` does `SELECT id WHERE public_id` *then* insert-or-update; two
+      concurrent pushes of the same `public_id` could both see "not found" and both insert → unique
+      violation or duplicate. *Fix:* `INSERT … ON CONFLICT(public_id) DO UPDATE` (or a txn that catches the
+      unique violation as the update branch). Invisible in the demo (single-threaded SQLite); a real
+      concurrent server needs it.
+- [ ] **Authorization / id-squatting (production only).** The client supplies the `public_id`, which is
+      also the shareable URL id, so anyone who knows it can address that row; `UNIQUE` won't stop an
+      upsert/delete of *someone else's* row. A real server must authorize writes by row ownership (the
+      security boundary is authz, not id secrecy). Out of scope for the demo (no auth/principals); flagged
+      because client-minted ids are what surface it.
+
+**Layer: docs**
+
+- [ ] **Capture the final identity model** in `offline-history-design.md`: internal int PK (never exposed),
+      `public_id` as the sole external identity, the dual-minting + adopt rule, and the rationale
+      (idempotency on lost-response retry, shareable URL id, reach over existing backends). The doc still
+      describes the superseded #630 collapsed-id / `SyncOffline`-marker model — refresh it.
