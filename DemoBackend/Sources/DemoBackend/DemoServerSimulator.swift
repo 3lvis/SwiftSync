@@ -26,7 +26,7 @@ public enum DemoBackendError: LocalizedError {
 
 public final class DemoServerSimulator {
     private struct ItemInput {
-        let id: String
+        let localID: String
         let title: String
         let position: Int
         let createdAt: Date
@@ -483,16 +483,18 @@ public final class DemoServerSimulator {
             guard let rawItems = body["items"] as? [[String: Any]] else {
                 throw DemoBackendError.validation(message: "items must be an array of objects")
             }
+            // Carry an unchanged item's title forward when the client omits it, matched by the client's
+            // own id (now the item's `local_id`, since `id` is the server-minted int).
             let existingRows = try itemsPayload(taskID: taskID)
-            let existingTitlesByID = Dictionary(
+            let existingTitlesByLocalID = Dictionary(
                 uniqueKeysWithValues: existingRows.compactMap { row -> (String, String)? in
-                    guard let id = row["id"] as? String,
+                    guard let localID = row["local_id"] as? String,
                         let title = row["title"] as? String
                     else { return nil }
-                    return (id, title)
+                    return (localID, title)
                 }
             )
-            itemsToReplace = try parseItems(rawItems, existingTitlesByID: existingTitlesByID)
+            itemsToReplace = try parseItems(rawItems, existingTitlesByID: existingTitlesByLocalID)
         } else {
             itemsToReplace = nil
         }
@@ -860,7 +862,7 @@ public final class DemoServerSimulator {
     private func itemsPayload(taskID: Int) throws -> [[String: Any]] {
         let rows = try self.sqlite.query(
             """
-            SELECT id, task_id, title, position, created_at, updated_at
+            SELECT id, local_id, task_id, title, position, created_at, updated_at
             FROM items
             WHERE task_id = ?
             ORDER BY position ASC, id ASC
@@ -871,7 +873,8 @@ public final class DemoServerSimulator {
         )
         return rows.map { row in
             [
-                "id": row.string("id"),
+                "id": Int(row.int64("id")),
+                "local_id": row.nullableString("local_id") ?? NSNull(),
                 "task_id": Int(row.int64("task_id")),
                 "title": row.string("title"),
                 "position": Int(row.int64("position")),
@@ -946,13 +949,13 @@ public final class DemoServerSimulator {
         existingTitlesByID: [String: String] = [:]
     ) throws -> [ItemInput] {
         try rawItems.enumerated().map { index, item in
-            guard let id = item["id"] as? String, !id.isEmpty else {
+            guard let localID = item["id"] as? String, !localID.isEmpty else {
                 throw DemoBackendError.validation(message: "items[\(index)].id is required")
             }
             let title: String
             if let rawTitle = item["title"] as? String {
                 title = try validatedNonEmpty(rawTitle, field: "items[\(index)].title")
-            } else if let existingTitle = existingTitlesByID[id] {
+            } else if let existingTitle = existingTitlesByID[localID] {
                 title = existingTitle
             } else {
                 throw DemoBackendError.validation(message: "items[\(index)].title is required")
@@ -993,7 +996,7 @@ public final class DemoServerSimulator {
             }
 
             return ItemInput(
-                id: id,
+                localID: localID,
                 title: title,
                 position: position,
                 createdAt: createdAt,
@@ -1006,11 +1009,11 @@ public final class DemoServerSimulator {
         for item in items {
             try self.sqlite.execute(
                 """
-                INSERT INTO items (id, task_id, title, position, created_at, updated_at)
+                INSERT INTO items (local_id, task_id, title, position, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 bind: { stmt in
-                    self.sqlite.bind(text: item.id, at: 1, in: stmt)
+                    self.sqlite.bind(text: item.localID, at: 1, in: stmt)
                     self.sqlite.bind(int: taskID, at: 2, in: stmt)
                     self.sqlite.bind(text: item.title, at: 3, in: stmt)
                     sqlite3_bind_int64(stmt, 4, Int64(item.position))
@@ -1164,7 +1167,8 @@ public final class DemoServerSimulator {
             );
 
             CREATE TABLE IF NOT EXISTS items (
-                id TEXT PRIMARY KEY,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                local_id TEXT,
                 task_id INTEGER NOT NULL,
                 title TEXT NOT NULL,
                 position INTEGER NOT NULL DEFAULT 0,
@@ -1264,11 +1268,11 @@ public final class DemoServerSimulator {
             for item in seedData.items {
                 try sqlite.execute(
                     """
-                    INSERT INTO items (id, task_id, title, position, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO items (id, local_id, task_id, title, position, created_at, updated_at)
+                    VALUES (?, NULL, ?, ?, ?, ?, ?)
                     """,
                     bind: { stmt in
-                        sqlite.bind(text: item.id, at: 1, in: stmt)
+                        sqlite.bind(int: item.id, at: 1, in: stmt)
                         sqlite.bind(int: item.taskID, at: 2, in: stmt)
                         sqlite.bind(text: item.title, at: 3, in: stmt)
                         sqlite3_bind_int64(stmt, 4, Int64(item.position))

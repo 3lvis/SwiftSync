@@ -80,10 +80,10 @@ final class DemoBackendTests: XCTestCase {
             XCTAssertNotNil(task["id"] as? Int, "task id is not an Int")
             XCTAssertTrue(task["local_id"] is NSNull, "seeded task local_id must be null")
         }
-        // Items keep TEXT UUID ids but point at the task's int id.
+        // Seeded items are server-origin: server-minted int id, null local_id, pointing at the task's int id.
         for item in taskItems {
-            let id = item["id"] as? String ?? ""
-            XCTAssertNotNil(UUID(uuidString: id), "item id '\(id)' is not a UUID")
+            XCTAssertNotNil(item["id"] as? Int, "item id is not an Int")
+            XCTAssertTrue(item["local_id"] is NSNull, "seeded item local_id must be null")
             XCTAssertEqual(item["task_id"] as? Int, firstTaskID)
         }
         XCTAssertFalse(taskItems.isEmpty)
@@ -316,7 +316,10 @@ final class DemoBackendTests: XCTestCase {
         let serverID = try XCTUnwrap(created["id"] as? Int)
         let createdItems = items(in: created)
         XCTAssertEqual(createdItems.count, 2)
-        XCTAssertEqual(createdItems.map { $0["id"] as? String }, ["item-1", "item-2"])
+        XCTAssertEqual(
+            createdItems.map { $0["local_id"] as? String }, ["item-1", "item-2"],
+            "the client's item ids are stored as local_id")
+        XCTAssertTrue(createdItems.allSatisfy { $0["id"] is Int }, "item id is the server-minted int")
         XCTAssertEqual(createdItems.map { $0["title"] as? String }, ["First", "Second"])
         XCTAssertTrue(createdItems.allSatisfy { $0["done"] == nil })
         XCTAssertEqual(createdItems.map { $0["position"] as? Int }, [0, 1])
@@ -325,7 +328,7 @@ final class DemoBackendTests: XCTestCase {
         let detail = try backend.getTaskDetailPayload(taskID: serverID)
         let detailItems = items(in: detail)
         XCTAssertEqual(detailItems.count, 2)
-        XCTAssertEqual(detailItems.map { $0["id"] as? String }, ["item-1", "item-2"])
+        XCTAssertEqual(detailItems.map { $0["local_id"] as? String }, ["item-1", "item-2"])
     }
 
     func testUpdateTaskFromBodyDictItemsKeyPresentReplacesItems() throws {
@@ -366,9 +369,9 @@ final class DemoBackendTests: XCTestCase {
 
         let updatedItems = items(in: updated)
         XCTAssertEqual(updatedItems.count, 2)
-        XCTAssertEqual(updatedItems.map { $0["id"] as? String }, ["item-b", "item-a"])
+        XCTAssertEqual(updatedItems.map { $0["local_id"] as? String }, ["item-b", "item-a"])
         XCTAssertTrue(updatedItems.allSatisfy { $0["done"] == nil })
-        XCTAssertFalse(updatedItems.contains { ($0["id"] as? String) == "initial-item" })
+        XCTAssertFalse(updatedItems.contains { ($0["local_id"] as? String) == "initial-item" })
     }
 
     func testUpdateTaskFromBodyDictItemsKeyAbsentPreservesItems() throws {
@@ -405,7 +408,7 @@ final class DemoBackendTests: XCTestCase {
 
         let updatedItems = items(in: updated)
         XCTAssertEqual(updatedItems.count, 1)
-        XCTAssertEqual(updatedItems.first?["id"] as? String, "keep-item")
+        XCTAssertEqual(updatedItems.first?["local_id"] as? String, "keep-item")
         XCTAssertEqual(updatedItems.first?["title"] as? String, "Keep")
     }
 
@@ -447,7 +450,7 @@ final class DemoBackendTests: XCTestCase {
             ])
 
         let reorderedItems = items(in: updated)
-        XCTAssertEqual(reorderedItems.map { $0["id"] as? String }, ["item-b", "item-a"])
+        XCTAssertEqual(reorderedItems.map { $0["local_id"] as? String }, ["item-b", "item-a"])
         XCTAssertEqual(reorderedItems.map { $0["title"] as? String }, ["Second", "First"])
     }
 
@@ -489,11 +492,11 @@ final class DemoBackendTests: XCTestCase {
             ])
 
         let detail = try backend.getTaskDetailPayload(taskID: serverID)
-        XCTAssertEqual(items(in: detail).map { $0["id"] as? String }, ["item-b", "item-a"])
+        XCTAssertEqual(items(in: detail).map { $0["local_id"] as? String }, ["item-b", "item-a"])
 
         let projectTasks = try backend.getProjectTasksPayload(projectID: projectID)
         let persistedTask = projectTasks.first { ($0["id"] as? Int) == serverID }
-        XCTAssertEqual(items(in: persistedTask).map { $0["id"] as? String }, ["item-b", "item-a"])
+        XCTAssertEqual(items(in: persistedTask).map { $0["local_id"] as? String }, ["item-b", "item-a"])
     }
 
     func testSQLiteBackendCreateAndDeleteTaskUpdatesProjectSlice() async throws {
@@ -779,7 +782,7 @@ final class DemoBackendTests: XCTestCase {
             ],
             items: [
                 .init(
-                    id: "B1B2C3D4-0000-0000-0000-000000000010",
+                    id: 1,
                     taskID: taskID,
                     title: "Gather requirements",
                     position: 0,
@@ -787,7 +790,7 @@ final class DemoBackendTests: XCTestCase {
                     updatedAt: now
                 ),
                 .init(
-                    id: "B1B2C3D4-0000-0000-0000-000000000011",
+                    id: 2,
                     taskID: taskID,
                     title: "Draft implementation plan",
                     position: 1,
