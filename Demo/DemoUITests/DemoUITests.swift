@@ -1,33 +1,10 @@
 import XCTest
 
-private enum DemoUITestPlan {
-    /*
-     Source of truth for Demo UI automation planning.
-
-     Purpose of the Demo app:
-     - prove SwiftSync works in real app flows, not only isolated unit tests
-     - show project list -> project detail -> task detail -> create/edit/delete behavior
-     - act as an integration regression surface for synced reads, writes, and relationships
-
-     Testing rule:
-     - tests should map to user goals, not to screen checkpoints
-     - navigation assertions only matter when they support a larger journey
-     - keep the suite intentionally small and stable; add coverage below the UI layer before growing this file further
-
-     Implemented coverage:
-     - bootstrap smoke: launch and confirm the canonical seeded project list loads
-     - journey: browse work and inspect task details
-       path:
-       1. open app
-       2. open "Account Security Controls"
-       3. open "Add session timeout controls to account settings"
-       4. verify title, assignee, author, and seeded checklist items
-
-     Scope:
-     - this suite is intentionally capped at core demo journeys
-     - future coverage should prefer lower-level tests unless a new end-to-end user journey justifies UI automation
-     */
-}
+// UI tests are the costliest CI tier, so this suite is intentionally tiny: it holds only journeys that
+// exercise genuinely app-layer behavior a DemoCore/SwiftSync/DemoBackend unit cannot (cross-screen
+// SwiftUI reactivity, the offline-toggle/auto-sync wiring, the failures-inbox screen). New behavior earns
+// coverage below the UI layer first. Rules + the per-test trial: docs/planning/ui-test-trial.md and
+// AGENTS.md ("UI tests are a last resort").
 
 private enum DemoSeedUserID {
     static let noahKim = "C3E7A1B2-2001-0000-0000-000000000002"
@@ -51,11 +28,6 @@ private enum DemoSeedTaskID {
 }
 
 final class DemoUITests: XCTestCase {
-    /// A people-edit save runs three sequential refresh cycles, so the form dismisses just past the old
-    /// 0.5s budget (which flaked); 1s asserts the form closes without re-introducing the flake.
-    // One-round-trip save → the form dismisses well under a second; 3s is jitter headroom. waitForNonExistence
-    // returns on dismiss, so a passing test isn't slowed and a real failure still fails fast.
-    private let saveDismissTimeout: TimeInterval = 3
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -84,7 +56,7 @@ final class DemoUITests: XCTestCase {
         replaceText(in: app.textFields["task-form.description"], with: "   ", app: app)
         app.buttons["task-form.save"].tap()
 
-        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout))
+        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 3))
         XCTAssertEqual(detailElement(app, id: "task.title").label, updatedTitle)
         XCTAssertEqual(detailElement(app, id: "task.description").label, normalizedDescription)
 
@@ -118,7 +90,7 @@ final class DemoUITests: XCTestCase {
         replaceText(in: app.textFields["task-form.title"], with: title, app: app)
         XCTAssertTrue(app.buttons["task-form.save"].isEnabled, "offline create works with cached reference data")
         app.buttons["task-form.save"].tap()
-        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout))
+        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 3))
 
         // It appears locally and is queued.
         XCTAssertTrue(findAfterScrolling(app.staticTexts[title], in: app))
@@ -151,7 +123,7 @@ final class DemoUITests: XCTestCase {
         openEditTaskForm(app)
         replaceText(in: app.textFields["task-form.title"], with: String(repeating: "A", count: 100), app: app)
         app.buttons["task-form.save"].tap()
-        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout))
+        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 3))
 
         // Reconnect: auto-sync pushes it, the server rejects it, and it surfaces in the inbox.
         app.buttons["offline-toggle"].tap()
@@ -202,14 +174,6 @@ extension DemoUITests {
         XCTAssertTrue(detailElement(app, id: "task.title").exists)
     }
 
-    fileprivate func openTopProjectTask(_ app: XCUIApplication) {
-        let rows = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "identifier BEGINSWITH 'project.task.'"))
-        let row = rows.element(boundBy: 0)
-        XCTAssertTrue(row.waitForExistence(timeout: 1))
-        row.tap()
-    }
-
     fileprivate func detailElement(_ app: XCUIApplication, id: String) -> XCUIElement {
         app.descendants(matching: .any)[id]
     }
@@ -226,65 +190,6 @@ extension DemoUITests {
     fileprivate func openEditTaskForm(_ app: XCUIApplication) {
         app.buttons["Edit"].tap()
         XCTAssertTrue(app.buttons["task-form.save"].exists)
-    }
-
-    fileprivate func selectAssignee(_ app: XCUIApplication, userID: String) {
-        tapAfterScrolling(app.buttons["task-form.summary.assignee"], in: app)
-        tapAfterScrolling(app.buttons["task-form.assignee.option.\(userID)"], in: app)
-    }
-
-    fileprivate func selectAuthor(_ app: XCUIApplication, userID: String) {
-        tapAfterScrolling(app.buttons["task-form.summary.author"], in: app)
-        tapAfterScrolling(app.buttons["task-form.author.option.\(userID)"], in: app)
-    }
-
-    fileprivate func addPerson(_ app: XCUIApplication, role: String, userID: String) {
-        tapAfterScrolling(app.buttons["task-form.\(role).add"], in: app)
-        tapAfterScrolling(app.buttons["task-form.\(role).option.\(userID)"], in: app)
-    }
-
-    fileprivate func deleteTaskFromProject(_ app: XCUIApplication, id: String) {
-        let taskRow = app.descendants(matching: .any)["project.task.\(id)"]
-        XCTAssertTrue(taskRow.waitForExistence(timeout: 1))
-        taskRow.swipeLeft()
-        app.buttons["Delete"].tap()
-        app.alerts["Delete Task?"].buttons["Delete"].tap()
-    }
-
-    fileprivate func tapAfterScrolling(_ element: XCUIElement, in app: XCUIApplication, maxSwipes: Int = 6) {
-        for _ in 0..<maxSwipes where !element.isHittable {
-            if app.tables.firstMatch.exists {
-                app.tables.firstMatch.swipeUp()
-            } else if app.scrollViews.firstMatch.exists {
-                app.scrollViews.firstMatch.swipeUp()
-            } else if app.otherElements["task-form"].exists {
-                app.otherElements["task-form"].swipeUp()
-            } else {
-                app.swipeUp()
-            }
-        }
-        XCTAssertTrue(element.exists)
-        element.tap()
-    }
-
-    fileprivate func scrollToVisible(_ element: XCUIElement, in app: XCUIApplication, maxSwipes: Int = 6) {
-        for _ in 0..<maxSwipes where !element.exists {
-            if app.tables.firstMatch.exists {
-                app.tables.firstMatch.swipeUp()
-            } else if app.scrollViews.firstMatch.exists {
-                app.scrollViews.firstMatch.swipeUp()
-            } else if app.otherElements["task-form"].exists {
-                app.otherElements["task-form"].swipeUp()
-            } else {
-                app.swipeUp()
-            }
-        }
-        XCTAssertTrue(element.exists)
-    }
-
-    fileprivate func tapVisible(_ element: XCUIElement) {
-        XCTAssertTrue(element.exists)
-        element.tap()
     }
 
     fileprivate func findAfterScrolling(_ element: XCUIElement, in app: XCUIApplication, maxSwipes: Int = 6) -> Bool {
