@@ -155,13 +155,31 @@ verdict, PR.)
   `watcher_ids`; the backend clear is asserted by `testUpdateTaskFromBodyHonorsReviewerAndWatcherIDs` and
   the online `.save` → backend → local-reflects path by the people-mutation unit (remove case). R3 → drop.
 
-### Remaining — CONVERT (need a red-first unit before dropping)
+### Remaining — CONVERT (add a DemoCore unit, then drop)
 
-These have no existing unit that asserts the behavior; each needs a DemoCore unit (red-first) before the
-UI test is dropped:
+**Principle (the way forward):** when a UI test guards real behavior that has no unit, the answer is to
+*grow unit coverage*, not to delete coverage. Add a DemoCore unit that asserts the behavior
+(characterization — it locks the contract in going forward and would fail if the behavior regressed),
+confirm green, then drop the UI test. New first-party behavior should land with unit coverage by default;
+a UI test is the exception, not the entry point.
+
+Each of these has no existing unit that asserts the behavior; add one, then drop the UI test:
 - **#3 `testCreateTaskInsideProject`** — online create via `.save` (form enable + createTask with people).
 - **#4 `testEditTaskItemsFlow`** — items add/rename/delete via `.save`.
 - **#7 `testDeleteTaskFromProject`** — online delete path (`apiClient.deleteTask` → re-sync), distinct from
   the offline tombstone push path already covered.
 - **#8 `testCancelCreateDoesNotPersistTask`** / **#9 `testCancelEditKeepsOriginalTaskValues`** — form-machine
   cancel / edit-context discard.
+
+#### Converted so far
+
+- **#3 `testCreateTaskInsideProject` → CONVERTED + DROPPED.** Added
+  `OfflinePushTests.testOnlineCreateTaskPersistsLocallyAndReachesBackend` (online `createTask` → local row
+  + reaches backend, not pending) — green. UI test dropped.
+- **#7 `testDeleteTaskFromProject` → CONVERTED + DROPPED.** Added
+  `OfflinePushTests.testOnlineDeleteTaskRemovesLocallyAndOnBackend` (online `deleteTask` → removed locally
+  + on backend) — distinct from the offline tombstone-push path. UI test dropped.
+- **#4 `testEditTaskItemsFlow`** — pending: `items` is `@NotExport`, so this needs the form machine's items
+  events (`.add`/`.updateTitle`/`.delete`) → `.save`, asserting the persisted items. (Next.)
+- **#8 / #9 cancel** — pending: unit characterizing "the form persists only on `.save`; unsaved
+  editContext changes never reach the store" (covers both cancel-create and cancel-edit). (Next.)

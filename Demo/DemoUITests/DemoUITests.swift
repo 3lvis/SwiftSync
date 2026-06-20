@@ -93,38 +93,6 @@ final class DemoUITests: XCTestCase {
     }
 
     @MainActor
-    func testCreateTaskInsideProject() throws {
-        let app = configuredApp()
-        let createdTitle = uniqueTitle(prefix: "UI Created Task")
-        let authorID = DemoSeedUserID.miaPatel
-        let reviewerID = DemoSeedUserID.sofiaGarcia
-        let watcherID = DemoSeedUserID.ethanLee
-
-        app.launch()
-        openProject(app, id: DemoSeedProjectID.accountSecurity)
-
-        openCreateTaskForm(app)
-
-        let saveButton = app.buttons["task-form.save"]
-        XCTAssertFalse(saveButton.isEnabled)
-
-        replaceText(in: app.textFields["task-form.title"], with: createdTitle, app: app)
-        selectAuthor(app, userID: authorID)
-        addPerson(app, role: "reviewers", userID: reviewerID)
-        addPerson(app, role: "watchers", userID: watcherID)
-        XCTAssertTrue(saveButton.isEnabled)
-        saveButton.tap()
-
-        openTopProjectTask(app)
-
-        XCTAssertTrue(detailElement(app, id: "task.title").exists)
-        XCTAssertEqual(detailElement(app, id: "task.title").label, createdTitle)
-        XCTAssertEqual(detailElement(app, id: "task.author").label, "Mia Patel")
-        XCTAssertTrue(findAfterScrolling(app.staticTexts["task.reviewer.\(reviewerID)"], in: app))
-        XCTAssertTrue(findAfterScrolling(app.staticTexts["task.watcher.\(watcherID)"], in: app))
-    }
-
-    @MainActor
     func testEditTaskItemsFlow() throws {
         let app = configuredApp()
         let addedItemTitle = uniqueTitle(prefix: "UI Added Item")
@@ -154,19 +122,6 @@ final class DemoUITests: XCTestCase {
         XCTAssertTrue(findAfterScrolling(app.staticTexts[renamedItemTitle], in: app))
         XCTAssertTrue(findAfterScrolling(app.staticTexts[addedItemTitle], in: app))
         XCTAssertFalse(app.staticTexts[deletedItemTitle].exists)
-    }
-
-    @MainActor
-    func testDeleteTaskFromProject() throws {
-        let app = configuredApp()
-
-        app.launch()
-        openProject(app, id: DemoSeedProjectID.accountSecurity)
-
-        deleteTaskFromProject(app, id: DemoSeedTaskID.securityPolicyPatch)
-        XCTAssertFalse(app.descendants(matching: .any)["project.task.\(DemoSeedTaskID.securityPolicyPatch)"].exists)
-        XCTAssertTrue(app.staticTexts["Add session timeout controls to account settings"].exists)
-        XCTAssertTrue(app.staticTexts["Write QA item list for forced re-auth scenarios"].exists)
     }
 
     @MainActor

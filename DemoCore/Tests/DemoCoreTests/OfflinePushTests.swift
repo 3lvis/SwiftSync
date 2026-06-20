@@ -47,6 +47,48 @@ final class OfflinePushTests: XCTestCase {
     }
 
     @MainActor
+    func testOnlineCreateTaskPersistsLocallyAndReachesBackend() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        let body = try createBody(
+            from: DemoSeedData.SeedIDs.Tasks.sessionTimeout, newID: "ONLINE-CREATE-1", in: syncContainer)
+        try await engine.createTask(body: body, projectID: projectID)
+
+        XCTAssertNotNil(
+            try fetchTask(id: "ONLINE-CREATE-1", in: syncContainer.mainContext), "created locally")
+        XCTAssertEqual(engine.pendingChangeCount, 0, "an online create syncs immediately, not pending")
+        let backendDetail = try await apiClient.getTaskDetail(taskID: "ONLINE-CREATE-1")
+        XCTAssertNotNil(backendDetail, "the create reached the backend")
+    }
+
+    @MainActor
+    func testOnlineDeleteTaskRemovesLocallyAndOnBackend() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        let taskID = DemoSeedData.SeedIDs.Tasks.securityPolicyPatch
+        try await engine.syncProjectTasks(projectID: projectID)
+        XCTAssertNotNil(try fetchTask(id: taskID, in: syncContainer.mainContext))
+
+        try await engine.deleteTask(taskID: taskID, projectID: projectID)
+
+        XCTAssertNil(
+            try fetchTask(id: taskID, in: syncContainer.mainContext), "removed locally after an online delete")
+        XCTAssertEqual(engine.pendingChangeCount, 0)
+        let backendDetail = try await apiClient.getTaskDetail(taskID: taskID)
+        XCTAssertNil(backendDetail, "removed on the backend")
+    }
+
+    @MainActor
     func testOfflineDeleteThenPushHardDeletesLocallyAndOnBackend() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
