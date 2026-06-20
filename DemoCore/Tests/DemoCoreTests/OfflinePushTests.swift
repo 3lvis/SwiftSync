@@ -47,6 +47,84 @@ final class OfflinePushTests: XCTestCase {
     }
 
     @MainActor
+    func testOnlineCreateTaskPersistsLocallyAndReachesBackend() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        try await engine.syncProjectTasks(projectID: projectID)
+
+        let body = try createBody(
+            from: DemoSeedData.SeedIDs.Tasks.sessionTimeout, newID: "ONLINE-CREATE-1", in: syncContainer)
+        try await engine.createTask(body: body, projectID: projectID)
+
+        XCTAssertNotNil(
+            try fetchTask(id: "ONLINE-CREATE-1", in: syncContainer.mainContext), "created locally")
+        XCTAssertEqual(engine.pendingChangeCount, 0, "an online create syncs immediately, not pending")
+        let backendDetail = try await apiClient.getTaskDetail(taskID: "ONLINE-CREATE-1")
+        XCTAssertNotNil(backendDetail, "the create reached the backend")
+    }
+
+    @MainActor
+    func testOnlineDeleteTaskRemovesLocallyAndOnBackend() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        let taskID = DemoSeedData.SeedIDs.Tasks.securityPolicyPatch
+        try await engine.syncProjectTasks(projectID: projectID)
+        XCTAssertNotNil(try fetchTask(id: taskID, in: syncContainer.mainContext))
+
+        try await engine.deleteTask(taskID: taskID, projectID: projectID)
+
+        XCTAssertNil(
+            try fetchTask(id: taskID, in: syncContainer.mainContext), "removed locally after an online delete")
+        XCTAssertEqual(engine.pendingChangeCount, 0)
+        let backendDetail = try await apiClient.getTaskDetail(taskID: taskID)
+        XCTAssertNil(backendDetail, "removed on the backend")
+    }
+
+    @MainActor
+    func testUpdateTaskItemsAddRenameDelete() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        let taskID = DemoSeedData.SeedIDs.Tasks.qaItemList
+        try await engine.syncProjectTasks(projectID: projectID)
+        try await engine.syncTaskDetail(taskID: taskID)
+
+        let task = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        var body = syncContainer.export(task)
+        var items = try XCTUnwrap(body["items"] as? [[String: Any]])
+        XCTAssertGreaterThanOrEqual(items.count, 2, "the seeded task has items to edit")
+
+        items[0]["title"] = "Renamed item"  // rename the first
+        let removed = items.remove(at: 1)  // delete the second
+        let removedTitle = try XCTUnwrap(removed["title"] as? String)
+        var added = items[0]  // clone the exported shape, then make it a new item
+        added["id"] = "ADDED-ITEM-1"
+        added["title"] = "Added item"
+        items.append(added)
+        body["items"] = items
+
+        try await engine.updateTask(
+            taskID: taskID, projectID: projectID, body: try DemoSyncPayload(dictionary: body))
+
+        let updated = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        let titles = updated.items.map(\.title)
+        XCTAssertTrue(titles.contains("Renamed item"), "rename applied")
+        XCTAssertTrue(titles.contains("Added item"), "add applied")
+        XCTAssertFalse(titles.contains(removedTitle), "delete applied")
+    }
+
+    @MainActor
     func testOfflineDeleteThenPushHardDeletesLocallyAndOnBackend() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
@@ -302,10 +380,12 @@ final class OfflinePushTests: XCTestCase {
         XCTAssertEqual(edited.project?.id, projectID, "the edit must not drop the project link")
     }
 
-    /// Regression: an offline `updateTask` with `reviewer_ids` must apply reviewers locally (`apply()`
-    /// skips the `@NotExport` relationship, so there's no server round-trip to reflect it).
+    /// The whole offline reviewer journey via the path the task-form save actually uses (reviewer_ids in
+    /// the `updateTask` body): it applies locally while offline — a regression guard, since `apply()`
+    /// skips the `@NotExport` relationship so nothing else would reflect it — then round-trips through
+    /// push so the server holds the new set, proven by a fresh pull bringing it back.
     @MainActor
-    func testOfflineUpdateTaskWithReviewerIDsAppliesLocally() async throws {
+    func testOfflineReviewerEditViaUpdateBodyAppliesLocallyAndSyncsOnReconnect() async throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("offline-update-people-\(UUID().uuidString).sqlite")
         addTeardownBlock { try? FileManager.default.removeItem(at: url) }
@@ -333,6 +413,18 @@ final class OfflinePushTests: XCTestCase {
         XCTAssertEqual(
             offline.reviewers.map(\.id).sorted(), newReviewers,
             "an offline updateTask with reviewer_ids must apply the reviewers to the local row")
+
+        engine.isOffline = false
+        let pushResult = try await engine.pushPendingChanges()
+        let summary = try XCTUnwrap(pushResult)
+        XCTAssertTrue(summary.failures.isEmpty)
+
+        // A fresh pull (server is authoritative) brings the same reviewers back.
+        try await engine.syncTaskDetail(taskID: taskID)
+        let pulled = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        XCTAssertEqual(
+            pulled.reviewers.map(\.id).sorted(), newReviewers,
+            "the offline reviewer edit persisted on the server")
     }
 
     /// Only `Task` is marked offline, yet a `Task`↔`User` relationship edit made offline (assigning
