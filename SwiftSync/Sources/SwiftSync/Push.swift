@@ -9,9 +9,9 @@ extension SwiftSync {
     static let inboundAuthor = "swiftsync.inbound"
 }
 
-/// The local `localID`s pending a push, partitioned by operation, derived from store history. Both the
-/// return of `pendingChanges(...)` and the value `push(...)` hands the `upload` closure — the app maps each
-/// id to its own request payload, so SwiftData objects never cross into a network call.
+/// The local rows with un-pushed changes, split by operation. Each array holds `localID`s (the rows'
+/// string ids), not objects — `push` hands this to your `upload` closure and you map each id to your own
+/// request payload, so SwiftData objects never cross into the network call.
 public struct SyncPendingChanges: Sendable {
     public let inserts: [String]
     public let updates: [String]
@@ -57,8 +57,8 @@ extension SwiftSync {
         try pendingChanges(from: localTransactions(since: token, in: context), for: Model.self, in: context)
     }
 
-    /// Separate from the token-driven overload so `push` derives the batch and its pre-upload boundary
-    /// token from a single history read (see the boundary capture in `push`).
+    /// Separate from the token-driven overload so `push` derives the batch and its `uploadedThrough` token
+    /// from a single history read (see the capture in `push`).
     static func pendingChanges<Model: SyncUpdatableModel>(
         from transactions: [DefaultHistoryTransaction],
         for _: Model.Type,
@@ -130,12 +130,13 @@ extension SwiftSync {
         return SyncPendingChanges(inserts: inserts, updates: updates, deletes: deletes)
     }
 
-    /// Drive one push: read pending changes from history (since the model type's last-pushed token),
-    /// hand them to the app's `upload` closure (the app owns the network call) which returns only the
-    /// failures, then — only when there are **no** failures — advance the last-pushed token to the
-    /// pre-upload history boundary and trim the now-redundant inbound history. SwiftSync writes no per-row
-    /// state on push; a failed (or any un-acknowledged) change simply stays past the token and is
-    /// re-detected next push.
+    /// Drive one push pass. Reads what changed locally since this model type's last-pushed token, hands it
+    /// to your `upload` closure (you own the network call), and gets back the rejected rows. Everything you
+    /// *don't* return as a failure is treated as confirmed — the client id is the identity the server
+    /// adopts, so a push is an idempotent upsert with nothing to acknowledge. Only on a fully clean push
+    /// (no failures) does it advance the token and trim the now-redundant inbound history. SwiftSync stores
+    /// no per-row state: a failed — or any un-pushed — change stays past the token and is re-detected next
+    /// push. Returns the same failures your closure returned (empty == clean).
     @discardableResult
     public static func push<Model: SyncUpdatableModel>(
         for _: Model.Type,
@@ -149,14 +150,15 @@ extension SwiftSync {
         let transactions = try localTransactions(since: token, in: context)
         let pending = try pendingChanges(from: transactions, for: Model.self, in: context)
         guard !pending.isEmpty else { return [] }
-        // The history head observed *before* the upload. Advancing only to here leaves any write that
-        // lands during the upload await past the token, so it's re-detected next push, not swallowed.
-        let boundary = transactions.last?.token
+        // The newest history token in this batch, captured *before* the upload. On success we advance the
+        // token only to here — never to the live head — so any local write that lands during the upload
+        // await stays past the token and is re-detected next push, instead of being silently skipped.
+        let uploadedThrough = transactions.last?.token
 
         let failures = try await upload(pending)
-        if failures.isEmpty, let boundary {
-            try setLastPushedHistoryToken(boundary, for: Model.self, in: context)
-            try? trimInboundHistory(throughInclusive: boundary, in: context)
+        if failures.isEmpty, let uploadedThrough {
+            try setLastPushedHistoryToken(uploadedThrough, for: Model.self, in: context)
+            try? trimInboundHistory(through: uploadedThrough, in: context)
         }
         return failures
     }
@@ -197,7 +199,7 @@ extension SwiftSync {
     /// Trim inbound (pull-authored) history up to and including `token`. Only inbound transactions are
     /// removed — local-authored history is the un-pushed-changes signal and a different model type may
     /// still need its own un-pushed local changes, so those are never trimmed here.
-    static func trimInboundHistory(throughInclusive token: DefaultHistoryToken, in context: ModelContext) throws {
+    static func trimInboundHistory(through token: DefaultHistoryToken, in context: ModelContext) throws {
         let inbound = inboundAuthor
         try context.deleteHistory(
             HistoryDescriptor<DefaultHistoryTransaction>(
