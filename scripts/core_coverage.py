@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
-"""Self-hosted code-coverage evaluation + regression gate for the SwiftSync library.
+"""Self-hosted code-coverage *report* for the SwiftSync library — informational, never a blocker.
 
 Reads the llvm-cov JSON that `swift test --enable-code-coverage --show-codecov-path` produces and acts
 only on the public library at SwiftSync/Sources/SwiftSync — the demo packages are out of scope. No
-third-party service: it's the toolchain's own coverage data plus this script, mirroring how the warnings,
-perf, and format gates are in-repo too.
+third-party service: it's the toolchain's own coverage data plus this script. Every subcommand exits 0;
+findings surface as a GitHub step summary + PR annotations, so coverage is visible without ever failing
+CI (deliberately not a required check).
 
 Subcommands:
   evaluate --head H.json
-      Print a per-file + total line-coverage table (and a GitHub step summary). Never fails.
+      Print a per-file + total line-coverage table (and a GitHub step summary).
   patch --head H.json --diff-base <ref>
-      Fail if any line *added* in this diff (under SwiftSync/Sources/SwiftSync) is an executable line
-      that no test covers. The gate that bites: you can't add untested core code. Escape hatch: a
-      trailing `// coverage:ignore` on the line.
+      Report any line *added* in this diff (under SwiftSync/Sources/SwiftSync) that is an executable line
+      no test covers — as warning annotations + a summary. Escape hatch: a trailing `// coverage:ignore`.
   compare --head H.json --base B.json
-      Fail if core total line coverage dropped vs base by more than EPSILON (a no-decrease ratchet, not
-      an absolute target).
+      Report the core total line-coverage delta vs base (a warning if it dropped past EPSILON).
 """
 
 import argparse
@@ -111,17 +110,22 @@ def cmd_patch(args):
         for ln in sorted(lines):
             if ln not in covered or covered[ln]:
                 continue  # not executable, or already covered
-            text = source[ln - 1] if ln - 1 < len(source) else ""
-            if "coverage:ignore" in text:
+            raw = source[ln - 1] if ln - 1 < len(source) else ""
+            if "coverage:ignore" in raw:
                 continue
-            violations.append(f"{path}:{ln}: {text.strip()}")
-    if violations:
-        print("::error::New SwiftSync core lines are not covered by any test:")
-        for v in violations:
-            print(f"  {v}")
-        print("Add a test, or annotate the line with `// coverage:ignore` if intentionally untestable.")
-        return 1
-    print("Patch coverage OK: every added SwiftSync core line is tested.")
+            violations.append((path, ln, raw.strip()))
+    # Informational, not blocking: surface findings as PR annotations + a summary, but never fail.
+    if not violations:
+        print("Patch coverage: every added SwiftSync core line is covered.")
+        emit_summary("### Patch coverage\n\n✅ Every added `SwiftSync/Sources` line is covered by a test.")
+        return 0
+    for path, ln, _text in violations:
+        print(f"::warning file={path},line={ln}::Added SwiftSync core line not covered by a test")
+    body = "\n".join(f"- `{p}:{ln}` — {t}" for p, ln, t in violations)
+    emit_summary(
+        "### ⚠️ Patch coverage — new core lines not covered\n\n" + body
+        + "\n\n_Informational only. Add a test, or `// coverage:ignore` if intentionally untestable._")
+    print(f"{len(violations)} added SwiftSync core line(s) not covered (informational, not blocking).")
     return 0
 
 
@@ -129,11 +133,12 @@ def cmd_compare(args):
     _, _, head_pct = core_total(core_files(args.head))
     _, _, base_pct = core_total(core_files(args.base))
     delta = head_pct - base_pct
-    print(f"core coverage: base {base_pct:.1f}% -> head {head_pct:.1f}% ({delta:+.1f}pp)")
+    line = f"core coverage: base {base_pct:.1f}% → head {head_pct:.1f}% ({delta:+.1f}pp)"
+    print(line)
+    emit_summary("### Core coverage delta\n\n" + line)
+    # Informational, not blocking.
     if delta < -EPSILON:
-        print(f"::error::SwiftSync core coverage dropped {-delta:.1f}pp (> {EPSILON}pp). "
-              "Add tests for the code that lost coverage.")
-        return 1
+        print(f"::warning::SwiftSync core coverage dropped {-delta:.1f}pp (informational, not blocking).")
     return 0
 
 

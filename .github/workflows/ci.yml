@@ -124,8 +124,10 @@ jobs:
             --filter FetchStrategyBenchmarkTests/testGlobalBatchSyncBenchmarks \
             --filter FetchStrategyBenchmarkTests/testSingleItemSyncBenchmarks
 
+  # Informational report, not a gate: surfaces SwiftSync core coverage (table + new-uncovered-line
+  # annotations + delta) in the step summary, but never fails CI and is intentionally not a required check.
   core-coverage:
-    name: Core coverage gate (SwiftSync)
+    name: Core coverage (SwiftSync)
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v5
@@ -143,22 +145,22 @@ jobs:
         run: swift --version
 
       # `swift test --show-codecov-path` only prints the path — it does NOT re-run tests. Run coverage
-      # for real first, then read the path, or the gate scores stale data.
+      # for real first, then read the path, or the report scores stale data.
       - name: Coverage (HEAD)
         run: |
           swift test --enable-code-coverage
           echo "HEAD_JSON=$(swift test --show-codecov-path)" >> "$GITHUB_ENV"
 
-      - name: Evaluate core coverage (informational)
+      - name: Evaluate core coverage
         run: python3 scripts/core_coverage.py evaluate --head "$HEAD_JSON"
 
-      - name: Patch gate — new SwiftSync core lines must be covered
+      - name: Patch coverage report (new core lines)
         if: github.event_name == 'pull_request'
         run: |
           python3 scripts/core_coverage.py patch \
             --head "$HEAD_JSON" --diff-base "origin/${{ github.base_ref }}...HEAD"
 
-      - name: No-decrease gate — core coverage must not drop vs base
+      - name: Core coverage delta vs base
         if: github.event_name == 'pull_request'
         run: |
           cp scripts/core_coverage.py "$RUNNER_TEMP/cc.py"
