@@ -61,23 +61,10 @@ final class DemoUITests: XCTestCase {
         continueAfterFailure = false
     }
 
-    // User journey: browse work and inspect synced task details.
-    @MainActor
-    func testProjectAndTaskDetailShowSeededContent() throws {
-        let app = configuredApp()
-        app.launch()
-
-        openProject(app, id: DemoSeedProjectID.accountSecurity)
-        openTask(app, id: DemoSeedTaskID.sessionTimeout)
-
-        XCTAssertTrue(detailElement(app, id: "task.title").exists)
-        XCTAssertEqual(detailElement(app, id: "task.title").label, "Add session timeout controls to account settings")
-        XCTAssertEqual(detailElement(app, id: "task.assignee").label, "Ava Martinez")
-        XCTAssertEqual(detailElement(app, id: "task.author").label, "Liam Brown")
-        XCTAssertTrue(findAfterScrolling(app.staticTexts["Gather requirements"], in: app))
-        XCTAssertTrue(findAfterScrolling(app.staticTexts["Draft implementation plan"], in: app))
-    }
-
+    // KEPT (R4): cross-screen reactivity — after a save, the edit must propagate to BOTH the detail and
+    // the project-list row (SwiftSync's @SyncQuery driving two SwiftUI views). The update + description
+    // normalization logic are unit-tested (OfflinePushTests, TaskFormDescriptionNormalizationTests); the
+    // reactive propagation across screens is not unit-coverable without a view host.
     @MainActor
     func testUpdateTaskTitleKeepsProjectAndDetailInSync() throws {
         let app = configuredApp()
@@ -170,35 +157,6 @@ final class DemoUITests: XCTestCase {
     }
 
     @MainActor
-    func testAssignUnassignedTask() throws {
-        let app = configuredApp()
-
-        app.launch()
-        openTaskDetail(
-            app,
-            projectID: DemoSeedProjectID.notificationsReliability,
-            taskID: DemoSeedTaskID.incidentPlaybook
-        )
-
-        XCTAssertTrue(detailElement(app, id: "task.assignee").exists)
-        XCTAssertEqual(detailElement(app, id: "task.assignee").label, "Unassigned")
-
-        openEditTaskForm(app)
-        app.buttons["task-form.summary.assignee"].tap()
-        tapAfterScrolling(app.buttons["task-form.assignee.option.\(DemoSeedUserID.miaPatel)"], in: app)
-        app.buttons["task-form.save"].tap()
-
-        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout))
-        XCTAssertEqual(detailElement(app, id: "task.assignee").label, "Mia Patel")
-
-        goBack(app)
-        openTask(app, id: DemoSeedTaskID.incidentPlaybook)
-
-        XCTAssertTrue(detailElement(app, id: "task.title").exists)
-        XCTAssertEqual(detailElement(app, id: "task.assignee").label, "Mia Patel")
-    }
-
-    @MainActor
     func testDeleteTaskFromProject() throws {
         let app = configuredApp()
 
@@ -252,37 +210,6 @@ final class DemoUITests: XCTestCase {
         goBack(app)
         XCTAssertTrue(app.staticTexts[originalTitle].exists)
         XCTAssertFalse(app.staticTexts[editedTitle].exists)
-    }
-
-    @MainActor
-    func testClearTaskReviewersOrWatchers() throws {
-        let app = configuredApp()
-
-        app.launch()
-        openTaskDetail(
-            app,
-            projectID: DemoSeedProjectID.notificationsReliability,
-            taskID: DemoSeedTaskID.duplicatePushFix
-        )
-
-        XCTAssertTrue(app.staticTexts["task.reviewer.\(DemoSeedUserID.noahKim)"].exists)
-
-        openEditTaskForm(app)
-
-        tapAfterScrolling(app.buttons["task-form.reviewers.delete.\(DemoSeedUserID.noahKim)"], in: app)
-        tapAfterScrolling(app.buttons["task-form.watchers.delete.\(DemoSeedUserID.liamBrown)"], in: app)
-        tapAfterScrolling(app.buttons["task-form.watchers.delete.\(DemoSeedUserID.ethanLee)"], in: app)
-        app.buttons["task-form.save"].tap()
-
-        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout))
-
-        goBack(app)
-        openTask(app, id: DemoSeedTaskID.duplicatePushFix)
-
-        XCTAssertTrue(detailElement(app, id: "task.title").exists)
-        XCTAssertFalse(app.staticTexts["task.reviewer.\(DemoSeedUserID.noahKim)"].exists)
-        XCTAssertFalse(app.staticTexts["task.watcher.\(DemoSeedUserID.liamBrown)"].exists)
-        XCTAssertFalse(app.staticTexts["task.watcher.\(DemoSeedUserID.ethanLee)"].exists)
     }
 
     // KEPT (R4): the offline-success integration is app-layer, not unit-coverable — ContentView's

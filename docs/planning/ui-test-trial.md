@@ -140,3 +140,28 @@ verdict, PR.)
   list-reflects-edit reactivity by the (kept) online #2. R3 → drop.
 - **#15 `testOfflineDeleteQueuesThenSyncsOnReconnect` → DROPPED.** Delete logic covered by
   `testOfflineDeleteThenPushHardDeletesLocallyAndOnBackend`; integration by #11. R3 → drop.
+- **#1 `testProjectAndTaskDetailShowSeededContent` → DROPPED.** Pure display of synced seed data; the sync
+  is engine-tested and the content/loading states are `ScreenStateResolutionTests`. The detail render is
+  also exercised by the kept #2. R3 → drop.
+- **#2 `testUpdateTaskTitleKeepsProjectAndDetailInSync` → KEPT (R4).** The one cross-screen reactivity
+  test: a save must propagate to BOTH the detail and the project-list row (`@SyncQuery` driving two
+  SwiftUI views). The update + blank-description normalization are unit-tested
+  (`OfflinePushTests`, `TaskFormDescriptionNormalizationTests`); the reactive propagation is not
+  unit-coverable without a view host.
+- **#6 `testAssignUnassignedTask` → DROPPED.** Assignee-set-via-`.save` is asserted by
+  `TaskFormPeopleMutationTests.testEditTaskPeopleFlowReplacesReviewersAndWatchers` (sets assignee, checks
+  persisted). nil→value is the same `updateTask` path. R3 → drop.
+- **#10 `testClearTaskReviewersOrWatchers` → DROPPED.** Clearing is `.save` with empty `reviewer_ids`/
+  `watcher_ids`; the backend clear is asserted by `testUpdateTaskFromBodyHonorsReviewerAndWatcherIDs` and
+  the online `.save` → backend → local-reflects path by the people-mutation unit (remove case). R3 → drop.
+
+### Remaining — CONVERT (need a red-first unit before dropping)
+
+These have no existing unit that asserts the behavior; each needs a DemoCore unit (red-first) before the
+UI test is dropped:
+- **#3 `testCreateTaskInsideProject`** — online create via `.save` (form enable + createTask with people).
+- **#4 `testEditTaskItemsFlow`** — items add/rename/delete via `.save`.
+- **#7 `testDeleteTaskFromProject`** — online delete path (`apiClient.deleteTask` → re-sync), distinct from
+  the offline tombstone push path already covered.
+- **#8 `testCancelCreateDoesNotPersistTask`** / **#9 `testCancelEditKeepsOriginalTaskValues`** — form-machine
+  cancel / edit-context discard.
