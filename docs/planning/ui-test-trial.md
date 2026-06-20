@@ -184,5 +184,19 @@ Each of these has no existing unit that asserts the behavior; add one, then drop
   characterizes the discard mechanism for both: the form edits in an isolated `editContext` (autosave
   off), and without `.save` neither an edit nor a new draft reaches the store — green. Both UI tests
   dropped. (There is no machine `.cancel` event; cancel = never sending `.save`.)
-- **#4 `testEditTaskItemsFlow`** — pending: `items` is `@NotExport`, so this needs the form machine's items
-  events (`.add`/`.updateTitle`/`.delete`) → `.save`, asserting the persisted items. (Next.)
+- **#4 `testEditTaskItemsFlow` → CONVERTED + DROPPED.** Correction: `items` is **not** `@NotExport` (it's a
+  plain exported `@Relationship`), so `export(task)` includes the items array. Added
+  `OfflinePushTests.testUpdateTaskItemsAddRenameDelete` (edit the exported items — rename/delete/add — via
+  `updateTask`, assert the persisted titles) — green. UI test dropped.
+
+## Outcome
+
+15 → 3 UI tests. **Dropped 12** (7 redundant, 5 converted to DemoCore units). **Kept 3** with documented
+R4 reasons — all genuinely app-layer, not unit-coverable:
+- `#2` cross-screen `@SyncQuery` reactivity,
+- `#11` offline-success integration (`ContentView.onChange` auto-drain + pending badge),
+- `#13` failures-inbox screen (`FailuresSheet`).
+
+New DemoCore units added: online create, online delete, items add/rename/delete, offline-reviewer
+round-trip (strengthened), editContext-isolation (cancel). Follow-up applied: R1 — the 3 survivors own
+their timeouts inline; `saveDismissTimeout` deleted.

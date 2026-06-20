@@ -89,6 +89,42 @@ final class OfflinePushTests: XCTestCase {
     }
 
     @MainActor
+    func testUpdateTaskItemsAddRenameDelete() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        let taskID = DemoSeedData.SeedIDs.Tasks.qaItemList
+        try await engine.syncProjectTasks(projectID: projectID)
+        try await engine.syncTaskDetail(taskID: taskID)
+
+        let task = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        var body = syncContainer.export(task)
+        var items = try XCTUnwrap(body["items"] as? [[String: Any]])
+        XCTAssertGreaterThanOrEqual(items.count, 2, "the seeded task has items to edit")
+
+        items[0]["title"] = "Renamed item"  // rename the first
+        let removed = items.remove(at: 1)  // delete the second
+        let removedTitle = try XCTUnwrap(removed["title"] as? String)
+        var added = items[0]  // clone the exported shape, then make it a new item
+        added["id"] = "ADDED-ITEM-1"
+        added["title"] = "Added item"
+        items.append(added)
+        body["items"] = items
+
+        try await engine.updateTask(
+            taskID: taskID, projectID: projectID, body: try DemoSyncPayload(dictionary: body))
+
+        let updated = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        let titles = updated.items.map(\.title)
+        XCTAssertTrue(titles.contains("Renamed item"), "rename applied")
+        XCTAssertTrue(titles.contains("Added item"), "add applied")
+        XCTAssertFalse(titles.contains(removedTitle), "delete applied")
+    }
+
+    @MainActor
     func testOfflineDeleteThenPushHardDeletesLocallyAndOnBackend() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()

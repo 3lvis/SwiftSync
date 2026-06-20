@@ -92,38 +92,6 @@ final class DemoUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts[updatedTitle].exists)
     }
 
-    @MainActor
-    func testEditTaskItemsFlow() throws {
-        let app = configuredApp()
-        let addedItemTitle = uniqueTitle(prefix: "UI Added Item")
-        let renamedItemTitle = "Relaunch flow after timeout"
-        let deletedItemTitle = "Offline to online recovery"
-
-        app.launch()
-        openTaskDetail(
-            app,
-            projectID: DemoSeedProjectID.accountSecurity,
-            taskID: DemoSeedTaskID.qaItemList
-        )
-
-        openEditTaskForm(app)
-
-        app.buttons["task-form.items.add"].tap()
-        scrollToVisible(app.textFields["task-form.items.2.title"], in: app)
-        replaceText(in: app.textFields["task-form.items.2.title"], with: addedItemTitle, app: app)
-
-        scrollToVisible(app.textFields["task-form.items.0.title"], in: app)
-        replaceText(in: app.textFields["task-form.items.0.title"], with: renamedItemTitle, app: app)
-        scrollToVisible(app.buttons["task-form.items.1.delete"], in: app)
-        app.buttons["task-form.items.1.delete"].tap()
-        app.buttons["task-form.save"].tap()
-
-        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout))
-        XCTAssertTrue(findAfterScrolling(app.staticTexts[renamedItemTitle], in: app))
-        XCTAssertTrue(findAfterScrolling(app.staticTexts[addedItemTitle], in: app))
-        XCTAssertFalse(app.staticTexts[deletedItemTitle].exists)
-    }
-
     // KEPT (R4): the offline-success integration is app-layer, not unit-coverable — ContentView's
     // `.onChange(of: isOffline)` auto-drains the queue on reconnect and the pending-count badge is a
     // SwiftUI view. The edit logic itself is unit-tested in OfflinePushTests; this guards the wiring.
