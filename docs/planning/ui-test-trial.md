@@ -125,3 +125,18 @@ verdict, PR.)
   to drive the full journey through the real app path (offline `updateTask` with `reviewer_ids` → applies
   locally → push → server holds it, proven by a fresh pull) — green. That unit now covers everything the
   UI test asserted; UI-only residue is the offline-toggle button + pending-count badge. R3 → drop.
+- **Offline cluster finding:** auto-sync-on-reconnect is wired in the **app** — `ContentView`'s
+  `.onChange(of: engine.isOffline)` drains the queue, and the pending-count badge is a SwiftUI view. The
+  unit tests (`OfflinePushTests`) call `pushPendingChanges()` *manually*, so they cannot cover that wiring.
+  That makes one offline-integration UI test legitimately UI-only (R4).
+- **#11 `testOfflineCreateQueuesThenSyncsOnReconnect` → KEPT (R4).** The single offline **success**
+  integration smoke: toggle offline → edit → pending badge → reconnect auto-drains → pending clears →
+  persisted. The wiring (`.onChange` + badge) is app-layer; the create/edit logic is unit-covered.
+- **#13 `testRejectedOfflineEditAppearsInFailuresInboxAndDiscards` → KEPT (R4).** The offline **failure**
+  path + the failures-inbox screen (`FailuresSheet`, discard) — a distinct app-layer surface. The failure
+  annotation and discard logic are unit-tested; the inbox surfacing on a rejected auto-sync is not.
+- **#12 `testOfflineEditTaskTitleUpdatesProjectList` → DROPPED.** Offline edit logic covered by
+  `testOfflineEditOfCreatedTaskUpdatesTitleAndKeepsProjectLink`; auto-sync integration by #11; the
+  list-reflects-edit reactivity by the (kept) online #2. R3 → drop.
+- **#15 `testOfflineDeleteQueuesThenSyncsOnReconnect` → DROPPED.** Delete logic covered by
+  `testOfflineDeleteThenPushHardDeletesLocallyAndOnBackend`; integration by #11. R3 → drop.
