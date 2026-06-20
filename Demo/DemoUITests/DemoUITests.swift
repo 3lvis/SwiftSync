@@ -170,38 +170,6 @@ final class DemoUITests: XCTestCase {
     }
 
     @MainActor
-    func testEditTaskPeopleFlow() throws {
-        let app = configuredApp()
-
-        app.launch()
-        openTaskDetail(
-            app,
-            projectID: DemoSeedProjectID.notificationsReliability,
-            taskID: DemoSeedTaskID.duplicatePushFix
-        )
-
-        openEditTaskForm(app)
-
-        selectAssignee(app, userID: DemoSeedUserID.miaPatel)
-        addPerson(app, role: "reviewers", userID: DemoSeedUserID.sofiaGarcia)
-        addPerson(app, role: "watchers", userID: DemoSeedUserID.sofiaGarcia)
-        app.buttons["task-form.save"].tap()
-
-        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout))
-        XCTAssertEqual(detailElement(app, id: "task.assignee").label, "Mia Patel")
-
-        goBack(app)
-        openTask(app, id: DemoSeedTaskID.duplicatePushFix)
-
-        XCTAssertTrue(detailElement(app, id: "task.title").exists)
-        XCTAssertEqual(detailElement(app, id: "task.assignee").label, "Mia Patel")
-        XCTAssertTrue(findAfterScrolling(app.staticTexts["task.reviewer.\(DemoSeedUserID.noahKim)"], in: app))
-        XCTAssertTrue(findAfterScrolling(app.staticTexts["task.reviewer.\(DemoSeedUserID.sofiaGarcia)"], in: app))
-        XCTAssertTrue(findAfterScrolling(app.staticTexts["task.watcher.\(DemoSeedUserID.ethanLee)"], in: app))
-        XCTAssertTrue(findAfterScrolling(app.staticTexts["task.watcher.\(DemoSeedUserID.sofiaGarcia)"], in: app))
-    }
-
-    @MainActor
     func testAssignUnassignedTask() throws {
         let app = configuredApp()
 

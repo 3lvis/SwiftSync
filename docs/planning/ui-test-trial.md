@@ -113,4 +113,9 @@ content states), `TaskFormDescriptionNormalizationTests`, `TaskExportRegressionT
 (Filled in as each test goes through the procedure: test, was-it-red-first evidence, unit attempt + result,
 verdict, PR.)
 
-- _pending_
+- **#5 `testEditTaskPeopleFlow` → DROPPED.** Born green in the bulk import `7ab19239` (R2: never red-first;
+  demo-workflow UI tests aren't TDD'd). Its behavior — a people edit (assignee + reviewers + watchers)
+  persists through the `.save` path — is covered by `TaskFormPeopleMutationTests.testEditTaskPeopleFlowReplacesReviewersAndWatchers`,
+  which drives the same machine with a richer add+remove scenario and asserts the persisted set (verified
+  green). UI-only residue (picker wiring, detail rendering) is generic SwiftUI, not a strong reason to keep
+  the slowest/flakiest UI test. R3 → drop.
