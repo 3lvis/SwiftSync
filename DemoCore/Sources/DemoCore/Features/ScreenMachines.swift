@@ -372,9 +372,8 @@ public final class TaskFormSheetMachine {
             let capturedReviewerIDs = draft.reviewers.map(\.id).sorted()
             let capturedWatcherIDs = draft.watchers.map(\.id).sorted()
 
-            // Bundle the people edit into the same create/update body (reviewers/watchers are @NotExport,
-            // so add them explicitly) — one round-trip, not separate /reviewers and /watchers calls. Only
-            // include a set when it actually changed, so a non-people edit doesn't churn reviewers.
+            // reviewers/watchers are @NotExport, so add them to the body explicitly — and only when
+            // changed, so a non-people edit doesn't churn them.
             switch mode {
             case .create:
                 if !capturedReviewerIDs.isEmpty { body["reviewer_ids"] = capturedReviewerIDs }

@@ -614,8 +614,6 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(before["reviewer_ids"] as? [String], [userID])
         XCTAssertEqual(before["watcher_ids"] as? [String], [userID])
 
-        // A single task update carrying reviewer_ids/watcher_ids applies them in one round-trip — so a
-        // people edit need not fan out to the separate /reviewers and /watchers endpoints.
         let cleared = try backend.updateTask(
             publicID: taskID,
             body: [
@@ -634,7 +632,6 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(reset["reviewer_ids"] as? [String], [userID])
         XCTAssertEqual(reset["watcher_ids"] as? [String], [userID])
 
-        // Absent keys leave people untouched — a title-only edit must not clear reviewers/watchers.
         let titleOnly = try backend.updateTask(
             publicID: taskID,
             body: ["title": "t2", "description": "d", "state": ["id": "todo"]])

@@ -1,12 +1,10 @@
 name: iOS Simulator
 
-# Ready-gated pre-merge tier: the simulator-bound tests — the DemoUITests UI suite plus the iOS-specific
-# dirty-tracking regression (a DemoCore test that the macOS `swift test` in ci.yml can't catch, since the
-# gap only shows on iOS). One job: a simulator boot + app build is the expensive part, so both share it
-# and report a single check. It runs only once a PR is marked ready for review — not on every draft push.
-# `ready_for_review` is in `types` because marking a draft ready adds no commit and would otherwise not
-# re-trigger anything; the `if` skips the job while the PR is a draft (a skipped required check still
-# reports success, so drafts stay mergeable-clean). No `push: master` trigger: this tier is pre-merge only.
+# Ready-gated pre-merge tier: the slow simulator-bound tests — the DemoUITests suite and the iOS-specific
+# dirty-tracking regression (a DemoCore test the macOS `swift test` in ci.yml can't catch — the gap only
+# shows on iOS). `ready_for_review` is in `types` because marking a draft ready adds no commit and would
+# otherwise not re-trigger; the per-job `if` skips it while the PR is a draft — and a skipped required
+# check still reports success, so drafts stay mergeable-clean.
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -30,11 +28,9 @@ jobs:
       - name: Xcode Version
         run: xcodebuild -version && swift --version
 
-      # Pick the iPhone simulator on the *newest* installed iOS runtime. simctl lists sims across every
-      # runtime; the Demo app only accepts ones meeting its deployment target (the latest runtime), so
-      # selecting by-name or first-found can yield a UDID xcodebuild rejects. Newest-runtime is the
-      # eligible set and needs no pinned device name (survives runner-image rolls). The same sim serves
-      # the DemoCore test too (its deployment target is a subset of the app's).
+      # Pick the iPhone on the newest installed iOS runtime. simctl lists sims across every runtime, but
+      # the Demo app only accepts ones meeting its deployment target (the latest runtime) — a by-name or
+      # first-found pick can yield a UDID xcodebuild rejects. No pinned device name (survives image rolls).
       - name: Select an iPhone simulator on the newest iOS runtime
         id: sim
         run: |
@@ -71,9 +67,7 @@ jobs:
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -only-testing:DemoCoreTests/DirtyTrackingGapTests
 
-      # The whole DemoUITests target via the Demo app scheme. No code signing on the simulator.
-      # `-retry-tests-on-failure` absorbs the occasional first-launch/UI-timing flake without masking a
-      # genuinely broken test (a real failure still fails every attempt).
+      # -retry-tests-on-failure absorbs first-launch/UI-timing flake; a real failure still fails every attempt.
       - name: UI tests — DemoUITests
         run: |
           xcodebuild test \
