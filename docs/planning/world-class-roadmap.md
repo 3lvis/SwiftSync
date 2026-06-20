@@ -42,12 +42,15 @@ API minimal (macros + convention over configuration), worked one item at a time.
 
 ## Open items
 
-### Phase 5 — Tighten the public API surface (deferred to first release / tag time)
+### Phase 5 — Tighten the public API surface
 
-- [ ] **Not now — do this when we cut the first tag.** Document the intended public surface and the
-      macro-support extension points (the helpers that must stay public) so they aren't mistakenly
-      demoted later. Lands alongside the release-time API-breakage gate (Phase 6); there's nothing to
-      protect until there's a tag to diff against.
+- [x] **Document the intended public surface + the macro-support extension points so nothing is demoted by
+      accident** — done: [`public-api-surface.md`](public-api-surface.md) is the contract (consumer API,
+      the PUBLIC-BY-CONTRACT macro-support set, reactive, push seam), and every macro-support symbol in
+      `Core.swift` carries a `PUBLIC BY CONTRACT` marker at its declaration. The release-time API-breakage
+      gate (Phase 6) enforces it automatically once there's a tag.
+- [ ] Further *shrinking* of the surface stays tracked in [`api-surface-review.md`](api-surface-review.md)
+      — items 5 (push-response seam) and 7 (reactive publishers); separate decisions, not this item.
 
 ### Phase 6 — CI gates for world-class hygiene
 

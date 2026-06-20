@@ -47,6 +47,8 @@ private func toSnakeCaseString(_ value: String) -> String {
 
 public enum SwiftSync {}
 
+// PUBLIC BY CONTRACT — @Syncable's generated extension conforms to this in the consumer's module;
+// demoting it or its members breaks consumers. See docs/planning/public-api-surface.md.
 public protocol SyncModelable: PersistentModel {
     associatedtype SyncID: Hashable & Codable & Sendable
     static var syncIdentity: KeyPath<Self, SyncID> { get }
@@ -96,6 +98,8 @@ extension SyncModelable {
     public static var syncRelationshipSchemaDescriptors: [SyncRelationshipSchemaDescriptor] { [] }
 }
 
+// PUBLIC BY CONTRACT — @Syncable builds these in the consumer's module (syncRelationshipSchemaDescriptors);
+// demoting it breaks consumers. See docs/planning/public-api-surface.md.
 public struct SyncRelationshipSchemaDescriptor: Sendable {
     public let propertyName: String
     public let relatedTypeName: String
@@ -115,6 +119,8 @@ public struct SyncRelationshipSchemaDescriptor: Sendable {
     }
 }
 
+// PUBLIC BY CONTRACT — @Syncable's generated extension conforms to this in the consumer's module
+// (make/apply/applyRelationships/export/syncMarkChanged); demoting it breaks consumers. See docs/planning/public-api-surface.md.
 public protocol SyncUpdatableModel: SyncModelable {
     static func make(from payload: SyncPayload) throws -> Self
     func apply(_ payload: SyncPayload) throws -> Bool
@@ -261,6 +267,9 @@ enum SyncRelationshipLookupState {
     @TaskLocal static var current: SyncRelationshipLookupCache?
 }
 
+// PUBLIC BY CONTRACT — every syncApplyTo{One,Many}{ForeignKey,NestedObject} helper below (all overloads)
+// is emitted into the consumer's module by @Syncable's generated relationship apply; demoting any breaks
+// consumers. See docs/planning/public-api-surface.md.
 @discardableResult
 public func syncApplyToOneForeignKey<Owner, Related: PersistentModel>(
     _ owner: Owner,
@@ -791,6 +800,8 @@ public protocol ParentScopedModel: SyncUpdatableModel {
     static var parentRelationship: ReferenceWritableKeyPath<Self, SyncParent?> { get }
 }
 
+// PUBLIC BY CONTRACT — named in @Syncable's generated applyRelationships(...) in the consumer's module;
+// demoting it breaks consumers. See docs/planning/public-api-surface.md.
 public struct SyncRelationshipOperations: OptionSet, Sendable {
     public let rawValue: Int
 
@@ -833,6 +844,8 @@ func defaultExportDateFormatter() -> DateFormatter {
 /// Cycle-detection state for recursive relationship export.
 /// This type is an implementation detail of `@Syncable`-generated code.
 /// Do not instantiate or reference it directly.
+// PUBLIC BY CONTRACT — generated export(...) calls enter/leave in the consumer's module; demoting it
+// breaks consumers. See docs/planning/public-api-surface.md.
 public enum ExportState {
     private static let threadDictionaryKey = "SwiftSync.ExportState"
 
@@ -868,6 +881,8 @@ private final class ExportStateBox {
     init(_ visiting: Set<String>) { self.visiting = visiting }
 }
 
+// PUBLIC BY CONTRACT — @Syncable's generated export(...) calls this in the consumer's module; demoting
+// it breaks consumers. See docs/planning/public-api-surface.md.
 public func exportEncodeValue(_ raw: Any, dateFormatter: DateFormatter) -> Any? {
     switch raw {
     case let value as String:
@@ -923,6 +938,8 @@ public func exportEncodeValue(_ raw: Any, dateFormatter: DateFormatter) -> Any? 
     }
 }
 
+// PUBLIC BY CONTRACT — @Syncable's generated export(...) calls this in the consumer's module; demoting
+// it breaks consumers. See docs/planning/public-api-surface.md.
 public func exportSetValue(_ value: Any, for keyPath: String, into target: inout [String: Any]) {
     let parts = keyPath.split(separator: ".").map(String.init)
     guard !parts.isEmpty else { return }
