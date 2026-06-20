@@ -302,10 +302,8 @@ final class OfflinePushTests: XCTestCase {
         XCTAssertEqual(edited.project?.id, projectID, "the edit must not drop the project link")
     }
 
-    /// The task-form save carries `reviewer_ids` in the `updateTask` body (one round-trip). Offline,
-    /// the local apply must reflect the reviewers immediately even though `reviewers` is `@NotExport`
-    /// (so `Task.apply` won't set it from the body) — otherwise an offline people edit shows nothing
-    /// until a server round-trip that never happens while offline.
+    /// Regression: an offline `updateTask` with `reviewer_ids` must apply reviewers locally (`apply()`
+    /// skips the `@NotExport` relationship, so there's no server round-trip to reflect it).
     @MainActor
     func testOfflineUpdateTaskWithReviewerIDsAppliesLocally() async throws {
         let url = FileManager.default.temporaryDirectory

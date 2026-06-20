@@ -53,9 +53,8 @@ private enum DemoSeedTaskID {
 final class DemoUITests: XCTestCase {
     /// A people-edit save runs three sequential refresh cycles, so the form dismisses just past the old
     /// 0.5s budget (which flaked); 1s asserts the form closes without re-introducing the flake.
-    // The people-edit save is one server round-trip, so the form dismisses in well under a second;
-    // 3s is headroom for normal CI jitter. waitForNonExistence returns the instant it dismisses, so a
-    // passing test isn't slowed — and on a real failure it fails in 3s, not a bloated ceiling × retries.
+    // One-round-trip save → the form dismisses well under a second; 3s is jitter headroom. waitForNonExistence
+    // returns on dismiss, so a passing test isn't slowed and a real failure still fails fast.
     private let saveDismissTimeout: TimeInterval = 3
 
     override func setUpWithError() throws {
