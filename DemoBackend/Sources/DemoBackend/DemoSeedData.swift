@@ -30,8 +30,8 @@ public struct DemoSeedData {
     }
 
     public struct SeedTask: Sendable {
-        public let id: Int
-        public let localID: String?
+        /// The task's public_id — its sole external identity. The DB assigns the internal int id.
+        public let id: String
         public let projectID: String
         public let assigneeID: String?
         public let reviewerIDs: [String]
@@ -44,8 +44,7 @@ public struct DemoSeedData {
         public let updatedAt: Date
 
         public init(
-            id: Int,
-            localID: String? = nil,
+            id: String,
             projectID: String,
             assigneeID: String?,
             reviewerIDs: [String] = [],
@@ -58,7 +57,6 @@ public struct DemoSeedData {
             updatedAt: Date
         ) {
             self.id = id
-            self.localID = localID
             self.projectID = projectID
             self.assigneeID = assigneeID
             self.reviewerIDs = reviewerIDs
@@ -73,16 +71,17 @@ public struct DemoSeedData {
     }
 
     public struct SeedItem: Sendable {
-        public let id: Int
-        public let taskID: Int
+        /// The item's public_id. `taskID` is the parent task's public_id.
+        public let id: String
+        public let taskID: String
         public let title: String
         public let position: Int
         public let createdAt: Date
         public let updatedAt: Date
 
         public init(
-            id: Int,
-            taskID: Int,
+            id: String,
+            taskID: String,
             title: String,
             position: Int,
             createdAt: Date,
@@ -131,18 +130,26 @@ public struct DemoSeedData {
             public static let ethanLee = "C3E7A1B2-2001-0000-0000-000000000006"
         }
         public enum Tasks {
-            public static let sessionTimeout = 1
-            public static let securityPolicyPatch = 2
-            public static let qaItemList = 3
-            public static let warningCopy = 4
-            public static let rolloutFlag = 5
-            public static let duplicatePushFix = 6
-            public static let idempotencyGuard = 7
-            public static let scopedDeleteVerify = 8
-            public static let incidentPlaybook = 9
-            public static let assigneeChip = 10
-            public static let inboxFilterKeys = 11
-            public static let regressionChecks = 12
+            public static let sessionTimeout = "C3E7A1B2-3001-0000-0000-000000000001"
+            public static let securityPolicyPatch = "C3E7A1B2-3001-0000-0000-000000000002"
+            public static let qaItemList = "C3E7A1B2-3001-0000-0000-000000000003"
+            public static let warningCopy = "C3E7A1B2-3001-0000-0000-000000000004"
+            public static let rolloutFlag = "C3E7A1B2-3001-0000-0000-000000000005"
+            public static let duplicatePushFix = "C3E7A1B2-3001-0000-0000-000000000006"
+            public static let idempotencyGuard = "C3E7A1B2-3001-0000-0000-000000000007"
+            public static let scopedDeleteVerify = "C3E7A1B2-3001-0000-0000-000000000008"
+            public static let incidentPlaybook = "C3E7A1B2-3001-0000-0000-000000000009"
+            public static let assigneeChip = "C3E7A1B2-3001-0000-0000-00000000000A"
+            public static let inboxFilterKeys = "C3E7A1B2-3001-0000-0000-00000000000B"
+            public static let regressionChecks = "C3E7A1B2-3001-0000-0000-00000000000C"
+        }
+        public enum Items {
+            public static let sessionGatherRequirements = "C3E7A1B2-4001-0000-0000-000000000001"
+            public static let sessionDraftPlan = "C3E7A1B2-4001-0000-0000-000000000002"
+            public static let qaRelaunchFlow = "C3E7A1B2-4001-0000-0000-000000000003"
+            public static let qaOfflineRecovery = "C3E7A1B2-4001-0000-0000-000000000004"
+            public static let pushCaptureRepro = "C3E7A1B2-4001-0000-0000-000000000005"
+            public static let pushVerifyReconnect = "C3E7A1B2-4001-0000-0000-000000000006"
         }
     }
 
@@ -314,9 +321,10 @@ public struct DemoSeedData {
             ),
         ]
 
+        let i = SeedIDs.Items.self
         let items: [SeedItem] = [
             .init(
-                id: 1,
+                id: i.sessionGatherRequirements,
                 taskID: t.sessionTimeout,
                 title: "Gather requirements",
                 position: 0,
@@ -324,7 +332,7 @@ public struct DemoSeedData {
                 updatedAt: at(301)
             ),
             .init(
-                id: 2,
+                id: i.sessionDraftPlan,
                 taskID: t.sessionTimeout,
                 title: "Draft implementation plan",
                 position: 1,
@@ -332,7 +340,7 @@ public struct DemoSeedData {
                 updatedAt: at(302)
             ),
             .init(
-                id: 3,
+                id: i.qaRelaunchFlow,
                 taskID: t.qaItemList,
                 title: "Relauch flow after timeout",
                 position: 0,
@@ -340,7 +348,7 @@ public struct DemoSeedData {
                 updatedAt: at(311)
             ),
             .init(
-                id: 4,
+                id: i.qaOfflineRecovery,
                 taskID: t.qaItemList,
                 title: "Offline to online recovery",
                 position: 1,
@@ -348,7 +356,7 @@ public struct DemoSeedData {
                 updatedAt: at(312)
             ),
             .init(
-                id: 5,
+                id: i.pushCaptureRepro,
                 taskID: t.duplicatePushFix,
                 title: "Capture repro case",
                 position: 0,
@@ -356,7 +364,7 @@ public struct DemoSeedData {
                 updatedAt: at(331)
             ),
             .init(
-                id: 6,
+                id: i.pushVerifyReconnect,
                 taskID: t.duplicatePushFix,
                 title: "Verify fix after reconnect",
                 position: 1,
