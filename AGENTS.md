@@ -91,7 +91,12 @@
 
 - This is a personally-responsible repo (`3lvis` remote), so the global rule applies: commit and open a
   **draft** PR proactively once a branch is a complete, green unit — no need to ask first or show the
-  title/body. **Never merge without an explicit ask.**
+  title/body. **Never merge without an explicit ask** — *except the doc-only fast path below.*
+- **Doc-only fast path.** A PR whose changes are *only* `**.md` / `docs/**` skips the heavy CI
+  (`paths-ignore` in `ci.yml` + `ios-regression.yml`), so no required checks report. Because
+  `enforce_admins` is off on `master`, such a PR may be **opened and admin-merged immediately without
+  asking** — `gh pr merge <n> --squash --admin --delete-branch`. This is the *only* merge allowed without
+  an explicit ask. A mixed doc+code PR runs full CI and follows the normal gate (green, then ask).
 - Before every commit:
   - run `git status --short`
   - confirm only intended files are staged
