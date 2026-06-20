@@ -30,7 +30,8 @@ public struct DemoSeedData {
     }
 
     public struct SeedTask: Sendable {
-        public let id: String
+        public let id: Int
+        public let localID: String?
         public let projectID: String
         public let assigneeID: String?
         public let reviewerIDs: [String]
@@ -43,7 +44,8 @@ public struct DemoSeedData {
         public let updatedAt: Date
 
         public init(
-            id: String,
+            id: Int,
+            localID: String? = nil,
             projectID: String,
             assigneeID: String?,
             reviewerIDs: [String] = [],
@@ -56,10 +58,11 @@ public struct DemoSeedData {
             updatedAt: Date
         ) {
             self.id = id
+            self.localID = localID
             self.projectID = projectID
             self.assigneeID = assigneeID
             self.reviewerIDs = reviewerIDs
-            self.authorID = authorID ?? assigneeID ?? reviewerIDs.first ?? id
+            self.authorID = authorID ?? assigneeID ?? reviewerIDs.first ?? ""
             self.title = title
             self.descriptionText = descriptionText
             self.state = state
@@ -71,7 +74,7 @@ public struct DemoSeedData {
 
     public struct SeedItem: Sendable {
         public let id: String
-        public let taskID: String
+        public let taskID: Int
         public let title: String
         public let position: Int
         public let createdAt: Date
@@ -79,7 +82,7 @@ public struct DemoSeedData {
 
         public init(
             id: String,
-            taskID: String,
+            taskID: Int,
             title: String,
             position: Int,
             createdAt: Date,
@@ -115,44 +118,44 @@ public struct DemoSeedData {
     // These are fixed — not random — so the demo loads consistent data across fresh installs.
     public enum SeedIDs {
         public enum Projects {
-            public static let accountSecurity          = "C3E7A1B2-1001-0000-0000-000000000001"
+            public static let accountSecurity = "C3E7A1B2-1001-0000-0000-000000000001"
             public static let notificationsReliability = "C3E7A1B2-1001-0000-0000-000000000002"
-            public static let supportInbox             = "C3E7A1B2-1001-0000-0000-000000000003"
+            public static let supportInbox = "C3E7A1B2-1001-0000-0000-000000000003"
         }
         public enum Users {
             public static let avaMartinez = "C3E7A1B2-2001-0000-0000-000000000001"
-            public static let noahKim     = "C3E7A1B2-2001-0000-0000-000000000002"
-            public static let miaPatel    = "C3E7A1B2-2001-0000-0000-000000000003"
-            public static let liamBrown   = "C3E7A1B2-2001-0000-0000-000000000004"
+            public static let noahKim = "C3E7A1B2-2001-0000-0000-000000000002"
+            public static let miaPatel = "C3E7A1B2-2001-0000-0000-000000000003"
+            public static let liamBrown = "C3E7A1B2-2001-0000-0000-000000000004"
             public static let sofiaGarcia = "C3E7A1B2-2001-0000-0000-000000000005"
-            public static let ethanLee    = "C3E7A1B2-2001-0000-0000-000000000006"
+            public static let ethanLee = "C3E7A1B2-2001-0000-0000-000000000006"
         }
         public enum Tasks {
-            public static let sessionTimeout      = "C3E7A1B2-3001-0000-0000-000000000001"
-            public static let securityPolicyPatch = "C3E7A1B2-3001-0000-0000-000000000002"
-            public static let qaItemList          = "C3E7A1B2-3001-0000-0000-000000000003"
-            public static let warningCopy         = "C3E7A1B2-3001-0000-0000-000000000004"
-            public static let rolloutFlag         = "C3E7A1B2-3001-0000-0000-000000000005"
-            public static let duplicatePushFix    = "C3E7A1B2-3001-0000-0000-000000000006"
-            public static let idempotencyGuard    = "C3E7A1B2-3001-0000-0000-000000000007"
-            public static let scopedDeleteVerify  = "C3E7A1B2-3001-0000-0000-000000000008"
-            public static let incidentPlaybook    = "C3E7A1B2-3001-0000-0000-000000000009"
-            public static let assigneeChip        = "C3E7A1B2-3001-0000-0000-000000000010"
-            public static let inboxFilterKeys     = "C3E7A1B2-3001-0000-0000-000000000011"
-            public static let regressionChecks    = "C3E7A1B2-3001-0000-0000-000000000012"
+            public static let sessionTimeout = 1
+            public static let securityPolicyPatch = 2
+            public static let qaItemList = 3
+            public static let warningCopy = 4
+            public static let rolloutFlag = 5
+            public static let duplicatePushFix = 6
+            public static let idempotencyGuard = 7
+            public static let scopedDeleteVerify = 8
+            public static let incidentPlaybook = 9
+            public static let assigneeChip = 10
+            public static let inboxFilterKeys = 11
+            public static let regressionChecks = 12
         }
         public enum Items {
             public static let sessionRequirements = "C3E7A1B2-4001-0000-0000-000000000001"
-            public static let sessionDraftPlan    = "C3E7A1B2-4001-0000-0000-000000000002"
-            public static let qaLaunchFlow        = "C3E7A1B2-4001-0000-0000-000000000003"
-            public static let qaOfflineRecovery   = "C3E7A1B2-4001-0000-0000-000000000004"
-            public static let pushReproCase       = "C3E7A1B2-4001-0000-0000-000000000005"
-            public static let pushVerifyFix       = "C3E7A1B2-4001-0000-0000-000000000006"
+            public static let sessionDraftPlan = "C3E7A1B2-4001-0000-0000-000000000002"
+            public static let qaLaunchFlow = "C3E7A1B2-4001-0000-0000-000000000003"
+            public static let qaOfflineRecovery = "C3E7A1B2-4001-0000-0000-000000000004"
+            public static let pushReproCase = "C3E7A1B2-4001-0000-0000-000000000005"
+            public static let pushVerifyFix = "C3E7A1B2-4001-0000-0000-000000000006"
         }
     }
 
     public static func generate() -> DemoSeedData {
-        let baseDate = Date(timeIntervalSince1970: 1_735_689_600) // 2025-01-01T00:00:00Z
+        let baseDate = Date(timeIntervalSince1970: 1_735_689_600)  // 2025-01-01T00:00:00Z
         func at(_ minutes: Int) -> Date {
             baseDate.addingTimeInterval(TimeInterval(minutes * 60))
         }
@@ -163,18 +166,20 @@ public struct DemoSeedData {
         let c = SeedIDs.Items.self
 
         let projects: [SeedProject] = [
-            .init(id: p.accountSecurity,          name: "Account Security Controls",      createdAt: at(540), updatedAt: at(540)),
-            .init(id: p.notificationsReliability,  name: "Team Notifications Reliability", createdAt: at(525), updatedAt: at(525)),
-            .init(id: p.supportInbox,              name: "Support Inbox Refresh",           createdAt: at(510), updatedAt: at(510))
+            .init(id: p.accountSecurity, name: "Account Security Controls", createdAt: at(540), updatedAt: at(540)),
+            .init(
+                id: p.notificationsReliability, name: "Team Notifications Reliability", createdAt: at(525),
+                updatedAt: at(525)),
+            .init(id: p.supportInbox, name: "Support Inbox Refresh", createdAt: at(510), updatedAt: at(510)),
         ]
 
         let users: [SeedUser] = [
-            .init(id: u.avaMartinez, displayName: "Ava Martinez", createdAt: at(60),  updatedAt: at(60)),
-            .init(id: u.noahKim,     displayName: "Noah Kim", createdAt: at(70),  updatedAt: at(70)),
-            .init(id: u.miaPatel,    displayName: "Mia Patel", createdAt: at(80),  updatedAt: at(80)),
-            .init(id: u.liamBrown,   displayName: "Liam Brown", createdAt: at(90),  updatedAt: at(90)),
+            .init(id: u.avaMartinez, displayName: "Ava Martinez", createdAt: at(60), updatedAt: at(60)),
+            .init(id: u.noahKim, displayName: "Noah Kim", createdAt: at(70), updatedAt: at(70)),
+            .init(id: u.miaPatel, displayName: "Mia Patel", createdAt: at(80), updatedAt: at(80)),
+            .init(id: u.liamBrown, displayName: "Liam Brown", createdAt: at(90), updatedAt: at(90)),
             .init(id: u.sofiaGarcia, displayName: "Sofia Garcia", createdAt: at(100), updatedAt: at(100)),
-            .init(id: u.ethanLee,    displayName: "Ethan Lee", createdAt: at(110), updatedAt: at(110))
+            .init(id: u.ethanLee, displayName: "Ethan Lee", createdAt: at(110), updatedAt: at(110)),
         ]
 
         let tasks: [SeedTask] = [
@@ -315,7 +320,7 @@ public struct DemoSeedData {
                 descriptionText: "Reduce regressions in task editing flows.",
                 state: "inProgress",
                 createdAt: at(360), updatedAt: at(360)
-            )
+            ),
         ]
 
         let items: [SeedItem] = [
@@ -366,7 +371,7 @@ public struct DemoSeedData {
                 position: 1,
                 createdAt: at(332),
                 updatedAt: at(332)
-            )
+            ),
         ]
 
         return DemoSeedData(

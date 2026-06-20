@@ -143,16 +143,16 @@ public final class DemoServerSimulator {
         ]
     }
 
-    public func getTaskDetailPayload(taskID: String) throws -> [String: Any]? {
+    public func getTaskDetailPayload(taskID: Int) throws -> [String: Any]? {
         let rows = try self.sqlite.query(
             """
-            SELECT id, remote_id, project_id, assignee_id, author_id, title, description, state, created_at, updated_at
+            SELECT id, local_id, project_id, assignee_id, author_id, title, description, state, created_at, updated_at
             FROM tasks
             WHERE id = ? AND deleted_at IS NULL
             LIMIT 1
             """,
             bind: { stmt in
-                self.sqlite.bind(text: taskID, at: 1, in: stmt)
+                self.sqlite.bind(int: taskID, at: 1, in: stmt)
             }
         )
         guard let row = rows.first else { return nil }
@@ -160,7 +160,7 @@ public final class DemoServerSimulator {
     }
 
     @discardableResult
-    public func patchTaskState(taskID: String, state: String) throws -> [String: Any]? {
+    public func patchTaskState(taskID: Int, state: String) throws -> [String: Any]? {
         _ = try validatedTaskState(state)
         guard let current = try getTaskDetailPayload(taskID: taskID) else { return nil }
         suspendAmbientMutationsAfterWrite()
@@ -176,14 +176,14 @@ public final class DemoServerSimulator {
             bind: { stmt in
                 self.sqlite.bind(text: state, at: 1, in: stmt)
                 self.sqlite.bind(double: next.timeIntervalSince1970, at: 2, in: stmt)
-                self.sqlite.bind(text: taskID, at: 3, in: stmt)
+                self.sqlite.bind(int: taskID, at: 3, in: stmt)
             }
         )
         return try getTaskDetailPayload(taskID: taskID)
     }
 
     @discardableResult
-    public func patchTaskAssignee(taskID: String, assigneeID: String?) throws -> [String: Any]? {
+    public func patchTaskAssignee(taskID: Int, assigneeID: String?) throws -> [String: Any]? {
         if let assigneeID, !(try exists(in: "users", id: assigneeID)) {
             throw DemoBackendError.invalidReference(entity: "assignee_id", id: assigneeID)
         }
@@ -201,15 +201,15 @@ public final class DemoServerSimulator {
             bind: { stmt in
                 self.sqlite.bind(nullableText: assigneeID, at: 1, in: stmt)
                 self.sqlite.bind(double: next.timeIntervalSince1970, at: 2, in: stmt)
-                self.sqlite.bind(text: taskID, at: 3, in: stmt)
+                self.sqlite.bind(int: taskID, at: 3, in: stmt)
             }
         )
         return try getTaskDetailPayload(taskID: taskID)
     }
 
     @discardableResult
-    public func replaceTaskReviewers(taskID: String, reviewerIDs: [String]) throws -> [String: Any]? {
-        guard try exists(in: "tasks", id: taskID) else { return nil }
+    public func replaceTaskReviewers(taskID: Int, reviewerIDs: [String]) throws -> [String: Any]? {
+        guard try taskExists(id: taskID) else { return nil }
         let uniqueReviewerIDs = Array(Set(reviewerIDs)).sorted()
         for reviewerID in uniqueReviewerIDs where !(try exists(in: "users", id: reviewerID)) {
             throw DemoBackendError.invalidReference(entity: "reviewer_id", id: reviewerID)
@@ -225,7 +225,7 @@ public final class DemoServerSimulator {
             try self.sqlite.execute(
                 "DELETE FROM task_reviewers WHERE task_id = ?",
                 bind: { stmt in
-                    self.sqlite.bind(text: taskID, at: 1, in: stmt)
+                    self.sqlite.bind(int: taskID, at: 1, in: stmt)
                 }
             )
 
@@ -236,7 +236,7 @@ public final class DemoServerSimulator {
                     VALUES (?, ?)
                     """,
                     bind: { stmt in
-                        self.sqlite.bind(text: taskID, at: 1, in: stmt)
+                        self.sqlite.bind(int: taskID, at: 1, in: stmt)
                         self.sqlite.bind(text: reviewerID, at: 2, in: stmt)
                     }
                 )
@@ -250,7 +250,7 @@ public final class DemoServerSimulator {
                 """,
                 bind: { stmt in
                     self.sqlite.bind(double: next.timeIntervalSince1970, at: 1, in: stmt)
-                    self.sqlite.bind(text: taskID, at: 2, in: stmt)
+                    self.sqlite.bind(int: taskID, at: 2, in: stmt)
                 }
             )
             try self.sqlite.execute("COMMIT;")
@@ -263,8 +263,8 @@ public final class DemoServerSimulator {
     }
 
     @discardableResult
-    public func replaceTaskWatchers(taskID: String, watcherIDs: [String]) throws -> [String: Any]? {
-        guard try exists(in: "tasks", id: taskID) else { return nil }
+    public func replaceTaskWatchers(taskID: Int, watcherIDs: [String]) throws -> [String: Any]? {
+        guard try taskExists(id: taskID) else { return nil }
         let uniqueWatcherIDs = Array(Set(watcherIDs)).sorted()
         for watcherID in uniqueWatcherIDs where !(try exists(in: "users", id: watcherID)) {
             throw DemoBackendError.invalidReference(entity: "watcher_id", id: watcherID)
@@ -280,7 +280,7 @@ public final class DemoServerSimulator {
             try self.sqlite.execute(
                 "DELETE FROM task_watchers WHERE task_id = ?",
                 bind: { stmt in
-                    self.sqlite.bind(text: taskID, at: 1, in: stmt)
+                    self.sqlite.bind(int: taskID, at: 1, in: stmt)
                 }
             )
 
@@ -291,7 +291,7 @@ public final class DemoServerSimulator {
                     VALUES (?, ?)
                     """,
                     bind: { stmt in
-                        self.sqlite.bind(text: taskID, at: 1, in: stmt)
+                        self.sqlite.bind(int: taskID, at: 1, in: stmt)
                         self.sqlite.bind(text: watcherID, at: 2, in: stmt)
                     }
                 )
@@ -305,7 +305,7 @@ public final class DemoServerSimulator {
                 """,
                 bind: { stmt in
                     self.sqlite.bind(double: next.timeIntervalSince1970, at: 1, in: stmt)
-                    self.sqlite.bind(text: taskID, at: 2, in: stmt)
+                    self.sqlite.bind(int: taskID, at: 2, in: stmt)
                 }
             )
             try self.sqlite.execute("COMMIT;")
@@ -318,9 +318,8 @@ public final class DemoServerSimulator {
     }
 
     public func createTask(body: [String: Any]) throws -> [String: Any] {
-        guard let id = body["id"] as? String, !id.isEmpty else {
-            throw DemoBackendError.validation(message: "id is required")
-        }
+        // The client's id (if present) becomes local_id; the server mints the int id via autoincrement.
+        let localID = (body["id"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         guard let projectID = body["project_id"] as? String else {
             throw DemoBackendError.validation(message: "project_id is required")
         }
@@ -363,7 +362,7 @@ public final class DemoServerSimulator {
         }
 
         return try createTaskInternal(
-            id: id,
+            localID: localID,
             projectID: projectID,
             title: title,
             descriptionText: description,
@@ -376,8 +375,9 @@ public final class DemoServerSimulator {
         )
     }
 
+    @discardableResult
     private func createTaskInternal(
-        id: String,
+        localID: String?,
         projectID: String,
         title: String,
         descriptionText: String?,
@@ -388,8 +388,8 @@ public final class DemoServerSimulator {
         updatedAt: Date,
         items: [ItemInput] = []
     ) throws -> [String: Any] {
-        if try exists(in: "tasks", id: id) {
-            throw DemoBackendError.validation(message: "task with id \(id) already exists")
+        if let localID, try taskExists(localID: localID) {
+            throw DemoBackendError.validation(message: "task with local_id \(localID) already exists")
         }
         guard try exists(in: "projects", id: projectID) else {
             throw DemoBackendError.invalidReference(entity: "project_id", id: projectID)
@@ -406,15 +406,16 @@ public final class DemoServerSimulator {
 
         suspendAmbientMutationsAfterWrite()
 
+        let taskID: Int
         try self.sqlite.execute("BEGIN TRANSACTION;")
         do {
             try self.sqlite.execute(
                 """
-                INSERT INTO tasks (id, project_id, assignee_id, author_id, title, description, state, created_at, updated_at)
+                INSERT INTO tasks (local_id, project_id, assignee_id, author_id, title, description, state, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 bind: { stmt in
-                    self.sqlite.bind(text: id, at: 1, in: stmt)
+                    self.sqlite.bind(nullableText: localID, at: 1, in: stmt)
                     self.sqlite.bind(text: projectID, at: 2, in: stmt)
                     self.sqlite.bind(nullableText: assigneeID, at: 3, in: stmt)
                     self.sqlite.bind(text: authorID, at: 4, in: stmt)
@@ -426,15 +427,16 @@ public final class DemoServerSimulator {
                 }
             )
 
-            try insertItems(items, forTaskID: id)
+            taskID = self.sqlite.lastInsertRowID()
+            try insertItems(items, forTaskID: taskID)
             try self.sqlite.execute("COMMIT;")
         } catch {
             try? self.sqlite.execute("ROLLBACK;")
             throw error
         }
 
-        guard let payload = try getTaskDetailPayload(taskID: id) else {
-            throw DemoBackendError.notFound(entity: "task", id: id)
+        guard let payload = try getTaskDetailPayload(taskID: taskID) else {
+            throw DemoBackendError.notFound(entity: "task", id: String(taskID))
         }
         return payload
     }
@@ -444,14 +446,18 @@ public final class DemoServerSimulator {
     /// id, project_id, author_id, and created_at are immutable; they are validated for consistency
     /// but not updated. updated_at is always advanced by the server regardless of the incoming value.
     @discardableResult
-    public func updateTask(taskID: String, body: [String: Any]) throws -> [String: Any] {
+    public func updateTask(taskID: Int, body: [String: Any]) throws -> [String: Any] {
         guard let current = try getTaskDetailPayload(taskID: taskID) else {
-            throw DemoBackendError.notFound(entity: "task", id: taskID)
+            throw DemoBackendError.notFound(entity: "task", id: String(taskID))
         }
 
-        // Validate immutable field consistency
-        if let incomingID = body["id"] as? String, incomingID != taskID {
-            throw DemoBackendError.validation(message: "id in body does not match taskID")
+        // Validate immutable field consistency: the client sends its own id (local_id), which must
+        // match the row's local_id (the server's int id is opaque to the client on this path).
+        if let incomingID = body["id"] as? String {
+            let currentLocalID = current["local_id"] as? String
+            if incomingID != currentLocalID {
+                throw DemoBackendError.validation(message: "id in body does not match task local_id")
+            }
         }
 
         guard let title = body["title"] as? String else {
@@ -522,7 +528,7 @@ public final class DemoServerSimulator {
                     self.sqlite.bind(text: normalizedState, at: 3, in: stmt)
                     self.sqlite.bind(nullableText: assigneeID, at: 4, in: stmt)
                     self.sqlite.bind(double: next.timeIntervalSince1970, at: 5, in: stmt)
-                    self.sqlite.bind(text: taskID, at: 6, in: stmt)
+                    self.sqlite.bind(int: taskID, at: 6, in: stmt)
                 }
             )
 
@@ -530,7 +536,7 @@ public final class DemoServerSimulator {
                 try self.sqlite.execute(
                     "DELETE FROM items WHERE task_id = ?",
                     bind: { stmt in
-                        self.sqlite.bind(text: taskID, at: 1, in: stmt)
+                        self.sqlite.bind(int: taskID, at: 1, in: stmt)
                     }
                 )
                 try insertItems(itemsToReplace, forTaskID: taskID)
@@ -543,20 +549,20 @@ public final class DemoServerSimulator {
         }
 
         guard let result = try getTaskDetailPayload(taskID: taskID) else {
-            throw DemoBackendError.notFound(entity: "task", id: taskID)
+            throw DemoBackendError.notFound(entity: "task", id: String(taskID))
         }
         return result
     }
 
-    public func deleteTask(taskID: String) throws {
-        guard try exists(in: "tasks", id: taskID) else {
-            throw DemoBackendError.notFound(entity: "task", id: taskID)
+    public func deleteTask(taskID: Int) throws {
+        guard try taskExists(id: taskID) else {
+            throw DemoBackendError.notFound(entity: "task", id: String(taskID))
         }
         suspendAmbientMutationsAfterWrite()
         try self.sqlite.execute(
             "DELETE FROM tasks WHERE id = ?",
             bind: { stmt in
-                self.sqlite.bind(text: taskID, at: 1, in: stmt)
+                self.sqlite.bind(int: taskID, at: 1, in: stmt)
             }
         )
     }
@@ -564,8 +570,9 @@ public final class DemoServerSimulator {
     // MARK: - POST /sync/upload (offline batch push)
     // See docs/project/upload-endpoint-contract.md. A flat, op-tagged operation list; per-operation
     // results (no all-or-nothing). Operations are keyed by the client's stable `localId`; the server
-    // mints (and returns) a distinct `remoteId` on first create. `upsert` is find-by-localId →
-    // update-else-create, `delete` tombstones by localId. Both are idempotent.
+    // owns the row's int id (its `remoteId`), minted via autoincrement on first create and returned
+    // on every result. `upsert` is find-by-localId → update-else-create, `delete` tombstones by
+    // localId. Both are idempotent.
 
     public func upload(operations: [[String: Any]]) throws -> [String: Any] {
         let results = operations.map(applyUploadOperation(_:))
@@ -590,9 +597,9 @@ public final class DemoServerSimulator {
     }
 
     /// Insert-or-update keyed by the client's stable `localId`. Found ⇒ update (last-writer-wins);
-    /// absent ⇒ create. The server mints its own `remoteId` on first create and returns it (the same
-    /// one on every subsequent upsert) — addressing by `localId` means a never-synced row still
-    /// upserts cleanly. Idempotent: re-sending converges, no duplicate row.
+    /// absent ⇒ create. The server owns the row's int `id` (its canonical remote id), minted via
+    /// autoincrement on first create and returned unchanged after — addressing by `local_id` means a
+    /// never-synced row still upserts cleanly. Idempotent: re-sending converges, no duplicate row.
     private func uploadUpsert(_ payload: [String: Any]) throws -> [String: Any] {
         try requireTasksType(payload)
         let localID = try requireLocalID(payload)
@@ -603,34 +610,40 @@ public final class DemoServerSimulator {
         var body = data
         body["id"] = localID
 
-        if try exists(in: "tasks", id: localID) {
-            if try isStale(localID: localID, incoming: incoming) {
+        let remoteID: Int
+        if let existingID = try taskID(forLocalID: localID) {
+            remoteID = existingID
+            if try isStale(remoteID: existingID, incoming: incoming) {
                 return [
                     "operation": "upsert", "localId": localID,
-                    "remoteId": try ensureRemoteID(forLocalID: localID), "status": "stale",
-                    "server": try getTaskDetailPayload(taskID: localID) ?? NSNull(),
+                    "remoteId": existingID, "status": "stale",
+                    "server": try getTaskDetailPayload(taskID: existingID) ?? NSNull(),
                 ]
             }
             // An edit newer than a delete wins LWW: revive the tombstoned row before updating it
             // (updateTask ignores tombstoned rows). A no-op for a live row.
             try self.sqlite.execute(
                 "UPDATE tasks SET deleted_at = NULL WHERE id = ?",
-                bind: { stmt in self.sqlite.bind(text: localID, at: 1, in: stmt) }
+                bind: { stmt in self.sqlite.bind(int: existingID, at: 1, in: stmt) }
             )
-            _ = try updateTask(taskID: localID, body: body)
+            _ = try updateTask(taskID: existingID, body: body)
         } else {
-            _ = try createTask(body: body)
+            let created = try createTask(body: body)
+            guard let mintedID = created["id"] as? Int else {
+                throw DemoBackendError.sqlite(message: "created task is missing its int id")
+            }
+            remoteID = mintedID
         }
         // Relationship edits (reviewers/watchers) ride in the same operation when present.
         if let reviewerIDs = data["reviewer_ids"] as? [String] {
-            _ = try replaceTaskReviewers(taskID: localID, reviewerIDs: reviewerIDs)
+            _ = try replaceTaskReviewers(taskID: remoteID, reviewerIDs: reviewerIDs)
         }
         if let watcherIDs = data["watcher_ids"] as? [String] {
-            _ = try replaceTaskWatchers(taskID: localID, watcherIDs: watcherIDs)
+            _ = try replaceTaskWatchers(taskID: remoteID, watcherIDs: watcherIDs)
         }
         return [
             "operation": "upsert", "localId": localID,
-            "remoteId": try ensureRemoteID(forLocalID: localID), "status": "applied",
+            "remoteId": remoteID, "status": "applied",
         ]
     }
 
@@ -638,15 +651,15 @@ public final class DemoServerSimulator {
         try requireTasksType(payload)
         let localID = try requireLocalID(payload)
         let incoming = try requireUpdatedAt(payload)
-        guard try exists(in: "tasks", id: localID) else {
+        guard let remoteID = try taskID(forLocalID: localID) else {
             // Already absent (or never synced) ⇒ idempotent success.
             return ["operation": "delete", "localId": localID, "status": "applied"]
         }
         // Last-writer-wins applies to deletes too: an older delete must not erase a newer server edit.
-        if try isStale(localID: localID, incoming: incoming) {
+        if try isStale(remoteID: remoteID, incoming: incoming) {
             return [
                 "operation": "delete", "localId": localID, "status": "stale",
-                "server": try getTaskDetailPayload(taskID: localID) ?? NSNull(),
+                "server": try getTaskDetailPayload(taskID: remoteID) ?? NSNull(),
             ]
         }
         suspendAmbientMutationsAfterWrite()
@@ -657,7 +670,7 @@ public final class DemoServerSimulator {
             bind: { stmt in
                 self.sqlite.bind(double: Date().timeIntervalSince1970, at: 1, in: stmt)
                 self.sqlite.bind(double: incoming.timeIntervalSince1970, at: 2, in: stmt)
-                self.sqlite.bind(text: localID, at: 3, in: stmt)
+                self.sqlite.bind(int: remoteID, at: 3, in: stmt)
             }
         )
         return ["operation": "delete", "localId": localID, "status": "applied"]
@@ -683,29 +696,21 @@ public final class DemoServerSimulator {
         return date
     }
 
-    /// The server's own id for a row, minted (and persisted) on first sight, returned unchanged after.
-    /// Opaque to the client; distinct from `localId` so the demo exercises a backend that owns its PKs.
-    private func ensureRemoteID(forLocalID localID: String) throws -> String {
+    /// The server's int id for the row carrying this `local_id`, or nil if none exists. Includes
+    /// tombstoned rows, so a delete/revive can still find the row it targets.
+    private func taskID(forLocalID localID: String) throws -> Int? {
         let rows = try self.sqlite.query(
-            "SELECT remote_id FROM tasks WHERE id = ? LIMIT 1",
+            "SELECT id FROM tasks WHERE local_id = ? LIMIT 1",
             bind: { stmt in self.sqlite.bind(text: localID, at: 1, in: stmt) }
         )
-        if let existing = rows.first?.nullableString("remote_id") { return existing }
-        let remote = "srv-\(UUID().uuidString.lowercased())"
-        try self.sqlite.execute(
-            "UPDATE tasks SET remote_id = ? WHERE id = ?",
-            bind: { stmt in
-                self.sqlite.bind(text: remote, at: 1, in: stmt)
-                self.sqlite.bind(text: localID, at: 2, in: stmt)
-            }
-        )
-        return remote
+        guard let value = rows.first?.int64("id") else { return nil }
+        return Int(value)
     }
 
-    private func isStale(localID: String, incoming: Date) throws -> Bool {
+    private func isStale(remoteID: Int, incoming: Date) throws -> Bool {
         let rows = try self.sqlite.query(
             "SELECT updated_at FROM tasks WHERE id = ? LIMIT 1",
-            bind: { stmt in self.sqlite.bind(text: localID, at: 1, in: stmt) }
+            bind: { stmt in self.sqlite.bind(int: remoteID, at: 1, in: stmt) }
         )
         guard let stored = rows.first?.double("updated_at") else { return false }
         // Contract: an incoming write older *or equal* loses (server wins ties).
@@ -748,7 +753,7 @@ public final class DemoServerSimulator {
             ? "WHERE tasks.deleted_at IS NULL" : "\(whereClause) AND tasks.deleted_at IS NULL"
         let rows = try self.sqlite.query(
             """
-            SELECT tasks.id, tasks.remote_id, tasks.project_id, tasks.assignee_id, tasks.author_id, tasks.title, tasks.description, tasks.state, tasks.created_at, tasks.updated_at
+            SELECT tasks.id, tasks.local_id, tasks.project_id, tasks.assignee_id, tasks.author_id, tasks.title, tasks.description, tasks.state, tasks.created_at, tasks.updated_at
             FROM tasks
             \(scoped)
             ORDER BY tasks.id ASC
@@ -765,7 +770,7 @@ public final class DemoServerSimulator {
         }
 
         let task = tasks[step % tasks.count]
-        guard let taskID = task["id"] as? String else { return }
+        guard let taskID = task["id"] as? Int else { return }
         let updateKind = (step / 3) % 2
 
         if updateKind == 0 {
@@ -813,7 +818,7 @@ public final class DemoServerSimulator {
 
         let now = Date()
         _ = try createTaskInternal(
-            id: UUID().uuidString,
+            localID: nil,
             projectID: projectID,
             title: selectedTitle,
             descriptionText: "Ambient backend update generated for the demo live-sync effect.",
@@ -828,18 +833,16 @@ public final class DemoServerSimulator {
     private func ambientDeleteTask(tasks: [[String: Any]], step: Int) throws {
         guard !tasks.isEmpty else { return }
         let task = tasks[(step / 2) % tasks.count]
-        guard let taskID = task["id"] as? String else { return }
+        guard let taskID = task["id"] as? Int else { return }
         try deleteTask(taskID: taskID)
     }
 
     private func taskPayload(from row: DemoSQLiteRow) throws -> [String: Any] {
-        let taskID = row.string("id")
+        let taskID = Int(row.int64("id"))
         let stateID = row.string("state")
         return [
             "id": taskID,
-            // Rows created before the upload path (seed / per-resource POST) have no minted
-            // remote_id; their own id is their canonical server id, so coalesce to it.
-            "remote_id": row.nullableString("remote_id") ?? taskID,
+            "local_id": row.nullableString("local_id") ?? NSNull(),
             "project_id": row.string("project_id"),
             "assignee_id": row.nullableString("assignee_id") ?? NSNull(),
             "reviewer_ids": try reviewerIDsFor(taskID: taskID),
@@ -854,7 +857,7 @@ public final class DemoServerSimulator {
         ]
     }
 
-    private func itemsPayload(taskID: String) throws -> [[String: Any]] {
+    private func itemsPayload(taskID: Int) throws -> [[String: Any]] {
         let rows = try self.sqlite.query(
             """
             SELECT id, task_id, title, position, created_at, updated_at
@@ -863,13 +866,13 @@ public final class DemoServerSimulator {
             ORDER BY position ASC, id ASC
             """,
             bind: { stmt in
-                self.sqlite.bind(text: taskID, at: 1, in: stmt)
+                self.sqlite.bind(int: taskID, at: 1, in: stmt)
             }
         )
         return rows.map { row in
             [
                 "id": row.string("id"),
-                "task_id": row.string("task_id"),
+                "task_id": Int(row.int64("task_id")),
                 "title": row.string("title"),
                 "position": Int(row.int64("position")),
                 "created_at": iso8601(row.double("created_at")),
@@ -908,7 +911,7 @@ public final class DemoServerSimulator {
         }
     }
 
-    private func reviewerIDsFor(taskID: String) throws -> [String] {
+    private func reviewerIDsFor(taskID: Int) throws -> [String] {
         let rows = try self.sqlite.query(
             """
             SELECT user_id
@@ -917,13 +920,13 @@ public final class DemoServerSimulator {
             ORDER BY user_id ASC
             """,
             bind: { stmt in
-                self.sqlite.bind(text: taskID, at: 1, in: stmt)
+                self.sqlite.bind(int: taskID, at: 1, in: stmt)
             }
         )
         return rows.map { $0.string("user_id") }
     }
 
-    private func watcherIDs(forTaskID taskID: String) throws -> [String] {
+    private func watcherIDs(forTaskID taskID: Int) throws -> [String] {
         let rows = try self.sqlite.query(
             """
             SELECT user_id
@@ -932,7 +935,7 @@ public final class DemoServerSimulator {
             ORDER BY user_id ASC
             """,
             bind: { stmt in
-                self.sqlite.bind(text: taskID, at: 1, in: stmt)
+                self.sqlite.bind(int: taskID, at: 1, in: stmt)
             }
         )
         return rows.map { $0.string("user_id") }
@@ -999,7 +1002,7 @@ public final class DemoServerSimulator {
         }
     }
 
-    private func insertItems(_ items: [ItemInput], forTaskID taskID: String) throws {
+    private func insertItems(_ items: [ItemInput], forTaskID taskID: Int) throws {
         for item in items {
             try self.sqlite.execute(
                 """
@@ -1008,7 +1011,7 @@ public final class DemoServerSimulator {
                 """,
                 bind: { stmt in
                     self.sqlite.bind(text: item.id, at: 1, in: stmt)
-                    self.sqlite.bind(text: taskID, at: 2, in: stmt)
+                    self.sqlite.bind(int: taskID, at: 2, in: stmt)
                     self.sqlite.bind(text: item.title, at: 3, in: stmt)
                     sqlite3_bind_int64(stmt, 4, Int64(item.position))
                     self.sqlite.bind(double: item.createdAt.timeIntervalSince1970, at: 5, in: stmt)
@@ -1026,6 +1029,21 @@ public final class DemoServerSimulator {
             }
         )
         return !rows.isEmpty
+    }
+
+    /// Any task row with this int id, tombstoned or not.
+    private func taskExists(id: Int) throws -> Bool {
+        let rows = try self.sqlite.query(
+            "SELECT 1 AS one FROM tasks WHERE id = ? LIMIT 1",
+            bind: { stmt in
+                self.sqlite.bind(int: id, at: 1, in: stmt)
+            }
+        )
+        return !rows.isEmpty
+    }
+
+    private func taskExists(localID: String) throws -> Bool {
+        try taskID(forLocalID: localID) != nil
     }
 
     private func allIDs(in table: String) throws -> [String] {
@@ -1113,8 +1131,8 @@ public final class DemoServerSimulator {
             );
 
             CREATE TABLE IF NOT EXISTS tasks (
-                id TEXT PRIMARY KEY,
-                remote_id TEXT NULL,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                local_id TEXT UNIQUE,
                 deleted_at REAL NULL,
                 project_id TEXT NOT NULL,
                 assignee_id TEXT NULL,
@@ -1130,7 +1148,7 @@ public final class DemoServerSimulator {
             );
 
             CREATE TABLE IF NOT EXISTS task_reviewers (
-                task_id TEXT NOT NULL,
+                task_id INTEGER NOT NULL,
                 user_id TEXT NOT NULL,
                 PRIMARY KEY (task_id, user_id),
                 FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE,
@@ -1138,7 +1156,7 @@ public final class DemoServerSimulator {
             );
 
             CREATE TABLE IF NOT EXISTS task_watchers (
-                task_id TEXT NOT NULL,
+                task_id INTEGER NOT NULL,
                 user_id TEXT NOT NULL,
                 PRIMARY KEY (task_id, user_id),
                 FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE,
@@ -1147,7 +1165,7 @@ public final class DemoServerSimulator {
 
             CREATE TABLE IF NOT EXISTS items (
                 id TEXT PRIMARY KEY,
-                task_id TEXT NOT NULL,
+                task_id INTEGER NOT NULL,
                 title TEXT NOT NULL,
                 position INTEGER NOT NULL DEFAULT 0,
                 created_at REAL NOT NULL,
@@ -1199,19 +1217,20 @@ public final class DemoServerSimulator {
             for task in seedData.tasks {
                 try sqlite.execute(
                     """
-                    INSERT INTO tasks (id, project_id, assignee_id, author_id, title, description, state, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO tasks (id, local_id, project_id, assignee_id, author_id, title, description, state, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     bind: { stmt in
-                        sqlite.bind(text: task.id, at: 1, in: stmt)
-                        sqlite.bind(text: task.projectID, at: 2, in: stmt)
-                        sqlite.bind(nullableText: task.assigneeID, at: 3, in: stmt)
-                        sqlite.bind(text: task.authorID, at: 4, in: stmt)
-                        sqlite.bind(text: task.title, at: 5, in: stmt)
-                        sqlite.bind(nullableText: task.descriptionText, at: 6, in: stmt)
-                        sqlite.bind(text: task.state, at: 7, in: stmt)
-                        sqlite.bind(double: task.createdAt.timeIntervalSince1970, at: 8, in: stmt)
-                        sqlite.bind(double: task.updatedAt.timeIntervalSince1970, at: 9, in: stmt)
+                        sqlite.bind(int: task.id, at: 1, in: stmt)
+                        sqlite.bind(nullableText: task.localID, at: 2, in: stmt)
+                        sqlite.bind(text: task.projectID, at: 3, in: stmt)
+                        sqlite.bind(nullableText: task.assigneeID, at: 4, in: stmt)
+                        sqlite.bind(text: task.authorID, at: 5, in: stmt)
+                        sqlite.bind(text: task.title, at: 6, in: stmt)
+                        sqlite.bind(nullableText: task.descriptionText, at: 7, in: stmt)
+                        sqlite.bind(text: task.state, at: 8, in: stmt)
+                        sqlite.bind(double: task.createdAt.timeIntervalSince1970, at: 9, in: stmt)
+                        sqlite.bind(double: task.updatedAt.timeIntervalSince1970, at: 10, in: stmt)
                     }
                 )
 
@@ -1222,7 +1241,7 @@ public final class DemoServerSimulator {
                         VALUES (?, ?)
                         """,
                         bind: { stmt in
-                            sqlite.bind(text: task.id, at: 1, in: stmt)
+                            sqlite.bind(int: task.id, at: 1, in: stmt)
                             sqlite.bind(text: reviewerID, at: 2, in: stmt)
                         }
                     )
@@ -1235,7 +1254,7 @@ public final class DemoServerSimulator {
                         VALUES (?, ?)
                         """,
                         bind: { stmt in
-                            sqlite.bind(text: task.id, at: 1, in: stmt)
+                            sqlite.bind(int: task.id, at: 1, in: stmt)
                             sqlite.bind(text: watcherID, at: 2, in: stmt)
                         }
                     )
@@ -1250,7 +1269,7 @@ public final class DemoServerSimulator {
                     """,
                     bind: { stmt in
                         sqlite.bind(text: item.id, at: 1, in: stmt)
-                        sqlite.bind(text: item.taskID, at: 2, in: stmt)
+                        sqlite.bind(int: item.taskID, at: 2, in: stmt)
                         sqlite.bind(text: item.title, at: 3, in: stmt)
                         sqlite3_bind_int64(stmt, 4, Int64(item.position))
                         sqlite.bind(double: item.createdAt.timeIntervalSince1970, at: 5, in: stmt)
@@ -1355,6 +1374,14 @@ private final class DemoSQLiteDatabase {
 
     func bind(double value: Double, at index: Int32, in stmt: OpaquePointer?) {
         sqlite3_bind_double(stmt, index, value)
+    }
+
+    func bind(int value: Int, at index: Int32, in stmt: OpaquePointer?) {
+        sqlite3_bind_int64(stmt, index, Int64(value))
+    }
+
+    func lastInsertRowID() -> Int {
+        Int(sqlite3_last_insert_rowid(db))
     }
 
     private func sqliteError() -> DemoBackendError {
