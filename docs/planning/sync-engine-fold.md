@@ -40,9 +40,9 @@ runs — not unifying the two paths, and not making online writes optimistic.
 
 ## Dependencies & base
 
-Stacked on the push-seam work: the transport closure shape is `withPendingChanges`'s `process`
-closure returning `[String: SyncRowOutcome]` (PRs #644 + #645). Start this only once those merge, and
-branch from the result.
+Built on the push-seam work in **#644** (`withPendingChanges` + `process` closure returning
+`[SyncPushFailure]`). The total-accounting variant (#645, `[String: SyncRowOutcome]`) was dropped, so
+`SyncBackend.push` returns `[SyncPushFailure]`. Start this once #644 merges, and branch off master.
 
 ## Sequencing principle
 
@@ -76,7 +76,7 @@ identified.
 Turn the demo's inline `upload` / `taskData` into a transport object the container holds, so the
 push machinery has something to call without the app passing a closure each time.
 
-- [ ] Add `public protocol SyncBackend { func push(_ pending: SyncPendingChanges) async throws -> [String: SyncRowOutcome] }`.
+- [ ] Add `public protocol SyncBackend { func push(_ pending: SyncPendingChanges) async throws -> [SyncPushFailure] }`.
 - [ ] Add registration on the container (`register(_:for:)` or a `backend` property).
 - [ ] Move the demo's `upload(_:)` + `taskData(_:)` into a `TaskBackend: SyncBackend` (logic unchanged).
 - [ ] Behavior-preserving: the engine still drives the push, but through the registered backend.
