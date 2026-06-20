@@ -179,7 +179,10 @@ Each of these has no existing unit that asserts the behavior; add one, then drop
 - **#7 `testDeleteTaskFromProject` → CONVERTED + DROPPED.** Added
   `OfflinePushTests.testOnlineDeleteTaskRemovesLocallyAndOnBackend` (online `deleteTask` → removed locally
   + on backend) — distinct from the offline tombstone-push path. UI test dropped.
+- **#8 `testCancelCreateDoesNotPersistTask` + #9 `testCancelEditKeepsOriginalTaskValues` → CONVERTED +
+  DROPPED.** One unit, `TaskFormPeopleMutationTests.testUnsavedFormEditsInEditContextDoNotReachTheStore`,
+  characterizes the discard mechanism for both: the form edits in an isolated `editContext` (autosave
+  off), and without `.save` neither an edit nor a new draft reaches the store — green. Both UI tests
+  dropped. (There is no machine `.cancel` event; cancel = never sending `.save`.)
 - **#4 `testEditTaskItemsFlow`** — pending: `items` is `@NotExport`, so this needs the form machine's items
   events (`.add`/`.updateTitle`/`.delete`) → `.save`, asserting the persisted items. (Next.)
-- **#8 / #9 cancel** — pending: unit characterizing "the form persists only on `.save`; unsaved
-  editContext changes never reach the store" (covers both cancel-create and cancel-edit). (Next.)

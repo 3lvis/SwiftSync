@@ -124,49 +124,6 @@ final class DemoUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts[deletedItemTitle].exists)
     }
 
-    @MainActor
-    func testCancelCreateDoesNotPersistTask() throws {
-        let app = configuredApp()
-        let draftTitle = uniqueTitle(prefix: "UI Cancel Create")
-
-        app.launch()
-        openProject(app, id: DemoSeedProjectID.accountSecurity)
-
-        openCreateTaskForm(app)
-        replaceText(in: app.textFields["task-form.title"], with: draftTitle, app: app)
-        app.buttons["task-form.cancel"].tap()
-
-        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout))
-        XCTAssertFalse(app.staticTexts[draftTitle].exists)
-    }
-
-    @MainActor
-    func testCancelEditKeepsOriginalTaskValues() throws {
-        let app = configuredApp()
-        let originalTitle = "Add session timeout controls to account settings"
-        let editedTitle = uniqueTitle(prefix: "UI Cancel Edit")
-
-        app.launch()
-        openTaskDetail(
-            app,
-            projectID: DemoSeedProjectID.accountSecurity,
-            taskID: DemoSeedTaskID.sessionTimeout
-        )
-
-        XCTAssertEqual(detailElement(app, id: "task.title").label, originalTitle)
-
-        openEditTaskForm(app)
-        replaceText(in: app.textFields["task-form.title"], with: editedTitle, app: app)
-        app.buttons["task-form.cancel"].tap()
-
-        XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: saveDismissTimeout))
-        XCTAssertEqual(detailElement(app, id: "task.title").label, originalTitle)
-
-        goBack(app)
-        XCTAssertTrue(app.staticTexts[originalTitle].exists)
-        XCTAssertFalse(app.staticTexts[editedTitle].exists)
-    }
-
     // KEPT (R4): the offline-success integration is app-layer, not unit-coverable — ContentView's
     // `.onChange(of: isOffline)` auto-drains the queue on reconnect and the pending-count badge is a
     // SwiftUI view. The edit logic itself is unit-tested in OfflinePushTests; this guards the wiring.

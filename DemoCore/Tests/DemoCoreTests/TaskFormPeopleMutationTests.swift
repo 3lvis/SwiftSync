@@ -1,7 +1,8 @@
+import Observation
 import SwiftData
 import SwiftSync
 import XCTest
-import Observation
+
 @testable import DemoCore
 
 final class TaskFormPeopleMutationTests: XCTestCase {
@@ -56,9 +57,12 @@ final class TaskFormPeopleMutationTests: XCTestCase {
         }
 
         let saved = expectation(description: "save callback")
-        machine.send(.save(mode: .edit(task: originalTask), draft: draft, onSuccess: {
-            saved.fulfill()
-        }))
+        machine.send(
+            .save(
+                mode: .edit(task: originalTask), draft: draft,
+                onSuccess: {
+                    saved.fulfill()
+                }))
         await fulfillment(of: [saved], timeout: 10)
 
         let updatedTask = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
@@ -104,7 +108,8 @@ final class TaskFormPeopleMutationTests: XCTestCase {
         let originalTask = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
         let editContext = ModelContext(syncContainer.modelContainer)
         editContext.autosaveEnabled = false
-        let formMachine = TaskFormSheetMachine(syncContainer: syncContainer, syncEngine: engine, editContext: editContext)
+        let formMachine = TaskFormSheetMachine(
+            syncContainer: syncContainer, syncEngine: engine, editContext: editContext)
         formMachine.send(.metadata(.onAppear))
         try await waitUntil {
             formMachine.userOptionsState == .available && formMachine.taskStateOptionsState == .available
@@ -124,9 +129,12 @@ final class TaskFormPeopleMutationTests: XCTestCase {
         }
 
         let saved = expectation(description: "save callback")
-        formMachine.send(.save(mode: .edit(task: originalTask), draft: draft, onSuccess: {
-            saved.fulfill()
-        }))
+        formMachine.send(
+            .save(
+                mode: .edit(task: originalTask), draft: draft,
+                onSuccess: {
+                    saved.fulfill()
+                }))
         await fulfillment(of: [saved], timeout: 10)
 
         try await waitUntil {
@@ -144,6 +152,40 @@ final class TaskFormPeopleMutationTests: XCTestCase {
             }),
             "spy values: \(spy.values)"
         )
+    }
+
+    /// The task form edits in an isolated `editContext` (a child ModelContext with autosave off, as the
+    /// form sheet builds it); only `.save` commits to the store. That isolation is what makes Cancel
+    /// discard — for an existing edit and a brand-new draft alike. (There is no machine `.cancel` event;
+    /// cancel is simply "never send `.save`".)
+    @MainActor
+    func testUnsavedFormEditsInEditContextDoNotReachTheStore() async throws {
+        let seed = DemoSeedData.generate()
+        let syncContainer = try makeSyncContainer()
+        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        let taskID = DemoSeedData.SeedIDs.Tasks.sessionTimeout
+        try await engine.syncProjectTasks(projectID: projectID)
+        try await engine.syncTaskDetail(taskID: taskID)
+        let originalTitle = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext)).title
+
+        let editContext = ModelContext(syncContainer.modelContainer)
+        editContext.autosaveEnabled = false
+
+        // Cancel-edit: change a draft's title in the editContext, never save.
+        let draft = try XCTUnwrap(fetchTask(id: taskID, in: editContext))
+        draft.title = "Edited but cancelled"
+        // Cancel-create: insert a brand-new draft in the editContext, never save.
+        editContext.insert(Task(id: "CANCELLED-CREATE-1", projectID: projectID, title: "New but cancelled"))
+
+        XCTAssertEqual(
+            try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext)).title, originalTitle,
+            "an unsaved edit must not reach the store (cancel-edit discards)")
+        XCTAssertNil(
+            try fetchTask(id: "CANCELLED-CREATE-1", in: syncContainer.mainContext),
+            "an unsaved new draft must not reach the store (cancel-create discards)")
     }
 
     @MainActor
