@@ -210,11 +210,12 @@ public final class DemoSyncEngine {
             isSyncing = !inFlightOperations.isEmpty
         }
 
-        let failures = try await SwiftSync.push(
+        let failures = try await SwiftSync.withPendingChanges(
             for: Task.self,
-            in: syncContainer.mainContext,
-            upload: { pending in try await self.upload(pending) }
-        )
+            in: syncContainer.mainContext
+        ) { pending in
+            try await self.upload(pending)
+        }
         try annotateFailures(failures)
         refreshPendingCount()
         return failures

@@ -97,10 +97,10 @@ state; failed rows stay pending and retry; surfacing is an event stream; the inb
 
 - [ ] **Represent + report (pure-bubble).** One `SyncError` currency for everything SwiftSync throws
       (`.invalidPayload` / `.cancelled` / `.schemaValidation` / `.containerInitialization`). For per-row
-      *partial* push rejections, `push()` returns the rejected rows (`[SyncPushFailure]` of `{localID, error}`)
-      and marks succeeded rows synced / leaves failed rows pending — it persists **nothing** on models
-      (no `syncFailureReason`/`syncFailureCode` on `SyncOfflineModel`). The consumer owns any inbox
-      persistence and reads the backend's own error in its `upload` closure. *Demo:* the engine annotates
+      *partial* push rejections, `withPendingChanges()` returns the rejected rows (`[SyncPushFailure]` of
+      `{localID, error}`) and marks succeeded rows synced / leaves failed rows pending — it persists
+      **nothing** on models (no `syncFailureReason`/`syncFailureCode` on `SyncOfflineModel`). The consumer
+      owns any inbox persistence and reads the backend's own error in its `process` closure. *Demo:* the engine annotates
       its own `Task` field from the returned failures and clears it on a later successful push.
 
 - [ ] **Surface (observability).** A multi-consumer `events()` `AsyncStream` emitting per-sync outcomes
@@ -109,7 +109,7 @@ state; failed rows stay pending and retry; surfacing is an event stream; the inb
       Same concern as the bubble above; lands with or right after it. (↔ Networking roadmap item 3.)
 
 **Out of SwiftSync — resilience.** Retry/backoff/`Retry-After`/auth-refresh are the *networking layer's*
-job (the `code/3lvis/ios/Networking` interceptors, wired into the consumer's `upload` closure), by the
+job (the `code/3lvis/ios/Networking` interceptors, wired into the consumer's `process` closure), by the
 same "a sync library doesn't own the network" principle that keeps it from categorizing errors. Not a
 SwiftSync feature.
 

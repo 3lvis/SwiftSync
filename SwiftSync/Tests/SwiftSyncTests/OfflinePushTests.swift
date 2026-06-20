@@ -41,7 +41,7 @@ final class OfflinePushTests: XCTestCase {
         for id in ["a", "b", "d"] { context.insert(PushNote(id: id, title: id)) }
         try context.save()
         // Baseline push: a, b, d become synced (token advances past their inserts).
-        _ = try await SwiftSync.push(for: PushNote.self, in: context, upload: noFailures)
+        _ = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context, process: noFailures)
 
         try mutate(context) { $0.first { $0.id == "b" }?.title = "edited" }  // update
         try delete("d", in: context)  // delete
@@ -65,7 +65,7 @@ final class OfflinePushTests: XCTestCase {
         context.insert(PushNote(id: "c1", title: "insert"))
         try context.save()
 
-        let failures = try await SwiftSync.push(for: PushNote.self, in: context) { pending in
+        let failures = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context) { pending in
             XCTAssertEqual(pending.inserts, ["c1"])
             return []
         }
@@ -82,7 +82,7 @@ final class OfflinePushTests: XCTestCase {
         context.insert(PushNote(id: "c1", title: "rejected"))
         try context.save()
 
-        let failures = try await SwiftSync.push(for: PushNote.self, in: context) { _ in
+        let failures = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context) { _ in
             [SyncPushFailure(localID: "c1", error: PushTestError(message: "422"))]
         }
 
@@ -97,12 +97,12 @@ final class OfflinePushTests: XCTestCase {
         let context = container.mainContext
         context.insert(PushNote(id: "u1", title: "v1"))
         try context.save()
-        _ = try await SwiftSync.push(for: PushNote.self, in: context, upload: noFailures)  // synced
+        _ = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context, process: noFailures)  // synced
 
         try mutate(context) { $0.first { $0.id == "u1" }?.title = "v2" }
         try context.save()
 
-        _ = try await SwiftSync.push(for: PushNote.self, in: context) { _ in
+        _ = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context) { _ in
             [SyncPushFailure(localID: "u1", error: PushTestError(message: "500"))]
         }
         XCTAssertEqual(
@@ -110,8 +110,6 @@ final class OfflinePushTests: XCTestCase {
             "an unacknowledged update stays pending")
     }
 
-    /// Counts are the batch minus the reported failures: a partial rejection confirms the rest by
-    /// complement. Because *any* failure freezes the token, even the confirmed rows stay pending and are
     /// Any failure freezes the token (all-or-nothing): the rejected row comes back in the returned
     /// failures, and even the row the server accepted stays pending and is re-detected next push
     /// (at-least-once).
@@ -122,7 +120,7 @@ final class OfflinePushTests: XCTestCase {
         context.insert(PushNote(id: "c2", title: "rejected"))
         try context.save()
 
-        let failures = try await SwiftSync.push(for: PushNote.self, in: context) { _ in
+        let failures = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context) { _ in
             [SyncPushFailure(localID: "c2", error: PushTestError(message: "422"))]
         }
         XCTAssertEqual(failures.map(\.localID), ["c2"])
@@ -139,7 +137,7 @@ final class OfflinePushTests: XCTestCase {
         context.insert(PushNote(id: "p1", title: "first"))
         try context.save()
 
-        let failures = try await SwiftSync.push(for: PushNote.self, in: context) { pending in
+        let failures = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context) { pending in
             XCTAssertEqual(pending.inserts, ["p1"])
             // A new local row appears after the batch was captured, while "uploading".
             context.insert(PushNote(id: "p2", title: "during upload"))
@@ -170,7 +168,7 @@ final class OfflinePushTests: XCTestCase {
 
         var uploadCalled = false
         do {
-            _ = try await SwiftSync.push(for: PushNote.self, in: context) { _ in
+            _ = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context) { _ in
                 uploadCalled = true
                 return []
             }

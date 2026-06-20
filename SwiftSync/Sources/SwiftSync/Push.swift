@@ -10,8 +10,8 @@ extension SwiftSync {
 }
 
 /// The local rows with un-pushed changes, split by operation. Each array holds `localID`s (the rows'
-/// string ids), not objects — `push` hands this to your `upload` closure and you map each id to your own
-/// request payload, so SwiftData objects never cross into the network call.
+/// string ids), not objects — `withPendingChanges` hands this to your `process` closure and you map each
+/// id to your own request payload, so SwiftData objects never cross into the network call.
 public struct SyncPendingChanges: Sendable {
     public let inserts: [String]
     public let updates: [String]
@@ -21,7 +21,7 @@ public struct SyncPendingChanges: Sendable {
 }
 
 /// One pushed row the server rejected: the `localID` to keep pending, and the consumer's own `error`
-/// bubbled up verbatim. The `upload` closure returns only these — everything else in the batch is treated
+/// bubbled up verbatim. Your `process` closure returns only these — everything else in the batch is treated
 /// as confirmed (the client `localID` is the identity the backend adopts, so a push is an idempotent
 /// upsert with no server-assigned ids to map home). The operation is the library's to know, not yours.
 public struct SyncPushFailure: Sendable {
@@ -130,19 +130,20 @@ extension SwiftSync {
         return SyncPendingChanges(inserts: inserts, updates: updates, deletes: deletes)
     }
 
-    /// Drive one push pass. Reads what changed locally since this model type's last-pushed token, hands it
-    /// to your `upload` closure (you own the network call), and gets back the rejected rows. Everything you
-    /// *don't* return as a failure is treated as confirmed — the client id is the identity the server
-    /// adopts, so a push is an idempotent upsert with nothing to acknowledge. Only on a fully clean push
-    /// (no failures) does it advance the token and trim the now-redundant inbound history. SwiftSync stores
-    /// no per-row state: a failed — or any un-pushed — change stays past the token and is re-detected next
-    /// push. Returns the same failures your closure returned (empty == clean).
+    /// Process this model type's locally-changed rows inside a scope SwiftSync manages. Reads what changed
+    /// since the last-pushed token, hands it to your `process` closure (you own the network call), and gets
+    /// back the rejected rows. Everything you *don't* return as a failure is treated as confirmed — the
+    /// client id is the identity the server adopts, so it's an idempotent upsert with nothing to
+    /// acknowledge. Only on a fully clean pass (no failures) does it advance the token and trim the
+    /// now-redundant inbound history. SwiftSync stores no per-row state: a failed — or any un-pushed —
+    /// change stays past the token and is re-detected next call. Returns the same failures your closure
+    /// returned (empty == clean).
     @discardableResult
-    public static func push<Model: SyncUpdatableModel>(
+    public static func withPendingChanges<Model: SyncUpdatableModel>(
         for _: Model.Type,
         in context: ModelContext,
         isolation: isolated (any Actor)? = #isolation,
-        upload: (SyncPendingChanges) async throws -> [SyncPushFailure]
+        process: (SyncPendingChanges) async throws -> [SyncPushFailure]
     ) async throws -> [SyncPushFailure] where Model.SyncID == String {
         try requireOfflineCapable(Model.self, in: context)
         try requireOfflinePushBookkeeping(in: context)
@@ -155,7 +156,7 @@ extension SwiftSync {
         // await stays past the token and is re-detected next push, instead of being silently skipped.
         let uploadedThrough = transactions.last?.token
 
-        let failures = try await upload(pending)
+        let failures = try await process(pending)
         if failures.isEmpty, let uploadedThrough {
             try setLastPushedHistoryToken(uploadedThrough, for: Model.self, in: context)
             try? trimInboundHistory(through: uploadedThrough, in: context)
