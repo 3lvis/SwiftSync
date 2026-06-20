@@ -42,23 +42,18 @@ API minimal (macros + convention over configuration), worked one item at a time.
 
 ## Open items
 
-### Phase 3 — DocC + publishable API documentation
+### Phase 5 — Tighten the public API surface (deferred to first release / tag time)
 
-- [ ] Add a DocC catalog to the SwiftSync target with a landing page and curated topics.
-- [ ] Document every public symbol surviving the API-surface tightening (Phase 5).
-- [ ] Add a CI job that builds DocC (and optionally publishes to GitHub Pages).
-
-### Phase 5 — Tighten the public API surface
-
-- [ ] Document the intended public surface and the macro-support extension points (the
-      helpers that must stay public) so they aren't mistakenly demoted later.
+- [ ] **Not now — do this when we cut the first tag.** Document the intended public surface and the
+      macro-support extension points (the helpers that must stay public) so they aren't mistakenly
+      demoted later. Lands alongside the release-time API-breakage gate (Phase 6); there's nothing to
+      protect until there's a tag to diff against.
 
 ### Phase 6 — CI gates for world-class hygiene
 
 - [ ] Add a warnings gate now that all packages are warning-clean: turn on
       `-warnings-as-errors` (or Swift 6.2 warning controls) for the library targets and/or
       enforce zero warnings in CI, so regressions can't reintroduce them.
-- [ ] Add a docs gate: DocC build success + doc link-check (depends on Phases 2–3).
 - [ ] Un-skip a small, fast benchmark subset and add a thresholded perf-regression gate;
       `log()` anything intentionally excluded so coverage isn't silently truncated.
 - [ ] **API-breakage gate (do at first release / tag time).** Once there's a published tag to diff
