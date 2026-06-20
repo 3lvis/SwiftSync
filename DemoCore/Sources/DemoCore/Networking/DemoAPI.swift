@@ -29,9 +29,9 @@ public enum DemoAPIError: LocalizedError {
         switch self {
         case .offline:
             return "The device is offline."
-        case let .transient(endpoint):
+        case .transient(let endpoint):
             return "Transient network failure while calling \(endpoint)."
-        case let .invalidPayload(message):
+        case .invalidPayload(let message):
             return message
         }
     }
@@ -100,7 +100,7 @@ public final class FakeDemoAPIClient {
 
     public func getTaskDetail(taskID: String) async throws -> DemoSyncPayload? {
         try await networkGate(endpoint: "GET /tasks/{id}")
-        guard let payload = try backend.getTaskDetailPayload(taskID: taskID) else { return nil }
+        guard let payload = try backend.getTaskDetailPayload(publicID: taskID) else { return nil }
         return try Self.makePayload(payload)
     }
 
@@ -111,25 +111,29 @@ public final class FakeDemoAPIClient {
 
     public func patchTaskState(taskID: String, state: String) async throws -> DemoSyncPayload? {
         try await networkGate(endpoint: "PATCH /tasks/{id} (state)")
-        guard let payload = try backend.patchTaskState(taskID: taskID, state: state) else { return nil }
+        guard let payload = try backend.patchTaskState(publicID: taskID, state: state) else { return nil }
         return try Self.makePayload(payload)
     }
 
     public func patchTaskAssignee(taskID: String, assigneeID: String?) async throws -> DemoSyncPayload? {
         try await networkGate(endpoint: "PATCH /tasks/{id} (assignee_id)")
-        guard let payload = try backend.patchTaskAssignee(taskID: taskID, assigneeID: assigneeID) else { return nil }
+        guard let payload = try backend.patchTaskAssignee(publicID: taskID, assigneeID: assigneeID) else { return nil }
         return try Self.makePayload(payload)
     }
 
     public func replaceTaskReviewers(taskID: String, reviewerIDs: [String]) async throws -> DemoSyncPayload? {
         try await networkGate(endpoint: "PUT /tasks/{id}/reviewers")
-        guard let payload = try backend.replaceTaskReviewers(taskID: taskID, reviewerIDs: reviewerIDs) else { return nil }
+        guard let payload = try backend.replaceTaskReviewers(publicID: taskID, reviewerIDs: reviewerIDs) else {
+            return nil
+        }
         return try Self.makePayload(payload)
     }
 
     public func replaceTaskWatchers(taskID: String, watcherIDs: [String]) async throws -> DemoSyncPayload? {
         try await networkGate(endpoint: "PUT /tasks/{id}/watchers")
-        guard let payload = try backend.replaceTaskWatchers(taskID: taskID, watcherIDs: watcherIDs) else { return nil }
+        guard let payload = try backend.replaceTaskWatchers(publicID: taskID, watcherIDs: watcherIDs) else {
+            return nil
+        }
         return try Self.makePayload(payload)
     }
 
@@ -141,13 +145,13 @@ public final class FakeDemoAPIClient {
 
     public func updateTask(taskID: String, body: DemoSyncPayload) async throws -> DemoSyncPayload? {
         try await networkGate(endpoint: "PUT /tasks/{id}")
-        let updated = try backend.updateTask(taskID: taskID, body: body.toSyncPayloadDictionary())
+        let updated = try backend.updateTask(publicID: taskID, body: body.toSyncPayloadDictionary())
         return try Self.makePayload(updated)
     }
 
     public func deleteTask(taskID: String) async throws {
         try await networkGate(endpoint: "DELETE /tasks/{id}")
-        try backend.deleteTask(taskID: taskID)
+        try backend.deleteTask(publicID: taskID)
     }
 
     /// POST /sync/upload — the batched offline push. Returns the per-operation `results` array.
@@ -176,14 +180,18 @@ public final class FakeDemoAPIClient {
 
         guard networkDelayMode == .scenarioDriven else { return }
 
-        let baseDelayMS: UInt64 = switch scenario {
-        case .fastStable: 150
-        case .slowNetwork: 950
-        case .flakyNetwork: 450
-        }
+        let baseDelayMS: UInt64 =
+            switch scenario {
+            case .fastStable: 150
+            case .slowNetwork: 950
+            case .flakyNetwork: 450
+            }
 
-        let isMutation = endpoint.hasPrefix("PATCH ") || endpoint.hasPrefix("POST ") || endpoint.hasPrefix("PUT ") || endpoint.hasPrefix("DELETE ")
-        let mutationExtra: UInt64 = isMutation ? (scenario == .fastStable ? 220 : scenario == .flakyNetwork ? 120 : 0) : 0
+        let isMutation =
+            endpoint.hasPrefix("PATCH ") || endpoint.hasPrefix("POST ") || endpoint.hasPrefix("PUT ")
+            || endpoint.hasPrefix("DELETE ")
+        let mutationExtra: UInt64 =
+            isMutation ? (scenario == .fastStable ? 220 : scenario == .flakyNetwork ? 120 : 0) : 0
         let hash = endpoint.unicodeScalars.reduce(0) { ($0 * 31 + Int($1.value)) % 10_000 }
         let jitter = UInt64((hash + callIndex * 17) % 250)
         try await _Concurrency.Task.sleep(nanoseconds: (baseDelayMS + jitter + mutationExtra) * 1_000_000)

@@ -27,9 +27,10 @@ final class OfflinePushTests: XCTestCase {
         engine.isOffline = true
         try await engine.createTask(body: body, projectID: projectID)
 
-        let local = try XCTUnwrap(fetchTask(id: "OFFLINE-CREATE-1", in: syncContainer.mainContext))
-        XCTAssertNil(local.syncRemoteID, "an offline-created row is pending until pushed")
-        XCTAssertEqual(engine.pendingChangeCount, 1)
+        XCTAssertNotNil(
+            try fetchTask(id: "OFFLINE-CREATE-1", in: syncContainer.mainContext),
+            "an offline-created row exists locally")
+        XCTAssertEqual(engine.pendingChangeCount, 1, "and is pending until pushed")
 
         engine.isOffline = false
         let pushResult = try await engine.pushPendingChanges()
@@ -39,10 +40,8 @@ final class OfflinePushTests: XCTestCase {
         XCTAssertTrue(summary.failures.isEmpty)
         XCTAssertEqual(engine.pendingChangeCount, 0)
 
-        let synced = try XCTUnwrap(fetchTask(id: "OFFLINE-CREATE-1", in: syncContainer.mainContext))
-        let remoteID = try XCTUnwrap(synced.syncRemoteID, "push stamps the server-minted remote id")
-        XCTAssertNotEqual(remoteID, "OFFLINE-CREATE-1", "the server mints its own id, distinct from localId")
-        XCTAssertTrue(remoteID.hasPrefix("srv-"))
+        XCTAssertNotNil(
+            try fetchTask(id: "OFFLINE-CREATE-1", in: syncContainer.mainContext), "the row remains, now synced")
         let backendDetail = try await apiClient.getTaskDetail(taskID: "OFFLINE-CREATE-1")
         XCTAssertNotNil(backendDetail, "the row reached the backend, keyed by its localId")
     }
@@ -61,8 +60,9 @@ final class OfflinePushTests: XCTestCase {
         engine.isOffline = true
         try await engine.deleteTask(taskID: taskID, projectID: projectID)
 
-        let tombstone = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
-        XCTAssertEqual(tombstone.isLocallyDeleted, true, "offline delete is a soft delete until pushed")
+        XCTAssertNil(
+            try fetchTask(id: taskID, in: syncContainer.mainContext),
+            "offline delete hard-deletes locally at once; the pending deletion lives in store history")
         XCTAssertEqual(engine.pendingChangeCount, 1)
 
         engine.isOffline = false
@@ -170,7 +170,7 @@ final class OfflinePushTests: XCTestCase {
         _ = try await engine.pushPendingChanges()
         let failed = try XCTUnwrap(fetchTask(id: localID, in: syncContainer.mainContext))
         XCTAssertNotNil(failed.syncFailureReason, "the rejected insert is flagged")
-        XCTAssertNil(failed.syncRemoteID, "it never reached the server")
+        XCTAssertEqual(engine.failedChangeCount, 1, "it never reached the server")
 
         // Edit it to a valid title (online): a never-synced row must be re-inserted, not PUT/404'd.
         var fixDictionary = syncContainer.export(failed)
@@ -180,7 +180,6 @@ final class OfflinePushTests: XCTestCase {
             taskID: localID, projectID: projectID, body: try DemoSyncPayload(dictionary: fixDictionary))
 
         let fixed = try XCTUnwrap(fetchTask(id: localID, in: syncContainer.mainContext))
-        XCTAssertNotNil(fixed.syncRemoteID, "the corrected task is inserted on the server")
         XCTAssertNil(fixed.syncFailureReason, "the failure is resolved")
         XCTAssertEqual(fixed.title, "Fixed")
         let backendDetail = try await apiClient.getTaskDetail(taskID: localID)
@@ -201,7 +200,7 @@ final class OfflinePushTests: XCTestCase {
         // Offline edit of an already-synced row to an over-long title → the update is rejected on push.
         engine.isOffline = true
         let synced = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
-        XCTAssertNotNil(synced.syncRemoteID, "precondition: the row is already synced")
+        XCTAssertEqual(engine.pendingChangeCount, 0, "precondition: the pulled row is already synced")
         var badDictionary = syncContainer.export(synced)
         badDictionary["title"] = String(repeating: "A", count: 100)
         badDictionary.removeValue(forKey: "items")
@@ -212,7 +211,6 @@ final class OfflinePushTests: XCTestCase {
         _ = try await engine.pushPendingChanges()
         let failed = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
         XCTAssertNotNil(failed.syncFailureReason, "the rejected edit is flagged")
-        XCTAssertNotNil(failed.syncRemoteID, "it is still a synced row, not a fresh insert")
         XCTAssertEqual(engine.failedChangeCount, 1)
 
         // Fix it with a valid title while online: the corrected save must resolve the failure.
@@ -302,6 +300,50 @@ final class OfflinePushTests: XCTestCase {
         let edited = try XCTUnwrap(fetchTask(id: "OFFLINE-EDIT-1", in: syncContainer.mainContext))
         XCTAssertEqual(edited.title, "Renamed offline", "the edit updates the local row's title")
         XCTAssertEqual(edited.project?.id, projectID, "the edit must not drop the project link")
+    }
+
+    /// Only `Task` is marked offline, yet a `Task`↔`User` relationship edit made offline (assigning
+    /// reviewers) round-trips: assigning a person is a local *Task* update — the linked `User` is
+    /// pull-only and never needs to be offline. After reconnect+push the server has the new reviewers,
+    /// proven by a fresh pull bringing the same set back.
+    @MainActor
+    func testOfflineReviewerAssignmentRoundTripsThroughPush() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("offline-people-\(UUID().uuidString).sqlite")
+        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
+        let backend = try DemoServerSimulator(databaseURL: url, seedData: DemoSeedData.generate())
+        let apiClient = FakeDemoAPIClient(backend: backend)
+        let syncContainer = try makeSyncContainer()
+        let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
+
+        let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
+        let taskID = DemoSeedData.SeedIDs.Tasks.sessionTimeout
+        try await engine.syncProjectTasks(projectID: projectID)
+        try await engine.syncTaskFormMetadata()  // ensure the users to assign are cached locally
+
+        let newReviewers = [DemoSeedData.SeedIDs.Users.miaPatel, DemoSeedData.SeedIDs.Users.ethanLee]
+
+        // Offline: assign people. Mutates the Task (its reviewers + updatedAt) → a pending Task update.
+        engine.isOffline = true
+        try await engine.replaceTaskReviewers(taskID: taskID, projectID: projectID, reviewerIDs: newReviewers)
+        let offline = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        XCTAssertEqual(Set(offline.reviewers.map(\.id)), Set(newReviewers), "applied locally while offline")
+        XCTAssertEqual(engine.pendingChangeCount, 1, "the relationship edit is a pending Task update")
+
+        // Reconnect + push: reviewer_ids travel in the upsert and the server accepts it.
+        engine.isOffline = false
+        let pushResult = try await engine.pushPendingChanges()
+        let summary = try XCTUnwrap(pushResult)
+        XCTAssertTrue(summary.failures.isEmpty)
+        XCTAssertEqual(engine.pendingChangeCount, 0, "the assignment was acknowledged")
+
+        // Prove the server stored it: a fresh pull (which overwrites local reviewers from the server)
+        // brings the same set back.
+        try await engine.syncTaskDetail(taskID: taskID)
+        let pulled = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
+        XCTAssertEqual(
+            Set(pulled.reviewers.map(\.id)), Set(newReviewers),
+            "the offline assignment round-tripped: pushed to the server and pulled back")
     }
 
     @MainActor
@@ -398,7 +440,7 @@ final class OfflinePushTests: XCTestCase {
         let summary = try XCTUnwrap(pushResult)
         XCTAssertEqual(summary.failures.count, 1)
         let failed = try XCTUnwrap(fetchTask(id: "OFFLINE-REJECT-1", in: syncContainer.mainContext))
-        XCTAssertNil(failed.syncRemoteID, "the rejected create never got a server id")
+        XCTAssertNotNil(failed.syncFailureReason, "the rejected create is flagged")
 
         // Re-pull the project's task set (as on relaunch); the server omits the never-accepted row.
         try await engine.syncProjectTasks(projectID: projectID)

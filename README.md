@@ -10,7 +10,7 @@ Define your models once, read from local SwiftData, and let SwiftSync handle the
 - Deterministic diffing for inserts, updates, and deletes
 - Automatic relationship syncing for nested objects and foreign keys
 - Export back into API-ready JSON
-- Offline push (local → server) with two-id identity and last-writer-wins
+- Offline push (local → server) via SwiftData History — no offline fields, last-writer-wins
 - Reactive local reads for SwiftUI and UIKit
 
 ## Quick Start
@@ -616,40 +616,37 @@ See [FAQ](docs/project/faq.md) and [Property Mapping Contract](docs/project/prop
 
 `sync` and `export` cover the pull side: pull server state into SwiftData, and turn a draft into a request body. **Push** is the outbound counterpart for offline-first apps — edit locally while disconnected, then reconcile with the server when you reconnect.
 
-Identity is a two-id mapping: `syncLocalID` is the client-generated id that is stable forever; `syncRemoteID` is the server's id, `nil` until the row has been pushed and acknowledged. `syncUpdatedAt` drives last-writer-wins, and `syncIsDeleted` is a soft-delete tombstone that survives until the deletion reaches the server. Conform your model to `SyncOfflineModel`:
+There are **no offline fields and no side table.** SwiftSync reads the store's own change journal — SwiftData History (iOS 18+) — to find what changed locally, so the consumer adds nothing to the model. The one requirement: mark the identity `@Attribute(.preserveValueOnDeletion)` so a deleted row's id survives in history and its deletion can be pushed. That attribute *is* the offline opt-in — its presence switches this model's pull semantics to "honor pending local edits"; a plain `@Syncable` model without it keeps "server is authoritative".
 
 ```swift
-extension Task: SyncOfflineModel {
-  var syncLocalID: String { id }
-  var syncUpdatedAt: Date { updatedAt }
-  var syncIsDeleted: Bool { isDeleted }
-  // syncRemoteID is a stored property the push driver assigns on acknowledgement
+@Syncable @Model
+final class Task {
+  @Attribute(.unique, .preserveValueOnDeletion) var id: String   // ← enables offline
+  var title: String
+  // no syncRemoteID, no isDeleted flag, no SyncOfflineModel conformance
 }
 ```
 
-`pendingChanges` partitions the store into inserts, updates, and deletes relative to your last-synced cursor — by querying the store, with no save-interception:
+The identity is the only id: it's client-generated and the backend adopts it, so push is an idempotent **upsert** keyed by that id — there is no separate server id to map home. Make local edits with plain SwiftData (`context.insert` / mutate / `context.delete`); SwiftSync tracks them via history.
 
-- **insert** — never synced (`syncRemoteID == nil`) and not deleted
-- **update** — synced, not deleted, and edited since the cursor
-- **delete** — soft-deleted *and* known to the server (a row inserted-then-deleted locally never reached the server, so it is dropped, not pushed)
+`pendingChanges` partitions the un-pushed local changes (history authored by you, since SwiftSync's internal per-type history token) into inserts, updates, and deletes. A row inserted *and* deleted before it was ever pushed is dropped (the server never saw it).
 
-`push` drives one pass. It hands the pending ids to your `upload` closure as a `Sendable` `SyncPushBatch` (so SwiftData objects never cross into a network call — you own the request), then applies the server's `SyncPushResponse` locally: stamping server-assigned `syncRemoteID`s onto inserts, hard-deleting confirmed deletes, and returning per-item failures for you to surface (discard / edit / retry).
+`push` drives one pass. It hands the pending ids to your `upload` closure as a `Sendable` `SyncPushBatch` (so SwiftData objects never cross into a network call — you own the request), then — only when every change is acknowledged — advances its internal history token and trims the redundant history. It writes no per-row state; an unacknowledged change stays pending and is re-detected next push. Per-item failures come back in `summary.failures` for you to surface (discard / edit / retry).
 
 ```swift
 let summary = try await SwiftSync.push(
   for: Task.self,
   in: syncContainer.mainContext,
-  changedSince: lastSyncedAt,
   upload: { batch in
-    // map batch.inserts / batch.updates / batch.deletes (syncLocalIDs) to requests,
-    // call your API, and report back what the server assigned/accepted/rejected
+    // map batch.inserts / batch.updates / batch.deletes (the localIDs) to upsert/delete
+    // requests, call your API, and report back which localIDs the server acknowledged
     try await api.push(batch)
   }
 )
-lastSyncedAt = summary.cursor
+// No history token to persist — SwiftSync owns it. Inspect summary.failures / counts.
 ```
 
-Advance your cursor to `summary.cursor` on every pass: it only moves forward when *every* pending update was acknowledged, so an unacknowledged update is safely re-detected on the next push rather than lost.
+Inbound pulls are tagged internally so a freshly-pulled row is never mistaken for a local edit; an un-pushed local insert survives a pull that omits it, and a newer local edit isn't clobbered by an older server version (last-writer-wins). Offline requires a persistent store (history is unavailable to ephemeral stores).
 
 ## Date Handling
 

@@ -28,7 +28,7 @@ git history is the memory.
 ## Priority order (highest leverage / lowest risk first)
 
 1. [x] ~~Remove `SyncContext` + local-write `sync(item:)`~~ — **done** (single-object `sync(item:)` applies on main, bulk off-main; `SyncContext` deleted)
-2. [ ] Macro-generate `SyncOfflineModel` — the flagship "magic" move
+2. [x] ~~Macro-generate `SyncOfflineModel`~~ — **superseded**: offline now rides SwiftData History, so there is no `SyncOfflineModel` to generate. Models carry zero offline fields; offline is opted in by marking the identity `@Attribute(.preserveValueOnDeletion)`. See `docs/planning/offline-history-design.md`.
 3. [x] ~~Drop `syncFailureReason` from the protocol~~ — **done** (#624: removed from `SyncOfflineModel`)
 4. [ ] Generalize the inbound LWW timestamp key — convention today, macro later
 5. [ ] Tighten the push response seam (5 public structs)

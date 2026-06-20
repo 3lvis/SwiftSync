@@ -30,6 +30,7 @@ public struct DemoSeedData {
     }
 
     public struct SeedTask: Sendable {
+        /// The task's public_id — its sole external identity. The DB assigns the internal int id.
         public let id: String
         public let projectID: String
         public let assigneeID: String?
@@ -59,7 +60,7 @@ public struct DemoSeedData {
             self.projectID = projectID
             self.assigneeID = assigneeID
             self.reviewerIDs = reviewerIDs
-            self.authorID = authorID ?? assigneeID ?? reviewerIDs.first ?? id
+            self.authorID = authorID ?? assigneeID ?? reviewerIDs.first ?? ""
             self.title = title
             self.descriptionText = descriptionText
             self.state = state
@@ -70,6 +71,7 @@ public struct DemoSeedData {
     }
 
     public struct SeedItem: Sendable {
+        /// The item's public_id. `taskID` is the parent task's public_id.
         public let id: String
         public let taskID: String
         public let title: String
@@ -115,44 +117,44 @@ public struct DemoSeedData {
     // These are fixed — not random — so the demo loads consistent data across fresh installs.
     public enum SeedIDs {
         public enum Projects {
-            public static let accountSecurity          = "C3E7A1B2-1001-0000-0000-000000000001"
+            public static let accountSecurity = "C3E7A1B2-1001-0000-0000-000000000001"
             public static let notificationsReliability = "C3E7A1B2-1001-0000-0000-000000000002"
-            public static let supportInbox             = "C3E7A1B2-1001-0000-0000-000000000003"
+            public static let supportInbox = "C3E7A1B2-1001-0000-0000-000000000003"
         }
         public enum Users {
             public static let avaMartinez = "C3E7A1B2-2001-0000-0000-000000000001"
-            public static let noahKim     = "C3E7A1B2-2001-0000-0000-000000000002"
-            public static let miaPatel    = "C3E7A1B2-2001-0000-0000-000000000003"
-            public static let liamBrown   = "C3E7A1B2-2001-0000-0000-000000000004"
+            public static let noahKim = "C3E7A1B2-2001-0000-0000-000000000002"
+            public static let miaPatel = "C3E7A1B2-2001-0000-0000-000000000003"
+            public static let liamBrown = "C3E7A1B2-2001-0000-0000-000000000004"
             public static let sofiaGarcia = "C3E7A1B2-2001-0000-0000-000000000005"
-            public static let ethanLee    = "C3E7A1B2-2001-0000-0000-000000000006"
+            public static let ethanLee = "C3E7A1B2-2001-0000-0000-000000000006"
         }
         public enum Tasks {
-            public static let sessionTimeout      = "C3E7A1B2-3001-0000-0000-000000000001"
+            public static let sessionTimeout = "C3E7A1B2-3001-0000-0000-000000000001"
             public static let securityPolicyPatch = "C3E7A1B2-3001-0000-0000-000000000002"
-            public static let qaItemList          = "C3E7A1B2-3001-0000-0000-000000000003"
-            public static let warningCopy         = "C3E7A1B2-3001-0000-0000-000000000004"
-            public static let rolloutFlag         = "C3E7A1B2-3001-0000-0000-000000000005"
-            public static let duplicatePushFix    = "C3E7A1B2-3001-0000-0000-000000000006"
-            public static let idempotencyGuard    = "C3E7A1B2-3001-0000-0000-000000000007"
-            public static let scopedDeleteVerify  = "C3E7A1B2-3001-0000-0000-000000000008"
-            public static let incidentPlaybook    = "C3E7A1B2-3001-0000-0000-000000000009"
-            public static let assigneeChip        = "C3E7A1B2-3001-0000-0000-000000000010"
-            public static let inboxFilterKeys     = "C3E7A1B2-3001-0000-0000-000000000011"
-            public static let regressionChecks    = "C3E7A1B2-3001-0000-0000-000000000012"
+            public static let qaItemList = "C3E7A1B2-3001-0000-0000-000000000003"
+            public static let warningCopy = "C3E7A1B2-3001-0000-0000-000000000004"
+            public static let rolloutFlag = "C3E7A1B2-3001-0000-0000-000000000005"
+            public static let duplicatePushFix = "C3E7A1B2-3001-0000-0000-000000000006"
+            public static let idempotencyGuard = "C3E7A1B2-3001-0000-0000-000000000007"
+            public static let scopedDeleteVerify = "C3E7A1B2-3001-0000-0000-000000000008"
+            public static let incidentPlaybook = "C3E7A1B2-3001-0000-0000-000000000009"
+            public static let assigneeChip = "C3E7A1B2-3001-0000-0000-00000000000A"
+            public static let inboxFilterKeys = "C3E7A1B2-3001-0000-0000-00000000000B"
+            public static let regressionChecks = "C3E7A1B2-3001-0000-0000-00000000000C"
         }
         public enum Items {
-            public static let sessionRequirements = "C3E7A1B2-4001-0000-0000-000000000001"
-            public static let sessionDraftPlan    = "C3E7A1B2-4001-0000-0000-000000000002"
-            public static let qaLaunchFlow        = "C3E7A1B2-4001-0000-0000-000000000003"
-            public static let qaOfflineRecovery   = "C3E7A1B2-4001-0000-0000-000000000004"
-            public static let pushReproCase       = "C3E7A1B2-4001-0000-0000-000000000005"
-            public static let pushVerifyFix       = "C3E7A1B2-4001-0000-0000-000000000006"
+            public static let sessionGatherRequirements = "C3E7A1B2-4001-0000-0000-000000000001"
+            public static let sessionDraftPlan = "C3E7A1B2-4001-0000-0000-000000000002"
+            public static let qaRelaunchFlow = "C3E7A1B2-4001-0000-0000-000000000003"
+            public static let qaOfflineRecovery = "C3E7A1B2-4001-0000-0000-000000000004"
+            public static let pushCaptureRepro = "C3E7A1B2-4001-0000-0000-000000000005"
+            public static let pushVerifyReconnect = "C3E7A1B2-4001-0000-0000-000000000006"
         }
     }
 
     public static func generate() -> DemoSeedData {
-        let baseDate = Date(timeIntervalSince1970: 1_735_689_600) // 2025-01-01T00:00:00Z
+        let baseDate = Date(timeIntervalSince1970: 1_735_689_600)  // 2025-01-01T00:00:00Z
         func at(_ minutes: Int) -> Date {
             baseDate.addingTimeInterval(TimeInterval(minutes * 60))
         }
@@ -160,21 +162,22 @@ public struct DemoSeedData {
         let p = SeedIDs.Projects.self
         let u = SeedIDs.Users.self
         let t = SeedIDs.Tasks.self
-        let c = SeedIDs.Items.self
 
         let projects: [SeedProject] = [
-            .init(id: p.accountSecurity,          name: "Account Security Controls",      createdAt: at(540), updatedAt: at(540)),
-            .init(id: p.notificationsReliability,  name: "Team Notifications Reliability", createdAt: at(525), updatedAt: at(525)),
-            .init(id: p.supportInbox,              name: "Support Inbox Refresh",           createdAt: at(510), updatedAt: at(510))
+            .init(id: p.accountSecurity, name: "Account Security Controls", createdAt: at(540), updatedAt: at(540)),
+            .init(
+                id: p.notificationsReliability, name: "Team Notifications Reliability", createdAt: at(525),
+                updatedAt: at(525)),
+            .init(id: p.supportInbox, name: "Support Inbox Refresh", createdAt: at(510), updatedAt: at(510)),
         ]
 
         let users: [SeedUser] = [
-            .init(id: u.avaMartinez, displayName: "Ava Martinez", createdAt: at(60),  updatedAt: at(60)),
-            .init(id: u.noahKim,     displayName: "Noah Kim", createdAt: at(70),  updatedAt: at(70)),
-            .init(id: u.miaPatel,    displayName: "Mia Patel", createdAt: at(80),  updatedAt: at(80)),
-            .init(id: u.liamBrown,   displayName: "Liam Brown", createdAt: at(90),  updatedAt: at(90)),
+            .init(id: u.avaMartinez, displayName: "Ava Martinez", createdAt: at(60), updatedAt: at(60)),
+            .init(id: u.noahKim, displayName: "Noah Kim", createdAt: at(70), updatedAt: at(70)),
+            .init(id: u.miaPatel, displayName: "Mia Patel", createdAt: at(80), updatedAt: at(80)),
+            .init(id: u.liamBrown, displayName: "Liam Brown", createdAt: at(90), updatedAt: at(90)),
             .init(id: u.sofiaGarcia, displayName: "Sofia Garcia", createdAt: at(100), updatedAt: at(100)),
-            .init(id: u.ethanLee,    displayName: "Ethan Lee", createdAt: at(110), updatedAt: at(110))
+            .init(id: u.ethanLee, displayName: "Ethan Lee", createdAt: at(110), updatedAt: at(110)),
         ]
 
         let tasks: [SeedTask] = [
@@ -315,12 +318,13 @@ public struct DemoSeedData {
                 descriptionText: "Reduce regressions in task editing flows.",
                 state: "inProgress",
                 createdAt: at(360), updatedAt: at(360)
-            )
+            ),
         ]
 
+        let i = SeedIDs.Items.self
         let items: [SeedItem] = [
             .init(
-                id: c.sessionRequirements,
+                id: i.sessionGatherRequirements,
                 taskID: t.sessionTimeout,
                 title: "Gather requirements",
                 position: 0,
@@ -328,7 +332,7 @@ public struct DemoSeedData {
                 updatedAt: at(301)
             ),
             .init(
-                id: c.sessionDraftPlan,
+                id: i.sessionDraftPlan,
                 taskID: t.sessionTimeout,
                 title: "Draft implementation plan",
                 position: 1,
@@ -336,7 +340,7 @@ public struct DemoSeedData {
                 updatedAt: at(302)
             ),
             .init(
-                id: c.qaLaunchFlow,
+                id: i.qaRelaunchFlow,
                 taskID: t.qaItemList,
                 title: "Relauch flow after timeout",
                 position: 0,
@@ -344,7 +348,7 @@ public struct DemoSeedData {
                 updatedAt: at(311)
             ),
             .init(
-                id: c.qaOfflineRecovery,
+                id: i.qaOfflineRecovery,
                 taskID: t.qaItemList,
                 title: "Offline to online recovery",
                 position: 1,
@@ -352,7 +356,7 @@ public struct DemoSeedData {
                 updatedAt: at(312)
             ),
             .init(
-                id: c.pushReproCase,
+                id: i.pushCaptureRepro,
                 taskID: t.duplicatePushFix,
                 title: "Capture repro case",
                 position: 0,
@@ -360,13 +364,13 @@ public struct DemoSeedData {
                 updatedAt: at(331)
             ),
             .init(
-                id: c.pushVerifyFix,
+                id: i.pushVerifyReconnect,
                 taskID: t.duplicatePushFix,
                 title: "Verify fix after reconnect",
                 position: 1,
                 createdAt: at(332),
                 updatedAt: at(332)
-            )
+            ),
         ]
 
         return DemoSeedData(

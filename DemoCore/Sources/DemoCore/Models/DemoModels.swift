@@ -66,7 +66,9 @@ public final class TaskStateOption {
 @Syncable
 @Model
 public final class Task {
-    @Attribute(.unique) public var id: String
+    // `.preserveValueOnDeletion` is SwiftSync's offline-push opt-in: it keeps the id recoverable from
+    // delete history so a hard `context.delete` can still be pushed.
+    @Attribute(.unique, .preserveValueOnDeletion) public var id: String
 
     public var projectID: String
 
@@ -85,20 +87,8 @@ public final class Task {
     public var createdAt: Date
     public var updatedAt: Date
 
-    // Imported from the server's `remote_id` (so a synced row knows its server id for later
-    // update/delete addressing); never exported back.
-    @RemoteKey("remote_id")
-    @NotExport
-    public var syncRemoteID: String?
-
-    // Not `isDeleted`: that name collides with PersistentModel's built-in context-deletion flag,
-    // which silently shadows a stored property of the same name.
-    @NotExport
-    public var isLocallyDeleted: Bool?
-
-    // Demo-owned: the engine annotates this from `summary.failures` after a push and clears it on a
-    // later success, so the failures inbox is a query for rows where it's set. SwiftSync itself
-    // persists no failure state — failures bubble up via `SyncPushSummary.failures`.
+    // Demo-owned (not a SwiftSync concept): the engine stamps this from `summary.failures` after a
+    // push and clears it on a later success, so the failures inbox is a query for rows where it's set.
     @NotExport
     public var syncFailureReason: String?
 
@@ -132,8 +122,6 @@ public final class Task {
         stateLabel: String = "",
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
-        syncRemoteID: String? = nil,
-        isLocallyDeleted: Bool? = nil,
         syncFailureReason: String? = nil,
         project: Project? = nil,
         author: User? = nil,
@@ -152,8 +140,6 @@ public final class Task {
         self.stateLabel = stateLabel
         self.createdAt = createdAt
         self.updatedAt = updatedAt
-        self.syncRemoteID = syncRemoteID
-        self.isLocallyDeleted = isLocallyDeleted
         self.syncFailureReason = syncFailureReason
         self.project = project
         self.author = author
@@ -162,12 +148,6 @@ public final class Task {
         self.watchers = watchers
         self.items = items
     }
-}
-
-extension Task: SyncOfflineModel {
-    public var syncLocalID: String { id }
-    public var syncUpdatedAt: Date { updatedAt }
-    public var syncIsDeleted: Bool { isLocallyDeleted ?? false }
 }
 
 @Syncable

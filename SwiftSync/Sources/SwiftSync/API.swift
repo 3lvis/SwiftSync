@@ -14,6 +14,9 @@ extension SwiftSync {
         do {
             try throwIfCancelled()
             try await withRelationshipLookupCache {
+                // Gathered before applying, so the pull honors pending local edits and never prunes a
+                // never-pushed local insert.
+                let dirtyPIDs = offlineDirtyPersistentIDs(for: Model.self, in: context)
                 let entries = try syncProfile("normalize-payload") {
                     try normalize(payload: payload, model: Model.self)
                 }
@@ -58,7 +61,7 @@ extension SwiftSync {
 
                     if let row = index[key] {
                         let didApplyFields = try syncProfile("apply-fields") {
-                            try applyHonoringLocalEdit(payloadModel, to: row)
+                            try applyHonoringLocalEdit(payloadModel, to: row, dirtyPIDs: dirtyPIDs)
                         }
                         if didApplyFields {
                             changed = true
@@ -105,7 +108,7 @@ extension SwiftSync {
                 try throwIfCancelled()
                 syncProfile("delete-missing") {
                     for (key, row) in index where !seenKeys.contains(key) {
-                        if isUnsyncedLocalInsert(row) { continue }
+                        if isUnsyncedLocalInsert(row, dirtyPIDs: dirtyPIDs) { continue }
                         context.delete(row)
                         changed = true
                     }
@@ -366,6 +369,9 @@ extension SwiftSync {
         do {
             try throwIfCancelled()
             try await withRelationshipLookupCache {
+                // Gathered before applying, so the pull honors pending local edits and never prunes a
+                // never-pushed local insert.
+                let dirtyPIDs = offlineDirtyPersistentIDs(for: Model.self, in: context)
                 let entries = try syncProfile("normalize-payload") {
                     try normalize(payload: payload, model: Model.self)
                 }
@@ -465,7 +471,7 @@ extension SwiftSync {
                             }
                         }
                         let didApplyFields = try syncProfile("apply-fields") {
-                            try applyHonoringLocalEdit(payloadModel, to: row)
+                            try applyHonoringLocalEdit(payloadModel, to: row, dirtyPIDs: dirtyPIDs)
                         }
                         if didApplyFields {
                             changed = true
@@ -503,7 +509,7 @@ extension SwiftSync {
                                 }
                             }
                             let didApplyFields = try syncProfile("apply-fields") {
-                                try applyHonoringLocalEdit(payloadModel, to: movedRow)
+                                try applyHonoringLocalEdit(payloadModel, to: movedRow, dirtyPIDs: dirtyPIDs)
                             }
                             if didApplyFields {
                                 changed = true
@@ -567,7 +573,7 @@ extension SwiftSync {
                         if seenKeys.contains(key) {
                             continue
                         }
-                        if isUnsyncedLocalInsert(row) {
+                        if isUnsyncedLocalInsert(row, dirtyPIDs: dirtyPIDs) {
                             continue
                         }
                         context.delete(row)
@@ -594,29 +600,22 @@ extension SwiftSync {
         }
     }
 
-    /// A live local row the server has never acknowledged (`syncRemoteID == nil`, not a tombstone).
-    /// `delete-missing` skips these: the server omitting a row it never created is not a deletion.
-    private static func isUnsyncedLocalInsert<Model: SyncUpdatableModel>(_ row: Model) -> Bool {
-        guard let offline = row as? any SyncOfflineModel else { return false }
-        if offline.syncIsDeleted { return false }
-        return offline.syncRemoteID == nil
+    /// A row with un-pushed local changes (its persistent id is in the history dirty-set). `delete-missing`
+    /// skips these: a row the user created or edited offline and hasn't pushed yet must survive an
+    /// inbound pull that omits it — the server omitting a row it has never seen is not a deletion.
+    private static func isUnsyncedLocalInsert<Model: SyncUpdatableModel>(
+        _ row: Model, dirtyPIDs: Set<PersistentIdentifier>
+    ) -> Bool {
+        dirtyPIDs.contains(row.persistentModelID)
     }
 
-    /// Apply a server `payload` onto `row`, but skip the overwrite when an offline row's local edit is
-    /// newer than the incoming version — so an inbound pull can't clobber a pending local edit.
-    /// Last-writer-wins, mirroring the server-side upsert's "older-or-equal loses". The incoming
-    /// timestamp is read straight from the payload under the conventional `updatedAt` key (the same one
-    /// `SyncOfflineModel.syncUpdatedAt` reflects) — no model is constructed; an unparseable/absent one
-    /// just falls through to a normal apply.
+    /// Apply a server `payload` onto `row`, but skip the overwrite when the row has an un-pushed local
+    /// edit (its persistent id is in the dirty-set) — so an inbound pull can't clobber pending local
+    /// work. Last-writer-wins, local-wins-while-pending: the local edit is preserved until it's pushed.
     private static func applyHonoringLocalEdit<Model: SyncUpdatableModel>(
-        _ payload: SyncPayload, to row: Model
+        _ payload: SyncPayload, to row: Model, dirtyPIDs: Set<PersistentIdentifier>
     ) throws -> Bool {
-        if let local = row as? any SyncOfflineModel,
-            let incoming = payload.value(for: "updatedAt", as: Date.self),
-            local.syncUpdatedAt > incoming
-        {
-            return false
-        }
+        if dirtyPIDs.contains(row.persistentModelID) { return false }
         return try row.apply(payload)
     }
 
