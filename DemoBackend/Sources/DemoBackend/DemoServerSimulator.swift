@@ -1134,7 +1134,7 @@ public final class DemoServerSimulator {
             );
 
             CREATE TABLE IF NOT EXISTS tasks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 local_id TEXT UNIQUE,
                 deleted_at REAL NULL,
                 project_id TEXT NOT NULL,
@@ -1167,7 +1167,7 @@ public final class DemoServerSimulator {
             );
 
             CREATE TABLE IF NOT EXISTS items (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 local_id TEXT,
                 task_id INTEGER NOT NULL,
                 title TEXT NOT NULL,
