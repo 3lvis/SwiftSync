@@ -70,6 +70,9 @@ API minimal (macros + convention over configuration), worked one item at a time.
       on-brand than a coverage %. Canonical implementation: the reusable `swiftlang/github-workflows`
       `soundness.yml` (`api_breakage_check`). It only becomes meaningful with a baseline tag, so it's
       gated on the first release, not now.
+- [x] Self-hosted core-coverage evaluation + regression gate for `SwiftSync/Sources` (per-file
+      evaluation, patch gate on new core lines, no-decrease gate) — shipped in #636. Doc-only PRs skip the
+      heavy CI via `paths-ignore` — shipped in #637.
 
 ### Phase 7 — Production-sync story (foundation shipped)
 
