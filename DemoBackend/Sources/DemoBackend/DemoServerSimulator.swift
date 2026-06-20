@@ -385,7 +385,7 @@ public final class DemoServerSimulator {
             items = []
         }
 
-        return try createTaskInternal(
+        let created = try createTaskInternal(
             publicID: publicID,
             projectID: projectID,
             title: title,
@@ -397,6 +397,19 @@ public final class DemoServerSimulator {
             updatedAt: updatedAt,
             items: items
         )
+
+        // Relationship edits ride in the same create when present (mirrors /sync/upload), keeping a
+        // create-with-people a single round-trip. Reuse the row just created.
+        guard body["reviewer_ids"] is [String] || body["watcher_ids"] is [String],
+            let rowID = try taskRowID(forPublicID: publicID, includeTombstoned: true)
+        else { return created }
+        if let reviewerIDs = body["reviewer_ids"] as? [String] {
+            _ = try replaceReviewers(rowID: rowID, reviewerIDs: reviewerIDs)
+        }
+        if let watcherIDs = body["watcher_ids"] as? [String] {
+            _ = try replaceWatchers(rowID: rowID, watcherIDs: watcherIDs)
+        }
+        return try taskDetailPayload(rowID: rowID) ?? created
     }
 
     @discardableResult
@@ -582,6 +595,16 @@ public final class DemoServerSimulator {
             throw error
         }
 
+        // Relationship edits ride in the same update when present (mirrors /sync/upload), so an online
+        // people edit is one round-trip rather than separate /reviewers and /watchers calls. Absent keys
+        // leave the sets untouched; an explicit (possibly empty) array replaces them.
+        if let reviewerIDs = body["reviewer_ids"] as? [String] {
+            _ = try replaceReviewers(rowID: taskID, reviewerIDs: reviewerIDs)
+        }
+        if let watcherIDs = body["watcher_ids"] as? [String] {
+            _ = try replaceWatchers(rowID: taskID, watcherIDs: watcherIDs)
+        }
+
         guard let result = try taskDetailPayload(rowID: taskID) else {
             throw DemoBackendError.notFound(entity: "task", id: String(taskID))
         }
@@ -642,7 +665,6 @@ public final class DemoServerSimulator {
         var body = data
         body["id"] = localID
 
-        let rowID: Int
         if let existingID = try taskRowID(forPublicID: localID, includeTombstoned: true) {
             if try isStale(rowID: existingID, incoming: incoming) {
                 return [
@@ -656,22 +678,11 @@ public final class DemoServerSimulator {
                 "UPDATE tasks SET deleted_at = NULL WHERE id = ?",
                 bind: { stmt in self.sqlite.bind(int: existingID, at: 1, in: stmt) }
             )
+            // updateTaskInternal/createTask apply any reviewer_ids/watcher_ids in the body themselves,
+            // so the relationship edits ride in this one operation without a second resolve.
             _ = try updateTaskInternal(rowID: existingID, body: body)
-            rowID = existingID
         } else {
             _ = try createTask(body: body)
-            guard let createdID = try taskRowID(forPublicID: localID) else {
-                throw DemoBackendError.notFound(entity: "task", id: localID)
-            }
-            rowID = createdID
-        }
-        // Relationship edits (reviewers/watchers) ride in the same operation when present. They reuse the
-        // already-resolved row id, so they don't re-look-up the public_id.
-        if let reviewerIDs = data["reviewer_ids"] as? [String] {
-            _ = try replaceReviewers(rowID: rowID, reviewerIDs: reviewerIDs)
-        }
-        if let watcherIDs = data["watcher_ids"] as? [String] {
-            _ = try replaceWatchers(rowID: rowID, watcherIDs: watcherIDs)
         }
         return ["operation": "upsert", "localId": localID, "status": "applied"]
     }
