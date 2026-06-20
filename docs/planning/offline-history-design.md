@@ -54,16 +54,16 @@ cursor and trims the now-redundant inbound history.
   uses plain SwiftData inserts/edits/`context.delete`.
 - **Collapsed id model** (decided with the user): the client `localID` *is* the identity the backend
   adopts; there is no separate server-assigned id to map home. Push is an idempotent **upsert**, so
-  insert vs update need not be distinguished on the wire — `SyncPushResponse` is just
-  `confirmedLocalIDs` + `failures`.
+  insert vs update need not be distinguished on the wire — and confirmations need not be echoed: `upload`
+  returns only `[SyncPushFailure]`, and the library confirms everything else by complement.
 
 ## What changed in code
 
 - `Push.swift`: `SyncCursor` (= `DefaultHistoryToken`), `SwiftSync.inboundAuthor`, history-based
   `pendingChanges(for:in:)` / `push(for:in:upload:)` (cursor internal, no `changedSince`/return cursor),
   `locallyDirtyPersistentIDs`, `trimInboundHistory`, `localTransactions`, `latestToken`. The
-  insert-then-delete-before-push case is dropped (server never saw it). `SyncPushResponse` =
-  `confirmedLocalIDs` + `failures`; `SyncPushSummary` drops `cursor`.
+  insert-then-delete-before-push case is dropped (server never saw it). `upload` returns
+  `[SyncPushFailure]` (confirmations derived by complement); `SyncPushSummary` drops `cursor`.
 - `SyncCursorStore.swift`: internal `SyncCursorRecord` (per-type token) + read/write helpers.
 - `OfflineDetection.swift`: `identityPreservesValueOnDeletion` (the opt-in check) + `requireOfflineCapable`
   (push/pending throw a clear diagnostic if the identity isn't `.preserveValueOnDeletion`).

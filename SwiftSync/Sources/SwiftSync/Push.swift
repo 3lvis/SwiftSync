@@ -5,10 +5,13 @@ extension SwiftSync {
     /// The transaction author SwiftSync stamps on inbound (pull) writes, so the push side can tell
     /// server-applied changes from genuine local edits and never push pulled rows back. Local edits
     /// use the store's default author; pull writes use this one and are filtered out of `pendingChanges`.
-    public static let inboundAuthor = "swiftsync.inbound"
+    /// Internal — the consumer never references it (`SyncContainer` stamps it on inbound saves).
+    static let inboundAuthor = "swiftsync.inbound"
 }
 
-/// The local `localID`s pending a push, partitioned by operation, derived from store history.
+/// The local `localID`s pending a push, partitioned by operation, derived from store history. Both the
+/// return of `pendingChanges(...)` and the value `push(...)` hands the `upload` closure — the app maps each
+/// id to its own request payload, so SwiftData objects never cross into a network call.
 public struct SyncPendingChanges: Sendable {
     public let inserts: [String]
     public let updates: [String]
@@ -17,40 +20,17 @@ public struct SyncPendingChanges: Sendable {
     public var isEmpty: Bool { inserts.isEmpty && updates.isEmpty && deletes.isEmpty }
 }
 
-/// The `localID`s to push, partitioned by operation. Sendable; the app maps each id to its payload,
-/// so SwiftData objects never cross into a network call.
-public struct SyncPushBatch: Sendable {
-    public let inserts: [String]
-    public let updates: [String]
-    public let deletes: [String]
-
-    public var isEmpty: Bool { inserts.isEmpty && updates.isEmpty && deletes.isEmpty }
-}
-
-/// One pushed item the server rejected. `error` is the consumer's own error, bubbled up verbatim.
+/// One pushed row the server rejected: the `localID` to keep pending, and the consumer's own `error`
+/// bubbled up verbatim. The `upload` closure returns only these — everything else in the batch is treated
+/// as confirmed (the client `localID` is the identity the backend adopts, so a push is an idempotent
+/// upsert with no server-assigned ids to map home). The operation is the library's to know, not yours.
 public struct SyncPushFailure: Sendable {
-    public enum Operation: String, Equatable, Sendable { case insert, update, delete }
     public let localID: String
-    public let operation: Operation
     public let error: any Error & Sendable
 
-    public init(localID: String, operation: Operation, error: any Error & Sendable) {
+    public init(localID: String, error: any Error & Sendable) {
         self.localID = localID
-        self.operation = operation
         self.error = error
-    }
-}
-
-/// What the app's uploader reports back. The client `localID` is the identity the backend adopts, so a
-/// push is an idempotent upsert — there are no server-assigned ids to map home — and the response is
-/// just the set of acknowledged `localID`s plus any failures.
-public struct SyncPushResponse: Sendable {
-    public var confirmedLocalIDs: Set<String>
-    public var failures: [SyncPushFailure]
-
-    public init(confirmedLocalIDs: Set<String> = [], failures: [SyncPushFailure] = []) {
-        self.confirmedLocalIDs = confirmedLocalIDs
-        self.failures = failures
     }
 }
 
@@ -160,16 +140,17 @@ extension SwiftSync {
     }
 
     /// Drive one push: read pending changes from history (since the model type's last-pushed token),
-    /// hand their ids to the app's `upload` closure (the app owns the network call), then — only when
-    /// *every* pending change was acknowledged — advance the last-pushed token to the pre-upload history
-    /// boundary and trim the now-redundant inbound history. SwiftSync writes no per-row state on push; an
-    /// unacknowledged change simply stays past the token and is re-detected next push.
+    /// hand them to the app's `upload` closure (the app owns the network call) which returns only the
+    /// failures, then — only when there are **no** failures — advance the last-pushed token to the
+    /// pre-upload history boundary and trim the now-redundant inbound history. SwiftSync writes no per-row
+    /// state on push; a failed (or any un-acknowledged) change simply stays past the token and is
+    /// re-detected next push.
     @discardableResult
     public static func push<Model: SyncUpdatableModel>(
         for _: Model.Type,
         in context: ModelContext,
         isolation: isolated (any Actor)? = #isolation,
-        upload: (SyncPushBatch) async throws -> SyncPushResponse
+        upload: (SyncPendingChanges) async throws -> [SyncPushFailure]
     ) async throws -> SyncPushSummary where Model.SyncID == String {
         try requireOfflineCapable(Model.self, in: context)
         try requireOfflinePushBookkeeping(in: context)
@@ -183,23 +164,21 @@ extension SwiftSync {
         // lands during the upload await past the token, so it's re-detected next push, not swallowed.
         let boundary = transactions.last?.token
 
-        let batch = SyncPushBatch(inserts: pending.inserts, updates: pending.updates, deletes: pending.deletes)
-        let response = try await upload(batch)
+        // The uploader reports only failures; everything else in the batch is confirmed by complement.
+        let failures = try await upload(pending)
+        let failedIDs = Set(failures.map(\.localID))
 
-        let allIDs = Set(pending.inserts + pending.updates + pending.deletes)
-        let acknowledgedEverything = response.failures.isEmpty && allIDs.isSubset(of: response.confirmedLocalIDs)
-
-        if acknowledgedEverything, let boundary {
+        if failures.isEmpty, let boundary {
             try setLastPushedHistoryToken(boundary, for: Model.self, in: context)
             try? trimInboundHistory(throughInclusive: boundary, in: context)
         }
 
-        func confirmed(_ ids: [String]) -> Int { ids.filter { response.confirmedLocalIDs.contains($0) }.count }
+        func confirmed(_ ids: [String]) -> Int { ids.filter { !failedIDs.contains($0) }.count }
         return SyncPushSummary(
             insertedCount: confirmed(pending.inserts),
             updatedCount: confirmed(pending.updates),
             deletedCount: confirmed(pending.deletes),
-            failures: response.failures)
+            failures: failures)
     }
 
     /// Dirty persistent ids for the pull, but only for models that opted into offline round-trip by

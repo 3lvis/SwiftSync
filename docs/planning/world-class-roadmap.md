@@ -97,7 +97,7 @@ state; failed rows stay pending and retry; surfacing is an event stream; the inb
 
 - [ ] **Represent + report (pure-bubble).** One `SyncError` currency for everything SwiftSync throws
       (`.invalidPayload` / `.cancelled` / `.schemaValidation` / `.containerInitialization`). For per-row
-      *partial* push rejections, `push()` returns the outcomes (`failures: [{localID, operation, error}]`)
+      *partial* push rejections, `push()` returns the outcomes (`failures: [{localID, error}]`)
       and marks succeeded rows synced / leaves failed rows pending — it persists **nothing** on models
       (no `syncFailureReason`/`syncFailureCode` on `SyncOfflineModel`). The consumer owns any inbox
       persistence and reads the backend's own error in its `upload` closure. *Demo:* the engine annotates

@@ -29,9 +29,7 @@ final class OfflinePushTests: XCTestCase {
             configurations: ModelConfiguration(url: directory.appendingPathComponent("store.sqlite")))
     }
 
-    private func confirmAll(_ batch: SyncPushBatch) -> SyncPushResponse {
-        SyncPushResponse(confirmedLocalIDs: Set(batch.inserts + batch.updates + batch.deletes))
-    }
+    private func noFailures(_ pending: SyncPendingChanges) -> [SyncPushFailure] { [] }
 
     /// History-derived partitioning: after a baseline push makes some rows "synced" (behind the
     /// token), a fresh round of local edits partitions into insert/update/delete — and a row inserted
@@ -43,7 +41,7 @@ final class OfflinePushTests: XCTestCase {
         for id in ["a", "b", "d"] { context.insert(PushNote(id: id, title: id)) }
         try context.save()
         // Baseline push: a, b, d become synced (token advances past their inserts).
-        _ = try await SwiftSync.push(for: PushNote.self, in: context, upload: confirmAll)
+        _ = try await SwiftSync.push(for: PushNote.self, in: context, upload: noFailures)
 
         try mutate(context) { $0.first { $0.id == "b" }?.title = "edited" }  // update
         try delete("d", in: context)  // delete
@@ -67,9 +65,9 @@ final class OfflinePushTests: XCTestCase {
         context.insert(PushNote(id: "c1", title: "insert"))
         try context.save()
 
-        let summary = try await SwiftSync.push(for: PushNote.self, in: context) { batch in
-            XCTAssertEqual(batch.inserts, ["c1"])
-            return self.confirmAll(batch)
+        let summary = try await SwiftSync.push(for: PushNote.self, in: context) { pending in
+            XCTAssertEqual(pending.inserts, ["c1"])
+            return []
         }
 
         XCTAssertEqual(summary.insertedCount, 1)
@@ -86,9 +84,7 @@ final class OfflinePushTests: XCTestCase {
         try context.save()
 
         let summary = try await SwiftSync.push(for: PushNote.self, in: context) { _ in
-            SyncPushResponse(failures: [
-                SyncPushFailure(localID: "c1", operation: .insert, error: PushTestError(message: "422"))
-            ])
+            [SyncPushFailure(localID: "c1", error: PushTestError(message: "422"))]
         }
 
         XCTAssertEqual(summary.failures.first?.localID, "c1")
@@ -102,35 +98,37 @@ final class OfflinePushTests: XCTestCase {
         let context = container.mainContext
         context.insert(PushNote(id: "u1", title: "v1"))
         try context.save()
-        _ = try await SwiftSync.push(for: PushNote.self, in: context, upload: confirmAll)  // synced
+        _ = try await SwiftSync.push(for: PushNote.self, in: context, upload: noFailures)  // synced
 
         try mutate(context) { $0.first { $0.id == "u1" }?.title = "v2" }
         try context.save()
 
         _ = try await SwiftSync.push(for: PushNote.self, in: context) { _ in
-            SyncPushResponse(failures: [
-                SyncPushFailure(localID: "u1", operation: .update, error: PushTestError(message: "500"))
-            ])
+            [SyncPushFailure(localID: "u1", error: PushTestError(message: "500"))]
         }
         XCTAssertEqual(
             try SwiftSync.pendingChanges(for: PushNote.self, in: context).updates, ["u1"],
             "an unacknowledged update stays pending")
     }
 
-    /// `updatedCount` reflects only rows actually in this batch, not extra ids the server echoes.
-    func testUpdatedCountIgnoresIDsOutsideTheBatch() async throws {
+    /// Counts are the batch minus the reported failures: a partial rejection confirms the rest by
+    /// complement. Because *any* failure freezes the token, even the confirmed rows stay pending and are
+    /// re-detected next push (at-least-once).
+    func testCountsAreBatchMinusFailures() async throws {
         let container = try makeContainer()
         let context = container.mainContext
-        context.insert(PushNote(id: "u1", title: "v1"))
-        try context.save()
-        _ = try await SwiftSync.push(for: PushNote.self, in: context, upload: confirmAll)  // synced
-        try mutate(context) { $0.first { $0.id == "u1" }?.title = "v2" }
+        context.insert(PushNote(id: "c1", title: "ok"))
+        context.insert(PushNote(id: "c2", title: "rejected"))
         try context.save()
 
         let summary = try await SwiftSync.push(for: PushNote.self, in: context) { _ in
-            SyncPushResponse(confirmedLocalIDs: ["u1", "ghost-not-in-batch"])
+            [SyncPushFailure(localID: "c2", error: PushTestError(message: "422"))]
         }
-        XCTAssertEqual(summary.updatedCount, 1, "only the in-batch update counts, not server echoes")
+        XCTAssertEqual(summary.insertedCount, 1, "c1 confirmed by complement; c2 failed")
+        XCTAssertEqual(summary.failures.map(\.localID), ["c2"])
+        XCTAssertEqual(
+            try SwiftSync.pendingChanges(for: PushNote.self, in: context).inserts.sorted(), ["c1", "c2"],
+            "a failure freezes the token, so even the confirmed row is re-detected")
     }
 
     /// A local write during the upload await wasn't in the batch, so the token must not advance past it:
@@ -141,12 +139,12 @@ final class OfflinePushTests: XCTestCase {
         context.insert(PushNote(id: "p1", title: "first"))
         try context.save()
 
-        let summary = try await SwiftSync.push(for: PushNote.self, in: context) { batch in
-            XCTAssertEqual(batch.inserts, ["p1"])
+        let summary = try await SwiftSync.push(for: PushNote.self, in: context) { pending in
+            XCTAssertEqual(pending.inserts, ["p1"])
             // A new local row appears after the batch was captured, while "uploading".
             context.insert(PushNote(id: "p2", title: "during upload"))
             try context.save()
-            return self.confirmAll(batch)
+            return []
         }
 
         XCTAssertEqual(summary.insertedCount, 1)
@@ -172,9 +170,9 @@ final class OfflinePushTests: XCTestCase {
 
         var uploadCalled = false
         do {
-            _ = try await SwiftSync.push(for: PushNote.self, in: context) { batch in
+            _ = try await SwiftSync.push(for: PushNote.self, in: context) { _ in
                 uploadCalled = true
-                return self.confirmAll(batch)
+                return []
             }
             XCTFail("expected push to throw when the bookkeeping model is not registered")
         } catch {
