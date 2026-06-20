@@ -30,7 +30,7 @@ git history is the memory.
 1. [x] ~~Remove `SyncContext` + local-write `sync(item:)`~~ — **done** (single-object `sync(item:)` applies on main, bulk off-main; `SyncContext` deleted)
 2. [x] ~~Macro-generate `SyncOfflineModel`~~ — **superseded**: offline now rides SwiftData History, so there is no `SyncOfflineModel` to generate. Models carry zero offline fields; offline is opted in by marking the identity `@Attribute(.preserveValueOnDeletion)`. See `docs/planning/offline-history-design.md`.
 3. [x] ~~Drop `syncFailureReason` from the protocol~~ — **done** (#624: removed from `SyncOfflineModel`)
-4. [ ] Generalize the inbound LWW timestamp key — convention today, macro later
+4. [x] ~~Generalize the inbound LWW timestamp key~~ — **stale**: superseded by the history dirty-set (see §4)
 5. [ ] Tighten the push response seam (5 public structs)
 6. [x] ~~Unify the three error types into `SyncError`~~ — **done** (#624: `SchemaValidationError` + `ObjectiveCInitializationExceptionError` folded into `SyncError`)
 7. [ ] Demote the reactive publishers to `internal`
@@ -109,21 +109,18 @@ the macro must not generate this field — it's gone.
 
 ---
 
-## 4. Generalize the inbound last-writer-wins timestamp key
+## 4. Generalize the inbound last-writer-wins timestamp key — 🪦 stale (superseded)
 
-**Context.** The pull's per-row LWW (stops a refresh from clobbering an un-pushed local edit, merged in
-#625) reads the incoming timestamp from the payload under the **conventional** `updatedAt` / `updated_at`
-key. An offline model whose timestamp uses a `@RemoteKey` rename **silently skips LWW** (degrades to a
-plain apply — i.e. pre-#625 behavior). This is convention-over-configuration working *today* with one
-blind spot.
+This item assumed the pull does per-row LWW by reading the incoming `updatedAt` from the payload under a
+**conventional** key, and worried that a `@RemoteKey`-renamed timestamp would silently skip it.
 
-**Target.** Once #2 exists, the macro surfaces the model's timestamp remote key (ties to
-`@SyncUpdatedAt`), and LWW reads the right key — no convention blind spot, still zero consumer config.
-
-**Decision needed.** Only act when a real consumer hits the rename case; fold into #2's macro work rather
-than adding standalone API.
-
-**Scope/risk.** Internal; ties to #2. No standalone public API.
+That mechanism no longer exists. The offline-via-SwiftData-History rework replaced timestamp-based client
+LWW with a **history dirty-set**: `applyHonoringLocalEdit` (`API.swift`) keeps any row whose persistent id
+is in `offlineDirtyPersistentIDs` (rows with un-pushed local-authored history since the push token) and
+applies the server otherwise. The client reads **no timestamp at all** — it's "local-wins-while-pending,"
+and the actual timestamp conflict resolution lives on the backend at push time (where the consumer's
+`upload` closure owns the payload). So the `@RemoteKey`-rename blind spot can't occur; there's nothing to
+generalize. Same fate as #2 (`SyncOfflineModel`), superseded by the same rework.
 
 ---
 
