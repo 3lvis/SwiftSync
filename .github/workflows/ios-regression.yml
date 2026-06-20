@@ -1,13 +1,14 @@
-name: iOS Regression
+name: iOS Simulator
 
-# Pre-merge gate: the dirty-tracking gap is iOS-specific, so the macOS `swift test`
-# in ci.yml can pass while iOS behaves differently. Run the iOS-Simulator regression
-# on every PR (and on master pushes) so it can actually block a regression — a
-# post-merge-only check only reports the breakage after it has already landed.
+# Ready-gated pre-merge tier: the slow, simulator-bound checks (iOS dirty-tracking regression and the
+# UI suite). These cost a simulator boot + app build, so they run only once a PR is marked ready for
+# review — not on every draft push during iteration. `ready_for_review` is in `types` because marking a
+# draft ready adds no commit and would otherwise not re-trigger anything; the `if` on each job skips
+# them while the PR is still a draft (a skipped required check still reports success, so drafts stay
+# mergeable-clean). No `push: master` trigger: this tier gates pre-merge only.
 on:
   pull_request:
-  push:
-    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -20,6 +21,7 @@ jobs:
   ios-dirty-tracking:
     name: iOS Dirty-Tracking Regression
     runs-on: macos-15
+    if: github.event.pull_request.draft == false
 
     steps:
       - uses: actions/checkout@v5
@@ -56,3 +58,50 @@ jobs:
             -scheme DemoCore \
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -only-testing:DemoCoreTests/DirtyTrackingGapTests
+
+  ui-tests:
+    name: UI Tests
+    runs-on: macos-15
+    if: github.event.pull_request.draft == false
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Xcode Version
+        run: xcodebuild -version && swift --version
+
+      - name: Select an available iPhone simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          candidates = [
+              d for runtime, ds in devices.items() if "iOS" in runtime
+              for d in ds if d.get("isAvailable") and "iPhone" in d.get("name", "")
+          ]
+          print(candidates[0]["udid"] if candidates else "")
+          ')
+          if [ -z "$UDID" ]; then
+            echo "::error::No available iPhone simulator found on the runner."
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "Using iPhone simulator $UDID"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      # The whole DemoUITests target via the Demo app scheme. No code signing on the simulator.
+      # `-retry-tests-on-failure` absorbs the occasional first-launch/UI-timing flake without masking a
+      # genuinely broken test (a real failure still fails every attempt).
+      - name: Test — DemoUITests (iOS Simulator)
+        run: |
+          xcodebuild test \
+            -workspace SwiftSync.xcworkspace \
+            -scheme Demo \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -only-testing:DemoUITests \
+            -parallel-testing-enabled NO \
+            -retry-tests-on-failure \
+            -test-iterations 3 \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY=''
