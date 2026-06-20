@@ -66,9 +66,8 @@ public final class TaskStateOption {
 @Syncable
 @Model
 public final class Task {
-    // `.preserveValueOnDeletion` keeps the id readable in the store's delete history (so a plain
-    // `context.delete` lets the push side recover the deleted id) and is how SwiftSync marks this
-    // model as offline-pushable.
+    // `.preserveValueOnDeletion` is SwiftSync's offline-push opt-in: it keeps the id recoverable from
+    // delete history so a hard `context.delete` can still be pushed.
     @Attribute(.unique, .preserveValueOnDeletion) public var id: String
 
     public var projectID: String

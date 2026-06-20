@@ -41,9 +41,9 @@ public struct SyncPushFailure: Sendable {
     }
 }
 
-/// What the app's uploader reports back. Under the collapsed id model (the client `localID` is the
-/// identity the backend adopts), a push is an idempotent upsert — there are no server-assigned ids to
-/// map home — so the response is just the set of acknowledged `localID`s plus any failures.
+/// What the app's uploader reports back. The client `localID` is the identity the backend adopts, so a
+/// push is an idempotent upsert — there are no server-assigned ids to map home — and the response is
+/// just the set of acknowledged `localID`s plus any failures.
 public struct SyncPushResponse: Sendable {
     public var confirmedLocalIDs: Set<String>
     public var failures: [SyncPushFailure]
@@ -86,10 +86,8 @@ extension SwiftSync {
         try pendingChanges(from: localTransactions(since: token, in: context), for: Model.self, in: context)
     }
 
-    /// Partition an already-read slice of local history into pending inserts/updates/deletes. Split out
-    /// so `push` can capture the history boundary from the *same* read it derives the batch from — and
-    /// advance only to that boundary — instead of re-reading after the upload await (which would let a
-    /// concurrent local write slip behind the token and never be pushed).
+    /// Separate from the token-driven overload so `push` derives the batch and its pre-upload boundary
+    /// token from a single history read (see the boundary capture in `push`).
     static func pendingChanges<Model: SyncUpdatableModel>(
         from transactions: [DefaultHistoryTransaction],
         for _: Model.Type,
@@ -163,8 +161,8 @@ extension SwiftSync {
 
     /// Drive one push: read pending changes from history (since the model type's last-pushed token),
     /// hand their ids to the app's `upload` closure (the app owns the network call), then — only when
-    /// *every* pending change was acknowledged — advance the last-pushed token to the current history
-    /// head and trim the now-redundant inbound history. SwiftSync writes no per-row state on push; an
+    /// *every* pending change was acknowledged — advance the last-pushed token to the pre-upload history
+    /// boundary and trim the now-redundant inbound history. SwiftSync writes no per-row state on push; an
     /// unacknowledged change simply stays past the token and is re-detected next push.
     @discardableResult
     public static func push<Model: SyncUpdatableModel>(
@@ -174,9 +172,6 @@ extension SwiftSync {
         upload: (SyncPushBatch) async throws -> SyncPushResponse
     ) async throws -> SyncPushSummary where Model.SyncID == String {
         try requireOfflineCapable(Model.self, in: context)
-        // Fail before the upload, not after: advancing the token writes the hidden bookkeeping model, and
-        // if it isn't in this context's schema that write throws *after* the server already applied the
-        // upload — stranding the server ahead of local state.
         try requireOfflinePushBookkeeping(in: context)
         let token = lastPushedHistoryToken(for: Model.self, in: context)
         let transactions = try localTransactions(since: token, in: context)
@@ -184,9 +179,8 @@ extension SwiftSync {
         guard !pending.isEmpty else {
             return SyncPushSummary(insertedCount: 0, updatedCount: 0, deletedCount: 0, failures: [])
         }
-        // The history head as observed *before* the upload — the batch covers exactly the changes up to
-        // here. Advancing only to this boundary leaves any write that lands during the upload await past
-        // the token, so it is re-detected next push instead of being silently swallowed.
+        // The history head observed *before* the upload. Advancing only to here leaves any write that
+        // lands during the upload await past the token, so it's re-detected next push, not swallowed.
         let boundary = transactions.last?.token
 
         let batch = SyncPushBatch(inserts: pending.inserts, updates: pending.updates, deletes: pending.deletes)

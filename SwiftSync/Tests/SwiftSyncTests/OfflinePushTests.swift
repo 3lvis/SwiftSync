@@ -34,7 +34,7 @@ final class OfflinePushTests: XCTestCase {
     }
 
     /// History-derived partitioning: after a baseline push makes some rows "synced" (behind the
-    /// cursor), a fresh round of local edits partitions into insert/update/delete — and a row inserted
+    /// token), a fresh round of local edits partitions into insert/update/delete — and a row inserted
     /// *and* deleted before any push is dropped, since the server never saw it.
     func testPartitionsPendingChangesFromHistory() async throws {
         let container = try makeContainer()
@@ -42,7 +42,7 @@ final class OfflinePushTests: XCTestCase {
 
         for id in ["a", "b", "d"] { context.insert(PushNote(id: id, title: id)) }
         try context.save()
-        // Baseline push: a, b, d become synced (cursor advances past their inserts).
+        // Baseline push: a, b, d become synced (token advances past their inserts).
         _ = try await SwiftSync.push(for: PushNote.self, in: context, upload: confirmAll)
 
         try mutate(context) { $0.first { $0.id == "b" }?.title = "edited" }  // update
@@ -60,7 +60,7 @@ final class OfflinePushTests: XCTestCase {
         XCTAssertEqual(pending.deletes.sorted(), ["d"])
     }
 
-    /// A fully-acknowledged push advances the cursor, so nothing is left pending afterwards.
+    /// A fully-acknowledged push advances the token, so nothing is left pending afterwards.
     func testFullyAcknowledgedPushClearsPending() async throws {
         let container = try makeContainer()
         let context = container.mainContext
@@ -78,7 +78,7 @@ final class OfflinePushTests: XCTestCase {
     }
 
     /// Pure-bubble: a rejected row's error is returned verbatim and nothing is written to the store, so
-    /// the row stays pending (the cursor does not advance) and is re-detected next push.
+    /// the row stays pending (the token does not advance) and is re-detected next push.
     func testRejectedInsertBubblesAndStaysPending() async throws {
         let container = try makeContainer()
         let context = container.mainContext
@@ -96,7 +96,7 @@ final class OfflinePushTests: XCTestCase {
         XCTAssertEqual(try SwiftSync.pendingChanges(for: PushNote.self, in: context).inserts, ["c1"])
     }
 
-    /// An unacknowledged change must not advance the cursor, or it would silently fall out of detection.
+    /// An unacknowledged change must not advance the token, or it would silently fall out of detection.
     func testUnacknowledgedPushKeepsChangePending() async throws {
         let container = try makeContainer()
         let context = container.mainContext
@@ -133,9 +133,8 @@ final class OfflinePushTests: XCTestCase {
         XCTAssertEqual(summary.updatedCount, 1, "only the in-batch update counts, not server echoes")
     }
 
-    /// A local write that lands *during* the `upload` await is not in the uploaded batch. The token must
-    /// advance only to the boundary captured before upload, so that write stays pending — never swallowed
-    /// behind an advanced token and permanently missed.
+    /// A local write during the upload await wasn't in the batch, so the token must not advance past it:
+    /// it stays pending rather than being silently swallowed.
     func testLocalWriteDuringUploadStaysPending() async throws {
         let container = try makeContainer()
         let context = container.mainContext
@@ -156,10 +155,8 @@ final class OfflinePushTests: XCTestCase {
             "a local write during upload must survive the token advance")
     }
 
-    /// `push` records its last-pushed token after the upload is acknowledged. If SwiftSync's hidden
-    /// bookkeeping model isn't in the schema (the caller built their own container instead of using
-    /// `SyncContainer`), that write would throw *after* the server already applied the upload — stranding
-    /// the server ahead of local state. Push must fail fast, before uploading.
+    /// Push must fail before uploading when the bookkeeping model is missing, so an acknowledged server
+    /// write is never stranded by a token write that throws afterward.
     func testPushFailsBeforeUploadingWhenBookkeepingModelMissing() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("no-bookkeeping-\(UUID().uuidString)", isDirectory: true)

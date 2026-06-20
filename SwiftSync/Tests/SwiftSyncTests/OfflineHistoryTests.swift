@@ -47,7 +47,7 @@ final class OfflineHistoryTests: XCTestCase {
         XCTAssertTrue(pending.updates.isEmpty)
         XCTAssertTrue(pending.deletes.isEmpty)
 
-        // Push it so it's "synced" (cursor advances past its insert); now a later delete is a genuine
+        // Push it so it's "synced" (token advances past its insert); now a later delete is a genuine
         // pending deletion rather than an insert-then-delete the server never saw.
         _ = try await SwiftSync.push(for: HistoryRow.self, in: local) { batch in
             SyncPushResponse(confirmedLocalIDs: Set(batch.inserts))

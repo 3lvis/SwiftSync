@@ -260,10 +260,10 @@ public final class DemoSyncEngine {
 
     /// Serialize the pending batch into the `/sync/upload` operation list, POST it once, and map the
     /// per-operation results back into a `SyncPushResponse`. Every created-or-edited row is an `upsert`
-    /// keyed by its stable `localId` (the server find-by-localId → update-else-creates, minting and
-    /// returning a distinct `remoteId` on first create); tombstones are a `delete` by the same
-    /// `localId`. A `stale` result means the server won last-writer-wins — adopt its state locally and
-    /// treat the row as resolved so it isn't re-sent.
+    /// keyed by its stable `localId` (the server find-by-localId → update-else-creates, adopting that
+    /// `localId` as the row's identity — no distinct server id comes back); tombstones are a `delete` by
+    /// the same `localId`. A `stale` result means the server won last-writer-wins — adopt its state
+    /// locally and treat the row as resolved so it isn't re-sent.
     private func upload(_ batch: SyncPushBatch) async throws -> SyncPushResponse {
         var operations: [[String: Any]] = []
 
@@ -293,8 +293,8 @@ public final class DemoSyncEngine {
             let localID = result["localId"] as? String
             switch (operation, status) {
             case ("upsert", "applied"), ("upsert", "stale"):
-                // Under the collapsed id model the localId is the identity the server adopts, so an
-                // applied upsert just acknowledges the row — there's no server id to map home.
+                // The localId is the identity the server adopts, so an applied upsert just acknowledges
+                // the row — there's no server id to map home.
                 if let localID { response.confirmedLocalIDs.insert(localID) }
                 if status == "stale", let server = result["server"] as? [String: Any] {
                     try? await syncContainer.sync(
