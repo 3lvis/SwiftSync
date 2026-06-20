@@ -53,10 +53,10 @@ private enum DemoSeedTaskID {
 final class DemoUITests: XCTestCase {
     /// A people-edit save runs three sequential refresh cycles, so the form dismisses just past the old
     /// 0.5s budget (which flaked); 1s asserts the form closes without re-introducing the flake.
-    // Generous ceiling, not a tuned number: waitForNonExistence returns the instant the form dismisses,
-    // so a large value never slows a passing test — it only stops false failures when the shared CI
-    // runner is slow (a tight 1s flaked unrelated save tests under load).
-    private let saveDismissTimeout: TimeInterval = 10
+    // The people-edit save is one server round-trip, so the form dismisses in well under a second;
+    // 3s is headroom for normal CI jitter. waitForNonExistence returns the instant it dismisses, so a
+    // passing test isn't slowed — and on a real failure it fails in 3s, not a bloated ceiling × retries.
+    private let saveDismissTimeout: TimeInterval = 3
 
     override func setUpWithError() throws {
         continueAfterFailure = false

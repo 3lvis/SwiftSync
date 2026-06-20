@@ -126,11 +126,11 @@ is a separate SPM product (↔ Networking items 5–6).
 - [x] **Consolidate the online people-edit save into one round-trip.** Done: `updateTask`/`createTask`
       now honor `reviewer_ids`/`watcher_ids` in the task body (the `.save` handler in `ScreenMachines.swift`
       adds the `@NotExport` people to the body and drops the separate `replaceTaskReviewers`/
-      `replaceTaskWatchers` calls), so a people edit is a single server round-trip. Separately, all the
-      UI save-dismiss waits were unified on a generous `saveDismissTimeout` (10s): the first CI UI run
-      showed a slow shared runner flaking unrelated save tests at the old tight 1s/2s ceilings, and a
-      `waitForNonExistence` ceiling returns the instant the form dismisses, so generous never slows a
-      passing test (the durability rule — pin a behavioral ceiling, not a machine-tuned number).
+      `replaceTaskWatchers` calls), so a people edit is a single server round-trip. The offline local
+      apply (`applyLocalTask`) sets the `@NotExport` reviewers/watchers relationships from the body, since
+      `apply()` won't — so an offline people edit shows before any round-trip. UI save-dismiss waits were
+      unified on one `saveDismissTimeout` (3s — sized for a one-round-trip save plus CI jitter, not a
+      bloated ceiling: `waitForNonExistence` returns on dismiss, so a real failure still fails fast).
 
 ### Offline / two-id identity model — follow-ups (PR #632)
 
