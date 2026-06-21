@@ -47,14 +47,18 @@ Built on the push-seam work in **#644** (`withPendingChanges` + `process` closur
 ## Revised architecture (decided during implementation)
 
 - **No separate `SyncEngine` type — `SyncContainer` absorbs the outbound machinery.** It's the object
-  the app already injects, so it owns `register(_:for:)`, `drain() -> [SyncPushFailure]`, `isOnline`
-  (auto-drains on reconnect), and an `onDrainComplete` handler for the reconnect result. The
+  the app already injects, so it owns `register(_:for:)`, `drain() async throws -> [SyncPushFailure]?`,
+  `isOnline` (auto-drains on reconnect), and an `onDrainComplete` handler for the reconnect result. The
   `sync(payload:)` path and the cross-thread `@objc` did-save handler are left untouched, so bulk sync
-  stays off-main and `SyncContainer` stays a plain `@unchecked Sendable NSObject` (no `@Observable` /
-  `@MainActor` reshuffle, no unsound `@unchecked` + observable-state combination).
+  stays off-main and `SyncContainer` stays a plain `@unchecked Sendable NSObject` (no `@Observable`
+  reshuffle) — but the outbound state (`isOnline` / `onDrainComplete` / the drain tasks) is
+  **`@MainActor`-isolated** so reachability callbacks can't race it.
+- **`drain()` has three outcomes, and concurrent drains coalesce.** `nil` = skipped (offline), `throws`
+  = didn't complete (backend error — rows stay pending), `[]`/`[..]` = completed. A drain already in
+  flight serves every concurrent caller, so a push-before-pull awaits the running upload instead of
+  racing it.
 - **Counts are NOT library state.** `pendingCount` / `failedCount` are a UI concern the app derives from
-  the existing `pendingChanges` primitive + the failures `drain()` returns. The library keeps no UI
-  state. (Shipped: library side done — `SyncContainerOutboundTests`, 175 green.)
+  the existing `pendingChanges` primitive + the failures `drain()` returns. The library keeps no UI state.
 
 ## Sequencing principle
 
@@ -161,16 +165,17 @@ consumer to justify it yet.)
 ## Section 6 — Cleanup, docs, verification — **done**
 
 - [x] No dead demo code; the per-resource REST endpoints stay (online writes still use them).
-- [x] README + this doc updated; `world-class-roadmap.md` points here.
-- [x] Demo app builds on a dynamically-selected simulator; DemoCore 42 / DemoBackend 30 / SwiftSync 175 green.
+- [x] README (the "Offline Push" section) + this doc updated; `world-class-roadmap.md` points here.
+- [x] Demo app builds on a dynamically-selected simulator; DemoCore 42 / DemoBackend 30 / SwiftSync 178 green.
 
 ---
 
 ## Outcome
 
-- **Library (`SyncContainer`):** `SyncBackend` + `register(_:for:)` + `drain() -> [SyncPushFailure]` +
-  `isOnline` (auto-drains on reconnect) + `onDrainComplete`. No UI state; off-main `sync(payload:)` and the
-  did-save handler untouched; stays a plain `@unchecked Sendable NSObject`.
+- **Library (`SyncContainer`):** `SyncBackend` + `register(_:for:)` + `drain() async throws ->
+  [SyncPushFailure]?` (coalescing) + `isOnline` (auto-drains on reconnect) + `onDrainComplete`. Outbound
+  state is `@MainActor`-isolated; off-main `sync(payload:)` and the did-save handler untouched; the class
+  stays a plain `@unchecked Sendable NSObject`. No UI state.
 - **Demo:** `upload`/`taskData` → `TaskBackend: SyncBackend`; `pushPendingChanges` → `syncContainer.drain()`;
   `isOffline` drives `isOnline`; `ContentView`'s manual reconnect `onChange` deleted. `DemoSyncEngine` shed
   the push orchestration/transport/reconnect (−112 lines in that file). The demo keeps its own counts +

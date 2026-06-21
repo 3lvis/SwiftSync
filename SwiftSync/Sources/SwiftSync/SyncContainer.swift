@@ -26,22 +26,23 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     public let keyStyle: KeyStyle
     public let dateFormatter: DateFormatter
 
-    // MARK: Outbound sync (queue drain)
+    // MARK: Outbound sync (queue drain) — all state is main-actor-isolated.
 
     /// App-fed reachability. Flipping offline→online drains the queue automatically.
-    public var isOnline = true {
+    @MainActor public var isOnline = true {
         didSet {
             if isOnline && !oldValue { scheduleDrain() }
         }
     }
     /// Called with the rejected rows after an *automatic* (reconnect) drain — the hook for drains the app
     /// didn't trigger. Manual `drain()` callers get the result directly.
-    public var onDrainComplete: (@MainActor ([SyncPushFailure]) -> Void)?
+    @MainActor public var onDrainComplete: (@MainActor ([SyncPushFailure]) -> Void)?
 
-    private var outboundRegistrations: [OutboundRegistration] = []
-    private var isDraining = false
+    @MainActor private var outboundRegistrations: [OutboundRegistration] = []
+    /// The drain in progress, if any — concurrent callers coalesce onto it rather than racing or skipping.
+    @MainActor private var activeDrain: Task<[SyncPushFailure]?, Error>?
     /// The in-flight reconnect drain — internal so tests can await it.
-    private(set) var inFlightDrain: Task<Void, Never>?
+    @MainActor private(set) var inFlightDrain: Task<Void, Never>?
 
     @MainActor
     public init(
@@ -271,19 +272,27 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     @MainActor
     @discardableResult
     public func drain() async throws -> [SyncPushFailure]? {
-        guard isOnline, !isDraining else { return nil }
-        isDraining = true
-        defer { isDraining = false }
+        guard isOnline else { return nil }
+        // Coalesce: a drain already in flight serves every concurrent caller, so a push-before-pull awaits
+        // the running upload instead of racing it (and the same batch is never pushed twice).
+        if let activeDrain { return try await activeDrain.value }
 
-        var collected: [SyncPushFailure] = []
-        for registration in outboundRegistrations {
-            // Propagate, don't swallow: a swallowed error would read as a clean drain and let the caller
-            // clear its inbox. The row stays pending (the token only advances on a clean return) to retry.
-            collected += try await registration.drain()
+        let registrations = outboundRegistrations
+        let task = Task { @MainActor () async throws -> [SyncPushFailure]? in
+            var collected: [SyncPushFailure] = []
+            for registration in registrations {
+                // Propagate, don't swallow: a swallowed error would read as a clean drain and let the
+                // caller clear its inbox. The row stays pending (the token only advances on a clean return).
+                collected += try await registration.drain()
+            }
+            return collected
         }
-        return collected
+        activeDrain = task
+        defer { activeDrain = nil }
+        return try await task.value
     }
 
+    @MainActor
     private func scheduleDrain() {
         inFlightDrain = Task { @MainActor [weak self] in
             guard let self else { return }

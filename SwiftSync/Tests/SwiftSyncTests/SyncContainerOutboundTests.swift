@@ -26,6 +26,21 @@ private struct ThrowingBackend: SyncBackend {
     func push(_ pending: SyncPendingChanges) async throws -> [SyncPushFailure] { throw PushError() }
 }
 
+/// Parks inside `push` until `release()`, so a test can hold a drain in flight while it starts another.
+private actor GatedBackend: SyncBackend {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private(set) var pushCount = 0
+    func push(_ pending: SyncPendingChanges) async throws -> [SyncPushFailure] {
+        pushCount += 1
+        await withCheckedContinuation { continuation = $0 }
+        return []
+    }
+    func release() {
+        continuation?.resume()
+        continuation = nil
+    }
+}
+
 @MainActor
 final class SyncContainerOutboundTests: XCTestCase {
     private func makeContainer(isOnline: Bool = true) throws -> SyncContainer {
@@ -118,6 +133,25 @@ final class SyncContainerOutboundTests: XCTestCase {
         XCTAssertEqual(
             try SwiftSync.pendingChanges(for: PushNote.self, in: container.mainContext).inserts, ["n1"],
             "a failed drain advances nothing — the row stays pending")
+    }
+
+    func testConcurrentDrainsCoalesceOntoOneInFlightDrain() async throws {
+        let container = try makeContainer()
+        let backend = GatedBackend()
+        container.register(backend, for: PushNote.self)
+        try insert("n1", in: container)
+
+        async let first: [SyncPushFailure]? = container.drain()
+        while await backend.pushCount == 0 { await Task.yield() }  // first is now parked inside push()
+        async let second: [SyncPushFailure]? = container.drain()
+        await Task.yield()
+        await backend.release()
+        _ = try await first
+        let secondResult = try await second
+
+        let pushCount = await backend.pushCount
+        XCTAssertEqual(pushCount, 1, "a concurrent drain coalesces into the in-flight one")
+        XCTAssertNotNil(secondResult, "the coalesced drain awaits and returns the result, not a nil skip")
     }
 
     func testReconnectDoesNotReportWhenBackendThrows() async throws {

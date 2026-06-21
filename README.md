@@ -642,6 +642,26 @@ let failures = try await SwiftSync.withPendingChanges(for: Task.self, in: syncCo
 // No history token to persist — SwiftSync owns it. `failures` is empty on a fully clean pass.
 ```
 
+### Auto-drain on reconnect
+
+`withPendingChanges` is the primitive — you decide when to call it. For the common "just sync my edits" case, register a transport once and let the container drive it:
+
+```swift
+struct TaskBackend: SyncBackend {
+  func push(_ pending: SyncPendingChanges) async throws -> [SyncPushFailure] {
+    // same body as the withPendingChanges closure above
+  }
+}
+
+syncContainer.register(TaskBackend(), for: Task.self)
+syncContainer.isOnline = reachability.isOnline   // flipping false→true auto-drains the queue
+syncContainer.onDrainComplete = { failures in /* reconnect drain finished — surface failures */ }
+
+let failures = try await syncContainer.drain()    // or drain on demand
+```
+
+`drain()` returns `nil` if it was skipped (offline, or a drain is already running — concurrent drains coalesce onto the in-flight one), **throws** if the push didn't complete (a transport/server error — the rows stay pending), and otherwise returns the rejected rows (`[]` is a fully clean drain). The outbound state is main-actor-isolated.
+
 Inbound pulls are tagged internally so a freshly-pulled row is never mistaken for a local edit; an un-pushed local insert survives a pull that omits it, and a newer local edit isn't clobbered by an older server version (last-writer-wins). Offline requires a persistent store (history is unavailable to ephemeral stores).
 
 ## Date Handling
