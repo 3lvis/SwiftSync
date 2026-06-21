@@ -48,6 +48,31 @@ Baseline: ~685 comment-bearing lines across 38 files (crude count, over-counts m
     `push` was renamed to `withPendingChanges`; the backtick refs pointed at a symbol that no longer exists.
   - **API note (deferred):** the consumer operation reads as "push" in all prose but the method is named
     `withPendingChanges`. Consider a `push`-named entry point or doc alias — an API change, not a comment fix.
+  - **Architecture (done, same branch):** `API.swift` held zero `public` declarations — it was the internal
+    sync engine misnamed as the public layer (the public surface lives on `SyncContainer`/`Core`/`Push`/
+    `ReactiveQuery`).
+    - The reconcile engine became `ModelContext` methods: `context.sync(payload:/item:…)` in
+      `ModelContext+Sync.swift`. The mutated thing is the receiver, so `in: context` threading is gone at
+      ~205 call sites, and the `SwiftSync.sync` vs `SyncContainer.sync` verb collision evaporates. Domain
+      calls inside the loop are explicit (`SwiftSync.identityKey(…)`) — opaque before, clear now.
+    - All `SwiftSync`-static reconcile helpers consolidated into one `SwiftSync+Helpers.swift`
+      (`normalize`/`resolveIdentity`/`identityKey`/`scopedIdentityKey`/`syncIdentityHasUniqueAttribute`/
+      `fetchUniqueRow`/`resolveParent`/`isCancellation`/`withRelationshipLookupCache`) — no proliferation of
+      `SwiftSync+X` files, no free functions.
+    - `throwIfCancelled` deleted in favor of stdlib `try Task.checkCancellation()` (behavior-neutral — the
+      `catch` already converts any cancellation → rollback → `SyncError.cancelled`).
+    - Moved the inbound-pull local-edit helpers (`isUnsyncedLocalInsert`/`applyHonoringLocalEdit`) to
+      `Push.swift` beside the dirty-set producers they consume.
+    - **Serialization, judged from first principles:** the old per-container lease was a *global keyed
+      singleton* (`private static let syncLeaseRegistry` keyed by `ObjectIdentifier(container)`) — a symptom
+      of the engine being stateless statics with nowhere to hang per-store state. Replaced it: the engine
+      `sync(...)` is now a pure reconcile function (no lease), and serialization is a per-instance async
+      mutex (`SyncContainer.Serializer`, a nested `private actor` — `acquire`/`release` parented to the type,
+      no singleton/global/keying) owned by `SyncContainer`, which wraps its four leaf `sync` methods. Contract: serialization is
+      per-`SyncContainer` (one per store — the library's existing norm). Behavior-neutral: SwiftSync 48/48
+      and DemoCore 43/43 (incl. ConvergingDrain/OfflinePush concurrency suites) green.
+    - Naming nit left for later: `isUnsyncedLocalInsert` checks any dirty pid (created *or* edited), not
+      just inserts.
 
 - [ ] **Section 2 — Library internals: inline why/gotchas**
   - Same files, `//` inline (Core, SyncContainer, Push, SyncDateParser, SyncableMacro, SyncQueryPublisher) (~30)

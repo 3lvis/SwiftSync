@@ -193,6 +193,25 @@ extension SwiftSync {
         return ids
     }
 
+    /// A row with un-pushed local changes (its persistent id is in the history dirty-set). `delete-missing`
+    /// skips these: a row the user created or edited offline and hasn't pushed yet must survive an
+    /// inbound pull that omits it — the server omitting a row it has never seen is not a deletion.
+    static func isUnsyncedLocalInsert<Model: SyncUpdatableModel>(
+        _ row: Model, dirtyPIDs: Set<PersistentIdentifier>
+    ) -> Bool {
+        dirtyPIDs.contains(row.persistentModelID)
+    }
+
+    /// Apply a server `payload` onto `row`, but skip the overwrite when the row has an un-pushed local
+    /// edit (its persistent id is in the dirty-set) — so an inbound pull can't clobber pending local
+    /// work. Last-writer-wins, local-wins-while-pending: the local edit is preserved until it's pushed.
+    static func applyHonoringLocalEdit<Model: SyncUpdatableModel>(
+        _ payload: SyncPayload, to row: Model, dirtyPIDs: Set<PersistentIdentifier>
+    ) throws -> Bool {
+        if dirtyPIDs.contains(row.persistentModelID) { return false }
+        return try row.apply(payload)
+    }
+
     /// Trim inbound (pull-authored) history up to and including `token`. Only inbound transactions are
     /// removed — local-authored history is the un-pushed-changes signal and a different model type may
     /// still need its own un-pushed local changes, so those are never trimmed here.

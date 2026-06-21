@@ -93,7 +93,7 @@ final class OfflineHistoryTests: XCTestCase {
 
             let clock = ContinuousClock()
             let pullStart = clock.now
-            try await SwiftSync.sync(payload: payload, as: HistoryRow.self, in: context, keyStyle: .snakeCase)
+            try await context.sync(payload: payload, as: HistoryRow.self, keyStyle: .snakeCase)
             let pullMs = pullStart.duration(to: clock.now).msValue
 
             // Push-side detection over the same store: should be ~empty (all inbound-authored) and fast.

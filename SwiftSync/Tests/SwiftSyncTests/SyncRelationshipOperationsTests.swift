@@ -209,38 +209,25 @@ final class RelationshipOperationsTests: XCTestCase {
         let container = try ModelContainer(for: OpsCompany.self, OpsEmployee.self, configurations: configuration)
         let context = ModelContext(container)
 
-        try await SwiftSync.sync(
-            payload: [["id": 10, "name": "Acme"]],
-            as: OpsCompany.self,
-            in: context
-        )
+        try await context.sync(payload: [["id": 10, "name": "Acme"]], as: OpsCompany.self)
 
-        try await SwiftSync.sync(
-            payload: [["id": 1, "name": "Ava", "company_id": 10]],
-            as: OpsEmployee.self,
-            in: context,
-            relationshipOperations: [.insert]
-        )
+        try await context.sync(
+            payload: [["id": 1, "name": "Ava", "company_id": 10]], as: OpsEmployee.self,
+            relationshipOperations: [.insert])
 
         var rows = try context.fetch(FetchDescriptor<OpsEmployee>())
         XCTAssertEqual(rows.first?.company?.id, 10)
 
-        try await SwiftSync.sync(
-            payload: [["id": 1, "name": "Ava", "company_id": NSNull()]],
-            as: OpsEmployee.self,
-            in: context,
-            relationshipOperations: [.insert]
-        )
+        try await context.sync(
+            payload: [["id": 1, "name": "Ava", "company_id": NSNull()]], as: OpsEmployee.self,
+            relationshipOperations: [.insert])
 
         rows = try context.fetch(FetchDescriptor<OpsEmployee>())
         XCTAssertEqual(rows.first?.company?.id, 10)
 
-        try await SwiftSync.sync(
-            payload: [["id": 1, "name": "Ava", "company_id": NSNull()]],
-            as: OpsEmployee.self,
-            in: context,
-            relationshipOperations: [.update]
-        )
+        try await context.sync(
+            payload: [["id": 1, "name": "Ava", "company_id": NSNull()]], as: OpsEmployee.self,
+            relationshipOperations: [.update])
 
         rows = try context.fetch(FetchDescriptor<OpsEmployee>())
         XCTAssertNil(rows.first?.company)

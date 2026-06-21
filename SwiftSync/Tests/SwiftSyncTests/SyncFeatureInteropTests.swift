@@ -61,16 +61,14 @@ final class SyncFeatureInteropTests: XCTestCase {
                 for: InteropIndexedNote.self,
                 configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
 
-        try await SwiftSync.sync(
+        try await context.sync(
             payload: [
                 ["id": 1, "title": "A", "category": "x"],
                 ["id": 2, "title": "B", "category": "x"],
-            ], as: InteropIndexedNote.self, in: context)
+            ], as: InteropIndexedNote.self)
 
         // Re-sync id 1 with changed fields — must update the same row, not create a new one.
-        try await SwiftSync.sync(
-            item: ["id": 1, "title": "A2", "category": "y"], as: InteropIndexedNote.self,
-            in: context)
+        try await context.sync(item: ["id": 1, "title": "A2", "category": "y"], as: InteropIndexedNote.self)
 
         let notes = try context.fetch(FetchDescriptor<InteropIndexedNote>())
         XCTAssertEqual(notes.count, 2, "#Index must not change row identity or count")
@@ -94,13 +92,9 @@ final class SyncFeatureInteropTests: XCTestCase {
                 for: InteropUniqueEmailUser.self,
                 configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
 
-        try await SwiftSync.sync(
-            item: ["id": 1, "email": "a@x.com", "name": "Alice"], as: InteropUniqueEmailUser.self,
-            in: context)
+        try await context.sync(item: ["id": 1, "email": "a@x.com", "name": "Alice"], as: InteropUniqueEmailUser.self)
         // id 2 is a distinct record per SwiftSync identity, but collides on the unique email.
-        try await SwiftSync.sync(
-            item: ["id": 2, "email": "a@x.com", "name": "Bob"], as: InteropUniqueEmailUser.self,
-            in: context)
+        try await context.sync(item: ["id": 2, "email": "a@x.com", "name": "Bob"], as: InteropUniqueEmailUser.self)
 
         let users = try context.fetch(FetchDescriptor<InteropUniqueEmailUser>())
         XCTAssertEqual(users.count, 2, "both identity-distinct rows should survive")
@@ -121,12 +115,8 @@ final class SyncFeatureInteropTests: XCTestCase {
                 for: InteropCompoundUniqueEvent.self,
                 configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
 
-        try await SwiftSync.sync(
-            item: ["id": 1, "name": "Launch", "day": "Mon"], as: InteropCompoundUniqueEvent.self,
-            in: context)
-        try await SwiftSync.sync(
-            item: ["id": 2, "name": "Launch", "day": "Mon"], as: InteropCompoundUniqueEvent.self,
-            in: context)
+        try await context.sync(item: ["id": 1, "name": "Launch", "day": "Mon"], as: InteropCompoundUniqueEvent.self)
+        try await context.sync(item: ["id": 2, "name": "Launch", "day": "Mon"], as: InteropCompoundUniqueEvent.self)
 
         let events = try context.fetch(FetchDescriptor<InteropCompoundUniqueEvent>())
         XCTAssertEqual(events.count, 2, "both identity-distinct rows should survive")

@@ -10,6 +10,29 @@ struct UncheckedSendableBox<Value>: @unchecked Sendable {
 }
 
 public final class SyncContainer: NSObject, @unchecked Sendable {
+    /// A FIFO async mutex. Serializes work spanning `await` points — which actor isolation alone does not,
+    /// since an actor method suspended at an `await` lets another call enter.
+    private actor Serializer {
+        private var isHeld = false
+        private var waiters: [CheckedContinuation<Void, Never>] = []
+
+        func acquire() async {
+            if isHeld {
+                await withCheckedContinuation { waiters.append($0) }
+            } else {
+                isHeld = true
+            }
+        }
+
+        func release() {
+            if waiters.isEmpty {
+                isHeld = false
+            } else {
+                waiters.removeFirst().resume()
+            }
+        }
+    }
+
     static let didSaveChangesNotification = Notification.Name("SwiftSync.SyncContainer.didSaveChanges")
     static let changedIdentifiersUserInfoKey = "changedIdentifiers"
     static let changedModelTypeNamesUserInfoKey = "changedModelTypeNames"
@@ -18,6 +41,8 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     public let mainContext: ModelContext
     public let keyStyle: KeyStyle
     public let dateFormatter: DateFormatter
+
+    private let serializer = Serializer()
 
     @MainActor
     public init(
@@ -71,15 +96,12 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         as model: Model.Type,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
-        let context = ModelContext(modelContainer)
-        context.author = SwiftSync.inboundAuthor
-        try await SwiftSync.sync(
-            payload: payload,
-            as: model,
-            in: context,
-            keyStyle: keyStyle,
-            relationshipOperations: relationshipOperations
-        )
+        try await serialized {
+            let context = ModelContext(modelContainer)
+            context.author = SwiftSync.inboundAuthor
+            try await context.sync(
+                payload: payload, as: model, keyStyle: keyStyle, relationshipOperations: relationshipOperations)
+        }
     }
 
     public func sync<Model: SyncUpdatableModel, Payload: SyncPayloadConvertible>(
@@ -101,17 +123,13 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         relationship: ReferenceWritableKeyPath<Model, Parent?>,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
-        let context = ModelContext(modelContainer)
-        context.author = SwiftSync.inboundAuthor
-        try await SwiftSync.sync(
-            payload: payload,
-            as: model,
-            in: context,
-            parent: parent,
-            relationship: relationship,
-            keyStyle: keyStyle,
-            relationshipOperations: relationshipOperations
-        )
+        try await serialized {
+            let context = ModelContext(modelContainer)
+            context.author = SwiftSync.inboundAuthor
+            try await context.sync(
+                payload: payload, as: model, parent: parent, relationship: relationship, keyStyle: keyStyle,
+                relationshipOperations: relationshipOperations)
+        }
     }
 
     public func sync<Model: SyncUpdatableModel, Payload: SyncPayloadConvertible, Parent: PersistentModel>(
@@ -140,8 +158,10 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         as model: Model.Type,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
-        try await syncIntoMainContext(
-            UncheckedSendableBox(item), as: model, relationshipOperations: relationshipOperations)
+        try await serialized {
+            try await syncIntoMainContext(
+                UncheckedSendableBox(item), as: model, relationshipOperations: relationshipOperations)
+        }
     }
 
     @MainActor
@@ -157,13 +177,8 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         let previousAuthor = mainContext.author
         mainContext.author = SwiftSync.inboundAuthor
         defer { mainContext.author = previousAuthor }
-        try await SwiftSync.sync(
-            item: item.value,
-            as: model,
-            in: mainContext,
-            keyStyle: keyStyle,
-            relationshipOperations: relationshipOperations
-        )
+        try await mainContext.sync(
+            item: item.value, as: model, keyStyle: keyStyle, relationshipOperations: relationshipOperations)
     }
 
     public func sync<Model: SyncUpdatableModel, Payload: SyncPayloadConvertible>(
@@ -185,17 +200,13 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         relationship: ReferenceWritableKeyPath<Model, Parent?>,
         relationshipOperations: SyncRelationshipOperations = .all
     ) async throws {
-        let context = ModelContext(modelContainer)
-        context.author = SwiftSync.inboundAuthor
-        try await SwiftSync.sync(
-            item: item,
-            as: model,
-            in: context,
-            parent: parent,
-            relationship: relationship,
-            keyStyle: keyStyle,
-            relationshipOperations: relationshipOperations
-        )
+        try await serialized {
+            let context = ModelContext(modelContainer)
+            context.author = SwiftSync.inboundAuthor
+            try await context.sync(
+                item: item, as: model, parent: parent, relationship: relationship, keyStyle: keyStyle,
+                relationshipOperations: relationshipOperations)
+        }
     }
 
     public func sync<Model: SyncUpdatableModel, Payload: SyncPayloadConvertible, Parent: PersistentModel>(
@@ -216,6 +227,18 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
 
     public func export<Model: SyncUpdatableModel>(_ model: Model) -> [String: Any] {
         model.export(keyStyle: keyStyle, dateFormatter: dateFormatter)
+    }
+
+    private func serialized<T>(_ operation: () async throws -> T) async throws -> T {
+        await serializer.acquire()
+        do {
+            let result = try await operation()
+            await serializer.release()
+            return result
+        } catch {
+            await serializer.release()
+            throw error
+        }
     }
 
     private func installDidSaveObserver() {
