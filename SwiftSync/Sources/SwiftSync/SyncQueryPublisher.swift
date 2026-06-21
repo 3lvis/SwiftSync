@@ -2,7 +2,6 @@ import Foundation
 import Observation
 import SwiftData
 
-// Observation callbacks are dispatched on queue: .main.
 @MainActor
 @Observable
 public final class SyncQueryPublisher<Model: PersistentModel> {
