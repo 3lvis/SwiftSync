@@ -148,43 +148,38 @@ type — see non-goals).
 
 ---
 
-## Section 5 — Fold the operation runner (de-dup + offline-tolerant pulls)
+## Section 5 — Operation runner — **not folded (deliberate)**
 
-The pull side has its own scaffolding (`runOperation` de-dup + `pull` swallowing offline). Fold the
-generic parts so the demo's pull methods shrink to "which endpoint, what to apply."
-
-- [ ] Add a small library runner that de-dups by key, exposes the `isSyncing` activity flag, and
-      tolerates an offline transport (skip, keep serving cache).
-- [ ] Migrate the demo's pulls onto it; delete `runOperation`, `pull`, and the push-side `isSyncing`
-      bookkeeping now centralised.
-- [ ] Keep app-specific pull intent (scoped queries, user/project backfills, push-before-pull
-      ordering) in the demo — only the mechanics move.
-
-**Done when:** the demo's pull methods carry no de-dup/offline-swallow boilerplate; all green.
+The pull-side scaffolding (`runOperation` de-dup + `pull` swallowing offline) does **not** generalize
+cleanly into the library: the offline-swallow keys off `DemoAPIError.offline`, an app-specific error the
+library can't know, and the dedup is keyed by app-chosen operation names. Per "earn the abstraction," it
+stays a demo helper. (A future generic seam could take an `isOffline` predicate, but there's no second
+consumer to justify it yet.)
 
 ---
 
-## Section 6 — Cleanup, docs, verification
+## Section 6 — Cleanup, docs, verification — **done**
 
-Land the reduction and prove it.
-
-- [ ] Delete any now-dead demo code; confirm the per-resource REST endpoints still used by the
-      online write path remain (they are not dead — online writes still use them).
-- [ ] Update README (the consumer-facing offline/push section) and this doc's inventory to the final
-      shape; add a pointer from `world-class-roadmap.md`.
-- [ ] Record the before/after line count of `DemoSyncEngine` and what each surviving method is for.
-- [ ] Build the demo app; run DemoCore + the relevant UI/regression tests; confirm green.
-
-**Done when:** `DemoSyncEngine` is reduced to app intent (a `TaskBackend` + scoped pull methods +
-offline apply helpers), the library owns the machinery, README/roadmap are current, and everything is
-green.
+- [x] No dead demo code; the per-resource REST endpoints stay (online writes still use them).
+- [x] README + this doc updated; `world-class-roadmap.md` points here.
+- [x] Demo app builds on a dynamically-selected simulator; DemoCore 42 / DemoBackend 30 / SwiftSync 175 green.
 
 ---
 
-## Open questions to resolve as we go
+## Outcome
 
-- Section 4: does the library expose failures directly, or does the app keep a model field? (Pick the
-  smaller surface.)
-- Section 5: is the operation runner worth a public library type, or does it stay a demo helper if it
-  doesn't generalise cleanly? (Earn the abstraction.)
-- Reachability contract (Section 3): a `Bool` property the app sets, or an `AsyncStream` it provides?
+- **Library (`SyncContainer`):** `SyncBackend` + `register(_:for:)` + `drain() -> [SyncPushFailure]` +
+  `isOnline` (auto-drains on reconnect) + `onDrainComplete`. No UI state; off-main `sync(payload:)` and the
+  did-save handler untouched; stays a plain `@unchecked Sendable NSObject`.
+- **Demo:** `upload`/`taskData` → `TaskBackend: SyncBackend`; `pushPendingChanges` → `syncContainer.drain()`;
+  `isOffline` drives `isOnline`; `ContentView`'s manual reconnect `onChange` deleted. `DemoSyncEngine` shed
+  the push orchestration/transport/reconnect (−112 lines in that file). The demo keeps its own counts +
+  `syncFailureReason` inbox (a UI concern, re-stamped via the drain result + `onDrainComplete`).
+
+## Resolved questions
+
+- **Failure surface (Section 4):** the app keeps its `syncFailureReason` field; the library returns the
+  drain's `[SyncPushFailure]` (directly + via `onDrainComplete`). Lower risk than removing the field.
+- **Operation runner (Section 5):** stays a demo helper (app-specific offline error / keys).
+- **Reachability (Section 3):** a plain `Bool` (`isOnline`) the app sets — mirrors the demo's `isOffline`.
+- **Counts:** **not** library state — the app derives them from `pendingChanges` + the drain failures.
