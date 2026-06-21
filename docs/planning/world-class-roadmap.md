@@ -82,12 +82,6 @@ optimisation (efficient deltas), not the foundation.
 
 Still open:
 
-- [x] **Layered sync architecture documented + enforced** — Views → per-screen state machines →
-      DemoSyncEngine (networking + orchestration) → SwiftSync (pure storage). SwiftSync stays storage-only
-      (`withPendingChanges` is the push primitive); the engine owns drain/reconnect/coalescing. Canonical:
-      [`../project/architecture.md`](../project/architecture.md). (The earlier "fold the driver into the
-      library" idea — [`sync-engine-fold.md`](sync-engine-fold.md) — was explored and reverted: orchestration
-      is app policy, not storage.)
 - [ ] Formal prior-art scan of the sync *protocol* (PowerSync, CouchDB/PouchDB replication,
       WatermelonDB, Realm/Firestore) before hardening the push/pull contract further — pick
       deliberately for our constraints (this gates the Phase 8 middleware seam).
@@ -130,14 +124,6 @@ Each item is its own PR (some a short series). Core stays dependency-free; any c
 is a separate SPM product (↔ Networking items 5–6).
 
 ### Demo app — follow-ups
-
-- [ ] **Review the push/drain pipeline end-to-end, test-harness first.** See
-      `docs/planning/push-drain-review-plan.md` — the single plan for this effort. Covers the coalescing
-      strand (P1) and the racy offline-no-op test (P2), but the real deliverable is a *deterministic test
-      harness* (a controllable upload seam) so this class of ordering bug is easy to reproduce → fix
-      red-first. An earlier in-session attempt at P1 (a serialized-chain fix) and P2 (a test-race edit)
-      was reverted — both jumped ahead of a red test; the chain even looked "correct-by-construction,"
-      which is exactly the trap. Start from the harness, not the fix.
 
 - [x] **Consolidate the online people-edit save into one round-trip.** Done: `updateTask`/`createTask`
       now honor `reviewer_ids`/`watcher_ids` in the task body (the `.save` handler in `ScreenMachines.swift`

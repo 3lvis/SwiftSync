@@ -155,8 +155,9 @@ public final class FakeDemoAPIClient {
     }
 
     /// Test-only seam: awaited at the start of every `upload(operations:)`, before the network gate, so a
-    /// test can deterministically park or observe each individual drain upload. Nil in production (inert).
-    public var beforeUpload: (@MainActor () async -> Void)?
+    /// test can deterministically park or observe each individual drain upload. `internal` so it never
+    /// becomes part of the public surface — tests reach it via `@testable import`. Nil in production (inert).
+    var beforeUpload: (@MainActor () async -> Void)?
 
     /// POST /sync/upload — the batched offline push. Returns the per-operation `results` array.
     public func upload(operations: [[String: Any]]) async throws -> [[String: Any]] {
