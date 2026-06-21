@@ -489,15 +489,16 @@ final class OfflinePushTests: XCTestCase {
         try await engine.createTask(body: body, projectID: projectID)
         XCTAssertEqual(engine.pendingChangeCount, 1)
 
-        // Still offline: a push must not reach the server.
+        nonisolated(unsafe) var uploadAttempted = false
+        apiClient.beforeUpload = { uploadAttempted = true }
+
+        // Still offline: the push is a no-op — it returns nil, touches no network, and leaves the change
+        // pending. Proven entirely from offline state; reconnecting to read the server would race the
+        // reconnect drain that the transition itself kicks off.
         let result = try await engine.pushPendingChanges()
         XCTAssertNil(result, "push is unavailable while offline")
+        XCTAssertFalse(uploadAttempted, "no upload is attempted while offline")
         XCTAssertEqual(engine.pendingChangeCount, 1, "the pending change survives")
-
-        // Reconnect to confirm the server never received it (the transport is unreachable offline).
-        engine.isOffline = false
-        let backendDetail = try await apiClient.getTaskDetail(taskID: "OFFLINE-NOOP-1")
-        XCTAssertNil(backendDetail, "nothing was uploaded while offline")
     }
 
     @MainActor

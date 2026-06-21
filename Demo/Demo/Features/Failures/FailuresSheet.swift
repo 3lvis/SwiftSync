@@ -4,18 +4,30 @@ import SwiftSync
 import SwiftUI
 
 /// The failures inbox: rows the server rejected (a `syncFailureReason` is set). The user resolves each
-/// by editing the task (fix → re-syncs) or discarding the change (restores the server's version).
-/// Driven by the engine's observable `failedChangeCount` so it refreshes as failures clear.
+/// by editing the task (fix → re-syncs) or discarding the change (restores the server's version). The
+/// list is a reactive store query, so it updates itself as failures appear and clear.
 struct FailuresSheet: View {
     let syncContainer: SyncContainer
     let syncEngine: DemoSyncEngine
 
     @Environment(\.dismiss) private var dismiss
-    @State private var rows: [Task] = []
+    @State private var failures: SyncQueryPublisher<Task>
     @State private var editingTask: Task?
 
+    init(syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
+        self.syncContainer = syncContainer
+        self.syncEngine = syncEngine
+        _failures = State(
+            initialValue: SyncQueryPublisher(
+                Task.self,
+                predicate: #Predicate { $0.syncFailureReason != nil },
+                in: syncContainer,
+                sortBy: [SortDescriptor(\Task.updatedAt, order: .reverse)]))
+    }
+
     var body: some View {
-        NavigationStack {
+        let rows = failures.rows
+        return NavigationStack {
             List {
                 if rows.isEmpty {
                     ContentUnavailableView("No failures", systemImage: "checkmark.circle")
@@ -54,19 +66,10 @@ struct FailuresSheet: View {
                 TaskFormSheet(mode: .edit(task: task), syncContainer: syncContainer, syncEngine: syncEngine)
             }
         }
-        .onAppear(perform: reload)
-        .onChange(of: syncEngine.failedChangeCount) { _, _ in reload() }
-    }
-
-    private func reload() {
-        rows = syncEngine.failedTasks()
     }
 
     private func discard(_ task: Task) {
         let taskID = task.id
-        _Concurrency.Task {
-            try? await syncEngine.discardFailedChange(taskID: taskID)
-            reload()
-        }
+        _Concurrency.Task { try? await syncEngine.discardFailedChange(taskID: taskID) }
     }
 }
