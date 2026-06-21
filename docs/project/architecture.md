@@ -8,10 +8,11 @@ generics, offline, reconnect, the failures inbox — falls out cleanly.
 ## The four layers
 
 ```
- ┌─ Views (SwiftUI) ─────────────────────────────────────────────┐
+ ┌─ Views (SwiftUI *or* UIKit) ──────────────────────────────────┐
  │  Pure rendering. Bind to ONE per-screen machine, which gives    │
  │  them both reactive DATA and STATUS. Know nothing of networking │
- │  or storage internals.                                          │
+ │  or storage internals. The framework is interchangeable — only  │
+ │  the last-mile binding differs (see "Framework-agnostic").      │
  └───────────────────────────▲────────────────────────────────────┘
                               │ render(state) / send(event)
  ┌─ Screen state machines (per screen) ──────────────────────────┐
@@ -144,6 +145,25 @@ lifecycle (status), and asks the engine to load. It is *not* redundant with the 
 **cross-cutting, app-wide** sync status (the offline toggle, badge counts, the inbox); each machine owns
 **one screen's** data+status. The data is a live store query (it reloads on any store change), not a
 snapshot the machine fetches once.
+
+## Framework-agnostic: SwiftUI *and* UIKit
+
+The layering is deliberately **UI-framework-agnostic** — and the demo proves it. Every screen except one
+is SwiftUI; the **Projects list is UIKit** (`ProjectsViewController: UITableViewController`) precisely to
+show SwiftSync works the same either way. Crucially, nothing below the view changes: the UIKit controller
+uses the **same `ProjectsViewMachine`** (same hosted `SyncQueryPublisher`, same `ScreenLoadMachine`, same
+engine, same SwiftSync) as a SwiftUI screen would. Only the **last-mile binding** differs:
+
+| | how the view observes the machine | how it renders the list |
+|---|---|---|
+| **SwiftUI** | `@Observable` binding — re-renders on change automatically | a `List`/`ForEach` over `machine.rows` |
+| **UIKit** | `observeContinuously { … }` (a `withObservationTracking` loop over the same `@Observable` machine) | re-applies an `NSDiffableDataSourceSnapshot` of `machine.rows.map(\.id)` |
+
+So the reactive store query (`SyncQueryPublisher`, observing `didSaveChangesNotification`) drives a
+`UITableViewDiffableDataSource` exactly as it drives a SwiftUI `List` — same data, same status enum
+(`ProjectsListStatusState`), same machine. SwiftSync's reactivity is an `@Observable` contract, not a
+SwiftUI feature, so any UIKit view can consume it through `withObservationTracking`. The framework is a
+view-layer detail; the architecture (machine → engine → SwiftSync) is identical underneath.
 
 ## Hard-won lessons (why the separation is enforced, not incidental)
 
