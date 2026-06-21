@@ -9,16 +9,16 @@ generics, offline, reconnect, the failures inbox — falls out cleanly.
 
 ```
  ┌─ Views (SwiftUI) ─────────────────────────────────────────────┐
- │  Pure rendering. Read DATA reactively from the store           │
- │  (@SyncQuery / @Query) and bind a screen's STATUS from its      │
- │  state machine. Know nothing of networking or storage internals.│
+ │  Pure rendering. Bind to ONE per-screen machine, which gives    │
+ │  them both reactive DATA and STATUS. Know nothing of networking │
+ │  or storage internals.                                          │
  └───────────────────────────▲────────────────────────────────────┘
                               │ render(state) / send(event)
  ┌─ Screen state machines (per screen) ──────────────────────────┐
- │  One per screen. Own the screen's lifecycle —                  │
- │  loading / loaded / empty / failed + transitions. Ask the       │
- │  engine for data; turn results into status. Know the engine,    │
- │  NOT networking or storage.                                     │
+ │  One per screen. Host the reactive store query (a               │
+ │  SyncQueryPublisher / SyncModelPublisher) that exposes DATA, and │
+ │  own the screen's STATUS lifecycle (loading/loaded/empty/error).│
+ │  Ask the engine for data; know the engine, NOT networking/store.│
  └───────────────────────────▲────────────────────────────────────┘
                               │ "load project X's tasks" / "push"
  ┌─ DemoSyncEngine  (NETWORKING + ORCHESTRATION) ────────────────┐
@@ -89,22 +89,28 @@ keeps a deleted row's id alive in history so deletions can be detected and pushe
 ## Data flow: data from the store, status from the machine
 
 This is where a stored app differs from a stateless one (flytt-ios carries data inside its `ViewState`
-because it has no store). Here the two streams are split:
+because it has no store). Here the two streams are split, and **the per-screen machine hosts both**:
 
-- **Data** flows from the store, observed reactively by the view (`@SyncQuery var tasks`). It never rides
-  through a network payload or a `.loaded([…])` enum case.
-- **Status** (`loading / empty / failed`) is owned by the screen's state machine.
+- **Data** is a reactive store query — a `SyncQueryPublisher` / `SyncModelPublisher` the machine holds
+  (scoped by relationship, e.g. `\Task.project` + `projectID`). It observes
+  `SyncContainer.didSaveChangesNotification` and reloads on any store change, so it never rides through a
+  network payload or a `.loaded([…])` enum case. The machine re-exposes it as `rows` / `tasks` / `task`.
+- **Status** (`loading / empty / error`) is the machine's `ScreenLoadState`, derived from the load
+  lifecycle (and the data count, for the empty-vs-content distinction).
 
-So a typical screen:
+So a typical screen — the view binds to **one** observable (the machine), which gives it both:
 
 ```
-view:    @SyncQuery reads the store (DATA)   +   binds machine.state (STATUS)
-machine: "engine, make sure project X is loaded"  → sets status
-engine:  fetch (networking) → SwiftSync.sync(...) (storage) → store updates → view re-renders
-SwiftSync: persists; the view's @SyncQuery fires
+view:    binds machine.tasks (reactive DATA)  +  machine.contentState (STATUS)
+machine: hosts SyncQueryPublisher<Task>(relationship: \.project, relationshipID:)  ← reactive data
+         + ScreenLoadMachine ("engine, load project X")                            ← status
+engine:  fetch (networking) → SwiftSync.sync(...) (storage) → store saves
+SwiftSync: persists → didSaveChangesNotification → the machine's publisher reloads → view re-renders
 ```
 
-The engine fills the store; the view reads the store; the machine tracks whether the fill is in flight.
+The engine fills the store; the machine's publisher observes the store; the view binds the machine. The
+view never holds a query or a payload — it's pure presentation over one observable. (The failures inbox
+follows the same pattern: a `SyncQueryPublisher<Task>` predicated on `syncFailureReason != nil`.)
 
 ## The offline / push story
 
@@ -133,10 +139,11 @@ The **push/drain orchestration lives in the engine** (it's *when/ordering*, i.e.
 ## State machines (per screen)
 
 One state machine **per screen** (`ScreenMachines`). It is the presentation layer between a view and the
-engine: it models that screen's `loading/loaded/empty/failed` lifecycle, requests data from the engine, and
-exposes status the view binds to. It is *not* redundant with the engine — the engine owns **cross-cutting,
-app-wide** sync status (the offline toggle, badge counts, the inbox); each machine owns **one screen's**
-status. Data, as above, comes from the store, not the machine.
+engine: it hosts the screen's reactive store query (data), models the `loading/loaded/empty/error`
+lifecycle (status), and asks the engine to load. It is *not* redundant with the engine — the engine owns
+**cross-cutting, app-wide** sync status (the offline toggle, badge counts, the inbox); each machine owns
+**one screen's** data+status. The data is a live store query (it reloads on any store change), not a
+snapshot the machine fetches once.
 
 ## Hard-won lessons (why the separation is enforced, not incidental)
 
