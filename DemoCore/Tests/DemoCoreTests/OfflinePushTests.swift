@@ -34,16 +34,15 @@ final class OfflinePushTests: XCTestCase {
 
         engine.isOffline = false
         let pushResult = try await engine.pushPendingChanges()
-        let summary = try XCTUnwrap(pushResult)
+        let failures = try XCTUnwrap(pushResult)
 
-        XCTAssertEqual(summary.insertedCount, 1)
-        XCTAssertTrue(summary.failures.isEmpty)
+        XCTAssertTrue(failures.isEmpty)
         XCTAssertEqual(engine.pendingChangeCount, 0)
 
         XCTAssertNotNil(
             try fetchTask(id: "OFFLINE-CREATE-1", in: syncContainer.mainContext), "the row remains, now synced")
         let backendDetail = try await apiClient.getTaskDetail(taskID: "OFFLINE-CREATE-1")
-        XCTAssertNotNil(backendDetail, "the row reached the backend, keyed by its localId")
+        XCTAssertNotNil(backendDetail, "the row reached the backend, keyed by its id")
     }
 
     @MainActor
@@ -145,10 +144,9 @@ final class OfflinePushTests: XCTestCase {
 
         engine.isOffline = false
         let pushResult = try await engine.pushPendingChanges()
-        let summary = try XCTUnwrap(pushResult)
+        let failures = try XCTUnwrap(pushResult)
 
-        XCTAssertEqual(summary.deletedCount, 1)
-        XCTAssertTrue(summary.failures.isEmpty)
+        XCTAssertTrue(failures.isEmpty)
         let remaining = try fetchTask(id: taskID, in: syncContainer.mainContext)
         XCTAssertNil(remaining, "confirmed delete is hard-deleted")
         let detail = try await apiClient.getTaskDetail(taskID: taskID)
@@ -177,8 +175,8 @@ final class OfflinePushTests: XCTestCase {
         // Reconnect + push: the server rejects, and the failure is recorded on the row.
         engine.isOffline = false
         let pushResult = try await engine.pushPendingChanges()
-        let summary = try XCTUnwrap(pushResult)
-        XCTAssertEqual(summary.failures.count, 1)
+        let failures = try XCTUnwrap(pushResult)
+        XCTAssertEqual(failures.count, 1)
 
         let failed = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
         let reason = try XCTUnwrap(
@@ -230,7 +228,7 @@ final class OfflinePushTests: XCTestCase {
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
         let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
-        let localID = "FAILED-INSERT-1"
+        let id = "FAILED-INSERT-1"
         try await engine.syncProjectTasks(projectID: projectID)
 
         // Offline create with an over-long title → the insert is rejected on push.
@@ -238,7 +236,7 @@ final class OfflinePushTests: XCTestCase {
         let template = try XCTUnwrap(
             fetchTask(id: DemoSeedData.SeedIDs.Tasks.sessionTimeout, in: syncContainer.mainContext))
         var createDictionary = syncContainer.export(template)
-        createDictionary["id"] = localID
+        createDictionary["id"] = id
         createDictionary["title"] = String(repeating: "A", count: 100)
         createDictionary.removeValue(forKey: "items")
         try await engine.createTask(
@@ -246,7 +244,7 @@ final class OfflinePushTests: XCTestCase {
 
         engine.isOffline = false
         _ = try await engine.pushPendingChanges()
-        let failed = try XCTUnwrap(fetchTask(id: localID, in: syncContainer.mainContext))
+        let failed = try XCTUnwrap(fetchTask(id: id, in: syncContainer.mainContext))
         XCTAssertNotNil(failed.syncFailureReason, "the rejected insert is flagged")
         XCTAssertEqual(engine.failedChangeCount, 1, "it never reached the server")
 
@@ -255,12 +253,12 @@ final class OfflinePushTests: XCTestCase {
         fixDictionary["title"] = "Fixed"
         fixDictionary.removeValue(forKey: "items")
         try await engine.updateTask(
-            taskID: localID, projectID: projectID, body: try DemoSyncPayload(dictionary: fixDictionary))
+            taskID: id, projectID: projectID, body: try DemoSyncPayload(dictionary: fixDictionary))
 
-        let fixed = try XCTUnwrap(fetchTask(id: localID, in: syncContainer.mainContext))
+        let fixed = try XCTUnwrap(fetchTask(id: id, in: syncContainer.mainContext))
         XCTAssertNil(fixed.syncFailureReason, "the failure is resolved")
         XCTAssertEqual(fixed.title, "Fixed")
-        let backendDetail = try await apiClient.getTaskDetail(taskID: localID)
+        let backendDetail = try await apiClient.getTaskDetail(taskID: id)
         XCTAssertNotNil(backendDetail, "it now exists on the server")
     }
 
@@ -337,7 +335,7 @@ final class OfflinePushTests: XCTestCase {
         serverData.removeValue(forKey: "items")
         _ = try backend.upload(operations: [
             [
-                "operation": "upsert", "type": "tasks", "localId": taskID,
+                "operation": "upsert", "type": "tasks", "id": taskID,
                 "updatedAt": "2099-01-01T00:00:00.000Z", "data": serverData,
             ]
         ])
@@ -416,8 +414,8 @@ final class OfflinePushTests: XCTestCase {
 
         engine.isOffline = false
         let pushResult = try await engine.pushPendingChanges()
-        let summary = try XCTUnwrap(pushResult)
-        XCTAssertTrue(summary.failures.isEmpty)
+        let failures = try XCTUnwrap(pushResult)
+        XCTAssertTrue(failures.isEmpty)
 
         // A fresh pull (server is authoritative) brings the same reviewers back.
         try await engine.syncTaskDetail(taskID: taskID)
@@ -458,8 +456,8 @@ final class OfflinePushTests: XCTestCase {
         // Reconnect + push: reviewer_ids travel in the upsert and the server accepts it.
         engine.isOffline = false
         let pushResult = try await engine.pushPendingChanges()
-        let summary = try XCTUnwrap(pushResult)
-        XCTAssertTrue(summary.failures.isEmpty)
+        let failures = try XCTUnwrap(pushResult)
+        XCTAssertTrue(failures.isEmpty)
         XCTAssertEqual(engine.pendingChangeCount, 0, "the assignment was acknowledged")
 
         // Prove the server stored it: a fresh pull (which overwrites local reviewers from the server)
@@ -520,7 +518,7 @@ final class OfflinePushTests: XCTestCase {
         // A task appears on the server that this client has never seen.
         _ = try backend.upload(operations: [
             [
-                "operation": "upsert", "type": "tasks", "localId": "SERVER-ONLY-1",
+                "operation": "upsert", "type": "tasks", "id": "SERVER-ONLY-1",
                 "updatedAt": "2026-06-16T20:00:00.000Z",
                 "data": [
                     "id": "SERVER-ONLY-1",
@@ -562,8 +560,8 @@ final class OfflinePushTests: XCTestCase {
         try await engine.createTask(body: body, projectID: projectID)
         engine.isOffline = false
         let pushResult = try await engine.pushPendingChanges()
-        let summary = try XCTUnwrap(pushResult)
-        XCTAssertEqual(summary.failures.count, 1)
+        let failures = try XCTUnwrap(pushResult)
+        XCTAssertEqual(failures.count, 1)
         let failed = try XCTUnwrap(fetchTask(id: "OFFLINE-REJECT-1", in: syncContainer.mainContext))
         XCTAssertNotNil(failed.syncFailureReason, "the rejected create is flagged")
 

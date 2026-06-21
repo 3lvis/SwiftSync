@@ -87,8 +87,8 @@ public final class Task {
     public var createdAt: Date
     public var updatedAt: Date
 
-    // Demo-owned (not a SwiftSync concept): the engine stamps this from `summary.failures` after a
-    // push and clears it on a later success, so the failures inbox is a query for rows where it's set.
+    // Demo-owned (not a SwiftSync concept): the engine stamps this from the failures `push` returns and
+    // clears it on a later success, so the failures inbox is a query for rows where it's set.
     @NotExport
     public var syncFailureReason: String?
 

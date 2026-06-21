@@ -31,7 +31,7 @@ git history is the memory.
 2. [x] ~~Macro-generate `SyncOfflineModel`~~ — **superseded**: offline now rides SwiftData History, so there is no `SyncOfflineModel` to generate. Models carry zero offline fields; offline is opted in by marking the identity `@Attribute(.preserveValueOnDeletion)`. See `docs/planning/offline-history-design.md`.
 3. [x] ~~Drop `syncFailureReason` from the protocol~~ — **done** (#624: removed from `SyncOfflineModel`)
 4. [x] ~~Generalize the inbound LWW timestamp key~~ — **stale**: superseded by the history dirty-set (see §4)
-5. [ ] Tighten the push response seam (5 public structs)
+5. [x] ~~Tighten the push response seam~~ — **done**: 5 push structs → 2 (`SyncPendingChanges`, `SyncPushFailure`); `push`→`withPendingChanges` (a `with…` scope) with a `process` closure that returns only `[SyncPushFailure]` (see §5)
 6. [x] ~~Unify the three error types into `SyncError`~~ — **done** (#624: `SchemaValidationError` + `ObjectiveCInitializationExceptionError` folded into `SyncError`)
 7. [ ] Demote the reactive publishers to `internal`
 
@@ -103,7 +103,7 @@ coordination with #3 (don't generate a field that's being removed).
 ## 3. Drop `syncFailureReason` from `SyncOfflineModel` — ✅ done (#624)
 
 Pure-bubble (#624) removed `syncFailureReason` from `SyncOfflineModel`: the library persists no per-row
-failure state — failures bubble up via `SyncPushSummary.failures` and the consumer owns any inbox (the
+failure state — failures bubble up as `withPendingChanges`'s `[SyncPushFailure]` return and the consumer owns any inbox (the
 demo annotates its own `@NotExport` field). One fewer hand-written protocol requirement. **Note for #2:**
 the macro must not generate this field — it's gone.
 
@@ -124,21 +124,40 @@ generalize. Same fate as #2 (`SyncOfflineModel`), superseded by the same rework.
 
 ---
 
-## 5. Tighten the push response seam
+## 5. Tighten the push response seam — ✅ done
 
-**Context.** The push feature exposes five public structs — `SyncPushBatch`, `SyncPushFailure`
-(+`Operation`), `SyncPushResponse`, `SyncPushSummary`, `SyncPendingChanges`. The consumer hand-maps its
-server's JSON into a `SyncPushResponse` (three id sets — `assignedRemoteIDs` / `confirmedUpdateLocalIDs`
-/ `confirmedDeleteLocalIDs` — plus `failures`). Some mapping is inherent (server shapes vary), but the
-return shape of the `upload` closure deserves a first-principles pass.
+**Was.** The push feature exposed **five** public structs — `SyncPushBatch`, `SyncPushFailure`
+(+ an `Operation` enum), `SyncPushResponse`, `SyncPushSummary`, `SyncPendingChanges` — and the `upload`
+closure took a `SyncPushBatch` and returned a `SyncPushResponse` the consumer assembled by enumerating
+*confirmed* ids (a `confirmedLocalIDs` set) plus failures.
 
-**Target.** Review whether the closure's return can be smaller or library-derived (e.g. derive
-confirmations from the batch + assigned ids rather than asking the consumer to enumerate three sets).
+**First principle.** The library already hands the consumer the batch, and the client id *is* the
+identity the server adopts (an idempotent upsert — no server-assigned ids to map home). So confirmations
+are derivable: `confirmed = batch − failures`. Asking the consumer to echo back which ids succeeded was
+redundant; only the **failures** carry information the library can't derive.
 
-**Decision needed.** Needs a design pass; lower leverage than #1–#2 — don't churn the seam without a
-clear reduction.
+**Now (5 structs → 2).**
+- `SyncPushBatch` merged into `SyncPendingChanges` — one type is both the return of `pendingChanges(...)`
+  and the value `withPendingChanges(...)` hands the `process` closure.
+- `SyncPushResponse` **deleted** — `upload` now returns `[SyncPushFailure]` directly.
+- `SyncPushFailure` shrank to `{ id, error }` — the `Operation` enum/field went (the operation is
+  the library's to know from the batch, not the consumer's to report). Its `id` field was renamed from
+  `localID` (a vestige of the deleted two-id `localId`+`remoteId` model); the library deals in one `id`,
+  matching the model's `@Attribute(.unique) var id`. The demo's `/sync/upload` wire key followed suit
+  (`"localId"` → `"id"`); the backend keeps `public_id` internally, where the int-PK contrast is real.
+- `SyncPushSummary` **deleted** — the method returns `[SyncPushFailure]` (the same value the closure
+  returns). Its three counts (`insertedCount`/`updatedCount`/`deletedCount`) had no consumer; the demo only
+  ever read `.failures`. Counts are derivable by complement if a consumer ever needs them.
+- `push(for:in:upload:)` renamed `withPendingChanges(for:in:process:)` — `push` was dishonest (the library
+  does no network; unlike `sync`, which *does* the write). The `with…` idiom names what it is: a scope that
+  hands you the pending changes, lets your `process` closure do the transport, and commits the token on the
+  way out. Pairs with the `pendingChanges` getter (peek vs. process). The `upload` label (a networking
+  term) became a trailing closure.
+- `inboundAuthor` demoted `public` → `internal` (consumer never referenced it).
 
-**Scope/risk.** Public API change to the push seam; medium.
+Surviving public push surface: `SyncPendingChanges` (in) and `SyncPushFailure` (out). The token still
+advances (and inbound history is trimmed) only when the `process` closure reports **no** failures — same
+at-least-once semantics, smaller seam.
 
 ---
 

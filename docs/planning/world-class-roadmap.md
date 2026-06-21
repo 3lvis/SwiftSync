@@ -97,11 +97,11 @@ state; failed rows stay pending and retry; surfacing is an event stream; the inb
 
 - [ ] **Represent + report (pure-bubble).** One `SyncError` currency for everything SwiftSync throws
       (`.invalidPayload` / `.cancelled` / `.schemaValidation` / `.containerInitialization`). For per-row
-      *partial* push rejections, `push()` returns the outcomes (`failures: [{localID, operation, error}]`)
-      and marks succeeded rows synced / leaves failed rows pending — it persists **nothing** on models
-      (no `syncFailureReason`/`syncFailureCode` on `SyncOfflineModel`). The consumer owns any inbox
-      persistence and reads the backend's own error in its `upload` closure. *Demo:* the engine annotates
-      its own `Task` field from `summary.failures` and clears it on a later successful push.
+      *partial* push rejections, `withPendingChanges()` returns the rejected rows (`[SyncPushFailure]` of
+      `{id, error}`) and marks succeeded rows synced / leaves failed rows pending — it persists
+      **nothing** on models (no `syncFailureReason`/`syncFailureCode` on `SyncOfflineModel`). The consumer
+      owns any inbox persistence and reads the backend's own error in its `process` closure. *Demo:* the engine annotates
+      its own `Task` field from the returned failures and clears it on a later successful push.
 
 - [ ] **Surface (observability).** A multi-consumer `events()` `AsyncStream` emitting per-sync outcomes
       (started/completed, applied/stale/rejected, counts, duration) — the prior-art surfacing channel
@@ -109,7 +109,7 @@ state; failed rows stay pending and retry; surfacing is an event stream; the inb
       Same concern as the bubble above; lands with or right after it. (↔ Networking roadmap item 3.)
 
 **Out of SwiftSync — resilience.** Retry/backoff/`Retry-After`/auth-refresh are the *networking layer's*
-job (the `code/3lvis/ios/Networking` interceptors, wired into the consumer's `upload` closure), by the
+job (the `code/3lvis/ios/Networking` interceptors, wired into the consumer's `process` closure), by the
 same "a sync library doesn't own the network" principle that keeps it from categorizing errors. Not a
 SwiftSync feature.
 
@@ -182,3 +182,7 @@ server-origin rows get a server-minted UUID. The client deals only in `public_id
       `public_id` as the sole external identity, the dual-minting + adopt rule, and the rationale
       (idempotency on lost-response retry, shareable URL id, reach over existing backends). The doc still
       describes the superseded #630 collapsed-id / `SyncOffline`-marker model — refresh it.
+- [ ] **Rewrite `upload-endpoint-contract.md`** to the collapsed-id model. It still documents the original
+      two-id (`localId` + server-minted `remoteId`) wire protocol; the shipped reality is one id (client id
+      adopted as `public_id`, no `remoteId`) and the demo's wire key is now `"id"`. Currently carries a
+      staleness banner pointing at `offline-history-design.md`.

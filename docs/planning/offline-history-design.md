@@ -27,7 +27,7 @@ each tagged with an **author** and ordered by a **token**. So:
   pulled row is never mistaken for a local insert and pushed back.
 - **"Deleted"** = a delete transaction. Marking the identity `@Attribute(.preserveValueOnDeletion)`
   keeps the id readable in the tombstone, so a plain `context.delete(row)` is enough to recover the
-  deleted `localID` at push time.
+  deleted `id` at push time.
 
 **Opt-in = `.preserveValueOnDeletion` on the identity.** That attribute is genuinely *required* for
 offline (to recover deleted ids) and is a harmless no-op otherwise, so its presence is the honest
@@ -52,18 +52,19 @@ cursor and trims the now-redundant inbound history.
 - **Near-zero consumer surface.** One attribute option (`.preserveValueOnDeletion`) on the identity —
   no `syncRemoteID`/tombstone/`updatedAt` sync fields, no `SwiftSync.delete` ceremony. The consumer
   uses plain SwiftData inserts/edits/`context.delete`.
-- **Collapsed id model** (decided with the user): the client `localID` *is* the identity the backend
+- **Collapsed id model** (decided with the user): the client `id` *is* the identity the backend
   adopts; there is no separate server-assigned id to map home. Push is an idempotent **upsert**, so
-  insert vs update need not be distinguished on the wire — `SyncPushResponse` is just
-  `confirmedLocalIDs` + `failures`.
+  insert vs update need not be distinguished on the wire — and confirmations need not be echoed: the
+  `process` closure returns only `[SyncPushFailure]`, and the library confirms everything else by complement.
 
 ## What changed in code
 
 - `Push.swift`: `SyncCursor` (= `DefaultHistoryToken`), `SwiftSync.inboundAuthor`, history-based
-  `pendingChanges(for:in:)` / `push(for:in:upload:)` (cursor internal, no `changedSince`/return cursor),
-  `locallyDirtyPersistentIDs`, `trimInboundHistory`, `localTransactions`, `latestToken`. The
-  insert-then-delete-before-push case is dropped (server never saw it). `SyncPushResponse` =
-  `confirmedLocalIDs` + `failures`; `SyncPushSummary` drops `cursor`.
+  `pendingChanges(for:in:)` / `withPendingChanges(for:in:process:)` (cursor internal, no
+  `changedSince`/return cursor), `locallyDirtyPersistentIDs`, `trimInboundHistory`, `localTransactions`,
+  `latestToken`. The insert-then-delete-before-push case is dropped (server never saw it). Both the
+  `process` closure and `withPendingChanges` return `[SyncPushFailure]` (confirmations derived by
+  complement; no summary/cursor for the caller to handle).
 - `SyncCursorStore.swift`: internal `SyncCursorRecord` (per-type token) + read/write helpers.
 - `OfflineDetection.swift`: `identityPreservesValueOnDeletion` (the opt-in check) + `requireOfflineCapable`
   (push/pending throw a clear diagnostic if the identity isn't `.preserveValueOnDeletion`).

@@ -5,10 +5,13 @@ extension SwiftSync {
     /// The transaction author SwiftSync stamps on inbound (pull) writes, so the push side can tell
     /// server-applied changes from genuine local edits and never push pulled rows back. Local edits
     /// use the store's default author; pull writes use this one and are filtered out of `pendingChanges`.
-    public static let inboundAuthor = "swiftsync.inbound"
+    /// Internal — the consumer never references it (`SyncContainer` stamps it on inbound saves).
+    static let inboundAuthor = "swiftsync.inbound"
 }
 
-/// The local `localID`s pending a push, partitioned by operation, derived from store history.
+/// The local rows with un-pushed changes, split by operation. Each array holds the rows' `id`s (strings),
+/// not objects — `withPendingChanges` hands this to your `process` closure and you map each id to your own
+/// request payload, so SwiftData objects never cross into the network call.
 public struct SyncPendingChanges: Sendable {
     public let inserts: [String]
     public let updates: [String]
@@ -17,57 +20,25 @@ public struct SyncPendingChanges: Sendable {
     public var isEmpty: Bool { inserts.isEmpty && updates.isEmpty && deletes.isEmpty }
 }
 
-/// The `localID`s to push, partitioned by operation. Sendable; the app maps each id to its payload,
-/// so SwiftData objects never cross into a network call.
-public struct SyncPushBatch: Sendable {
-    public let inserts: [String]
-    public let updates: [String]
-    public let deletes: [String]
-
-    public var isEmpty: Bool { inserts.isEmpty && updates.isEmpty && deletes.isEmpty }
-}
-
-/// One pushed item the server rejected. `error` is the consumer's own error, bubbled up verbatim.
+/// One pushed row the server rejected: the row `id` to keep pending, and the consumer's own `error`
+/// bubbled up verbatim. Your `process` closure returns only these — everything else in the batch is treated
+/// as confirmed (the client id is the identity the backend adopts, so a push is an idempotent upsert with
+/// no server-assigned ids to map home). The operation is the library's to know, not yours.
 public struct SyncPushFailure: Sendable {
-    public enum Operation: String, Equatable, Sendable { case insert, update, delete }
-    public let localID: String
-    public let operation: Operation
+    public let id: String
     public let error: any Error & Sendable
 
-    public init(localID: String, operation: Operation, error: any Error & Sendable) {
-        self.localID = localID
-        self.operation = operation
+    public init(id: String, error: any Error & Sendable) {
+        self.id = id
         self.error = error
     }
-}
-
-/// What the app's uploader reports back. The client `localID` is the identity the backend adopts, so a
-/// push is an idempotent upsert — there are no server-assigned ids to map home — and the response is
-/// just the set of acknowledged `localID`s plus any failures.
-public struct SyncPushResponse: Sendable {
-    public var confirmedLocalIDs: Set<String>
-    public var failures: [SyncPushFailure]
-
-    public init(confirmedLocalIDs: Set<String> = [], failures: [SyncPushFailure] = []) {
-        self.confirmedLocalIDs = confirmedLocalIDs
-        self.failures = failures
-    }
-}
-
-/// Result of a push pass. SwiftSync advances its own per-type token internally on a fully-acknowledged
-/// push, so there is no token for the caller to persist — just the counts and any per-row failures.
-public struct SyncPushSummary: Sendable {
-    public let insertedCount: Int
-    public let updatedCount: Int
-    public let deletedCount: Int
-    public let failures: [SyncPushFailure]
 }
 
 extension SwiftSync {
     /// The local changes pending a push, read straight from SwiftData history since SwiftSync's stored
     /// per-type token: transactions authored by anyone other than the inbound (pull) author. A row
     /// inserted then edited collapses to a single insert; a row deleted after editing collapses to a
-    /// delete (its `localID` recovered from the history tombstone — mark the identity
+    /// delete (its `id` recovered from the history tombstone — mark the identity
     /// `.preserveValueOnDeletion`).
     public static func pendingChanges<Model: SyncUpdatableModel>(
         for _: Model.Type,
@@ -86,8 +57,8 @@ extension SwiftSync {
         try pendingChanges(from: localTransactions(since: token, in: context), for: Model.self, in: context)
     }
 
-    /// Separate from the token-driven overload so `push` derives the batch and its pre-upload boundary
-    /// token from a single history read (see the boundary capture in `push`).
+    /// Separate from the token-driven overload so `push` derives the batch and its `uploadedThrough` token
+    /// from a single history read (see the capture in `push`).
     static func pendingChanges<Model: SyncUpdatableModel>(
         from transactions: [DefaultHistoryTransaction],
         for _: Model.Type,
@@ -99,7 +70,7 @@ extension SwiftSync {
             return SyncPendingChanges(inserts: [], updates: [], deletes: [])
         }
 
-        // Resolve every changed persistent id to its localID. Live rows come from a fetch; deleted
+        // Resolve every changed persistent id to its id. Live rows come from a fetch; deleted
         // rows are gone from the store, so their (now-invalidated) insert/update changes can't be read
         // — their id comes from the delete tombstone instead (mark the identity `.preserveValueOnDeletion`).
         // Resolving deleted rows lets us recognise an insert-then-delete that never reached the server.
@@ -159,47 +130,38 @@ extension SwiftSync {
         return SyncPendingChanges(inserts: inserts, updates: updates, deletes: deletes)
     }
 
-    /// Drive one push: read pending changes from history (since the model type's last-pushed token),
-    /// hand their ids to the app's `upload` closure (the app owns the network call), then — only when
-    /// *every* pending change was acknowledged — advance the last-pushed token to the pre-upload history
-    /// boundary and trim the now-redundant inbound history. SwiftSync writes no per-row state on push; an
-    /// unacknowledged change simply stays past the token and is re-detected next push.
+    /// Process this model type's locally-changed rows inside a scope SwiftSync manages. Reads what changed
+    /// since the last-pushed token, hands it to your `process` closure (you own the network call), and gets
+    /// back the rejected rows. Everything you *don't* return as a failure is treated as confirmed — the
+    /// client id is the identity the server adopts, so it's an idempotent upsert with nothing to
+    /// acknowledge. Only on a fully clean pass (no failures) does it advance the token and trim the
+    /// now-redundant inbound history. SwiftSync stores no per-row state: a failed — or any un-pushed —
+    /// change stays past the token and is re-detected next call. Returns the same failures your closure
+    /// returned (empty == clean).
     @discardableResult
-    public static func push<Model: SyncUpdatableModel>(
+    public static func withPendingChanges<Model: SyncUpdatableModel>(
         for _: Model.Type,
         in context: ModelContext,
         isolation: isolated (any Actor)? = #isolation,
-        upload: (SyncPushBatch) async throws -> SyncPushResponse
-    ) async throws -> SyncPushSummary where Model.SyncID == String {
+        process: (SyncPendingChanges) async throws -> [SyncPushFailure]
+    ) async throws -> [SyncPushFailure] where Model.SyncID == String {
         try requireOfflineCapable(Model.self, in: context)
         try requireOfflinePushBookkeeping(in: context)
         let token = lastPushedHistoryToken(for: Model.self, in: context)
         let transactions = try localTransactions(since: token, in: context)
         let pending = try pendingChanges(from: transactions, for: Model.self, in: context)
-        guard !pending.isEmpty else {
-            return SyncPushSummary(insertedCount: 0, updatedCount: 0, deletedCount: 0, failures: [])
+        guard !pending.isEmpty else { return [] }
+        // The newest history token in this batch, captured *before* the upload. On success we advance the
+        // token only to here — never to the live head — so any local write that lands during the upload
+        // await stays past the token and is re-detected next push, instead of being silently skipped.
+        let uploadedThrough = transactions.last?.token
+
+        let failures = try await process(pending)
+        if failures.isEmpty, let uploadedThrough {
+            try setLastPushedHistoryToken(uploadedThrough, for: Model.self, in: context)
+            try? trimInboundHistory(through: uploadedThrough, in: context)
         }
-        // The history head observed *before* the upload. Advancing only to here leaves any write that
-        // lands during the upload await past the token, so it's re-detected next push, not swallowed.
-        let boundary = transactions.last?.token
-
-        let batch = SyncPushBatch(inserts: pending.inserts, updates: pending.updates, deletes: pending.deletes)
-        let response = try await upload(batch)
-
-        let allIDs = Set(pending.inserts + pending.updates + pending.deletes)
-        let acknowledgedEverything = response.failures.isEmpty && allIDs.isSubset(of: response.confirmedLocalIDs)
-
-        if acknowledgedEverything, let boundary {
-            try setLastPushedHistoryToken(boundary, for: Model.self, in: context)
-            try? trimInboundHistory(throughInclusive: boundary, in: context)
-        }
-
-        func confirmed(_ ids: [String]) -> Int { ids.filter { response.confirmedLocalIDs.contains($0) }.count }
-        return SyncPushSummary(
-            insertedCount: confirmed(pending.inserts),
-            updatedCount: confirmed(pending.updates),
-            deletedCount: confirmed(pending.deletes),
-            failures: response.failures)
+        return failures
     }
 
     /// Dirty persistent ids for the pull, but only for models that opted into offline round-trip by
@@ -216,7 +178,7 @@ extension SwiftSync {
     /// The persistent identifiers of rows with **un-pushed local changes** for `Model` — local-authored
     /// history since the stored token. The pull uses this to preserve never-pushed local inserts from
     /// delete-missing and to keep a newer local edit from being clobbered (last-writer-wins). Reads
-    /// persistent ids (not localIDs), so it needs no `SyncID == String` constraint.
+    /// persistent ids (not row ids), so it needs no `SyncID == String` constraint.
     static func locallyDirtyPersistentIDs<Model: SyncUpdatableModel>(
         for _: Model.Type, in context: ModelContext
     ) throws -> Set<PersistentIdentifier> {
@@ -238,7 +200,7 @@ extension SwiftSync {
     /// Trim inbound (pull-authored) history up to and including `token`. Only inbound transactions are
     /// removed — local-authored history is the un-pushed-changes signal and a different model type may
     /// still need its own un-pushed local changes, so those are never trimmed here.
-    static func trimInboundHistory(throughInclusive token: DefaultHistoryToken, in context: ModelContext) throws {
+    static func trimInboundHistory(through token: DefaultHistoryToken, in context: ModelContext) throws {
         let inbound = inboundAuthor
         try context.deleteHistory(
             HistoryDescriptor<DefaultHistoryTransaction>(
