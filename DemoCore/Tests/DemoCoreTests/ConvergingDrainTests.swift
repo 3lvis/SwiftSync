@@ -42,11 +42,22 @@ final class ConvergingDrainTests: XCTestCase {
         syncContainer.mainContext.insert(row)
         try syncContainer.mainContext.save()
 
-        let controller = UploadController(parksRemaining: 1)
-        apiClient.beforeUpload = { await controller.gate() }
+        // Park only the first upload mid-flight; convergence's later uploads flow straight through, so the
+        // test never assumes how many uploads a correct drain performs.
+        nonisolated(unsafe) var uploadStarted: CheckedContinuation<Void, Never>?
+        nonisolated(unsafe) var releaseGate: CheckedContinuation<Void, Never>?
+        nonisolated(unsafe) var didPark = false
+        apiClient.beforeUpload = {
+            guard !didPark else { return }
+            didPark = true
+            await withCheckedContinuation { gate in
+                releaseGate = gate
+                uploadStarted?.resume()
+            }
+        }
 
         let drain = _Concurrency.Task { @MainActor in try await engine.pushPendingChanges() }
-        await controller.awaitUploadStart()  // drain has snapshotted {CONVERGE-A: v1} and parked its upload
+        await withCheckedContinuation { uploadStarted = $0 }  // drain has snapshotted {CONVERGE-A: v1} and parked its upload
 
         // The late edit: lands after the snapshot, while the upload is parked mid-flight. The demo server
         // stamps `updated_at` to its own clock when it writes the create's reviewer/watcher rows, so the
@@ -56,7 +67,7 @@ final class ConvergingDrainTests: XCTestCase {
         pending.updatedAt = Date().addingTimeInterval(3600)
         try syncContainer.mainContext.save()
 
-        controller.releaseNextUpload()
+        releaseGate?.resume()
         _ = try await drain.value
 
         let server = try await apiClient.getTaskDetail(taskID: "CONVERGE-A")
