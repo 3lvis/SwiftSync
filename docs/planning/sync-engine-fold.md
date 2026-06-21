@@ -1,5 +1,15 @@
 # Folding DemoSyncEngine's boilerplate into SwiftSync
 
+> ⚠️ **Superseded — see [`../project/architecture.md`](../project/architecture.md).** This doc explored
+> *folding the outbound driver into the library/`SyncContainer`*. That was the wrong move: orchestration
+> (when to push, reconnect, status) is **networking-layer policy** and belongs in the app's engine, not the
+> `Sendable` storage container — forcing it in produced a mixed-`@MainActor` smell. The conclusion is the
+> **four-layer architecture** (Views → per-screen state machines → DemoSyncEngine [networking+orchestration]
+> → SwiftSync [pure storage]) documented in `architecture.md`. SwiftSync stays storage-only
+> (`withPendingChanges` is the push *primitive*); `DemoSyncEngine` owns the drain/reconnect/coalescing. Kept
+> from this exploration: the `withPendingChanges` primitive and the comment-audit. Reverted: `SyncBackend`,
+> `SyncContainer.register/drain/isOnline/onDrainComplete`. The rest below is the historical exploration.
+
 ## Goal
 
 `DemoSyncEngine` (~490 lines) carries a lot of machinery that **every** SwiftSync consumer would

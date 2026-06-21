@@ -9,13 +9,6 @@ struct UncheckedSendableBox<Value>: @unchecked Sendable {
     init(_ value: Value) { self.value = value }
 }
 
-/// An app's transport for pushing a model's pending changes. Returns only the rejected rows — everything
-/// else is treated as confirmed (the client id is the server's identity, so a push is an idempotent
-/// upsert). Registered once per offline model via `register(_:for:)`.
-public protocol SyncBackend: Sendable {
-    func push(_ pending: SyncPendingChanges) async throws -> [SyncPushFailure]
-}
-
 public final class SyncContainer: NSObject, @unchecked Sendable {
     static let didSaveChangesNotification = Notification.Name("SwiftSync.SyncContainer.didSaveChanges")
     static let changedIdentifiersUserInfoKey = "changedIdentifiers"
@@ -25,24 +18,6 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     public let mainContext: ModelContext
     public let keyStyle: KeyStyle
     public let dateFormatter: DateFormatter
-
-    // MARK: Outbound sync (queue drain) — all state is main-actor-isolated.
-
-    /// App-fed reachability. Flipping offline→online drains the queue automatically.
-    @MainActor public var isOnline = true {
-        didSet {
-            if isOnline && !oldValue { scheduleDrain() }
-        }
-    }
-    /// Called with the rejected rows after an *automatic* (reconnect) drain — the hook for drains the app
-    /// didn't trigger. Manual `drain()` callers get the result directly.
-    @MainActor public var onDrainComplete: (@MainActor ([SyncPushFailure]) -> Void)?
-
-    @MainActor private var outboundRegistrations: [OutboundRegistration] = []
-    /// The drain in progress, if any — concurrent callers coalesce onto it rather than racing or skipping.
-    @MainActor private var activeDrain: Task<[SyncPushFailure]?, Error>?
-    /// The in-flight reconnect drain — internal so tests can await it.
-    @MainActor private(set) var inFlightDrain: Task<Void, Never>?
 
     @MainActor
     public init(
@@ -242,72 +217,6 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
 
     public func export<Model: SyncUpdatableModel>(_ model: Model) -> [String: Any] {
         model.export(keyStyle: keyStyle, dateFormatter: dateFormatter)
-    }
-
-    // MARK: Outbound sync
-
-    /// Register a model's push transport (once, at setup).
-    @MainActor
-    public func register<Model: SyncUpdatableModel>(_ backend: SyncBackend, for _: Model.Type)
-    where Model.SyncID == String {
-        // Capture the context, not `self`, so the stored closure doesn't retain the container.
-        let mainContext = self.mainContext
-        outboundRegistrations.append(
-            OutboundRegistration(
-                drain: {
-                    try await SwiftSync.withPendingChanges(for: Model.self, in: mainContext) { pending in
-                        try await backend.push(pending)
-                    }
-                }))
-    }
-
-    /// Drain the pending queue for every registered model through its backend. Three distinct outcomes,
-    /// so the caller never mistakes a failed drain for a clean one:
-    /// - returns `nil` — **skipped** (offline, or a drain is already running); nothing ran.
-    /// - throws — the drain **did not complete** (a backend threw, e.g. transport/server error). The
-    ///   token didn't advance, so the rows stay pending and retry; the caller must not treat this as
-    ///   "synced".
-    /// - returns `[SyncPushFailure]` — **completed**: `[]` is fully clean, a non-empty array is the rows
-    ///   the server rejected (those stay pending).
-    @MainActor
-    @discardableResult
-    public func drain() async throws -> [SyncPushFailure]? {
-        guard isOnline else { return nil }
-        // Coalesce: a drain already in flight serves every concurrent caller, so a push-before-pull awaits
-        // the running upload instead of racing it (and the same batch is never pushed twice).
-        if let activeDrain { return try await activeDrain.value }
-
-        let registrations = outboundRegistrations
-        let task = Task { @MainActor () async throws -> [SyncPushFailure]? in
-            var collected: [SyncPushFailure] = []
-            for registration in registrations {
-                // Propagate, don't swallow: a swallowed error would read as a clean drain and let the
-                // caller clear its inbox. The row stays pending (the token only advances on a clean return).
-                collected += try await registration.drain()
-            }
-            return collected
-        }
-        activeDrain = task
-        defer { activeDrain = nil }
-        return try await task.value
-    }
-
-    @MainActor
-    private func scheduleDrain() {
-        inFlightDrain = Task { @MainActor [weak self] in
-            guard let self else { return }
-            // A failed (thrown) or skipped (nil) reconnect drain must not report a clean result: the rows
-            // stay pending and retry, and the app's inbox is left untouched.
-            do {
-                if let failures = try await self.drain() {
-                    self.onDrainComplete?(failures)
-                }
-            } catch {}
-        }
-    }
-
-    private struct OutboundRegistration {
-        let drain: @MainActor () async throws -> [SyncPushFailure]
     }
 
     private func installDidSaveObserver() {
