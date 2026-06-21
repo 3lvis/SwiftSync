@@ -203,26 +203,37 @@ public final class DemoSyncEngine {
     @discardableResult
     public func pushPendingChanges() async throws -> [SyncPushFailure]? {
         guard !isOffline else { return nil }
-        // Coalesce: a drain already running (e.g. a reconnect drain) serves a concurrent push-before-pull,
-        // so the pull awaits the upload instead of racing it.
+        // Coalesce onto a running drain: it converges (re-reads the pending set after every upload), so a
+        // caller that joins — a concurrent push-before-pull, or an edit landing mid-drain — is covered by
+        // a later pass and never stranded on a stale snapshot.
         if let activeDrain { return try await activeDrain.value }
 
-        let task = _Concurrency.Task { @MainActor in
-            try await SwiftSync.withPendingChanges(for: Task.self, in: syncContainer.mainContext) { pending in
-                try await self.upload(pending)
-            }
-        }
+        let task = _Concurrency.Task { @MainActor in try await self.drainToConvergence() }
         activeDrain = task
         defer { activeDrain = nil }
         isSyncing = true
         defer { isSyncing = !inFlightOperations.isEmpty }
+        return try await task.value
+    }
 
-        // A throw (transport/server error) propagates without annotating, so a transient failure leaves
-        // the inbox intact — only a completed push re-stamps `syncFailureReason`.
-        let failures = try await task.value
-        try annotateFailures(failures)
-        refreshPendingCount()
-        return failures
+    /// Upload pending changes pass by pass until the queue is empty, re-reading the pending set after each
+    /// pass. The history token advances only on a clean pass, so an edit that lands mid-upload stays
+    /// pending and is picked up by the next pass instead of being stranded (the P1 strand).
+    ///
+    /// Stops on a pass that leaves failures: a rejected row pins the token (`withPendingChanges` won't
+    /// advance past it), so nothing more can drain until the user resolves it — looping would spin. A
+    /// throw (transport/server error) propagates without annotating, leaving the inbox intact — only a
+    /// completed pass re-stamps `syncFailureReason`.
+    private func drainToConvergence() async throws -> [SyncPushFailure] {
+        var lastFailures: [SyncPushFailure] = []
+        repeat {
+            lastFailures = try await SwiftSync.withPendingChanges(for: Task.self, in: syncContainer.mainContext) {
+                pending in try await self.upload(pending)
+            }
+            try annotateFailures(lastFailures)
+            refreshPendingCount()
+        } while !isOffline && lastFailures.isEmpty && pendingChangeCount > 0
+        return lastFailures
     }
 
     /// Serialize the pending batch into the `/sync/upload` operations, POST once, and return only the
