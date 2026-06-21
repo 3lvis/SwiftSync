@@ -2,19 +2,14 @@ import Foundation
 import SwiftData
 @preconcurrency import SwiftSync
 
-/// The backend's rejection of a pushed row, bubbled up through `SyncPushFailure.error`. This is the
-/// app's own error type — SwiftSync carries it verbatim and never interprets it.
 public struct DemoUploadRejection: LocalizedError, Sendable {
     public let message: String
     public var errorDescription: String? { message }
 }
 
-/// The demo's `/sync/upload` transport, registered on the `SyncContainer`. Turns the pending Task ids into
-/// the operation list, POSTs it once, and maps the per-row results back to `[SyncPushFailure]`. Every
-/// created-or-edited row is an `upsert` keyed by its stable `id` (the server find-by-id → update-else-create,
-/// adopting that `id` as the row's `public_id` — no distinct server id comes back); tombstones are a
-/// `delete` by the same `id`. A `stale` result means the server won last-writer-wins — adopt its state
-/// locally and report no failure for that row (resolved, not rejected).
+/// The demo's `/sync/upload` transport. The client `id` is the identity the server adopts as its
+/// `public_id` (an idempotent upsert — no separate server id comes back), so a re-push converges; a
+/// `stale` result means the server won last-writer-wins.
 @MainActor
 final class TaskBackend: SyncBackend {
     private unowned let syncContainer: SyncContainer
@@ -52,8 +47,7 @@ final class TaskBackend: SyncBackend {
             guard let id = result["id"] as? String else { continue }
             switch result["status"] as? String {
             case "stale":
-                // The server won last-writer-wins — adopt its state locally (the inbound sync re-creates a
-                // hard-deleted row when a delete loses); the row is resolved, not a failure.
+                // Server won LWW: adopt its state (a stale delete revives the row) — resolved, not a failure.
                 if let server = result["server"] as? [String: Any] {
                     try? await syncContainer.sync(
                         item: DemoSyncPayload(dictionary: server), as: Task.self)
@@ -61,8 +55,6 @@ final class TaskBackend: SyncBackend {
             case "applied":
                 break
             default:
-                // Bubble the backend's rejection up as this app's own error; the engine reads it back from
-                // the drain result to annotate the failures inbox.
                 failures.append(
                     SyncPushFailure(
                         id: id, error: DemoUploadRejection(message: (result["message"] as? String) ?? "rejected")))

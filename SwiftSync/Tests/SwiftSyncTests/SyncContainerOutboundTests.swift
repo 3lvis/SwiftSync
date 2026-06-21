@@ -5,7 +5,6 @@ import XCTest
 
 private struct EngineTestError: Error, Equatable { let id: String }
 
-/// Confirms everything (no failures) and records the batches it was handed.
 private actor ConfirmingBackend: SyncBackend {
     private(set) var batches: [SyncPendingChanges] = []
     func push(_ pending: SyncPendingChanges) async throws -> [SyncPushFailure] {
@@ -14,7 +13,6 @@ private actor ConfirmingBackend: SyncBackend {
     }
 }
 
-/// Rejects one id, confirms the rest.
 private struct RejectingBackend: SyncBackend {
     let rejectID: String
     func push(_ pending: SyncPendingChanges) async throws -> [SyncPushFailure] {
@@ -22,7 +20,7 @@ private struct RejectingBackend: SyncBackend {
     }
 }
 
-/// Throws — a transport/server error, *not* a per-row rejection.
+/// Throws instead of returning failures — a transport/server error, not a per-row rejection.
 private struct ThrowingBackend: SyncBackend {
     struct PushError: Error {}
     func push(_ pending: SyncPendingChanges) async throws -> [SyncPushFailure] { throw PushError() }
@@ -47,7 +45,6 @@ final class SyncContainerOutboundTests: XCTestCase {
         try container.mainContext.save()
     }
 
-    /// A drain pushes every pending row through the registered backend and clears the queue.
     func testDrainPushesPendingThroughBackendAndClears() async throws {
         let container = try makeContainer()
         let backend = ConfirmingBackend()
@@ -62,7 +59,6 @@ final class SyncContainerOutboundTests: XCTestCase {
         XCTAssertTrue(try SwiftSync.pendingChanges(for: PushNote.self, in: container.mainContext).isEmpty)
     }
 
-    /// While offline, a drain does nothing — the backend is never called and the change stays pending.
     func testOfflineDrainIsNoOp() async throws {
         let container = try makeContainer(isOnline: false)
         let backend = ConfirmingBackend()
@@ -78,7 +74,6 @@ final class SyncContainerOutboundTests: XCTestCase {
             try SwiftSync.pendingChanges(for: PushNote.self, in: container.mainContext).inserts, ["n1"])
     }
 
-    /// Flipping offline→online drains the queue automatically and reports the result to `onDrainComplete`.
     func testReconnectAutoDrainsAndReportsResult() async throws {
         let container = try makeContainer(isOnline: false)
         let backend = ConfirmingBackend()
@@ -97,7 +92,6 @@ final class SyncContainerOutboundTests: XCTestCase {
         XCTAssertTrue(try SwiftSync.pendingChanges(for: PushNote.self, in: container.mainContext).isEmpty)
     }
 
-    /// A rejection comes back from `drain()` verbatim; the row stays pending (token frozen).
     func testDrainReturnsRejections() async throws {
         let container = try makeContainer()
         container.register(RejectingBackend(rejectID: "n2"), for: PushNote.self)
@@ -112,8 +106,6 @@ final class SyncContainerOutboundTests: XCTestCase {
             ["n1", "n2"], "any failure freezes the token, so both stay pending")
     }
 
-    /// A backend that throws (transport/server error) must surface as a thrown drain — never a clean
-    /// empty result that the app would mistake for "all synced" and use to wipe its failures inbox.
     func testDrainThrowsOnBackendErrorRatherThanReportingClean() async throws {
         let container = try makeContainer()
         container.register(ThrowingBackend(), for: PushNote.self)
@@ -122,16 +114,12 @@ final class SyncContainerOutboundTests: XCTestCase {
         do {
             _ = try await container.drain()
             XCTFail("a throwing backend must surface as a thrown drain, not a clean/empty result")
-        } catch is ThrowingBackend.PushError {
-            // expected
-        }
+        } catch is ThrowingBackend.PushError {}
         XCTAssertEqual(
             try SwiftSync.pendingChanges(for: PushNote.self, in: container.mainContext).inserts, ["n1"],
             "a failed drain advances nothing — the row stays pending")
     }
 
-    /// A failed reconnect drain must not fire `onDrainComplete` (which would report a clean result and let
-    /// the app clear its inbox); the rows stay pending and retry.
     func testReconnectDoesNotReportWhenBackendThrows() async throws {
         let container = try makeContainer(isOnline: false)
         container.register(ThrowingBackend(), for: PushNote.self)

@@ -22,9 +22,8 @@ public final class DemoSyncEngine {
 
     public private(set) var isSyncing = false
 
-    /// Simulated airplane mode. The state lives at the transport (`apiClient`); this mirror drives it
-    /// and lets the UI bind to it. While offline, pulls keep serving the local cache, task edits queue
-    /// locally, and push is held — `SyncContainer` reconciles it on reconnect (`isOnline` flip).
+    /// Simulated airplane mode the UI binds to. The didSet forwards it to the transport and to
+    /// `SyncContainer.isOnline`, which drains the queued offline edits on reconnect.
     public var isOffline = false {
         didSet {
             apiClient.isOffline = isOffline
@@ -45,9 +44,8 @@ public final class DemoSyncEngine {
     public init(syncContainer: SyncContainer, apiClient: FakeDemoAPIClient) {
         self.syncContainer = syncContainer
         self.apiClient = apiClient
-        // The container owns the outbound queue: register the transport, and re-stamp the failures inbox
-        // after a reconnect drain it ran on its own.
         syncContainer.register(TaskBackend(syncContainer: syncContainer, apiClient: apiClient), for: Task.self)
+        // Re-stamp the inbox after a reconnect drain the container ran on its own (the app didn't call it).
         syncContainer.onDrainComplete = { [weak self] failures in
             guard let self else { return }
             try? self.annotateFailures(failures)
@@ -199,18 +197,15 @@ public final class DemoSyncEngine {
         return ids.compactMap { byID[$0] }
     }
 
-    /// Drain the pending task queue through the container's registered backend and reflect the result on
-    /// the failures inbox. Returns `nil` while offline or when the drain was skipped/failed. The container
-    /// owns the push orchestration and de-dups concurrent drains.
+    /// Push pending task changes through the container and stamp any rejections on the failures inbox.
     @discardableResult
     public func pushPendingChanges() async throws -> [SyncPushFailure]? {
         guard !isOffline else { return nil }
         isSyncing = true
         defer { isSyncing = !inFlightOperations.isEmpty }
 
-        // `drain()` returns nil when skipped (a drain is already running) and throws when it didn't
-        // complete (transport/server error) — in neither case do we touch the inbox, so a transient
-        // failure can't wipe `syncFailureReason`. Only a completed drain re-annotates.
+        // A skipped (nil) or failed (thrown) drain leaves the inbox alone — only a completed drain
+        // re-annotates, so a transient failure can't wipe `syncFailureReason`.
         guard let failures = try await syncContainer.drain() else { return nil }
         try annotateFailures(failures)
         refreshPendingCount()

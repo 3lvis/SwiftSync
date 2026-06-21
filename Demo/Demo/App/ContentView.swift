@@ -28,8 +28,6 @@ struct ContentView: View {
                     }
                 }
             }
-            // Reconnecting drains the offline queue automatically — SyncContainer does it on the
-            // isOnline flip (DemoSyncEngine forwards isOffline), so there's no manual sync step here.
             .sheet(isPresented: $showingFailures) {
                 FailuresSheet(syncContainer: runtime.syncContainer, syncEngine: engine)
             }

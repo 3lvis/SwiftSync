@@ -9,10 +9,9 @@ struct UncheckedSendableBox<Value>: @unchecked Sendable {
     init(_ value: Value) { self.value = value }
 }
 
-/// How an app pushes a model's pending changes to its backend. Registered once per offline model with
-/// `SyncContainer.register(_:for:)`; the container calls `push` whenever it drains the queue. The closure
-/// owns the network call and returns only the rejected rows (everything else is confirmed) — the same
-/// contract as `SwiftSync.withPendingChanges`'s `process` closure, promoted to a registered object.
+/// An app's transport for pushing a model's pending changes. Returns only the rejected rows — everything
+/// else is treated as confirmed (the client id is the server's identity, so a push is an idempotent
+/// upsert). Registered once per offline model via `register(_:for:)`.
 public protocol SyncBackend: Sendable {
     func push(_ pending: SyncPendingChanges) async throws -> [SyncPushFailure]
 }
@@ -35,13 +34,13 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             if isOnline && !oldValue { scheduleDrain() }
         }
     }
-    /// Called with the rejected rows after an automatic (reconnect) drain. The app owns the reaction —
-    /// surfacing failures, recomputing its own counts from `pendingChanges`. SwiftSync keeps no UI state.
+    /// Called with the rejected rows after an *automatic* (reconnect) drain — the hook for drains the app
+    /// didn't trigger. Manual `drain()` callers get the result directly.
     public var onDrainComplete: (@MainActor ([SyncPushFailure]) -> Void)?
 
     private var outboundRegistrations: [OutboundRegistration] = []
     private var isDraining = false
-    /// The in-flight reconnect drain, if any — exposed so callers (and tests) can await it.
+    /// The in-flight reconnect drain — internal so tests can await it.
     private(set) var inFlightDrain: Task<Void, Never>?
 
     @MainActor
@@ -246,7 +245,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
 
     // MARK: Outbound sync
 
-    /// Register how an offline model pushes. Call once per pushable model at setup.
+    /// Register a model's push transport (once, at setup).
     @MainActor
     public func register<Model: SyncUpdatableModel>(_ backend: SyncBackend, for _: Model.Type)
     where Model.SyncID == String {
@@ -278,9 +277,8 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
 
         var collected: [SyncPushFailure] = []
         for registration in outboundRegistrations {
-            // A thrown error (transport/server failure) propagates — the drain "did not complete", so the
-            // caller must not treat it as clean. `withPendingChanges` only advances the token on a clean
-            // return, so a throw leaves every row pending to retry.
+            // Propagate, don't swallow: a swallowed error would read as a clean drain and let the caller
+            // clear its inbox. The row stays pending (the token only advances on a clean return) to retry.
             collected += try await registration.drain()
         }
         return collected
