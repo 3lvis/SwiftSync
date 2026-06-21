@@ -37,7 +37,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     }
     /// Called with the rejected rows after an automatic (reconnect) drain. The app owns the reaction —
     /// surfacing failures, recomputing its own counts from `pendingChanges`. SwiftSync keeps no UI state.
-    public var onDrainComplete: (([SyncPushFailure]) -> Void)?
+    public var onDrainComplete: (@MainActor ([SyncPushFailure]) -> Void)?
 
     private var outboundRegistrations: [OutboundRegistration] = []
     private var isDraining = false
@@ -250,9 +250,11 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     @MainActor
     public func register<Model: SyncUpdatableModel>(_ backend: SyncBackend, for _: Model.Type)
     where Model.SyncID == String {
+        // Capture the context, not `self`, so the stored closure doesn't retain the container.
+        let mainContext = self.mainContext
         outboundRegistrations.append(
             OutboundRegistration(
-                drain: { [self] in
+                drain: {
                     try await SwiftSync.withPendingChanges(for: Model.self, in: mainContext) { pending in
                         try await backend.push(pending)
                     }

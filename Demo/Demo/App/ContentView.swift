@@ -28,12 +28,8 @@ struct ContentView: View {
                     }
                 }
             }
-            // Reconnecting drains the offline queue automatically — no manual sync step.
-            .onChange(of: engine.isOffline) { _, isNowOffline in
-                if !isNowOffline && engine.pendingChangeCount > 0 {
-                    _Concurrency.Task { try? await engine.pushPendingChanges() }
-                }
-            }
+            // Reconnecting drains the offline queue automatically — SyncContainer does it on the
+            // isOnline flip (DemoSyncEngine forwards isOffline), so there's no manual sync step here.
             .sheet(isPresented: $showingFailures) {
                 FailuresSheet(syncContainer: runtime.syncContainer, syncEngine: engine)
             }

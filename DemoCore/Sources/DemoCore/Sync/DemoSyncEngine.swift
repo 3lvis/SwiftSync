@@ -3,13 +3,6 @@ import Observation
 import SwiftData
 @preconcurrency import SwiftSync
 
-/// The backend's rejection of a pushed row, bubbled up through `SyncPushFailure.error`. This is the
-/// app's own error type — SwiftSync carries it verbatim and never interprets it.
-public struct DemoUploadRejection: LocalizedError, Sendable {
-    public let message: String
-    public var errorDescription: String? { message }
-}
-
 @MainActor
 @Observable
 public final class DemoSyncEngine {
@@ -31,9 +24,12 @@ public final class DemoSyncEngine {
 
     /// Simulated airplane mode. The state lives at the transport (`apiClient`); this mirror drives it
     /// and lets the UI bind to it. While offline, pulls keep serving the local cache, task edits queue
-    /// locally, and push is held — reconciled on reconnect.
+    /// locally, and push is held — `SyncContainer` reconciles it on reconnect (`isOnline` flip).
     public var isOffline = false {
-        didSet { apiClient.isOffline = isOffline }
+        didSet {
+            apiClient.isOffline = isOffline
+            syncContainer.isOnline = !isOffline
+        }
     }
 
     public private(set) var pendingChangeCount = 0
@@ -49,6 +45,14 @@ public final class DemoSyncEngine {
     public init(syncContainer: SyncContainer, apiClient: FakeDemoAPIClient) {
         self.syncContainer = syncContainer
         self.apiClient = apiClient
+        // The container owns the outbound queue: register the transport, and re-stamp the failures inbox
+        // after a reconnect drain it ran on its own.
+        syncContainer.register(TaskBackend(syncContainer: syncContainer, apiClient: apiClient), for: Task.self)
+        syncContainer.onDrainComplete = { [weak self] failures in
+            guard let self else { return }
+            try? self.annotateFailures(failures)
+            self.refreshPendingCount()
+        }
     }
 
     public func syncProjects() async throws {
@@ -195,27 +199,16 @@ public final class DemoSyncEngine {
         return ids.compactMap { byID[$0] }
     }
 
-    /// Push every locally-pending task change to the server and apply the result. Returns `nil` while
-    /// offline (no network) or if a push is already in flight.
+    /// Drain the pending task queue through the container's registered backend and reflect the result on
+    /// the failures inbox. Returns `nil` while offline (the container holds the queue until reconnect).
+    /// The container owns the push orchestration and de-dups concurrent drains.
     @discardableResult
     public func pushPendingChanges() async throws -> [SyncPushFailure]? {
         guard !isOffline else { return nil }
-        let key = "push"
-        guard !inFlightOperations.contains(key) else { return nil }
-
-        inFlightOperations.insert(key)
         isSyncing = true
-        defer {
-            inFlightOperations.remove(key)
-            isSyncing = !inFlightOperations.isEmpty
-        }
+        defer { isSyncing = !inFlightOperations.isEmpty }
 
-        let failures = try await SwiftSync.withPendingChanges(
-            for: Task.self,
-            in: syncContainer.mainContext
-        ) { pending in
-            try await self.upload(pending)
-        }
+        let failures = await syncContainer.drain()
         try annotateFailures(failures)
         refreshPendingCount()
         return failures
@@ -265,72 +258,6 @@ public final class DemoSyncEngine {
             if let task = try task(withID: id) { task.syncFailureReason = reason }
         }
         try syncContainer.mainContext.save()
-    }
-
-    /// Serialize the pending batch into the `/sync/upload` operation list, POST it once, and return only
-    /// the per-row failures — SwiftSync confirms everything else by complement. Every created-or-edited
-    /// row is an `upsert` keyed by its stable `id` (the server find-by-id → update-else-creates, adopting
-    /// that `id` as the row's `public_id` — no distinct server id comes back); tombstones are a `delete`
-    /// by the same `id`. A `stale` result means the server won last-writer-wins — adopt its state locally
-    /// and treat the row as resolved (not a failure) so it isn't re-sent.
-    private func upload(_ pending: SyncPendingChanges) async throws -> [SyncPushFailure] {
-        var operations: [[String: Any]] = []
-
-        for id in pending.inserts + pending.updates {
-            guard let task = try task(withID: id) else { continue }
-            let data = taskData(task)
-            operations.append([
-                "operation": "upsert", "type": "tasks", "id": id,
-                "updatedAt": data["updated_at"] ?? "", "data": data,
-            ])
-        }
-        for id in pending.deletes {
-            // The row is already hard-deleted locally — its id is recovered from store history — so the
-            // delete can't fetch the gone task. Stamp the deletion time now for the server's LWW check.
-            operations.append([
-                "operation": "delete", "type": "tasks", "id": id,
-                "updatedAt": syncContainer.dateFormatter.string(from: Date()),
-            ])
-        }
-
-        let results = try await apiClient.upload(operations: operations)
-
-        var failures: [SyncPushFailure] = []
-        for result in results {
-            let operation = result["operation"] as? String
-            let status = result["status"] as? String
-            let id = result["id"] as? String
-            switch (operation, status) {
-            case ("upsert", "stale"), ("delete", "stale"):
-                // The server won last-writer-wins — adopt its state locally (the inbound sync re-creates a
-                // hard-deleted row when a delete loses) and treat the row as resolved, not a failure.
-                if let server = result["server"] as? [String: Any] {
-                    try? await syncContainer.sync(
-                        item: DemoSyncPayload(dictionary: server), as: Task.self)
-                }
-            case ("upsert", "applied"), ("delete", "applied"):
-                break
-            default:
-                // Bubble the backend's rejection up as this app's own error. SwiftSync returns the
-                // failures verbatim without interpreting them; the engine reads them back to annotate
-                // the inbox.
-                failures.append(
-                    SyncPushFailure(
-                        id: id ?? "",
-                        error: DemoUploadRejection(
-                            message: (result["message"] as? String) ?? "rejected")))
-            }
-        }
-        return failures
-    }
-
-    /// The task's upload payload: its exported scalars plus `reviewer_ids`/`watcher_ids` (which are
-    /// `@NotExport`, so `export` omits them) so relationship edits travel with the operation.
-    private func taskData(_ task: Task) -> [String: Any] {
-        var data = syncContainer.export(task)
-        data["reviewer_ids"] = task.reviewers.map(\.id)
-        data["watcher_ids"] = task.watchers.map(\.id)
-        return data
     }
 
     private func refreshPendingCount() {
