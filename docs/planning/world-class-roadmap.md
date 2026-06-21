@@ -131,6 +131,14 @@ is a separate SPM product (↔ Networking items 5–6).
 
 ### Demo app — follow-ups
 
+- [ ] **Review the push/drain pipeline end-to-end, test-harness first.** See
+      `docs/planning/push-drain-review-plan.md` — the single plan for this effort. Covers the coalescing
+      strand (P1) and the racy offline-no-op test (P2), but the real deliverable is a *deterministic test
+      harness* (a controllable upload seam) so this class of ordering bug is easy to reproduce → fix
+      red-first. An earlier in-session attempt at P1 (a serialized-chain fix) and P2 (a test-race edit)
+      was reverted — both jumped ahead of a red test; the chain even looked "correct-by-construction,"
+      which is exactly the trap. Start from the harness, not the fix.
+
 - [x] **Consolidate the online people-edit save into one round-trip.** Done: `updateTask`/`createTask`
       now honor `reviewer_ids`/`watcher_ids` in the task body (the `.save` handler in `ScreenMachines.swift`
       adds the `@NotExport` people to the body and drops the separate `replaceTaskReviewers`/

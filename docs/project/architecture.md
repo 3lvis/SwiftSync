@@ -26,8 +26,9 @@ generics, offline, reconnect, the failures inbox — falls out cleanly.
  │  The ONLY layer that talks to the backend. Decides ordering    │
  │  (push-before-pull, drain-on-reconnect), which endpoint, when.  │
  │  Holds cross-cutting sync STATUS (isOffline, isSyncing,         │
- │  pending/failed counts, the failures inbox). Uses SwiftSync as  │
- │  a black box — does NOT know how it stores.                     │
+ │  pending/failed counts, the failures inbox). Uses SwiftData     │
+ │  directly for plain local reads/writes, and SwiftSync for the   │
+ │  SYNC magic — it never reimplements SwiftSync's sync internals. │
  └───────────────────────────▲────────────────────────────────────┘
                               │ "store these" / "what changed locally?"
  ┌─ SwiftSync  (STORAGE) ────────────────────────────────────────┐
@@ -139,12 +140,18 @@ The **push/drain orchestration lives in the engine** (it's *when/ordering*, i.e.
 
 ## State machines (per screen)
 
-One state machine **per screen** (`ScreenMachines`). It is the presentation layer between a view and the
-engine: it hosts the screen's reactive store query (data), models the `loading/loaded/empty/error`
-lifecycle (status), and asks the engine to load. It is *not* redundant with the engine — the engine owns
-**cross-cutting, app-wide** sync status (the offline toggle, badge counts, the inbox); each machine owns
-**one screen's** data+status. The data is a live store query (it reloads on any store change), not a
-snapshot the machine fetches once.
+A screen with a **load lifecycle** gets a state machine (`ScreenMachines`): the presentation layer between
+a view and the engine, hosting the screen's reactive store query (data), modelling the
+`loading/loaded/empty/error` lifecycle (status), and asking the engine to load. It is *not* redundant with
+the engine — the engine owns **cross-cutting, app-wide** sync status (the offline toggle, badge counts,
+the inbox); each machine owns **one screen's** data+status. The data is a live store query (it reloads on
+any store change), not a snapshot the machine fetches once.
+
+A screen with **no load lifecycle** doesn't need a machine. The failures inbox (`FailuresSheet`) is the
+example: it has no loading/empty/error states to model, so it holds its `SyncQueryPublisher` directly in
+the view (and the `DemoSyncEngine` for the discard action). The rule isn't "every screen has a machine" —
+it's "data is a reactive store query, status is modelled where a lifecycle exists." A machine is just the
+home for that pairing when a lifecycle warrants it.
 
 ## Framework-agnostic: SwiftUI *and* UIKit
 
