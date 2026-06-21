@@ -261,21 +261,27 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
                 }))
     }
 
-    /// Drain the pending queue for every registered model through its backend, returning the rejected
-    /// rows. A no-op (returns `[]`) while offline or when a drain is already running. Per-model errors are
-    /// swallowed: those rows simply stay pending and are retried next drain.
+    /// Drain the pending queue for every registered model through its backend. Three distinct outcomes,
+    /// so the caller never mistakes a failed drain for a clean one:
+    /// - returns `nil` — **skipped** (offline, or a drain is already running); nothing ran.
+    /// - throws — the drain **did not complete** (a backend threw, e.g. transport/server error). The
+    ///   token didn't advance, so the rows stay pending and retry; the caller must not treat this as
+    ///   "synced".
+    /// - returns `[SyncPushFailure]` — **completed**: `[]` is fully clean, a non-empty array is the rows
+    ///   the server rejected (those stay pending).
     @MainActor
     @discardableResult
-    public func drain() async -> [SyncPushFailure] {
-        guard isOnline, !isDraining else { return [] }
+    public func drain() async throws -> [SyncPushFailure]? {
+        guard isOnline, !isDraining else { return nil }
         isDraining = true
         defer { isDraining = false }
 
         var collected: [SyncPushFailure] = []
         for registration in outboundRegistrations {
-            if let modelFailures = try? await registration.drain() {
-                collected += modelFailures
-            }
+            // A thrown error (transport/server failure) propagates — the drain "did not complete", so the
+            // caller must not treat it as clean. `withPendingChanges` only advances the token on a clean
+            // return, so a throw leaves every row pending to retry.
+            collected += try await registration.drain()
         }
         return collected
     }
@@ -283,8 +289,13 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     private func scheduleDrain() {
         inFlightDrain = Task { @MainActor [weak self] in
             guard let self else { return }
-            let failures = await self.drain()
-            self.onDrainComplete?(failures)
+            // A failed (thrown) or skipped (nil) reconnect drain must not report a clean result: the rows
+            // stay pending and retry, and the app's inbox is left untouched.
+            do {
+                if let failures = try await self.drain() {
+                    self.onDrainComplete?(failures)
+                }
+            } catch {}
         }
     }
 

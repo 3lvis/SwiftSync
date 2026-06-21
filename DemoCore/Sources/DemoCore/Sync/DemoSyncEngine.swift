@@ -200,15 +200,18 @@ public final class DemoSyncEngine {
     }
 
     /// Drain the pending task queue through the container's registered backend and reflect the result on
-    /// the failures inbox. Returns `nil` while offline (the container holds the queue until reconnect).
-    /// The container owns the push orchestration and de-dups concurrent drains.
+    /// the failures inbox. Returns `nil` while offline or when the drain was skipped/failed. The container
+    /// owns the push orchestration and de-dups concurrent drains.
     @discardableResult
     public func pushPendingChanges() async throws -> [SyncPushFailure]? {
         guard !isOffline else { return nil }
         isSyncing = true
         defer { isSyncing = !inFlightOperations.isEmpty }
 
-        let failures = await syncContainer.drain()
+        // `drain()` returns nil when skipped (a drain is already running) and throws when it didn't
+        // complete (transport/server error) — in neither case do we touch the inbox, so a transient
+        // failure can't wipe `syncFailureReason`. Only a completed drain re-annotates.
+        guard let failures = try await syncContainer.drain() else { return nil }
         try annotateFailures(failures)
         refreshPendingCount()
         return failures
