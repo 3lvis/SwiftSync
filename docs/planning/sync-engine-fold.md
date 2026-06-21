@@ -44,6 +44,18 @@ Built on the push-seam work in **#644** (`withPendingChanges` + `process` closur
 `[SyncPushFailure]`). The total-accounting variant (#645, `[String: SyncRowOutcome]`) was dropped, so
 `SyncBackend.push` returns `[SyncPushFailure]`. Start this once #644 merges, and branch off master.
 
+## Revised architecture (decided during implementation)
+
+- **No separate `SyncEngine` type — `SyncContainer` absorbs the outbound machinery.** It's the object
+  the app already injects, so it owns `register(_:for:)`, `drain() -> [SyncPushFailure]`, `isOnline`
+  (auto-drains on reconnect), and an `onDrainComplete` handler for the reconnect result. The
+  `sync(payload:)` path and the cross-thread `@objc` did-save handler are left untouched, so bulk sync
+  stays off-main and `SyncContainer` stays a plain `@unchecked Sendable NSObject` (no `@Observable` /
+  `@MainActor` reshuffle, no unsound `@unchecked` + observable-state combination).
+- **Counts are NOT library state.** `pendingCount` / `failedCount` are a UI concern the app derives from
+  the existing `pendingChanges` primitive + the failures `drain()` returns. The library keeps no UI
+  state. (Shipped: library side done — `SyncContainerOutboundTests`, 175 green.)
+
 ## Sequencing principle
 
 Work **section by section**, not micro-task by micro-task. Each section is one self-contained,
