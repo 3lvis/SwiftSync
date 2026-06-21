@@ -642,6 +642,8 @@ let failures = try await SwiftSync.withPendingChanges(for: Task.self, in: syncCo
 // No history token to persist — SwiftSync owns it. `failures` is empty on a fully clean pass.
 ```
 
+`withPendingChanges` is the storage *primitive* — SwiftSync brackets the local-change detection and the history token; **you** own the network call and decide *when* to push. Orchestration (push-before-pull, draining on reconnect, surfacing the failures inbox) is the app's job, not the library's — see the demo's `DemoSyncEngine` and [`docs/project/architecture.md`](docs/project/architecture.md) for the layering.
+
 Inbound pulls are tagged internally so a freshly-pulled row is never mistaken for a local edit; an un-pushed local insert survives a pull that omits it, and a newer local edit isn't clobbered by an older server version (last-writer-wins). Offline requires a persistent store (history is unavailable to ephemeral stores).
 
 ## Date Handling

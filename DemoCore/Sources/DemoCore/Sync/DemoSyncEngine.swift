@@ -3,8 +3,6 @@ import Observation
 import SwiftData
 @preconcurrency import SwiftSync
 
-/// The backend's rejection of a pushed row, bubbled up through `SyncPushFailure.error`. This is the
-/// app's own error type — SwiftSync carries it verbatim and never interprets it.
 public struct DemoUploadRejection: LocalizedError, Sendable {
     public let message: String
     public var errorDescription: String? { message }
@@ -29,11 +27,14 @@ public final class DemoSyncEngine {
 
     public private(set) var isSyncing = false
 
-    /// Simulated airplane mode. The state lives at the transport (`apiClient`); this mirror drives it
-    /// and lets the UI bind to it. While offline, pulls keep serving the local cache, task edits queue
-    /// locally, and push is held — reconciled on reconnect.
+    /// Simulated airplane mode the UI binds to. Flipping back online drains the offline queue.
     public var isOffline = false {
-        didSet { apiClient.isOffline = isOffline }
+        didSet {
+            apiClient.isOffline = isOffline
+            if !isOffline && oldValue {
+                _Concurrency.Task { try? await pushPendingChanges() }
+            }
+        }
     }
 
     public private(set) var pendingChangeCount = 0
@@ -42,6 +43,8 @@ public final class DemoSyncEngine {
     public private(set) var failedChangeCount = 0
 
     private var inFlightOperations: Set<String> = []
+    /// The drain in progress, if any — concurrent pushes (reconnect + push-before-pull) coalesce onto it.
+    private var activeDrain: _Concurrency.Task<[SyncPushFailure], Error>?
 
     private let syncContainer: SyncContainer
     private let apiClient: FakeDemoAPIClient
@@ -195,76 +198,42 @@ public final class DemoSyncEngine {
         return ids.compactMap { byID[$0] }
     }
 
-    /// Push every locally-pending task change to the server and apply the result. Returns `nil` while
-    /// offline (no network) or if a push is already in flight.
+    /// Drain the pending task changes to the server and stamp any rejections on the failures inbox.
+    /// SwiftSync brackets the storage token; the `upload` closure is the networking half.
     @discardableResult
     public func pushPendingChanges() async throws -> [SyncPushFailure]? {
         guard !isOffline else { return nil }
-        let key = "push"
-        guard !inFlightOperations.contains(key) else { return nil }
+        // Coalesce onto a running drain: it converges (re-reads the pending set after every upload), so a
+        // caller that joins — a concurrent push-before-pull, or an edit landing mid-drain — is covered by
+        // a later pass and never stranded on a stale snapshot.
+        if let activeDrain { return try await activeDrain.value }
 
-        inFlightOperations.insert(key)
+        let task = _Concurrency.Task { @MainActor in try await self.drainToConvergence() }
+        activeDrain = task
+        defer { activeDrain = nil }
         isSyncing = true
-        defer {
-            inFlightOperations.remove(key)
-            isSyncing = !inFlightOperations.isEmpty
-        }
-
-        let failures = try await SwiftSync.withPendingChanges(
-            for: Task.self,
-            in: syncContainer.mainContext
-        ) { pending in
-            try await self.upload(pending)
-        }
-        try annotateFailures(failures)
-        refreshPendingCount()
-        return failures
+        defer { isSyncing = !inFlightOperations.isEmpty }
+        return try await task.value
     }
 
-    /// Apply a payload to the local store as a *local* edit (default author), so it's tracked as a
-    /// pending change — unlike `syncContainer.sync(item:)`, which stamps writes as inbound (pulled).
-    /// Reuses the `@Syncable`-generated `make`/`apply`, so no field mapping is duplicated here.
-    private func applyLocalTask(_ body: DemoSyncPayload, project: Project? = nil) throws {
-        let values = body.toSyncPayloadDictionary()
-        let payload = SyncPayload(values: values, keyStyle: syncContainer.keyStyle)
-        let context = syncContainer.mainContext
-        let task: Task
-        if let id = payload.value(for: "id", as: String.self), let existing = try self.task(withID: id) {
-            _ = try existing.apply(payload)
-            task = existing
-        } else {
-            let created = try Task.make(from: payload)
-            context.insert(created)
-            if let project { created.project = project }
-            task = created
-        }
-        // reviewers/watchers are @NotExport, so apply()/make() won't set them from the body. Apply the
-        // relationships explicitly so an offline people edit shows locally before any server round-trip.
-        if let reviewerIDs = values["reviewer_ids"] as? [String] { task.reviewers = try users(for: reviewerIDs) }
-        if let watcherIDs = values["watcher_ids"] as? [String] { task.watchers = try users(for: watcherIDs) }
-        try context.save()
-    }
-
-    /// A task whose only history is a never-pushed local insert (it's in the pending-insert set).
-    private func isNeverPushed(_ taskID: String) -> Bool {
-        let pending = try? SwiftSync.pendingChanges(for: Task.self, in: syncContainer.mainContext)
-        return pending?.inserts.contains(taskID) ?? false
-    }
-
-    /// Reflect a push's outcome onto the inbox: stamp `syncFailureReason` on each rejected row and
-    /// clear it from any row that no longer fails (it succeeded, or its corrected edit went through).
-    /// SwiftSync persists nothing — the failures inbox is entirely this app's concern.
-    private func annotateFailures(_ failures: [SyncPushFailure]) throws {
-        let reasonsByID = Dictionary(
-            failures.map { ($0.id, $0.error.localizedDescription) },
-            uniquingKeysWith: { first, _ in first })
-        for task in failedTasks() where reasonsByID[task.id] == nil {
-            task.syncFailureReason = nil
-        }
-        for (id, reason) in reasonsByID {
-            if let task = try task(withID: id) { task.syncFailureReason = reason }
-        }
-        try syncContainer.mainContext.save()
+    /// Upload pending changes pass by pass until the queue is empty, re-reading the pending set after each
+    /// pass. The history token advances only on a clean pass, so an edit that lands mid-upload stays
+    /// pending and is picked up by the next pass instead of being stranded (the P1 strand).
+    ///
+    /// Stops on a pass that leaves failures: a rejected row pins the token (`withPendingChanges` won't
+    /// advance past it), so nothing more can drain until the user resolves it — looping would spin. A
+    /// throw (transport/server error) propagates without annotating, leaving the inbox intact — only a
+    /// completed pass re-stamps `syncFailureReason`.
+    private func drainToConvergence() async throws -> [SyncPushFailure] {
+        var lastFailures: [SyncPushFailure] = []
+        repeat {
+            lastFailures = try await SwiftSync.withPendingChanges(for: Task.self, in: syncContainer.mainContext) {
+                pending in try await self.upload(pending)
+            }
+            try annotateFailures(lastFailures)
+            refreshPendingCount()
+        } while !isOffline && lastFailures.isEmpty && pendingChangeCount > 0
+        return lastFailures
     }
 
     /// Serialize the pending batch into the `/sync/upload` operation list, POST it once, and return only
@@ -331,6 +300,52 @@ public final class DemoSyncEngine {
         data["reviewer_ids"] = task.reviewers.map(\.id)
         data["watcher_ids"] = task.watchers.map(\.id)
         return data
+    }
+
+    /// Apply a payload to the local store as a *local* edit (default author), so it's tracked as a
+    /// pending change — unlike `syncContainer.sync(item:)`, which stamps writes as inbound (pulled).
+    /// Reuses the `@Syncable`-generated `make`/`apply`, so no field mapping is duplicated here.
+    private func applyLocalTask(_ body: DemoSyncPayload, project: Project? = nil) throws {
+        let values = body.toSyncPayloadDictionary()
+        let payload = SyncPayload(values: values, keyStyle: syncContainer.keyStyle)
+        let context = syncContainer.mainContext
+        let task: Task
+        if let id = payload.value(for: "id", as: String.self), let existing = try self.task(withID: id) {
+            _ = try existing.apply(payload)
+            task = existing
+        } else {
+            let created = try Task.make(from: payload)
+            context.insert(created)
+            if let project { created.project = project }
+            task = created
+        }
+        // reviewers/watchers are @NotExport, so apply()/make() won't set them from the body. Apply the
+        // relationships explicitly so an offline people edit shows locally before any server round-trip.
+        if let reviewerIDs = values["reviewer_ids"] as? [String] { task.reviewers = try users(for: reviewerIDs) }
+        if let watcherIDs = values["watcher_ids"] as? [String] { task.watchers = try users(for: watcherIDs) }
+        try context.save()
+    }
+
+    /// A task whose only history is a never-pushed local insert (it's in the pending-insert set).
+    private func isNeverPushed(_ taskID: String) -> Bool {
+        let pending = try? SwiftSync.pendingChanges(for: Task.self, in: syncContainer.mainContext)
+        return pending?.inserts.contains(taskID) ?? false
+    }
+
+    /// Reflect a push's outcome onto the inbox: stamp `syncFailureReason` on each rejected row and
+    /// clear it from any row that no longer fails (it succeeded, or its corrected edit went through).
+    /// SwiftSync persists nothing — the failures inbox is entirely this app's concern.
+    private func annotateFailures(_ failures: [SyncPushFailure]) throws {
+        let reasonsByID = Dictionary(
+            failures.map { ($0.id, $0.error.localizedDescription) },
+            uniquingKeysWith: { first, _ in first })
+        for task in failedTasks() where reasonsByID[task.id] == nil {
+            task.syncFailureReason = nil
+        }
+        for (id, reason) in reasonsByID {
+            if let task = try task(withID: id) { task.syncFailureReason = reason }
+        }
+        try syncContainer.mainContext.save()
     }
 
     private func refreshPendingCount() {
