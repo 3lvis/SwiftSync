@@ -5,13 +5,11 @@ extension SwiftSync {
     /// The transaction author SwiftSync stamps on inbound (pull) writes, so the push side can tell
     /// server-applied changes from genuine local edits and never push pulled rows back. Local edits
     /// use the store's default author; pull writes use this one and are filtered out of `pendingChanges`.
-    /// Internal — the consumer never references it (`SyncContainer` stamps it on inbound saves).
     static let inboundAuthor = "swiftsync.inbound"
 }
 
-/// The local rows with un-pushed changes, split by operation. Each array holds the rows' `id`s (strings),
-/// not objects — `withPendingChanges` hands this to your `process` closure and you map each id to your own
-/// request payload, so SwiftData objects never cross into the network call.
+/// Each array holds row `id`s (strings), not objects, so SwiftData objects never cross into your network
+/// call: `withPendingChanges` hands you the ids and you map each to your own request payload.
 public struct SyncPendingChanges: Sendable {
     public let inserts: [String]
     public let updates: [String]
@@ -20,10 +18,9 @@ public struct SyncPendingChanges: Sendable {
     public var isEmpty: Bool { inserts.isEmpty && updates.isEmpty && deletes.isEmpty }
 }
 
-/// One pushed row the server rejected: the row `id` to keep pending, and the consumer's own `error`
-/// bubbled up verbatim. Your `process` closure returns only these — everything else in the batch is treated
-/// as confirmed (the client id is the identity the backend adopts, so a push is an idempotent upsert with
-/// no server-assigned ids to map home). The operation is the library's to know, not yours.
+/// One pushed row the server rejected: the row `id` (kept pending) and the consumer's own `error`,
+/// bubbled up verbatim. Return only these from your `process` closure — the operation that failed is the
+/// library's to track, not yours.
 public struct SyncPushFailure: Sendable {
     public let id: String
     public let error: any Error & Sendable
@@ -57,8 +54,8 @@ extension SwiftSync {
         try pendingChanges(from: localTransactions(since: token, in: context), for: Model.self, in: context)
     }
 
-    /// Separate from the token-driven overload so `push` derives the batch and its `uploadedThrough` token
-    /// from a single history read (see the capture in `push`).
+    /// Separate from the token-driven overload so `withPendingChanges` derives the batch and its
+    /// `uploadedThrough` token from a single history read (see the capture in `withPendingChanges`).
     static func pendingChanges<Model: SyncUpdatableModel>(
         from transactions: [DefaultHistoryTransaction],
         for _: Model.Type,
@@ -130,14 +127,12 @@ extension SwiftSync {
         return SyncPendingChanges(inserts: inserts, updates: updates, deletes: deletes)
     }
 
-    /// Process this model type's locally-changed rows inside a scope SwiftSync manages. Reads what changed
-    /// since the last-pushed token, hands it to your `process` closure (you own the network call), and gets
-    /// back the rejected rows. Everything you *don't* return as a failure is treated as confirmed — the
-    /// client id is the identity the server adopts, so it's an idempotent upsert with nothing to
-    /// acknowledge. Only on a fully clean pass (no failures) does it advance the token and trim the
-    /// now-redundant inbound history. SwiftSync stores no per-row state: a failed — or any un-pushed —
-    /// change stays past the token and is re-detected next call. Returns the same failures your closure
-    /// returned (empty == clean).
+    /// Hands your `process` closure the rows changed since the last-pushed token; you own the network call
+    /// and return the rejections. Everything you *don't* return is treated as confirmed — the client id is
+    /// the identity the server adopts, so it's an idempotent upsert with nothing to acknowledge. Only a
+    /// fully clean pass (no failures) advances the token and trims the now-redundant inbound history;
+    /// SwiftSync keeps no per-row state, so a failed — or any un-pushed — change stays past the token and
+    /// is re-detected next call.
     @discardableResult
     public static func withPendingChanges<Model: SyncUpdatableModel>(
         for _: Model.Type,
@@ -208,7 +203,6 @@ extension SwiftSync {
                 predicate: #Predicate { $0.token <= token && $0.author == inbound }))
     }
 
-    /// History transactions since `token` that were *not* authored by the inbound (pull) writer.
     static func localTransactions(since token: DefaultHistoryToken?, in context: ModelContext) throws
         -> [DefaultHistoryTransaction]
     {

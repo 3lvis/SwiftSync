@@ -134,8 +134,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     /// actor) and the change is visible to live queries at once — unlike bulk `sync(payload:)`, which
     /// runs off-main. (SwiftData has no `mergeChanges(fromContextDidSave:)`, so an off-main *update*
     /// wouldn't promptly refresh an already-registered `mainContext` row; for a single object, applying
-    /// on main sidesteps that without a meaningful main-thread cost.) The payload rides in an
-    /// unchecked-Sendable box so it can cross to the main actor; it is only read there, so the box is sound.
+    /// on main sidesteps that without a meaningful main-thread cost.)
     public func sync<Model: SyncUpdatableModel>(
         item: [String: Any],
         as model: Model.Type,
