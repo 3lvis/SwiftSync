@@ -167,7 +167,8 @@ extension SwiftSync {
     /// Dirty persistent ids for the pull, but only for models that opted into offline round-trip by
     /// marking their identity `.preserveValueOnDeletion`. A plain (non-offline) model gets an empty
     /// set, so its pull keeps "server is authoritative, always apply" semantics — the behavior the core
-    /// diffing tests rely on.
+    /// diffing tests rely on. Capture it before applying the payload, so the pull honors pending local
+    /// edits and never prunes a never-pushed local insert.
     static func offlineDirtyPersistentIDs<Model: SyncUpdatableModel>(
         for _: Model.Type, in context: ModelContext
     ) -> Set<PersistentIdentifier> {

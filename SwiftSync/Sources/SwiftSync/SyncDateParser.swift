@@ -53,7 +53,6 @@ enum SyncDateParser {
         var input = iso8601.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !input.isEmpty else { return nil }
 
-        // Date-only input is normalized to UTC midnight.
         if isDateOnly(input.utf8) {
             input += "T00:00:00+00:00"
         }

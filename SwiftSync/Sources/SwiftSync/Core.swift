@@ -439,7 +439,7 @@ public func syncApplyToManyForeignKeys<Owner: SyncUpdatableModel, Related: SyncM
             return false
         }
 
-        // Old Sync behavior avoids duplicate membership; dedupe input deterministically.
+        // Old Sync behavior avoids duplicate membership.
         let desiredIDs = dedupePreservingOrder(rawIDs)
         let relatedByID = try syncFetchRelatedRowsByIdentity(Related.self, matching: desiredIDs, in: context)
         let desiredRelated = desiredIDs.compactMap { relatedByID[syncIdentityKey(from: $0)] }
@@ -836,7 +836,7 @@ func defaultExportDateFormatter() -> DateFormatter {
 public enum ExportState {
     private static let threadDictionaryKey = "SwiftSync.ExportState"
 
-    /// Enters cycle-detection scope for a model. Returns false if already visiting (cycle detected).
+    /// Returns false if already visiting (cycle detected).
     public static func enter<Model: PersistentModel>(_ model: Model) -> Bool {
         let key = String(describing: model.persistentModelID)
         var visiting = currentVisiting()
@@ -846,7 +846,6 @@ public enum ExportState {
         return true
     }
 
-    /// Leaves cycle-detection scope for a model.
     public static func leave<Model: PersistentModel>(_ model: Model) {
         let key = String(describing: model.persistentModelID)
         var visiting = currentVisiting()
