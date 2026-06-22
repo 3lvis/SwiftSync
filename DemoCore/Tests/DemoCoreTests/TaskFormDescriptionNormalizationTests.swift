@@ -1,6 +1,7 @@
 import SwiftData
 import SwiftSync
 import XCTest
+
 @testable import DemoCore
 
 final class TaskFormDescriptionNormalizationTests: XCTestCase {
@@ -9,7 +10,7 @@ final class TaskFormDescriptionNormalizationTests: XCTestCase {
     func testSaveBlankDescriptionClearsStoredDescriptionToNil() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
-        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let apiClient = FakeDemoAPIClient(seedData: seed, networkDelayMode: .disabled)
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
         let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
@@ -33,9 +34,12 @@ final class TaskFormDescriptionNormalizationTests: XCTestCase {
         draft.descriptionText = "   "
 
         let saved = expectation(description: "save callback")
-        machine.send(.save(mode: .edit(task: originalTask), draft: draft, onSuccess: {
-            saved.fulfill()
-        }))
+        machine.send(
+            .save(
+                mode: .edit(task: originalTask), draft: draft,
+                onSuccess: {
+                    saved.fulfill()
+                }))
         await fulfillment(of: [saved], timeout: 10)
 
         let updatedTask = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
