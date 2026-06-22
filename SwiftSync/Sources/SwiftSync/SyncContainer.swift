@@ -76,8 +76,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     }
 
     @MainActor
-    public init(_ modelContainer: ModelContainer, keyStyle: KeyStyle = .snakeCase, dateFormatter: DateFormatter? = nil)
-    {
+    public init(_ modelContainer: ModelContainer, keyStyle: KeyStyle = .snakeCase, dateFormatter: DateFormatter? = nil) {
         self.modelContainer = modelContainer
         self.mainContext = modelContainer.mainContext
         self.keyStyle = keyStyle
