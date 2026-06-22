@@ -11,7 +11,7 @@ final class OfflinePushTests: XCTestCase {
     func testOfflineCreateThenPushStampsRemoteIDAndReachesBackend() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
-        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let apiClient = FakeDemoAPIClient(seedData: seed, networkDelayMode: .disabled)
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
         let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
@@ -49,7 +49,7 @@ final class OfflinePushTests: XCTestCase {
     func testOnlineCreateTaskPersistsLocallyAndReachesBackend() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
-        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let apiClient = FakeDemoAPIClient(seedData: seed, networkDelayMode: .disabled)
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
         let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
@@ -70,7 +70,7 @@ final class OfflinePushTests: XCTestCase {
     func testOnlineDeleteTaskRemovesLocallyAndOnBackend() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
-        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let apiClient = FakeDemoAPIClient(seedData: seed, networkDelayMode: .disabled)
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
         let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
@@ -91,7 +91,7 @@ final class OfflinePushTests: XCTestCase {
     func testUpdateTaskItemsAddRenameDelete() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
-        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let apiClient = FakeDemoAPIClient(seedData: seed, networkDelayMode: .disabled)
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
         let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
@@ -127,7 +127,7 @@ final class OfflinePushTests: XCTestCase {
     func testOfflineDeleteThenPushHardDeletesLocallyAndOnBackend() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
-        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let apiClient = FakeDemoAPIClient(seedData: seed, networkDelayMode: .disabled)
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
         let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
@@ -157,7 +157,7 @@ final class OfflinePushTests: XCTestCase {
     func testRejectedPushPersistsFailureReasonOnTheRow() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
-        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let apiClient = FakeDemoAPIClient(seedData: seed, networkDelayMode: .disabled)
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
         let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
@@ -193,7 +193,7 @@ final class OfflinePushTests: XCTestCase {
     func testDiscardFailedChangeRestoresServerStateAndClearsFailure() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
-        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let apiClient = FakeDemoAPIClient(seedData: seed, networkDelayMode: .disabled)
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
         let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
@@ -224,7 +224,7 @@ final class OfflinePushTests: XCTestCase {
     func testEditingAFailedInsertReinsertsInsteadOf404() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
-        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let apiClient = FakeDemoAPIClient(seedData: seed, networkDelayMode: .disabled)
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
         let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
@@ -266,7 +266,7 @@ final class OfflinePushTests: XCTestCase {
     func testEditingAFailedSyncedRowOnlineClearsFailure() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
-        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let apiClient = FakeDemoAPIClient(seedData: seed, networkDelayMode: .disabled)
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
         let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
@@ -308,7 +308,7 @@ final class OfflinePushTests: XCTestCase {
             .appendingPathComponent("stale-adopt-\(UUID().uuidString).sqlite")
         addTeardownBlock { try? FileManager.default.removeItem(at: url) }
         let backend = try DemoServerSimulator(databaseURL: url, seedData: DemoSeedData.generate())
-        let apiClient = FakeDemoAPIClient(backend: backend)
+        let apiClient = FakeDemoAPIClient(backend: backend, networkDelayMode: .disabled)
         let syncContainer = try makeSyncContainer()
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
@@ -352,7 +352,7 @@ final class OfflinePushTests: XCTestCase {
     func testOfflineEditOfCreatedTaskUpdatesTitleAndKeepsProjectLink() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
-        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let apiClient = FakeDemoAPIClient(seedData: seed, networkDelayMode: .disabled)
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
         let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
@@ -388,7 +388,7 @@ final class OfflinePushTests: XCTestCase {
             .appendingPathComponent("offline-update-people-\(UUID().uuidString).sqlite")
         addTeardownBlock { try? FileManager.default.removeItem(at: url) }
         let backend = try DemoServerSimulator(databaseURL: url, seedData: DemoSeedData.generate())
-        let apiClient = FakeDemoAPIClient(backend: backend)
+        let apiClient = FakeDemoAPIClient(backend: backend, networkDelayMode: .disabled)
         let syncContainer = try makeSyncContainer()
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
@@ -435,7 +435,7 @@ final class OfflinePushTests: XCTestCase {
             .appendingPathComponent("offline-people-\(UUID().uuidString).sqlite")
         addTeardownBlock { try? FileManager.default.removeItem(at: url) }
         let backend = try DemoServerSimulator(databaseURL: url, seedData: DemoSeedData.generate())
-        let apiClient = FakeDemoAPIClient(backend: backend)
+        let apiClient = FakeDemoAPIClient(backend: backend, networkDelayMode: .disabled)
         let syncContainer = try makeSyncContainer()
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
@@ -473,7 +473,7 @@ final class OfflinePushTests: XCTestCase {
     func testPushWhileOfflineIsANoOp() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
-        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let apiClient = FakeDemoAPIClient(seedData: seed, networkDelayMode: .disabled)
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
         let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
@@ -507,7 +507,7 @@ final class OfflinePushTests: XCTestCase {
             .appendingPathComponent("offline-read-\(UUID().uuidString).sqlite")
         addTeardownBlock { try? FileManager.default.removeItem(at: url) }
         let backend = try DemoServerSimulator(databaseURL: url, seedData: DemoSeedData.generate())
-        let apiClient = FakeDemoAPIClient(backend: backend)
+        let apiClient = FakeDemoAPIClient(backend: backend, networkDelayMode: .disabled)
         let syncContainer = try makeSyncContainer()
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
@@ -547,7 +547,7 @@ final class OfflinePushTests: XCTestCase {
     func testRejectedOfflineCreatedTaskSurvivesProjectPull() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
-        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let apiClient = FakeDemoAPIClient(seedData: seed, networkDelayMode: .disabled)
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
         let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
@@ -579,7 +579,7 @@ final class OfflinePushTests: XCTestCase {
     func testOfflineEditSurvivesServerSideDeleteOnReconnect() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
-        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let apiClient = FakeDemoAPIClient(seedData: seed, networkDelayMode: .disabled)
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
         let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
@@ -611,7 +611,7 @@ final class OfflinePushTests: XCTestCase {
     func testFailedOfflineEditIsNotClobberedByProjectRefresh() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
-        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let apiClient = FakeDemoAPIClient(seedData: seed, networkDelayMode: .disabled)
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
         let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
@@ -640,7 +640,7 @@ final class OfflinePushTests: XCTestCase {
     func testNewerServerVersionOverwritesPollutedLocalEdit() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
-        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let apiClient = FakeDemoAPIClient(seedData: seed, networkDelayMode: .disabled)
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
         let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
@@ -678,7 +678,7 @@ final class OfflinePushTests: XCTestCase {
     func testPollutedRowDoesNotBlockSiblingRefresh() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
-        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let apiClient = FakeDemoAPIClient(seedData: seed, networkDelayMode: .disabled)
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
         let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity

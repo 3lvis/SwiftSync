@@ -18,7 +18,7 @@ final class ConvergingDrainTests: XCTestCase {
     func testLateEditDuringDrainReachesServer() async throws {
         let seed = DemoSeedData.generate()
         let syncContainer = try makeSyncContainer()
-        let apiClient = FakeDemoAPIClient(seedData: seed)
+        let apiClient = FakeDemoAPIClient(seedData: seed, networkDelayMode: .disabled)
         let engine = DemoSyncEngine(syncContainer: syncContainer, apiClient: apiClient)
 
         let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
