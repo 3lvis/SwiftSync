@@ -12,7 +12,7 @@ public func syncApplyToOneForeignKey<Owner, Related: PersistentModel>(
 ) throws -> Bool {
     _ = context
     let canClear = operations.contains(.delete)
-    guard let key = firstPresentPayloadKey(payload, keys: keys) else { return false }
+    guard let key = payload.firstPresentKey(in: keys) else { return false }
     guard payload.value(for: key, as: NSNull.self) != nil else { return false }
     guard canClear else { return false }
     if owner[keyPath: relationship] != nil {
@@ -34,7 +34,7 @@ public func syncApplyToOneForeignKey<Owner, Related: SyncModelable>(
     try syncProfile("relationship-apply-to-one-foreign-key") {
         let canLink = !operations.isDisjoint(with: [.insert, .update])
         let canClear = operations.contains(.delete)
-        guard let key = firstPresentPayloadKey(payload, keys: keys) else { return false }
+        guard let key = payload.firstPresentKey(in: keys) else { return false }
 
         if payload.value(for: key, as: NSNull.self) != nil {
             guard canClear else { return false }
@@ -49,8 +49,8 @@ public func syncApplyToOneForeignKey<Owner, Related: SyncModelable>(
             return false
         }
 
-        let relatedByID = try syncFetchRelatedRowsByIdentity(Related.self, matching: [nextID], in: context)
-        guard let nextRelated = relatedByID[syncIdentityKey(from: nextID)] else {
+        let relatedByID = try context.syncFetchRelatedRowsByIdentity(Related.self, matching: [nextID])
+        guard let nextRelated = relatedByID[SwiftSync.identityKey(from: nextID)] else {
             // Old Sync parity: unknown FK row is a soft no-op.
             return false
         }
@@ -93,7 +93,7 @@ public func syncApplyToOneForeignKey<Owner, Related: SyncModelable>(
 ) throws -> Bool {
     try syncProfile("relationship-apply-to-one-foreign-key") {
         let canLink = !operations.isDisjoint(with: [.insert, .update])
-        guard let key = firstPresentPayloadKey(payload, keys: keys) else { return false }
+        guard let key = payload.firstPresentKey(in: keys) else { return false }
 
         if payload.value(for: key, as: NSNull.self) != nil {
             // Non-optional to-one relationships cannot be cleared.
@@ -104,8 +104,8 @@ public func syncApplyToOneForeignKey<Owner, Related: SyncModelable>(
             return false
         }
 
-        let relatedByID = try syncFetchRelatedRowsByIdentity(Related.self, matching: [nextID], in: context)
-        guard let nextRelated = relatedByID[syncIdentityKey(from: nextID)] else {
+        let relatedByID = try context.syncFetchRelatedRowsByIdentity(Related.self, matching: [nextID])
+        guard let nextRelated = relatedByID[SwiftSync.identityKey(from: nextID)] else {
             return false
         }
 
@@ -129,7 +129,7 @@ public func syncApplyToManyForeignKeys<Owner, Related: PersistentModel>(
 ) throws -> Bool {
     _ = context
     let canClear = operations.contains(.delete)
-    guard let key = firstPresentPayloadKey(payload, keys: keys) else { return false }
+    guard let key = payload.firstPresentKey(in: keys) else { return false }
 
     if payload.value(for: key, as: NSNull.self) != nil {
         guard canClear else { return false }
@@ -163,7 +163,7 @@ public func syncApplyToManyForeignKeys<Owner: SyncUpdatableModel, Related: SyncM
     try syncProfile("relationship-apply-to-many-foreign-keys") {
         let canAdd = !operations.isDisjoint(with: [.insert, .update])
         let canDelete = operations.contains(.delete)
-        guard let key = firstPresentPayloadKey(payload, keys: keys) else { return false }
+        guard let key = payload.firstPresentKey(in: keys) else { return false }
 
         if payload.value(for: key, as: NSNull.self) != nil {
             guard canDelete else { return false }
@@ -181,8 +181,8 @@ public func syncApplyToManyForeignKeys<Owner: SyncUpdatableModel, Related: SyncM
 
         // Old Sync behavior avoids duplicate membership.
         let desiredIDs = rawIDs.syncDedupedPreservingOrder()
-        let relatedByID = try syncFetchRelatedRowsByIdentity(Related.self, matching: desiredIDs, in: context)
-        let desiredRelated = desiredIDs.compactMap { relatedByID[syncIdentityKey(from: $0)] }
+        let relatedByID = try context.syncFetchRelatedRowsByIdentity(Related.self, matching: desiredIDs)
+        let desiredRelated = desiredIDs.compactMap { relatedByID[SwiftSync.identityKey(from: $0)] }
 
         // SwiftData does not expose ordered-relationship metadata; treat to-many as unordered membership.
         let current = owner[keyPath: relationship]
@@ -231,7 +231,7 @@ public func syncApplyToOneNestedObject<Owner, Related: SyncUpdatableModel>(
     try syncProfile("relationship-apply-to-one-nested-object") {
         let canLink = !operations.isDisjoint(with: [.insert, .update])
         let canClear = operations.contains(.delete)
-        guard let key = firstPresentPayloadKey(payload, keys: keys) else { return false }
+        guard let key = payload.firstPresentKey(in: keys) else { return false }
 
         if payload.value(for: key, as: NSNull.self) != nil {
             guard canClear else { return false }
@@ -247,10 +247,10 @@ public func syncApplyToOneNestedObject<Owner, Related: SyncUpdatableModel>(
         }
         let nestedPayload = SyncPayload(values: nestedValues, keyStyle: payload.keyStyle)
         var changed = false
-        var relatedByID = try syncFetchRelatedRowsByIdentity(Related.self, in: context)
+        var relatedByID = try context.syncFetchRelatedRowsByIdentity(Related.self)
 
         var resolvedRelated: Related?
-        if let nestedIdentity = resolveIdentity(from: nestedPayload, model: Related.self),
+        if let nestedIdentity = SwiftSync.resolveIdentityKey(from: nestedPayload, model: Related.self),
             let existing = relatedByID[nestedIdentity]
         {
             if operations.contains(.update), try existing.apply(nestedPayload) {
@@ -258,7 +258,7 @@ public func syncApplyToOneNestedObject<Owner, Related: SyncUpdatableModel>(
             }
             resolvedRelated = existing
         } else if let current = owner[keyPath: relationship], operations.contains(.update),
-            resolveIdentity(from: nestedPayload, model: Related.self) == nil
+            SwiftSync.resolveIdentityKey(from: nestedPayload, model: Related.self) == nil
         {
             if try current.apply(nestedPayload) {
                 changed = true
@@ -267,8 +267,8 @@ public func syncApplyToOneNestedObject<Owner, Related: SyncUpdatableModel>(
         } else if operations.contains(.insert) {
             let created = try Related.make(from: nestedPayload)
             context.insert(created)
-            syncRelationshipLookupCacheAppend(created, as: Related.self)
-            if let createdIdentity = resolveIdentity(from: created) {
+            SyncRelationshipLookupState.current?.append(created, as: Related.self)
+            if let createdIdentity = SwiftSync.resolveIdentityKey(of: created) {
                 relatedByID[createdIdentity] = created
             }
             resolvedRelated = created
@@ -314,7 +314,7 @@ public func syncApplyToManyNestedObjects<Owner: SyncUpdatableModel, Related: Syn
     try syncProfile("relationship-apply-to-many-nested-objects") {
         let canAdd = !operations.isDisjoint(with: [.insert, .update])
         let canDelete = operations.contains(.delete)
-        guard let key = firstPresentPayloadKey(payload, keys: keys) else { return false }
+        guard let key = payload.firstPresentKey(in: keys) else { return false }
 
         if payload.value(for: key, as: NSNull.self) != nil {
             guard canDelete else { return false }
@@ -331,7 +331,7 @@ public func syncApplyToManyNestedObjects<Owner: SyncUpdatableModel, Related: Syn
         }
 
         var changed = false
-        var relatedByID = try syncFetchRelatedRowsByIdentity(Related.self, in: context)
+        var relatedByID = try context.syncFetchRelatedRowsByIdentity(Related.self)
 
         var desired: [Related] = []
         var desiredIDs: Set<PersistentIdentifier> = []
@@ -339,7 +339,7 @@ public func syncApplyToManyNestedObjects<Owner: SyncUpdatableModel, Related: Syn
             let nestedPayload = SyncPayload(values: nestedValue, keyStyle: payload.keyStyle)
             var resolved: Related?
 
-            if let nestedIdentity = resolveIdentity(from: nestedPayload, model: Related.self),
+            if let nestedIdentity = SwiftSync.resolveIdentityKey(from: nestedPayload, model: Related.self),
                 let existing = relatedByID[nestedIdentity]
             {
                 if operations.contains(.update), try existing.apply(nestedPayload) {
@@ -349,8 +349,8 @@ public func syncApplyToManyNestedObjects<Owner: SyncUpdatableModel, Related: Syn
             } else if operations.contains(.insert) {
                 let created = try Related.make(from: nestedPayload)
                 context.insert(created)
-                syncRelationshipLookupCacheAppend(created, as: Related.self)
-                if let createdIdentity = resolveIdentity(from: created) {
+                SyncRelationshipLookupState.current?.append(created, as: Related.self)
+                if let createdIdentity = SwiftSync.resolveIdentityKey(of: created) {
                     relatedByID[createdIdentity] = created
                 }
                 resolved = created
@@ -381,78 +381,6 @@ public func syncApplyToManyNestedObjects<Owner: SyncUpdatableModel, Related: Syn
 
         return changed
     }
-}
-
-private func firstPresentPayloadKey(_ payload: SyncPayload, keys: [String]) -> String? {
-    for key in keys where payload.contains(key) {
-        return key
-    }
-    return nil
-}
-
-private func syncFetchRelatedRows<Model: PersistentModel>(
-    _ modelType: Model.Type,
-    in context: ModelContext
-) throws -> [Model] {
-    if let cache = SyncRelationshipLookupState.current {
-        return try cache.rows(for: modelType, in: context)
-    }
-    return try syncProfile("relationship-fetch") {
-        try context.fetch(FetchDescriptor<Model>())
-    }
-}
-
-private func syncFetchRelatedRowsByIdentity<Model: SyncModelable>(
-    _ modelType: Model.Type,
-    in context: ModelContext
-) throws -> [String: Model] {
-    if let cache = SyncRelationshipLookupState.current {
-        return try cache.rowsByIdentity(for: modelType, in: context)
-    }
-
-    let fetched = try syncFetchRelatedRows(modelType, in: context)
-    return syncProfile("relationship-index-by-id") {
-        let indexed: [String: Model] = Dictionary(
-            uniqueKeysWithValues: fetched.compactMap { row in
-                guard let identity = resolveIdentity(from: row) else { return nil }
-                return (identity, row)
-            }
-        )
-        return indexed
-    }
-}
-
-private func syncFetchRelatedRowsByIdentity<Model: SyncModelable>(
-    _ modelType: Model.Type,
-    matching identities: [Model.SyncID],
-    in context: ModelContext
-) throws -> [String: Model] {
-    if let cache = SyncRelationshipLookupState.current {
-        return try cache.rowsByIdentity(for: modelType, matching: identities, in: context)
-    }
-
-    guard let predicate = Model.syncIdentityPredicate(matchingAny: identities) else {
-        return try syncFetchRelatedRowsByIdentity(modelType, in: context)
-    }
-
-    let fetched = try syncProfile("relationship-fetch-by-identity") {
-        try context.fetch(FetchDescriptor<Model>(predicate: predicate))
-    }
-    return syncProfile("relationship-index-by-id") {
-        Dictionary(
-            uniqueKeysWithValues: fetched.compactMap { row in
-                guard let identity = resolveIdentity(from: row) else { return nil }
-                return (identity, row)
-            }
-        )
-    }
-}
-
-private func syncRelationshipLookupCacheAppend<Model: SyncModelable>(
-    _ row: Model,
-    as modelType: Model.Type
-) {
-    SyncRelationshipLookupState.current?.append(row, as: modelType)
 }
 
 private func syncApplyToManyRelationshipMembership<Owner, Model: PersistentModel>(

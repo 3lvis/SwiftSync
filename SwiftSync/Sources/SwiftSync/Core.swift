@@ -158,7 +158,7 @@ final class SyncRelationshipLookupCache: @unchecked Sendable {
         let indexed: [String: Model] = syncProfile("relationship-index-by-id") {
             Dictionary(
                 uniqueKeysWithValues: fetched.compactMap { row in
-                    guard let identity = resolveIdentity(from: row) else { return nil }
+                    guard let identity = SwiftSync.resolveIdentityKey(of: row) else { return nil }
                     return (identity, row)
                 }
             )
@@ -177,7 +177,7 @@ final class SyncRelationshipLookupCache: @unchecked Sendable {
 
         // Unresolved ids are intentionally not memoized: a later pass may have inserted them,
         // and the re-fetch is a narrow predicate query over the few still-missing ids.
-        let missing = identities.filter { map[syncIdentityKey(from: $0)] == nil }
+        let missing = identities.filter { map[SwiftSync.identityKey(from: $0)] == nil }
         guard !missing.isEmpty else { return map }
 
         guard let predicate = Model.syncIdentityPredicate(matchingAny: missing) else {
@@ -189,7 +189,7 @@ final class SyncRelationshipLookupCache: @unchecked Sendable {
         }
         syncProfile("relationship-index-by-id") {
             for row in fetched {
-                if let identity = resolveIdentity(from: row) {
+                if let identity = SwiftSync.resolveIdentityKey(of: row) {
                     map[identity] = row
                 }
             }
@@ -204,7 +204,7 @@ final class SyncRelationshipLookupCache: @unchecked Sendable {
             cached.append(row)
             rowsByType[key] = cached
         }
-        if let identity = resolveIdentity(from: row) {
+        if let identity = SwiftSync.resolveIdentityKey(of: row) {
             if var cached = rowsByIdentityType[key] as? [String: Model] {
                 cached[identity] = row
                 rowsByIdentityType[key] = cached
@@ -219,24 +219,6 @@ final class SyncRelationshipLookupCache: @unchecked Sendable {
 
 enum SyncRelationshipLookupState {
     @TaskLocal static var current: SyncRelationshipLookupCache?
-}
-
-func resolveIdentity<Model: SyncModelable>(from payload: SyncPayload, model: Model.Type) -> String? {
-    _ = model
-    for key in Model.syncIdentityRemoteKeys {
-        if let identity = payload.value(for: key, as: Model.SyncID.self) {
-            return syncIdentityKey(from: identity)
-        }
-    }
-    return nil
-}
-
-func resolveIdentity<Model: SyncModelable>(from row: Model) -> String? {
-    syncIdentityKey(from: row[keyPath: Model.syncIdentity])
-}
-
-func syncIdentityKey<ID: Hashable>(from identity: ID) -> String {
-    String(describing: identity)
 }
 
 public protocol ParentScopedModel: SyncUpdatableModel {
@@ -669,5 +651,14 @@ extension SyncError: LocalizedError {
         case .containerInitialization(let reason):
             return reason
         }
+    }
+}
+
+extension SyncPayload {
+    func firstPresentKey(in keys: [String]) -> String? {
+        for key in keys where contains(key) {
+            return key
+        }
+        return nil
     }
 }

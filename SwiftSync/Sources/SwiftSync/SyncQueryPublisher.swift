@@ -32,8 +32,8 @@ public final class SyncQueryPublisher<Model: PersistentModel> {
             queue: .main
         ) { [weak self] notification in
             guard let self else { return }
-            let changedTypeNames = syncQueryChangedModelTypeNames(from: notification.userInfo)
-            let changedIDs = syncQueryChangedIdentifiers(from: notification.userInfo)
+            let changedTypeNames = SyncContainer.changedModelTypeNames(from: notification.userInfo)
+            let changedIDs = SyncContainer.changedIdentifiers(from: notification.userInfo)
             MainActor.assumeIsolated {
                 guard self.shouldReload(changedTypeNames: changedTypeNames, changedIDs: changedIDs) else { return }
                 self.reload()

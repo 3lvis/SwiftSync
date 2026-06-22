@@ -51,6 +51,14 @@ extension SwiftSync {
         String(describing: identity)
     }
 
+    static func resolveIdentityKey<Model: SyncModelable>(from payload: SyncPayload, model: Model.Type) -> String? {
+        resolveIdentity(from: payload, model: model).map { identityKey(from: $0) }
+    }
+
+    static func resolveIdentityKey<Model: SyncModelable>(of row: Model) -> String? {
+        identityKey(from: row[keyPath: Model.syncIdentity])
+    }
+
     static func scopedIdentityKey<ID: Hashable>(
         from identity: ID,
         parentPersistentID: PersistentIdentifier

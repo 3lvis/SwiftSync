@@ -574,3 +574,51 @@ extension ModelContext {
         }
     }
 }
+
+extension ModelContext {
+    func syncFetchRelatedRows<Model: PersistentModel>(_ modelType: Model.Type) throws -> [Model] {
+        if let cache = SyncRelationshipLookupState.current {
+            return try cache.rows(for: modelType, in: self)
+        }
+        return try syncProfile("relationship-fetch") {
+            try fetch(FetchDescriptor<Model>())
+        }
+    }
+
+    func syncFetchRelatedRowsByIdentity<Model: SyncModelable>(_ modelType: Model.Type) throws -> [String: Model] {
+        if let cache = SyncRelationshipLookupState.current {
+            return try cache.rowsByIdentity(for: modelType, in: self)
+        }
+        let fetched = try syncFetchRelatedRows(modelType)
+        return syncProfile("relationship-index-by-id") {
+            Dictionary(
+                uniqueKeysWithValues: fetched.compactMap { row in
+                    guard let identity = SwiftSync.resolveIdentityKey(of: row) else { return nil }
+                    return (identity, row)
+                }
+            )
+        }
+    }
+
+    func syncFetchRelatedRowsByIdentity<Model: SyncModelable>(
+        _ modelType: Model.Type, matching identities: [Model.SyncID]
+    ) throws -> [String: Model] {
+        if let cache = SyncRelationshipLookupState.current {
+            return try cache.rowsByIdentity(for: modelType, matching: identities, in: self)
+        }
+        guard let predicate = Model.syncIdentityPredicate(matchingAny: identities) else {
+            return try syncFetchRelatedRowsByIdentity(modelType)
+        }
+        let fetched = try syncProfile("relationship-fetch-by-identity") {
+            try fetch(FetchDescriptor<Model>(predicate: predicate))
+        }
+        return syncProfile("relationship-index-by-id") {
+            Dictionary(
+                uniqueKeysWithValues: fetched.compactMap { row in
+                    guard let identity = SwiftSync.resolveIdentityKey(of: row) else { return nil }
+                    return (identity, row)
+                }
+            )
+        }
+    }
+}

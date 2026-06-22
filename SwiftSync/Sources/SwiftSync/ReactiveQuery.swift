@@ -47,8 +47,8 @@ private final class SyncQueryObserver<Model: PersistentModel> {
             queue: .main
         ) { [weak self] notification in
             guard let self else { return }
-            let changedModelTypeNames = syncQueryChangedModelTypeNames(from: notification.userInfo)
-            let changedIDs = syncQueryChangedIdentifiers(from: notification.userInfo)
+            let changedModelTypeNames = SyncContainer.changedModelTypeNames(from: notification.userInfo)
+            let changedIDs = SyncContainer.changedIdentifiers(from: notification.userInfo)
             MainActor.assumeIsolated {
                 guard self.shouldReload(changedModelTypeNames: changedModelTypeNames, changedIDs: changedIDs) else {
                     return
@@ -100,28 +100,6 @@ private final class SyncQueryObserver<Model: PersistentModel> {
             rows = []
         }
     }
-}
-
-func syncQueryChangedIdentifiers(from userInfo: [AnyHashable: Any]?) -> Set<PersistentIdentifier> {
-    guard let raw = userInfo?[SyncContainer.changedIdentifiersUserInfoKey] else { return [] }
-    if let setValue = raw as? Set<PersistentIdentifier> {
-        return setValue
-    }
-    if let arrayValue = raw as? [PersistentIdentifier] {
-        return Set(arrayValue)
-    }
-    return []
-}
-
-func syncQueryChangedModelTypeNames(from userInfo: [AnyHashable: Any]?) -> Set<String> {
-    guard let raw = userInfo?[SyncContainer.changedModelTypeNamesUserInfoKey] else { return [] }
-    if let setValue = raw as? Set<String> {
-        return setValue
-    }
-    if let arrayValue = raw as? [String] {
-        return Set(arrayValue)
-    }
-    return []
 }
 
 @MainActor
@@ -374,8 +352,8 @@ private final class SyncModelObserver<Model: PersistentModel & SyncModelable> {
             queue: .main
         ) { [weak self] notification in
             guard let self else { return }
-            let changedTypeNames = syncQueryChangedModelTypeNames(from: notification.userInfo)
-            let changedIDs = syncQueryChangedIdentifiers(from: notification.userInfo)
+            let changedTypeNames = SyncContainer.changedModelTypeNames(from: notification.userInfo)
+            let changedIDs = SyncContainer.changedIdentifiers(from: notification.userInfo)
             MainActor.assumeIsolated {
                 guard self.shouldReload(changedTypeNames: changedTypeNames, changedIDs: changedIDs) else { return }
                 self.reload()
