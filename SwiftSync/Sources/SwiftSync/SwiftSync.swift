@@ -83,7 +83,7 @@ public enum SwiftSync {
         _ parent: Parent,
         in context: ModelContext
     ) throws -> Parent? {
-        let parents = try syncProfile("fetch-parents") {
+        let parents = try syncPerformanceProfile(.fetchParents) {
             try context.fetch(FetchDescriptor<Parent>())
         }
         return parents.first { $0.persistentModelID == parent.persistentModelID }

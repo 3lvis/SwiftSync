@@ -990,7 +990,7 @@ private struct BenchmarkSummary {
 
 private struct BenchmarkMeasurement {
     let duration: Duration
-    let phaseTotals: [String: Duration]
+    let phaseTotals: [SyncPhase: Duration]
 }
 
 private struct BenchmarkPhaseProfile {
@@ -1002,7 +1002,7 @@ private struct BenchmarkPhaseProfile {
     }
 
     static func build(from measurements: [BenchmarkMeasurement]) -> [BenchmarkPhaseProfile] {
-        var durationsByPhase: [String: [Duration]] = [:]
+        var durationsByPhase: [SyncPhase: [Duration]] = [:]
         for measurement in measurements {
             for (phase, duration) in measurement.phaseTotals {
                 durationsByPhase[phase, default: []].append(duration)
@@ -1010,7 +1010,7 @@ private struct BenchmarkPhaseProfile {
         }
         return
             durationsByPhase
-            .map { BenchmarkPhaseProfile(name: $0.key, durations: $0.value) }
+            .map { BenchmarkPhaseProfile(name: $0.key.rawValue, durations: $0.value) }
             .sorted { $0.name < $1.name }
     }
 }

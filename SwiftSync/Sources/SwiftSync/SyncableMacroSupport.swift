@@ -32,7 +32,7 @@ extension SwiftSync {
         in context: ModelContext,
         operations: SyncRelationshipOperations = .all
     ) throws -> Bool {
-        try syncProfile("relationship-apply-to-one-foreign-key") {
+        try syncPerformanceProfile(.relationshipApplyToOneForeignKey) {
             let canLink = !operations.isDisjoint(with: [.insert, .update])
             let canClear = operations.contains(.delete)
             guard let key = payload.firstPresentKey(in: keys) else { return false }
@@ -92,7 +92,7 @@ extension SwiftSync {
         in context: ModelContext,
         operations: SyncRelationshipOperations = .all
     ) throws -> Bool {
-        try syncProfile("relationship-apply-to-one-foreign-key") {
+        try syncPerformanceProfile(.relationshipApplyToOneForeignKey) {
             let canLink = !operations.isDisjoint(with: [.insert, .update])
             guard let key = payload.firstPresentKey(in: keys) else { return false }
 
@@ -161,7 +161,7 @@ extension SwiftSync {
         in context: ModelContext,
         operations: SyncRelationshipOperations = .all
     ) throws -> Bool {
-        try syncProfile("relationship-apply-to-many-foreign-keys") {
+        try syncPerformanceProfile(.relationshipApplyToManyForeignKeys) {
             let canAdd = !operations.isDisjoint(with: [.insert, .update])
             let canDelete = operations.contains(.delete)
             guard let key = payload.firstPresentKey(in: keys) else { return false }
@@ -229,7 +229,7 @@ extension SwiftSync {
         in context: ModelContext,
         operations: SyncRelationshipOperations = .all
     ) throws -> Bool {
-        try syncProfile("relationship-apply-to-one-nested-object") {
+        try syncPerformanceProfile(.relationshipApplyToOneNestedObject) {
             let canLink = !operations.isDisjoint(with: [.insert, .update])
             let canClear = operations.contains(.delete)
             guard let key = payload.firstPresentKey(in: keys) else { return false }
@@ -312,7 +312,7 @@ extension SwiftSync {
         in context: ModelContext,
         operations: SyncRelationshipOperations = .all
     ) throws -> Bool {
-        try syncProfile("relationship-apply-to-many-nested-objects") {
+        try syncPerformanceProfile(.relationshipApplyToManyNestedObjects) {
             let canAdd = !operations.isDisjoint(with: [.insert, .update])
             let canDelete = operations.contains(.delete)
             guard let key = payload.firstPresentKey(in: keys) else { return false }

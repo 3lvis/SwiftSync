@@ -17,7 +17,7 @@ final class SyncRelationshipLookupCache: @unchecked Sendable {
             return cached
         }
 
-        let fetched = try syncProfile("relationship-fetch") {
+        let fetched = try syncPerformanceProfile(.relationshipFetch) {
             try context.fetch(FetchDescriptor<Model>())
         }
         rowsByType[key] = fetched
@@ -34,7 +34,7 @@ final class SyncRelationshipLookupCache: @unchecked Sendable {
         }
 
         let fetched = try rows(for: modelType, in: context)
-        let indexed: [String: Model] = syncProfile("relationship-index-by-id") {
+        let indexed: [String: Model] = syncPerformanceProfile(.relationshipIndexByID) {
             Dictionary(
                 uniqueKeysWithValues: fetched.compactMap { row in
                     guard let identity = SwiftSync.resolveIdentityKey(of: row) else { return nil }
@@ -63,10 +63,10 @@ final class SyncRelationshipLookupCache: @unchecked Sendable {
             return try rowsByIdentity(for: modelType, in: context)
         }
 
-        let fetched = try syncProfile("relationship-fetch-by-identity") {
+        let fetched = try syncPerformanceProfile(.relationshipFetchByIdentity) {
             try context.fetch(FetchDescriptor<Model>(predicate: predicate))
         }
-        syncProfile("relationship-index-by-id") {
+        syncPerformanceProfile(.relationshipIndexByID) {
             for row in fetched {
                 if let identity = SwiftSync.resolveIdentityKey(of: row) {
                     map[identity] = row

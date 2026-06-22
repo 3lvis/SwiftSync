@@ -13,16 +13,16 @@ extension ModelContext {
             try Task.checkCancellation()
             try await SwiftSync.withRelationshipLookupCache {
                 let dirtyPIDs = SwiftSync.offlineDirtyPersistentIDs(for: Model.self, in: self)
-                let entries = try syncProfile("normalize-payload") {
+                let entries = try syncPerformanceProfile(.normalizePayload) {
                     try SwiftSync.normalize(payload: payload, model: Model.self)
                 }
-                let existing = try syncProfile("fetch-existing") {
+                let existing = try syncPerformanceProfile(.fetchExisting) {
                     try fetch(FetchDescriptor<Model>())
                 }
 
                 var index: [String: Model] = [:]
                 var duplicates: [Model] = []
-                syncProfile("build-index") {
+                syncPerformanceProfile(.buildIndex) {
                     for row in existing {
                         let key = SwiftSync.identityKey(from: row[keyPath: Model.syncIdentity])
                         if index[key] != nil {
@@ -38,7 +38,7 @@ extension ModelContext {
 
                 if !duplicates.isEmpty {
                     try Task.checkCancellation()
-                    syncProfile("delete-duplicates") {
+                    syncPerformanceProfile(.deleteDuplicates) {
                         for duplicate in duplicates {
                             delete(duplicate)
                         }
@@ -56,7 +56,7 @@ extension ModelContext {
                     seenKeys.insert(key)
 
                     if let row = index[key] {
-                        let didApplyFields = try syncProfile("apply-fields") {
+                        let didApplyFields = try syncPerformanceProfile(.applyFields) {
                             try SwiftSync.applyHonoringLocalEdit(payloadModel, to: row, dirtyPIDs: dirtyPIDs)
                         }
                         if didApplyFields {
@@ -64,7 +64,7 @@ extension ModelContext {
                         }
                         if !relationshipOperations.isDisjoint(with: [.update, .delete]) {
                             try Task.checkCancellation()
-                            let didApplyRelationships = try await syncProfile("apply-relationships") {
+                            let didApplyRelationships = try await syncPerformanceProfile(.applyRelationships) {
                                 try await row.applyRelationships(
                                     payloadModel,
                                     in: self,
@@ -79,13 +79,13 @@ extension ModelContext {
                         continue
                     }
 
-                    let created = try syncProfile("create-model") {
+                    let created = try syncPerformanceProfile(.createModel) {
                         try Model.make(from: payloadModel)
                     }
                     insert(created)
                     if relationshipOperations.contains(.insert) {
                         try Task.checkCancellation()
-                        let didApplyRelationships = try await syncProfile("apply-relationships") {
+                        let didApplyRelationships = try await syncPerformanceProfile(.applyRelationships) {
                             try await created.applyRelationships(
                                 payloadModel,
                                 in: self,
@@ -102,7 +102,7 @@ extension ModelContext {
                 }
 
                 try Task.checkCancellation()
-                syncProfile("delete-missing") {
+                syncPerformanceProfile(.deleteMissing) {
                     for (key, row) in index where !seenKeys.contains(key) {
                         if SwiftSync.isUnsyncedLocalInsert(row, dirtyPIDs: dirtyPIDs) { continue }
                         delete(row)
@@ -112,7 +112,7 @@ extension ModelContext {
 
                 try Task.checkCancellation()
                 if changed {
-                    try syncProfile("save-context") {
+                    try syncPerformanceProfile(.saveContext) {
                         try save()
                     }
                 }
@@ -136,7 +136,7 @@ extension ModelContext {
         do {
             try Task.checkCancellation()
             try await SwiftSync.withRelationshipLookupCache {
-                let payloadModel = syncProfile("normalize-payload") {
+                let payloadModel = syncPerformanceProfile(.normalizePayload) {
                     SyncPayload(values: item, keyStyle: keyStyle)
                 }
                 guard let identity = SwiftSync.resolveIdentity(from: payloadModel, model: Model.self) else {
@@ -148,25 +148,25 @@ extension ModelContext {
                 if SwiftSync.syncIdentityHasUniqueAttribute(Model.self),
                     Model.syncIdentityPredicate(matching: identity) != nil
                 {
-                    matchingRow = try syncProfile("fetch-existing-by-identity") {
+                    matchingRow = try syncPerformanceProfile(.fetchExistingByIdentity) {
                         try SwiftSync.fetchUniqueRow(matching: identity, as: Model.self, in: self)
                     }
                 } else {
-                    let existing = try syncProfile("fetch-existing") {
+                    let existing = try syncPerformanceProfile(.fetchExisting) {
                         try fetch(FetchDescriptor<Model>())
                     }
-                    matchingRow = syncProfile("find-existing") {
+                    matchingRow = syncPerformanceProfile(.findExisting) {
                         existing.first(where: { SwiftSync.identityKey(from: $0[keyPath: Model.syncIdentity]) == key })
                     }
                 }
                 if let row = matchingRow {
-                    let didApplyFields = try syncProfile("apply-fields") {
+                    let didApplyFields = try syncPerformanceProfile(.applyFields) {
                         try row.apply(payloadModel)
                     }
                     if didApplyFields { changed = true }
                     if !relationshipOperations.isDisjoint(with: [.update, .delete]) {
                         try Task.checkCancellation()
-                        let didApplyRelationships = try await syncProfile("apply-relationships") {
+                        let didApplyRelationships = try await syncPerformanceProfile(.applyRelationships) {
                             try await row.applyRelationships(
                                 payloadModel, in: self, operations: relationshipOperations)
                         }
@@ -176,13 +176,13 @@ extension ModelContext {
                         try Task.checkCancellation()
                     }
                 } else {
-                    let created = try syncProfile("create-model") {
+                    let created = try syncPerformanceProfile(.createModel) {
                         try Model.make(from: payloadModel)
                     }
                     insert(created)
                     if relationshipOperations.contains(.insert) {
                         try Task.checkCancellation()
-                        let didApplyRelationships = try await syncProfile("apply-relationships") {
+                        let didApplyRelationships = try await syncPerformanceProfile(.applyRelationships) {
                             try await created.applyRelationships(
                                 payloadModel, in: self, operations: relationshipOperations)
                         }
@@ -196,7 +196,7 @@ extension ModelContext {
 
                 try Task.checkCancellation()
                 if changed {
-                    try syncProfile("save-context") { try save() }
+                    try syncPerformanceProfile(.saveContext) { try save() }
                 }
             }
         } catch {
@@ -220,15 +220,15 @@ extension ModelContext {
         do {
             try Task.checkCancellation()
             try await SwiftSync.withRelationshipLookupCache {
-                let payloadModel = syncProfile("normalize-payload") {
+                let payloadModel = syncPerformanceProfile(.normalizePayload) {
                     SyncPayload(values: item, keyStyle: keyStyle)
                 }
                 guard let identity = SwiftSync.resolveIdentity(from: payloadModel, model: Model.self) else {
                     return
                 }
                 let key = SwiftSync.identityKey(from: identity)
-                let resolvedParent = try syncProfile(
-                    "resolve-parent",
+                let resolvedParent = try syncPerformanceProfile(
+                    .resolveParent,
                     operation: {
                         try SwiftSync.resolveParent(parent, in: self)
                     })
@@ -243,36 +243,36 @@ extension ModelContext {
                 if SwiftSync.syncIdentityHasUniqueAttribute(Model.self),
                     Model.syncIdentityPredicate(matching: identity) != nil
                 {
-                    matchingRow = try syncProfile("fetch-existing-by-identity") {
+                    matchingRow = try syncPerformanceProfile(.fetchExistingByIdentity) {
                         try SwiftSync.fetchUniqueRow(matching: identity, as: Model.self, in: self)
                     }
                 } else {
-                    let existing = try syncProfile("fetch-existing") {
+                    let existing = try syncPerformanceProfile(.fetchExisting) {
                         try fetch(FetchDescriptor<Model>())
                     }
-                    let scopeRows = syncProfile("filter-scope") {
+                    let scopeRows = syncPerformanceProfile(.filterScope) {
                         existing.filter {
                             $0[keyPath: relationship]?.persistentModelID == resolvedParent.persistentModelID
                         }
                     }
-                    matchingRow = syncProfile("find-existing") {
+                    matchingRow = syncPerformanceProfile(.findExisting) {
                         scopeRows.first(where: { SwiftSync.identityKey(from: $0[keyPath: Model.syncIdentity]) == key })
                     }
                 }
                 if let row = matchingRow {
-                    syncProfile("apply-parent") {
+                    syncPerformanceProfile(.applyParent) {
                         if row[keyPath: relationship]?.persistentModelID != resolvedParent.persistentModelID {
                             row[keyPath: relationship] = resolvedParent
                             changed = true
                         }
                     }
-                    let didApplyFields = try syncProfile("apply-fields") {
+                    let didApplyFields = try syncPerformanceProfile(.applyFields) {
                         try row.apply(payloadModel)
                     }
                     if didApplyFields { changed = true }
                     if !relationshipOperations.isDisjoint(with: [.update, .delete]) {
                         try Task.checkCancellation()
-                        let didApplyRelationships = try await syncProfile("apply-relationships") {
+                        let didApplyRelationships = try await syncPerformanceProfile(.applyRelationships) {
                             try await row.applyRelationships(
                                 payloadModel, in: self, operations: relationshipOperations)
                         }
@@ -282,16 +282,16 @@ extension ModelContext {
                         try Task.checkCancellation()
                     }
                 } else {
-                    let created = try syncProfile("create-model") {
+                    let created = try syncPerformanceProfile(.createModel) {
                         try Model.make(from: payloadModel)
                     }
-                    syncProfile("apply-parent") {
+                    syncPerformanceProfile(.applyParent) {
                         created[keyPath: relationship] = resolvedParent
                     }
                     insert(created)
                     if relationshipOperations.contains(.insert) {
                         try Task.checkCancellation()
-                        let didApplyRelationships = try await syncProfile("apply-relationships") {
+                        let didApplyRelationships = try await syncPerformanceProfile(.applyRelationships) {
                             try await created.applyRelationships(
                                 payloadModel, in: self, operations: relationshipOperations)
                         }
@@ -304,7 +304,7 @@ extension ModelContext {
                 }
 
                 try Task.checkCancellation()
-                if changed { try syncProfile("save-context") { try save() } }
+                if changed { try syncPerformanceProfile(.saveContext) { try save() } }
             }
         } catch {
             if SwiftSync.isCancellation(error) {
@@ -349,11 +349,11 @@ extension ModelContext {
             try Task.checkCancellation()
             try await SwiftSync.withRelationshipLookupCache {
                 let dirtyPIDs = SwiftSync.offlineDirtyPersistentIDs(for: Model.self, in: self)
-                let entries = try syncProfile("normalize-payload") {
+                let entries = try syncPerformanceProfile(.normalizePayload) {
                     try SwiftSync.normalize(payload: payload, model: Model.self)
                 }
-                let resolvedParent = try syncProfile(
-                    "resolve-parent",
+                let resolvedParent = try syncPerformanceProfile(
+                    .resolveParent,
                     operation: {
                         try SwiftSync.resolveParent(parent, in: self)
                     })
@@ -369,14 +369,14 @@ extension ModelContext {
                 )
                 let scopeRows: [Model]
                 if let parentPredicate {
-                    scopeRows = try syncProfile("fetch-existing-by-parent") {
+                    scopeRows = try syncPerformanceProfile(.fetchExistingByParent) {
                         try fetch(FetchDescriptor<Model>(predicate: parentPredicate))
                     }
                 } else {
-                    let fetchedExisting = try syncProfile("fetch-existing") {
+                    let fetchedExisting = try syncPerformanceProfile(.fetchExisting) {
                         try fetch(FetchDescriptor<Model>())
                     }
-                    scopeRows = syncProfile("filter-scope") {
+                    scopeRows = syncPerformanceProfile(.filterScope) {
                         fetchedExisting.filter {
                             $0[keyPath: parentRelationship]?.persistentModelID == resolvedParent.persistentModelID
                         }
@@ -385,7 +385,7 @@ extension ModelContext {
 
                 var index: [String: Model] = [:]
                 var duplicates: [Model] = []
-                syncProfile("build-index") {
+                syncPerformanceProfile(.buildIndex) {
                     if isGlobal {
                         for row in scopeRows {
                             let key = SwiftSync.identityKey(from: row[keyPath: Model.syncIdentity])
@@ -415,7 +415,7 @@ extension ModelContext {
 
                 if !duplicates.isEmpty {
                     try Task.checkCancellation()
-                    syncProfile("delete-duplicates") {
+                    syncPerformanceProfile(.deleteDuplicates) {
                         for duplicate in duplicates {
                             delete(duplicate)
                         }
@@ -441,13 +441,13 @@ extension ModelContext {
                     seenKeys.insert(key)
 
                     if let row = index[key] {
-                        syncProfile("apply-parent") {
+                        syncPerformanceProfile(.applyParent) {
                             if row[keyPath: parentRelationship]?.persistentModelID != resolvedParent.persistentModelID {
                                 row[keyPath: parentRelationship] = resolvedParent
                                 changed = true
                             }
                         }
-                        let didApplyFields = try syncProfile("apply-fields") {
+                        let didApplyFields = try syncPerformanceProfile(.applyFields) {
                             try SwiftSync.applyHonoringLocalEdit(payloadModel, to: row, dirtyPIDs: dirtyPIDs)
                         }
                         if didApplyFields {
@@ -455,7 +455,7 @@ extension ModelContext {
                         }
                         if !relationshipOperations.isDisjoint(with: [.update, .delete]) {
                             try Task.checkCancellation()
-                            let didApplyRelationships = try await syncProfile("apply-relationships") {
+                            let didApplyRelationships = try await syncPerformanceProfile(.applyRelationships) {
                                 try await row.applyRelationships(
                                     payloadModel,
                                     in: self,
@@ -471,13 +471,13 @@ extension ModelContext {
                     }
 
                     if isGlobal {
-                        let movedRow = try syncProfile(
-                            "fetch-existing-by-identity",
+                        let movedRow = try syncPerformanceProfile(
+                            .fetchExistingByIdentity,
                             operation: {
                                 try SwiftSync.fetchUniqueRow(matching: identity, as: Model.self, in: self)
                             })
                         if let movedRow {
-                            syncProfile("apply-parent") {
+                            syncPerformanceProfile(.applyParent) {
                                 if movedRow[keyPath: parentRelationship]?.persistentModelID
                                     != resolvedParent.persistentModelID
                                 {
@@ -485,7 +485,7 @@ extension ModelContext {
                                     changed = true
                                 }
                             }
-                            let didApplyFields = try syncProfile("apply-fields") {
+                            let didApplyFields = try syncPerformanceProfile(.applyFields) {
                                 try SwiftSync.applyHonoringLocalEdit(payloadModel, to: movedRow, dirtyPIDs: dirtyPIDs)
                             }
                             if didApplyFields {
@@ -493,7 +493,7 @@ extension ModelContext {
                             }
                             if !relationshipOperations.isDisjoint(with: [.update, .delete]) {
                                 try Task.checkCancellation()
-                                let didApplyRelationships = try await syncProfile("apply-relationships") {
+                                let didApplyRelationships = try await syncPerformanceProfile(.applyRelationships) {
                                     try await movedRow.applyRelationships(
                                         payloadModel,
                                         in: self,
@@ -510,16 +510,16 @@ extension ModelContext {
                         }
                     }
 
-                    let created = try syncProfile("create-model") {
+                    let created = try syncPerformanceProfile(.createModel) {
                         try Model.make(from: payloadModel)
                     }
-                    syncProfile("apply-parent") {
+                    syncPerformanceProfile(.applyParent) {
                         created[keyPath: parentRelationship] = resolvedParent
                     }
                     insert(created)
                     if relationshipOperations.contains(.insert) {
                         try Task.checkCancellation()
-                        let didApplyRelationships = try await syncProfile("apply-relationships") {
+                        let didApplyRelationships = try await syncPerformanceProfile(.applyRelationships) {
                             try await created.applyRelationships(
                                 payloadModel,
                                 in: self,
@@ -536,7 +536,7 @@ extension ModelContext {
                 }
 
                 try Task.checkCancellation()
-                syncProfile("delete-missing") {
+                syncPerformanceProfile(.deleteMissing) {
                     for row in scopeRows {
                         let key: String
                         if isGlobal {
@@ -560,7 +560,7 @@ extension ModelContext {
 
                 try Task.checkCancellation()
                 if changed {
-                    try syncProfile("save-context") {
+                    try syncPerformanceProfile(.saveContext) {
                         try save()
                     }
                 }
@@ -580,7 +580,7 @@ extension ModelContext {
         if let cache = SyncRelationshipLookupState.current {
             return try cache.rows(for: modelType, in: self)
         }
-        return try syncProfile("relationship-fetch") {
+        return try syncPerformanceProfile(.relationshipFetch) {
             try fetch(FetchDescriptor<Model>())
         }
     }
@@ -590,7 +590,7 @@ extension ModelContext {
             return try cache.rowsByIdentity(for: modelType, in: self)
         }
         let fetched = try syncFetchRelatedRows(modelType)
-        return syncProfile("relationship-index-by-id") {
+        return syncPerformanceProfile(.relationshipIndexByID) {
             Dictionary(
                 uniqueKeysWithValues: fetched.compactMap { row in
                     guard let identity = SwiftSync.resolveIdentityKey(of: row) else { return nil }
@@ -609,10 +609,10 @@ extension ModelContext {
         guard let predicate = Model.syncIdentityPredicate(matchingAny: identities) else {
             return try syncFetchRelatedRowsByIdentity(modelType)
         }
-        let fetched = try syncProfile("relationship-fetch-by-identity") {
+        let fetched = try syncPerformanceProfile(.relationshipFetchByIdentity) {
             try fetch(FetchDescriptor<Model>(predicate: predicate))
         }
-        return syncProfile("relationship-index-by-id") {
+        return syncPerformanceProfile(.relationshipIndexByID) {
             Dictionary(
                 uniqueKeysWithValues: fetched.compactMap { row in
                     guard let identity = SwiftSync.resolveIdentityKey(of: row) else { return nil }

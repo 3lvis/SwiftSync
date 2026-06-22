@@ -3345,9 +3345,9 @@ final class SyncTests: XCTestCase {
             try await context.sync(item: ["id": 1, "full_name": "One Updated"], as: User.self)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase["fetch-existing-by-identity"])
-        XCTAssertNil(profile.totalsByPhase["fetch-existing"])
-        XCTAssertNil(profile.totalsByPhase["find-existing"])
+        XCTAssertNotNil(profile.totalsByPhase[.fetchExistingByIdentity])
+        XCTAssertNil(profile.totalsByPhase[.fetchExisting])
+        XCTAssertNil(profile.totalsByPhase[.findExisting])
     }
 
     @MainActor
@@ -3366,9 +3366,9 @@ final class SyncTests: XCTestCase {
             try await context.sync(item: ["id": 1, "full_name": "One Updated"], as: LooseUser.self)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase["fetch-existing"])
-        XCTAssertNotNil(profile.totalsByPhase["find-existing"])
-        XCTAssertNil(profile.totalsByPhase["fetch-existing-by-identity"])
+        XCTAssertNotNil(profile.totalsByPhase[.fetchExisting])
+        XCTAssertNotNil(profile.totalsByPhase[.findExisting])
+        XCTAssertNil(profile.totalsByPhase[.fetchExistingByIdentity])
     }
 
     @MainActor
@@ -3387,9 +3387,9 @@ final class SyncTests: XCTestCase {
             try await context.sync(item: ["id": 1, "name": "One Updated"], as: Team.self)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase["fetch-existing"])
-        XCTAssertNotNil(profile.totalsByPhase["find-existing"])
-        XCTAssertNil(profile.totalsByPhase["fetch-existing-by-identity"])
+        XCTAssertNotNil(profile.totalsByPhase[.fetchExisting])
+        XCTAssertNotNil(profile.totalsByPhase[.findExisting])
+        XCTAssertNil(profile.totalsByPhase[.fetchExistingByIdentity])
     }
 
     @MainActor
@@ -3415,13 +3415,13 @@ final class SyncTests: XCTestCase {
             try await context.sync(item: ["id": 1, "name": "Ava", "company_id": 10], as: AutoEmployee.self)
         }
 
-        XCTAssertNotNil(toOneProfile.totalsByPhase["relationship-apply-to-one-foreign-key"])
+        XCTAssertNotNil(toOneProfile.totalsByPhase[.relationshipApplyToOneForeignKey])
 
         let (_, toManyProfile) = try await SwiftSync.withMainActorPerformanceProfiling {
             try await context.sync(item: ["id": 10, "title": "Task 10", "tag_ids": [1, 2]], as: AutoTask.self)
         }
 
-        XCTAssertNotNil(toManyProfile.totalsByPhase["relationship-apply-to-many-foreign-keys"])
+        XCTAssertNotNil(toManyProfile.totalsByPhase[.relationshipApplyToManyForeignKeys])
     }
 
     @MainActor
@@ -3444,8 +3444,8 @@ final class SyncTests: XCTestCase {
             try await context.sync(item: ["id": 1, "name": "Ava", "company_id": 10], as: AutoEmployee.self)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase["relationship-fetch-by-identity"])
-        XCTAssertNil(profile.totalsByPhase["relationship-fetch"])
+        XCTAssertNotNil(profile.totalsByPhase[.relationshipFetchByIdentity])
+        XCTAssertNil(profile.totalsByPhase[.relationshipFetch])
     }
 
     @MainActor
@@ -3469,8 +3469,8 @@ final class SyncTests: XCTestCase {
             try await context.sync(item: ["id": 10, "title": "Task 10", "tag_ids": [1, 2]], as: ScenarioTask.self)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase["relationship-fetch-by-identity"])
-        XCTAssertNil(profile.totalsByPhase["relationship-fetch"])
+        XCTAssertNotNil(profile.totalsByPhase[.relationshipFetchByIdentity])
+        XCTAssertNil(profile.totalsByPhase[.relationshipFetch])
     }
 
     @MainActor
@@ -3493,8 +3493,8 @@ final class SyncTests: XCTestCase {
             try await context.sync(item: ["id": 10, "title": "Task 10", "tag_ids": [1, 2]], as: AutoTask.self)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase["relationship-fetch"])
-        XCTAssertNil(profile.totalsByPhase["relationship-fetch-by-identity"])
+        XCTAssertNotNil(profile.totalsByPhase[.relationshipFetch])
+        XCTAssertNil(profile.totalsByPhase[.relationshipFetchByIdentity])
     }
 
     @MainActor
@@ -3521,9 +3521,9 @@ final class SyncTests: XCTestCase {
                 ], as: MacroScopedNote.self, parent: folder, relationship: \MacroScopedNote.folder)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase["fetch-existing-by-parent"])
-        XCTAssertNil(profile.totalsByPhase["fetch-existing"])
-        XCTAssertNil(profile.totalsByPhase["filter-scope"])
+        XCTAssertNotNil(profile.totalsByPhase[.fetchExistingByParent])
+        XCTAssertNil(profile.totalsByPhase[.fetchExisting])
+        XCTAssertNil(profile.totalsByPhase[.filterScope])
     }
 
     @MainActor
@@ -3549,9 +3549,9 @@ final class SyncTests: XCTestCase {
                 ], as: SuperNote.self, parent: parent, relationship: \SuperNote.superUser)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase["fetch-existing"])
-        XCTAssertNotNil(profile.totalsByPhase["filter-scope"])
-        XCTAssertNil(profile.totalsByPhase["fetch-existing-by-parent"])
+        XCTAssertNotNil(profile.totalsByPhase[.fetchExisting])
+        XCTAssertNotNil(profile.totalsByPhase[.filterScope])
+        XCTAssertNil(profile.totalsByPhase[.fetchExistingByParent])
     }
 
     @MainActor
@@ -3601,10 +3601,10 @@ final class SyncTests: XCTestCase {
                 relationship: \MacroScopedNote.folder)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase["fetch-existing-by-identity"])
-        XCTAssertNil(profile.totalsByPhase["fetch-existing"])
-        XCTAssertNil(profile.totalsByPhase["filter-scope"])
-        XCTAssertNil(profile.totalsByPhase["find-existing"])
+        XCTAssertNotNil(profile.totalsByPhase[.fetchExistingByIdentity])
+        XCTAssertNil(profile.totalsByPhase[.fetchExisting])
+        XCTAssertNil(profile.totalsByPhase[.filterScope])
+        XCTAssertNil(profile.totalsByPhase[.findExisting])
     }
 
     @MainActor
@@ -3628,10 +3628,10 @@ final class SyncTests: XCTestCase {
                 relationship: \SuperNote.superUser)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase["fetch-existing"])
-        XCTAssertNotNil(profile.totalsByPhase["filter-scope"])
-        XCTAssertNotNil(profile.totalsByPhase["find-existing"])
-        XCTAssertNil(profile.totalsByPhase["fetch-existing-by-identity"])
+        XCTAssertNotNil(profile.totalsByPhase[.fetchExisting])
+        XCTAssertNotNil(profile.totalsByPhase[.filterScope])
+        XCTAssertNotNil(profile.totalsByPhase[.findExisting])
+        XCTAssertNil(profile.totalsByPhase[.fetchExistingByIdentity])
     }
 
     @MainActor

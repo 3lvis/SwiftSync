@@ -2,7 +2,7 @@ import Foundation
 import OSLog
 
 struct SyncPerformanceProfile: Sendable {
-    let totalsByPhase: [String: Duration]
+    let totalsByPhase: [SyncPhase: Duration]
 }
 
 final class SyncPerformanceProfiler: @unchecked Sendable {
@@ -10,10 +10,10 @@ final class SyncPerformanceProfiler: @unchecked Sendable {
 
     private let clock = ContinuousClock()
     private let lock = NSLock()
-    private var totalsByPhase: [String: Duration] = [:]
+    private var totalsByPhase: [SyncPhase: Duration] = [:]
 
-    func measure<T>(_ phase: String, operation: () throws -> T) rethrows -> T {
-        let interval = Self.signposter.beginInterval("SwiftSyncPhase", "\(phase, privacy: .public)")
+    func measure<T>(_ phase: SyncPhase, operation: () throws -> T) rethrows -> T {
+        let interval = Self.signposter.beginInterval("SwiftSyncPhase", "\(phase.rawValue, privacy: .public)")
         let start = clock.now
         defer {
             Self.signposter.endInterval("SwiftSyncPhase", interval)
@@ -22,8 +22,8 @@ final class SyncPerformanceProfiler: @unchecked Sendable {
         return try operation()
     }
 
-    func measure<T>(_ phase: String, operation: () async throws -> T) async rethrows -> T {
-        let interval = Self.signposter.beginInterval("SwiftSyncPhase", "\(phase, privacy: .public)")
+    func measure<T>(_ phase: SyncPhase, operation: () async throws -> T) async rethrows -> T {
+        let interval = Self.signposter.beginInterval("SwiftSyncPhase", "\(phase.rawValue, privacy: .public)")
         let start = clock.now
         defer {
             Self.signposter.endInterval("SwiftSyncPhase", interval)
@@ -38,7 +38,7 @@ final class SyncPerformanceProfiler: @unchecked Sendable {
         return SyncPerformanceProfile(totalsByPhase: totalsByPhase)
     }
 
-    private func record(phase: String, duration: Duration) {
+    private func record(phase: SyncPhase, duration: Duration) {
         lock.lock()
         totalsByPhase[phase, default: .zero] += duration
         lock.unlock()
@@ -49,14 +49,14 @@ enum SyncPerformanceProfilingState {
     @TaskLocal static var current: SyncPerformanceProfiler?
 }
 
-func syncProfile<T>(_ phase: String, operation: () throws -> T) rethrows -> T {
+func syncPerformanceProfile<T>(_ phase: SyncPhase, operation: () throws -> T) rethrows -> T {
     guard let profiler = SyncPerformanceProfilingState.current else {
         return try operation()
     }
     return try profiler.measure(phase, operation: operation)
 }
 
-func syncProfile<T>(_ phase: String, operation: () async throws -> T) async rethrows -> T {
+func syncPerformanceProfile<T>(_ phase: SyncPhase, operation: () async throws -> T) async rethrows -> T {
     guard let profiler = SyncPerformanceProfilingState.current else {
         return try await operation()
     }
