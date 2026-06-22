@@ -3217,6 +3217,22 @@ final class SyncTests: XCTestCase {
     }
 
     @MainActor
+    func testSyncThrowsInvalidPayloadForNonDictionaryElement() async throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: DifferentContextConflictUser.self, configurations: configuration)
+        let context = ModelContext(container)
+
+        do {
+            try await context.sync(payload: ["not a dictionary"], as: DifferentContextConflictUser.self)
+            XCTFail("Expected a non-dictionary payload element to throw")
+        } catch let error as SyncError {
+            guard case .invalidPayload = error else {
+                return XCTFail("Expected .invalidPayload, got \(error)")
+            }
+        }
+    }
+
+    @MainActor
     func testSyncCancellationDuringExecutionRollsBackUnsavedChanges() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: ConcurrentRaceUser.self, configurations: configuration)
