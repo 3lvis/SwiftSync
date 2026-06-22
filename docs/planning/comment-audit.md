@@ -108,3 +108,10 @@ Baseline: ~685 comment-bearing lines across 38 files (crude count, over-counts m
 ## Log
 
 - Section 0: #650, merged.
+- Sections 1–2 + engine restructure: #651 (draft). Full re-audit of `SwiftSync/Sources/` (128 comment
+  lines) after the restructure: the explanatory doc + inline comments survive the bar (SwiftData/CoreData
+  quirks, the SQL `nil != "inbound"` trap, provenance, invariants, justifications) — Section 1 + the
+  restructure already removed the restatement/duplication. Found one partial-duplicate trim
+  (`SyncContainer` schema-registration comment) and cut 5 access-level `// MARK:` headers in
+  `SyncQueryPublisher` (they restated `public`/`private`); kept Core.swift's 2 navigation MARKs (1300-line
+  file). This closes Section 2 (library inline comments) — the surface is fully audited.

@@ -6,11 +6,7 @@ import SwiftData
 @Observable
 public final class SyncQueryPublisher<Model: PersistentModel> {
 
-    // MARK: - Public interface
-
     public private(set) var rows: [Model] = []
-
-    // MARK: - Private state
 
     @ObservationIgnored private let syncContainer: SyncContainer
     @ObservationIgnored private let predicate: Predicate<Model>?
@@ -18,8 +14,6 @@ public final class SyncQueryPublisher<Model: PersistentModel> {
     @ObservationIgnored private let postFetchFilter: ((Model) -> Bool)?
     @ObservationIgnored private let observedModelTypeNames: Set<String>
     @ObservationIgnored nonisolated(unsafe) private var notificationToken: NSObjectProtocol?
-
-    // MARK: - Designated init
 
     private init(
         syncContainer: SyncContainer,
@@ -53,8 +47,6 @@ public final class SyncQueryPublisher<Model: PersistentModel> {
             NotificationCenter.default.removeObserver(notificationToken)
         }
     }
-
-    // MARK: - Public inits
 
     public convenience init(
         _ _: Model.Type,
@@ -107,8 +99,6 @@ public final class SyncQueryPublisher<Model: PersistentModel> {
             }
         )
     }
-
-    // MARK: - Private
 
     private func shouldReload(
         changedTypeNames: Set<String>,

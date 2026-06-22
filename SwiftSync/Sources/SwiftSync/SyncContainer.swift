@@ -53,8 +53,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         configurations: ModelConfiguration...
     ) throws {
         try Self._validateSchema(modelTypes: modelTypes)
-        // SwiftSync's per-type last-pushed history token (O(model types) rows). Registered so consumers
-        // never declare or manage it.
+        // Registered so consumers never declare or manage SwiftSync's bookkeeping model.
         let schema = Schema(modelTypes + [PushHistoryTokenRecord.self])
         self.modelContainer = try Self._recoverContainerInitialization(
             recoverOnFailure: recoverOnFailure,
