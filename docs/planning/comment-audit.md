@@ -107,6 +107,14 @@ Baseline: ~685 comment-bearing lines across 38 files (crude count, over-counts m
 
 ## Log
 
+- Serialization regression caught by CI: `testConcurrentSyncDifferentContextsSameStoreUniqueConstraintConflict`
+  relied on the removed engine-level lease to make an arbitrary *race-order* winner deterministic (15-run
+  loop: 8/7 coin flip). The "one row, no corruption" guarantee comes from `@Attribute(.unique)` and holds
+  without the lease (15/15). Real last-writer-wins (winner decided by timestamp) is covered deterministically
+  elsewhere — DemoBackend `UploadEndpointTests` (×4) and DemoCore `OfflinePushTests` (×2). Rewrote the test
+  as `testLastWriterWinsAcrossContextsOnSameStore`: sequence the two context writes so "last writer" is
+  actually defined, assert the later context wins (deterministic, 15/15). No global lock restored.
+
 - Section 0: #650, merged.
 - Sections 1–2 + engine restructure: #651 (draft). Full re-audit of `SwiftSync/Sources/` (128 comment
   lines) after the restructure: the explanatory doc + inline comments survive the bar (SwiftData/CoreData

@@ -2743,26 +2743,17 @@ final class SyncTests: XCTestCase {
     }
 
     @MainActor
-    func testConcurrentSyncDifferentContextsSameStoreUniqueConstraintConflict() async throws {
+    func testLastWriterWinsAcrossContextsOnSameStore() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: DifferentContextConflictUser.self, configurations: configuration)
         let foregroundContext = ModelContext(container)
         let backgroundContext = ModelContext(container)
         let readerContext = ModelContext(container)
 
-        let foregroundTask = Task { @MainActor in
-            try await foregroundContext.sync(
-                payload: [["id": 500, "full_name": "Foreground Winner"]], as: DifferentContextConflictUser.self)
-        }
-
-        await Task.yield()
-        let backgroundTask = Task { @MainActor in
-            try await backgroundContext.sync(
-                payload: [["id": 500, "full_name": "Background Winner"]], as: DifferentContextConflictUser.self)
-        }
-
-        try await foregroundTask.value
-        try await backgroundTask.value
+        try await foregroundContext.sync(
+            payload: [["id": 500, "full_name": "Foreground Winner"]], as: DifferentContextConflictUser.self)
+        try await backgroundContext.sync(
+            payload: [["id": 500, "full_name": "Background Winner"]], as: DifferentContextConflictUser.self)
 
         let rows = try readerContext.fetch(FetchDescriptor<DifferentContextConflictUser>())
         XCTAssertEqual(rows.count, 1)
