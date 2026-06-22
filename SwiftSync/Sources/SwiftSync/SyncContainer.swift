@@ -9,6 +9,10 @@ struct UncheckedSendableBox<Value>: @unchecked Sendable {
     init(_ value: Value) { self.value = value }
 }
 
+public protocol SyncPayloadConvertible: Sendable {
+    func toSyncPayloadDictionary() -> [String: Any]
+}
+
 public final class SyncContainer: NSObject, @unchecked Sendable {
     /// A FIFO async mutex. Serializes work spanning `await` points — which actor isolation alone does not,
     /// since an actor method suspended at an `await` lets another call enter.
