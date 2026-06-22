@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-struct SyncPerformanceProfile: Sendable {
+struct SyncPerformanceReport: Sendable {
     let totalsByPhase: [SyncPhase: Duration]
 }
 
@@ -32,10 +32,10 @@ final class SyncPerformanceProfiler: @unchecked Sendable {
         return try await operation()
     }
 
-    func snapshot() -> SyncPerformanceProfile {
+    func snapshot() -> SyncPerformanceReport {
         lock.lock()
         defer { lock.unlock() }
-        return SyncPerformanceProfile(totalsByPhase: totalsByPhase)
+        return SyncPerformanceReport(totalsByPhase: totalsByPhase)
     }
 
     private func record(phase: SyncPhase, duration: Duration) {
@@ -66,7 +66,7 @@ func syncPerformanceProfile<T>(_ phase: SyncPhase, operation: () async throws ->
 extension SwiftSync {
     static func withPerformanceProfiling<T>(
         operation: () throws -> T
-    ) rethrows -> (value: T, profile: SyncPerformanceProfile) {
+    ) rethrows -> (value: T, profile: SyncPerformanceReport) {
         let profiler = SyncPerformanceProfiler()
         let value = try SyncPerformanceProfilingState.$current.withValue(profiler) {
             try operation()
@@ -76,7 +76,7 @@ extension SwiftSync {
 
     static func withPerformanceProfiling<T>(
         operation: () async throws -> T
-    ) async rethrows -> (value: T, profile: SyncPerformanceProfile) {
+    ) async rethrows -> (value: T, profile: SyncPerformanceReport) {
         let profiler = SyncPerformanceProfiler()
         let value = try await SyncPerformanceProfilingState.$current.withValue(profiler) {
             try await operation()
@@ -87,7 +87,7 @@ extension SwiftSync {
     @MainActor
     static func withMainActorPerformanceProfiling<T>(
         operation: @MainActor () async throws -> T
-    ) async rethrows -> (value: T, profile: SyncPerformanceProfile) {
+    ) async rethrows -> (value: T, profile: SyncPerformanceReport) {
         let profiler = SyncPerformanceProfiler()
         let value = try await SyncPerformanceProfilingState.$current.withValue(profiler) {
             try await operation()
