@@ -19,7 +19,7 @@
   "testTargets" : [
     {
       "target" : {
-        "containerPath" : "container:DemoCore",
+        "containerPath" : "container:..\/DemoCore",
         "identifier" : "DemoCoreTests",
         "name" : "DemoCoreTests"
       }
