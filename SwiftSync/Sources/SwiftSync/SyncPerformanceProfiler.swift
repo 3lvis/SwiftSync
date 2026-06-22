@@ -2,6 +2,10 @@ import Foundation
 
 struct SyncPerformanceReport: Sendable {
     let totalsByPhase: [SyncPhase: Duration]
+
+    func entered(_ phase: SyncPhase) -> Bool {
+        totalsByPhase[phase] != nil
+    }
 }
 
 final class SyncPerformanceProfiler: @unchecked Sendable {

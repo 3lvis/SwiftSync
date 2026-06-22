@@ -3345,9 +3345,9 @@ final class SyncTests: XCTestCase {
             try await context.sync(item: ["id": 1, "full_name": "One Updated"], as: User.self)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase[.fetchExistingByIdentity])
-        XCTAssertNil(profile.totalsByPhase[.fetchExisting])
-        XCTAssertNil(profile.totalsByPhase[.findExisting])
+        XCTAssertTrue(profile.entered(.fetchExistingByIdentity))
+        XCTAssertFalse(profile.entered(.fetchExisting))
+        XCTAssertFalse(profile.entered(.findExisting))
     }
 
     @MainActor
@@ -3366,9 +3366,9 @@ final class SyncTests: XCTestCase {
             try await context.sync(item: ["id": 1, "full_name": "One Updated"], as: LooseUser.self)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase[.fetchExisting])
-        XCTAssertNotNil(profile.totalsByPhase[.findExisting])
-        XCTAssertNil(profile.totalsByPhase[.fetchExistingByIdentity])
+        XCTAssertTrue(profile.entered(.fetchExisting))
+        XCTAssertTrue(profile.entered(.findExisting))
+        XCTAssertFalse(profile.entered(.fetchExistingByIdentity))
     }
 
     @MainActor
@@ -3387,9 +3387,9 @@ final class SyncTests: XCTestCase {
             try await context.sync(item: ["id": 1, "name": "One Updated"], as: Team.self)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase[.fetchExisting])
-        XCTAssertNotNil(profile.totalsByPhase[.findExisting])
-        XCTAssertNil(profile.totalsByPhase[.fetchExistingByIdentity])
+        XCTAssertTrue(profile.entered(.fetchExisting))
+        XCTAssertTrue(profile.entered(.findExisting))
+        XCTAssertFalse(profile.entered(.fetchExistingByIdentity))
     }
 
     @MainActor
@@ -3415,13 +3415,13 @@ final class SyncTests: XCTestCase {
             try await context.sync(item: ["id": 1, "name": "Ava", "company_id": 10], as: AutoEmployee.self)
         }
 
-        XCTAssertNotNil(toOneProfile.totalsByPhase[.relationshipApplyToOneForeignKey])
+        XCTAssertTrue(toOneProfile.entered(.relationshipApplyToOneForeignKey))
 
         let (_, toManyProfile) = try await SwiftSync.withMainActorPerformanceProfiling {
             try await context.sync(item: ["id": 10, "title": "Task 10", "tag_ids": [1, 2]], as: AutoTask.self)
         }
 
-        XCTAssertNotNil(toManyProfile.totalsByPhase[.relationshipApplyToManyForeignKeys])
+        XCTAssertTrue(toManyProfile.entered(.relationshipApplyToManyForeignKeys))
     }
 
     @MainActor
@@ -3444,8 +3444,8 @@ final class SyncTests: XCTestCase {
             try await context.sync(item: ["id": 1, "name": "Ava", "company_id": 10], as: AutoEmployee.self)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase[.relationshipFetchByIdentity])
-        XCTAssertNil(profile.totalsByPhase[.relationshipFetch])
+        XCTAssertTrue(profile.entered(.relationshipFetchByIdentity))
+        XCTAssertFalse(profile.entered(.relationshipFetch))
     }
 
     @MainActor
@@ -3469,8 +3469,8 @@ final class SyncTests: XCTestCase {
             try await context.sync(item: ["id": 10, "title": "Task 10", "tag_ids": [1, 2]], as: ScenarioTask.self)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase[.relationshipFetchByIdentity])
-        XCTAssertNil(profile.totalsByPhase[.relationshipFetch])
+        XCTAssertTrue(profile.entered(.relationshipFetchByIdentity))
+        XCTAssertFalse(profile.entered(.relationshipFetch))
     }
 
     @MainActor
@@ -3493,8 +3493,8 @@ final class SyncTests: XCTestCase {
             try await context.sync(item: ["id": 10, "title": "Task 10", "tag_ids": [1, 2]], as: AutoTask.self)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase[.relationshipFetch])
-        XCTAssertNil(profile.totalsByPhase[.relationshipFetchByIdentity])
+        XCTAssertTrue(profile.entered(.relationshipFetch))
+        XCTAssertFalse(profile.entered(.relationshipFetchByIdentity))
     }
 
     @MainActor
@@ -3521,9 +3521,9 @@ final class SyncTests: XCTestCase {
                 ], as: MacroScopedNote.self, parent: folder, relationship: \MacroScopedNote.folder)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase[.fetchExistingByParent])
-        XCTAssertNil(profile.totalsByPhase[.fetchExisting])
-        XCTAssertNil(profile.totalsByPhase[.filterScope])
+        XCTAssertTrue(profile.entered(.fetchExistingByParent))
+        XCTAssertFalse(profile.entered(.fetchExisting))
+        XCTAssertFalse(profile.entered(.filterScope))
     }
 
     @MainActor
@@ -3549,9 +3549,9 @@ final class SyncTests: XCTestCase {
                 ], as: SuperNote.self, parent: parent, relationship: \SuperNote.superUser)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase[.fetchExisting])
-        XCTAssertNotNil(profile.totalsByPhase[.filterScope])
-        XCTAssertNil(profile.totalsByPhase[.fetchExistingByParent])
+        XCTAssertTrue(profile.entered(.fetchExisting))
+        XCTAssertTrue(profile.entered(.filterScope))
+        XCTAssertFalse(profile.entered(.fetchExistingByParent))
     }
 
     @MainActor
@@ -3601,10 +3601,10 @@ final class SyncTests: XCTestCase {
                 relationship: \MacroScopedNote.folder)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase[.fetchExistingByIdentity])
-        XCTAssertNil(profile.totalsByPhase[.fetchExisting])
-        XCTAssertNil(profile.totalsByPhase[.filterScope])
-        XCTAssertNil(profile.totalsByPhase[.findExisting])
+        XCTAssertTrue(profile.entered(.fetchExistingByIdentity))
+        XCTAssertFalse(profile.entered(.fetchExisting))
+        XCTAssertFalse(profile.entered(.filterScope))
+        XCTAssertFalse(profile.entered(.findExisting))
     }
 
     @MainActor
@@ -3628,10 +3628,10 @@ final class SyncTests: XCTestCase {
                 relationship: \SuperNote.superUser)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase[.fetchExisting])
-        XCTAssertNotNil(profile.totalsByPhase[.filterScope])
-        XCTAssertNotNil(profile.totalsByPhase[.findExisting])
-        XCTAssertNil(profile.totalsByPhase[.fetchExistingByIdentity])
+        XCTAssertTrue(profile.entered(.fetchExisting))
+        XCTAssertTrue(profile.entered(.filterScope))
+        XCTAssertTrue(profile.entered(.findExisting))
+        XCTAssertFalse(profile.entered(.fetchExistingByIdentity))
     }
 
     @MainActor
