@@ -159,16 +159,16 @@ final class SyncableMacroDiagnosticsTests: XCTestCase {
                         }
 
                         var result: [String: Any] = [:]
-                        if let encoded = exportEncodeValue(self.id, dateFormatter: dateFormatter) {
-                    exportSetValue(encoded, for: keyStyle.transform("id"), into: &result)
+                        if let encoded = SwiftSync.exportEncodeValue(self.id, dateFormatter: dateFormatter) {
+                    SwiftSync.exportSetValue(encoded, for: keyStyle.transform("id"), into: &result)
                         } else {
-                    exportSetValue(NSNull(), for: keyStyle.transform("id"), into: &result)
+                    SwiftSync.exportSetValue(NSNull(), for: keyStyle.transform("id"), into: &result)
                         }
 
-                        if let encoded = exportEncodeValue(self.title, dateFormatter: dateFormatter) {
-                            exportSetValue(encoded, for: keyStyle.transform("title"), into: &result)
+                        if let encoded = SwiftSync.exportEncodeValue(self.title, dateFormatter: dateFormatter) {
+                            SwiftSync.exportSetValue(encoded, for: keyStyle.transform("title"), into: &result)
                         } else {
-                            exportSetValue(NSNull(), for: keyStyle.transform("title"), into: &result)
+                            SwiftSync.exportSetValue(NSNull(), for: keyStyle.transform("title"), into: &result)
                         }
                         return result
                     }
@@ -297,10 +297,10 @@ final class SyncableMacroDiagnosticsTests: XCTestCase {
                         }
 
                         var result: [String: Any] = [:]
-                        if let encoded = exportEncodeValue(self.id, dateFormatter: dateFormatter) {
-                    exportSetValue(encoded, for: keyStyle.transform("id"), into: &result)
+                        if let encoded = SwiftSync.exportEncodeValue(self.id, dateFormatter: dateFormatter) {
+                    SwiftSync.exportSetValue(encoded, for: keyStyle.transform("id"), into: &result)
                         } else {
-                    exportSetValue(NSNull(), for: keyStyle.transform("id"), into: &result)
+                    SwiftSync.exportSetValue(NSNull(), for: keyStyle.transform("id"), into: &result)
                         }
                         return result
                     }

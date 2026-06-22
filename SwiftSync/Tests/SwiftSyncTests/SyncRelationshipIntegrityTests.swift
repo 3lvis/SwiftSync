@@ -123,7 +123,7 @@ extension MissingInverseRegressionTask: SyncUpdatableModel {
         operations: SyncRelationshipOperations,
         isolation: isolated (any Actor)? = #isolation
     ) async throws -> Bool {
-        try syncApplyToManyForeignKeys(
+        try SwiftSync.syncApplyToManyForeignKeys(
             self,
             relationship: \MissingInverseRegressionTask.tags,
             payload: payload,
@@ -195,7 +195,7 @@ extension ExplicitInverseRegressionTask: SyncUpdatableModel {
         operations: SyncRelationshipOperations,
         isolation: isolated (any Actor)? = #isolation
     ) async throws -> Bool {
-        try syncApplyToManyForeignKeys(
+        try SwiftSync.syncApplyToManyForeignKeys(
             self,
             relationship: \ExplicitInverseRegressionTask.tags,
             payload: payload,
@@ -305,7 +305,7 @@ extension OneSidedTask: SyncUpdatableModel {
         operations: SyncRelationshipOperations,
         isolation: isolated (any Actor)? = #isolation
     ) async throws -> Bool {
-        try syncApplyToManyForeignKeys(
+        try SwiftSync.syncApplyToManyForeignKeys(
             self,
             relationship: \OneSidedTask.members,
             payload: payload,
@@ -409,7 +409,7 @@ extension OneSidedNestedTask: SyncUpdatableModel {
         operations: SyncRelationshipOperations,
         isolation: isolated (any Actor)? = #isolation
     ) async throws -> Bool {
-        try syncApplyToManyNestedObjects(
+        try SwiftSync.syncApplyToManyNestedObjects(
             self,
             relationship: \OneSidedNestedTask.members,
             payload: payload,
