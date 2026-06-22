@@ -1,34 +1,23 @@
 import Foundation
-import OSLog
 
 struct SyncPerformanceReport: Sendable {
     let totalsByPhase: [SyncPhase: Duration]
 }
 
 final class SyncPerformanceProfiler: @unchecked Sendable {
-    private static let signposter = OSSignposter(subsystem: "SwiftSync", category: "Performance")
-
     private let clock = ContinuousClock()
     private let lock = NSLock()
     private var totalsByPhase: [SyncPhase: Duration] = [:]
 
     func measure<T>(_ phase: SyncPhase, operation: () throws -> T) rethrows -> T {
-        let interval = Self.signposter.beginInterval("SwiftSyncPhase", "\(phase.rawValue, privacy: .public)")
         let start = clock.now
-        defer {
-            Self.signposter.endInterval("SwiftSyncPhase", interval)
-            record(phase: phase, duration: start.duration(to: clock.now))
-        }
+        defer { record(phase: phase, duration: start.duration(to: clock.now)) }
         return try operation()
     }
 
     func measure<T>(_ phase: SyncPhase, operation: () async throws -> T) async rethrows -> T {
-        let interval = Self.signposter.beginInterval("SwiftSyncPhase", "\(phase.rawValue, privacy: .public)")
         let start = clock.now
-        defer {
-            Self.signposter.endInterval("SwiftSyncPhase", interval)
-            record(phase: phase, duration: start.duration(to: clock.now))
-        }
+        defer { record(phase: phase, duration: start.duration(to: clock.now)) }
         return try await operation()
     }
 
