@@ -61,22 +61,18 @@ jobs:
           echo "Using iPhone simulator $UDID"
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
 
-      # Fast, deterministic — run it first so a regression here fails before the slow UI suite.
-      - name: iOS regression — DirtyTrackingGapTests (DemoCore)
-        working-directory: DemoCore
-        run: |
-          xcodebuild test \
-            -scheme DemoCore \
-            -destination "id=${{ steps.sim.outputs.udid }}" \
-            -only-testing:DemoCoreTests/DirtyTrackingGapTests
-
+      # Both simulator-bound suites in ONE build. The Demo app already depends on the DemoCore package
+      # locally, so DemoCoreTests is reachable from the workspace scheme (it's in Demo.xctestplan) — no
+      # need to build the shared graph (SwiftSync/DemoCore/DemoBackend) twice. DirtyTrackingGapTests is
+      # listed first in the test plan, so it still runs before the slow UI suite (fail-fast on execution).
       # -retry-tests-on-failure absorbs first-launch/UI-timing flake; a real failure still fails every attempt.
-      - name: UI tests — DemoUITests
+      - name: iOS regression + UI tests (single build)
         run: |
           xcodebuild test \
             -workspace SwiftSync.xcworkspace \
             -scheme Demo \
             -destination "id=${{ steps.sim.outputs.udid }}" \
+            -only-testing:DemoCoreTests/DirtyTrackingGapTests \
             -only-testing:DemoUITests \
             -parallel-testing-enabled NO \
             -retry-tests-on-failure \

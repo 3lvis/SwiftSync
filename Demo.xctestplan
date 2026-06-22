@@ -19,6 +19,13 @@
   "testTargets" : [
     {
       "target" : {
+        "containerPath" : "container:DemoCore",
+        "identifier" : "DemoCoreTests",
+        "name" : "DemoCoreTests"
+      }
+    },
+    {
+      "target" : {
         "containerPath" : "container:Demo.xcodeproj",
         "identifier" : "280A39832F61B0610003F40E",
         "name" : "DemoUITests"
