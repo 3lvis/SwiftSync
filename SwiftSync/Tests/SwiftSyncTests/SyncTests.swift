@@ -2700,12 +2700,11 @@ final class SyncTests: XCTestCase {
     }
 
     @MainActor
-    func testConcurrentSyncSameContextCausesRaceOrConflict() async throws {
+    func testConcurrentSyncContainerCallsSerializeSoLastWriterWins() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: ConcurrentRaceUser.self, configurations: configuration)
-        let context = ModelContext(container)
-        context.insert(ConcurrentRaceUser(id: 1, fullName: "Seed"))
-        try context.save()
+        let syncContainer = try SyncContainer(for: ConcurrentRaceUser.self, configurations: configuration)
+        syncContainer.mainContext.insert(ConcurrentRaceUser(id: 1, fullName: "Seed"))
+        try syncContainer.mainContext.save()
 
         await ConcurrentRaceHooks.shared.installFirstSyncBlocker()
         defer {
@@ -2715,21 +2714,24 @@ final class SyncTests: XCTestCase {
             }
         }
 
-        let firstTask = Task { @MainActor in
+        // The first call acquires SyncContainer's FIFO serializer and parks mid-apply (the id==1 hook),
+        // so it holds the mutex while blocked; the second call queues strictly behind it and its write
+        // lands last. Without serialization the two writes would race and the winner would be undefined.
+        let firstTask = Task {
             let payload: [Any] = [
                 ["id": 1, "full_name": "Refresh User"],
                 ["id": 99, "full_name": "Refresh Insert"],
             ]
-            try await context.sync(payload: payload, as: ConcurrentRaceUser.self)
+            try await syncContainer.sync(payload: payload, as: ConcurrentRaceUser.self)
         }
         await ConcurrentRaceHooks.shared.waitUntilFirstSyncBlocked()
 
-        let secondTask = Task { @MainActor in
+        let secondTask = Task {
             let payload: [Any] = [
                 ["id": 1, "full_name": "Websocket User"],
                 ["id": 99, "full_name": "Websocket Winner"],
             ]
-            try await context.sync(payload: payload, as: ConcurrentRaceUser.self)
+            try await syncContainer.sync(payload: payload, as: ConcurrentRaceUser.self)
         }
 
         await ConcurrentRaceHooks.shared.releaseFirstSync()
@@ -2737,7 +2739,8 @@ final class SyncTests: XCTestCase {
         try await firstTask.value
         try await secondTask.value
 
-        let rows = try context.fetch(FetchDescriptor<ConcurrentRaceUser>())
+        let readerContext = ModelContext(syncContainer.modelContainer)
+        let rows = try readerContext.fetch(FetchDescriptor<ConcurrentRaceUser>())
         XCTAssertEqual(Set(rows.map(\.id)), Set([1, 99]))
         XCTAssertEqual(rows.first(where: { $0.id == 99 })?.fullName, "Websocket Winner")
     }
