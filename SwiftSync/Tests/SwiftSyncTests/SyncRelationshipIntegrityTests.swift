@@ -447,16 +447,10 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
         let context = ModelContext(container)
 
         // Seed two users and a task with no members.
-        try await SwiftSync.sync(
-            payload: [["id": 1, "name": "Alice"], ["id": 2, "name": "Bob"]],
-            as: OneSidedUser.self,
-            in: context
-        )
-        try await SwiftSync.sync(
-            payload: [["id": 10, "title": "Task 10", "member_ids": [] as [Int]]],
-            as: OneSidedTask.self,
-            in: context
-        )
+        try await context.sync(
+            payload: [["id": 1, "name": "Alice"], ["id": 2, "name": "Bob"]], as: OneSidedUser.self)
+        try await context.sync(
+            payload: [["id": 10, "title": "Task 10", "member_ids": [] as [Int]]], as: OneSidedTask.self)
 
         let task = try XCTUnwrap(context.fetch(FetchDescriptor<OneSidedTask>()).first)
         XCTAssertEqual(task.members.count, 0, "precondition: task starts with no members")
@@ -465,11 +459,7 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
         OneSidedTask.syncMarkChangedCallCount = 0
 
         // Sync a to-many membership change: [] → [1, 2]. No scalar (title) changes.
-        try await SwiftSync.sync(
-            payload: [["id": 10, "title": "Task 10", "member_ids": [1, 2]]],
-            as: OneSidedTask.self,
-            in: context
-        )
+        try await context.sync(payload: [["id": 10, "title": "Task 10", "member_ids": [1, 2]]], as: OneSidedTask.self)
 
         // syncApplyToManyForeignKeys must have called syncMarkChanged() exactly once.
         // Without the fix this count is 0 — the test fails, reproducing the bug contract.
@@ -494,26 +484,15 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
         )
         let context = ModelContext(container)
 
-        try await SwiftSync.sync(
-            payload: [["id": 1, "name": "Alice"], ["id": 2, "name": "Bob"]],
-            as: OneSidedUser.self,
-            in: context
-        )
+        try await context.sync(
+            payload: [["id": 1, "name": "Alice"], ["id": 2, "name": "Bob"]], as: OneSidedUser.self)
         // Seed with existing membership [1, 2].
-        try await SwiftSync.sync(
-            payload: [["id": 10, "title": "Task 10", "member_ids": [1, 2]]],
-            as: OneSidedTask.self,
-            in: context
-        )
+        try await context.sync(payload: [["id": 10, "title": "Task 10", "member_ids": [1, 2]]], as: OneSidedTask.self)
 
         OneSidedTask.syncMarkChangedCallCount = 0
 
         // Sync with the same membership — no actual change.
-        try await SwiftSync.sync(
-            payload: [["id": 10, "title": "Task 10", "member_ids": [1, 2]]],
-            as: OneSidedTask.self,
-            in: context
-        )
+        try await context.sync(payload: [["id": 10, "title": "Task 10", "member_ids": [1, 2]]], as: OneSidedTask.self)
 
         XCTAssertEqual(
             OneSidedTask.syncMarkChangedCallCount, 0,
@@ -529,18 +508,15 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
         )
         let context = ModelContext(container)
 
-        try await SwiftSync.sync(
-            payload: [["id": 10, "title": "Task 10", "members": [] as [[String: Any]]]],
-            as: OneSidedNestedTask.self,
-            in: context
-        )
+        try await context.sync(
+            payload: [["id": 10, "title": "Task 10", "members": [] as [[String: Any]]]], as: OneSidedNestedTask.self)
 
         let task = try XCTUnwrap(context.fetch(FetchDescriptor<OneSidedNestedTask>()).first)
         XCTAssertEqual(task.members.count, 0, "precondition: task starts with no members")
 
         OneSidedNestedTask.syncMarkChangedCallCount = 0
 
-        try await SwiftSync.sync(
+        try await context.sync(
             payload: [
                 [
                     "id": 10,
@@ -550,10 +526,7 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
                         ["id": 2, "name": "Bob"],
                     ],
                 ]
-            ],
-            as: OneSidedNestedTask.self,
-            in: context
-        )
+            ], as: OneSidedNestedTask.self)
 
         XCTAssertEqual(
             OneSidedNestedTask.syncMarkChangedCallCount, 1,
@@ -570,7 +543,7 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
         )
         let context = ModelContext(container)
 
-        try await SwiftSync.sync(
+        try await context.sync(
             payload: [
                 [
                     "id": 10,
@@ -580,14 +553,11 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
                         ["id": 2, "name": "Bob"],
                     ],
                 ]
-            ],
-            as: OneSidedNestedTask.self,
-            in: context
-        )
+            ], as: OneSidedNestedTask.self)
 
         OneSidedNestedTask.syncMarkChangedCallCount = 0
 
-        try await SwiftSync.sync(
+        try await context.sync(
             payload: [
                 [
                     "id": 10,
@@ -597,10 +567,7 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
                         ["id": 2, "name": "Bob"],
                     ],
                 ]
-            ],
-            as: OneSidedNestedTask.self,
-            in: context
-        )
+            ], as: OneSidedNestedTask.self)
 
         XCTAssertEqual(
             OneSidedNestedTask.syncMarkChangedCallCount, 0,
@@ -616,7 +583,7 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
         )
         let context = ModelContext(container)
 
-        try await SwiftSync.sync(
+        try await context.sync(
             payload: [
                 [
                     "id": 10,
@@ -626,27 +593,21 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
                         ["id": 2, "name": "Bob"],
                     ],
                 ]
-            ],
-            as: OneSidedNestedTask.self,
-            in: context
-        )
+            ], as: OneSidedNestedTask.self)
 
         let task = try XCTUnwrap(context.fetch(FetchDescriptor<OneSidedNestedTask>()).first)
         XCTAssertEqual(Set(task.members.map(\.id)), Set([1, 2]), "precondition: task starts populated")
 
         OneSidedNestedTask.syncMarkChangedCallCount = 0
 
-        try await SwiftSync.sync(
+        try await context.sync(
             payload: [
                 [
                     "id": 10,
                     "title": "Task 10",
                     "members": NSNull(),
                 ]
-            ],
-            as: OneSidedNestedTask.self,
-            in: context
-        )
+            ], as: OneSidedNestedTask.self)
 
         XCTAssertEqual(
             OneSidedNestedTask.syncMarkChangedCallCount, 1,
@@ -664,16 +625,10 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
         )
         let context = ModelContext(container)
 
-        try await SwiftSync.sync(
+        try await context.sync(
             payload: [["id": 1, "name": "Alice"], ["id": 2, "name": "Bob"], ["id": 3, "name": "Cara"]],
-            as: OneSidedUser.self,
-            in: context
-        )
-        try await SwiftSync.sync(
-            payload: [["id": 10, "title": "Task 10", "member_ids": [1, 2]]],
-            as: OneSidedTask.self,
-            in: context
-        )
+            as: OneSidedUser.self)
+        try await context.sync(payload: [["id": 10, "title": "Task 10", "member_ids": [1, 2]]], as: OneSidedTask.self)
 
         let task = try XCTUnwrap(context.fetch(FetchDescriptor<OneSidedTask>()).first)
         XCTAssertEqual(task.members.map(\.id).sorted(), [1, 2])
@@ -690,11 +645,7 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
             observedChange.fire()
         }
 
-        try await SwiftSync.sync(
-            payload: [["id": 10, "title": "Task 10", "member_ids": [2, 3]]],
-            as: OneSidedTask.self,
-            in: context
-        )
+        try await context.sync(payload: [["id": 10, "title": "Task 10", "member_ids": [2, 3]]], as: OneSidedTask.self)
 
         XCTAssertEqual(task.members.map(\.id).sorted(), [2, 3])
         XCTAssertTrue(
@@ -740,38 +691,29 @@ final class RelationshipIntegrityRegressionTests: XCTestCase {
         )
         let context = ModelContext(container)
 
-        try await SwiftSync.sync(
+        try await context.sync(
             payload: [
                 ["id": 1, "name": "Tag 1"],
                 ["id": 2, "name": "Tag 2"],
                 ["id": 3, "name": "Tag 3"],
-            ],
-            as: MissingInverseRegressionTag.self,
-            in: context
-        )
+            ], as: MissingInverseRegressionTag.self)
 
         // Mirrors the demo flow: a single-task sync happens first after a mutation.
-        try await SwiftSync.sync(
+        try await context.sync(
             payload: [
                 [
                     "id": 10,
                     "title": "Task 10",
                     "tag_ids": [1, 2],
                 ]
-            ],
-            as: MissingInverseRegressionTask.self,
-            in: context
-        )
+            ], as: MissingInverseRegressionTask.self)
 
         // Then a task-list batch sync arrives with another task sharing one tag.
-        try await SwiftSync.sync(
+        try await context.sync(
             payload: [
                 ["id": 10, "title": "Task 10", "tag_ids": [1, 2]],
                 ["id": 20, "title": "Task 20", "tag_ids": [2, 3]],
-            ],
-            as: MissingInverseRegressionTask.self,
-            in: context
-        )
+            ], as: MissingInverseRegressionTask.self)
 
         let tasks = try context.fetch(FetchDescriptor<MissingInverseRegressionTask>())
         let tasksByID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, Set($0.tags.map(\.id))) })
@@ -790,36 +732,27 @@ final class RelationshipIntegrityRegressionTests: XCTestCase {
         )
         let context = ModelContext(container)
 
-        try await SwiftSync.sync(
+        try await context.sync(
             payload: [
                 ["id": 1, "name": "Tag 1"],
                 ["id": 2, "name": "Tag 2"],
                 ["id": 3, "name": "Tag 3"],
-            ],
-            as: ExplicitInverseRegressionTag.self,
-            in: context
-        )
+            ], as: ExplicitInverseRegressionTag.self)
 
-        try await SwiftSync.sync(
+        try await context.sync(
             payload: [
                 [
                     "id": 10,
                     "title": "Task 10",
                     "tag_ids": [1, 2],
                 ]
-            ],
-            as: ExplicitInverseRegressionTask.self,
-            in: context
-        )
+            ], as: ExplicitInverseRegressionTask.self)
 
-        try await SwiftSync.sync(
+        try await context.sync(
             payload: [
                 ["id": 10, "title": "Task 10", "tag_ids": [1, 2]],
                 ["id": 20, "title": "Task 20", "tag_ids": [2, 3]],
-            ],
-            as: ExplicitInverseRegressionTask.self,
-            in: context
-        )
+            ], as: ExplicitInverseRegressionTask.self)
 
         let tasks = try context.fetch(FetchDescriptor<ExplicitInverseRegressionTask>())
         let tasksByID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, Set($0.tags.map(\.id))) })

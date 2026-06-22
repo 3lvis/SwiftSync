@@ -203,7 +203,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                     try seedUsers(count: existingCount, in: context)
                     let payload = makeUserPayload(count: existingCount, namePrefix: "batch-updated")
                     return try await measureDuration {
-                        try await SwiftSync.sync(payload: payload, as: BenchmarkUser.self, in: context)
+                        try await context.sync(payload: payload, as: BenchmarkUser.self)
                     }
                 }
 
@@ -240,7 +240,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                         "full_name": "single-item-updated-\(existingCount)",
                     ]
                     return try await measureDuration {
-                        try await SwiftSync.sync(item: payload, as: BenchmarkUser.self, in: context)
+                        try await context.sync(item: payload, as: BenchmarkUser.self)
                     }
                 }
 
@@ -284,13 +284,9 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                         "title": "Scoped Item Updated",
                     ]
                     return try await measureDuration {
-                        try await SwiftSync.sync(
-                            item: payload,
-                            as: BenchmarkScopedTask.self,
-                            in: context,
-                            parent: targetProject,
-                            relationship: \BenchmarkScopedTask.project
-                        )
+                        try await context.sync(
+                            item: payload, as: BenchmarkScopedTask.self, parent: targetProject,
+                            relationship: \BenchmarkScopedTask.project)
                     }
                 }
 
@@ -328,13 +324,9 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                     )
                     let payload = makeScopedTaskPayload(count: scopeCount)
                     return try await measureDuration {
-                        try await SwiftSync.sync(
-                            payload: payload,
-                            as: BenchmarkScopedTask.self,
-                            in: context,
-                            parent: targetProject,
-                            relationship: \BenchmarkScopedTask.project
-                        )
+                        try await context.sync(
+                            payload: payload, as: BenchmarkScopedTask.self, parent: targetProject,
+                            relationship: \BenchmarkScopedTask.project)
                     }
                 }
 
@@ -373,7 +365,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                         "assignee_id": relatedCount,
                     ]
                     return try await measureDuration {
-                        try await SwiftSync.sync(item: payload, as: BenchmarkWorkItem.self, in: context)
+                        try await context.sync(item: payload, as: BenchmarkWorkItem.self)
                     }
                 }
 
@@ -414,7 +406,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                             "tag_ids": Array(1...linkCount),
                         ]
                         return try await measureDuration {
-                            try await SwiftSync.sync(item: payload, as: BenchmarkWorkItem.self, in: context)
+                            try await context.sync(item: payload, as: BenchmarkWorkItem.self)
                         }
                     }
 
@@ -458,7 +450,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                             },
                         ]
                         return try await measureDuration {
-                            try await SwiftSync.sync(item: payload, as: BenchmarkWorkItem.self, in: context)
+                            try await context.sync(item: payload, as: BenchmarkWorkItem.self)
                         }
                     }
 
@@ -527,15 +519,11 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                     ]
 
                     return try await measureDuration {
-                        try await SwiftSync.sync(item: userPayload, as: BenchmarkUser.self, in: context)
-                        try await SwiftSync.sync(
-                            payload: scopedPayload,
-                            as: BenchmarkScopedTask.self,
-                            in: context,
-                            parent: targetProject,
-                            relationship: \BenchmarkScopedTask.project
-                        )
-                        try await SwiftSync.sync(item: workItemPayload, as: BenchmarkWorkItem.self, in: context)
+                        try await context.sync(item: userPayload, as: BenchmarkUser.self)
+                        try await context.sync(
+                            payload: scopedPayload, as: BenchmarkScopedTask.self, parent: targetProject,
+                            relationship: \BenchmarkScopedTask.project)
+                        try await context.sync(item: workItemPayload, as: BenchmarkWorkItem.self)
                     }
                 }
 
@@ -598,15 +586,11 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                     ]
 
                     return try await measureDuration {
-                        try await SwiftSync.sync(
-                            payload: taskListPayload,
-                            as: ScenarioTask.self,
-                            in: context,
-                            parent: targetProject,
-                            relationship: \ScenarioTask.project
-                        )
-                        try await SwiftSync.sync(item: taskDetailPayload, as: ScenarioTask.self, in: context)
-                        try await SwiftSync.sync(item: userPresencePayload, as: ScenarioUser.self, in: context)
+                        try await context.sync(
+                            payload: taskListPayload, as: ScenarioTask.self, parent: targetProject,
+                            relationship: \ScenarioTask.project)
+                        try await context.sync(item: taskDetailPayload, as: ScenarioTask.self)
+                        try await context.sync(item: userPresencePayload, as: ScenarioUser.self)
                     }
                 }
 

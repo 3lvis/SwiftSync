@@ -19,7 +19,7 @@ final class PushHistoryTokenRecord {
 }
 
 extension SwiftSync {
-    /// `push` writes `PushHistoryTokenRecord` to advance its bookmark once the upload is acknowledged.
+    /// `withPendingChanges` writes `PushHistoryTokenRecord` to advance its bookmark once the upload is acknowledged.
     /// `SyncContainer` registers that model automatically; a caller who builds their own `ModelContainer`
     /// may not. Validate it's in the schema *before* the upload, so an acknowledged server write is never
     /// stranded by a token write that throws afterward.
