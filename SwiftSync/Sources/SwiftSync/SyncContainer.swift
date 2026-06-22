@@ -70,7 +70,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         )
         self.mainContext = modelContainer.mainContext
         self.keyStyle = keyStyle
-        self.dateFormatter = dateFormatter ?? defaultExportDateFormatter()
+        self.dateFormatter = dateFormatter ?? DateFormatter.syncDefault()
         super.init()
         installDidSaveObserver()
     }
@@ -80,7 +80,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         self.modelContainer = modelContainer
         self.mainContext = modelContainer.mainContext
         self.keyStyle = keyStyle
-        self.dateFormatter = dateFormatter ?? defaultExportDateFormatter()
+        self.dateFormatter = dateFormatter ?? DateFormatter.syncDefault()
         super.init()
         installDidSaveObserver()
     }

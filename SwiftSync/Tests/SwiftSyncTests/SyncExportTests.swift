@@ -339,7 +339,7 @@ final class ExportTests: XCTestCase {
     func testExportUnsupportedScalarFallsBackToNSNull() throws {
         var body: [String: Any] = [:]
         let raw = ExportUnsupportedScalarValue(raw: 10)
-        if let encoded = exportEncodeValue(raw, dateFormatter: defaultExportDateFormatter()) {
+        if let encoded = exportEncodeValue(raw, dateFormatter: DateFormatter.syncDefault()) {
             exportSetValue(encoded, for: "value", into: &body)
         } else {
             exportSetValue(NSNull(), for: "value", into: &body)
@@ -535,7 +535,7 @@ final class ExportTests: XCTestCase {
 
         let body = model.export(
             keyStyle: .snakeCase,
-            dateFormatter: defaultExportDateFormatter()
+            dateFormatter: DateFormatter.syncDefault()
         )
 
         // @RemoteKey("type") must appear as "type", not "user_type"
@@ -575,7 +575,7 @@ final class ExportTests: XCTestCase {
 
         let body = model.export(
             keyStyle: .snakeCase,
-            dateFormatter: defaultExportDateFormatter()
+            dateFormatter: DateFormatter.syncDefault()
         )
 
         // descriptionText → @RemoteKey("description") → must appear as "description"

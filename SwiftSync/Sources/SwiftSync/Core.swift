@@ -3,46 +3,6 @@ import SwiftData
 
 // MARK: - Shared String Case Conversion Utilities
 
-private enum ScalarClass {
-    case upper
-    case lower
-    case digit
-    case other
-}
-
-private func scalarClass(_ scalar: UnicodeScalar) -> ScalarClass {
-    if CharacterSet.uppercaseLetters.contains(scalar) {
-        return .upper
-    }
-    if CharacterSet.lowercaseLetters.contains(scalar) {
-        return .lower
-    }
-    if CharacterSet.decimalDigits.contains(scalar) {
-        return .digit
-    }
-    return .other
-}
-
-private func toSnakeCaseString(_ value: String) -> String {
-    guard !value.isEmpty else { return value }
-    var output = ""
-    let scalars = Array(value.unicodeScalars)
-    for (index, scalar) in scalars.enumerated() {
-        let current = scalarClass(scalar)
-        if index > 0, current == .upper {
-            let previous = scalarClass(scalars[index - 1])
-            let next = index + 1 < scalars.count ? scalarClass(scalars[index + 1]) : nil
-            let startsNewWord = previous == .lower || previous == .digit
-            let endsAcronym = previous == .upper && next == .lower
-            if startsNewWord || endsAcronym, output.last != "_" {
-                output.append("_")
-            }
-        }
-        output.append(String(scalar).lowercased())
-    }
-    return output
-}
-
 // MARK: - SwiftSync API
 
 public enum SwiftSync {}
@@ -311,16 +271,8 @@ public enum KeyStyle: Sendable {
     }
 
     private func toSnakeCase(_ value: String) -> String {
-        toSnakeCaseString(value)
+        value.syncSnakeCased
     }
-}
-
-func defaultExportDateFormatter() -> DateFormatter {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.timeZone = TimeZone(secondsFromGMT: 0)
-    formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSXXXXX"
-    return formatter
 }
 
 /// Cycle-detection state for recursive relationship export.
@@ -550,7 +502,7 @@ public struct SyncPayload {
     }
 
     private func snakeCased(_ value: String) -> String {
-        toSnakeCaseString(value)
+        value.syncSnakeCased
     }
 
     private func camelCased(_ value: String) -> String {

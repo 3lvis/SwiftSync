@@ -180,7 +180,7 @@ public func syncApplyToManyForeignKeys<Owner: SyncUpdatableModel, Related: SyncM
         }
 
         // Old Sync behavior avoids duplicate membership.
-        let desiredIDs = dedupePreservingOrder(rawIDs)
+        let desiredIDs = rawIDs.syncDedupedPreservingOrder()
         let relatedByID = try syncFetchRelatedRowsByIdentity(Related.self, matching: desiredIDs, in: context)
         let desiredRelated = desiredIDs.compactMap { relatedByID[syncIdentityKey(from: $0)] }
 
@@ -390,18 +390,6 @@ private func firstPresentPayloadKey(_ payload: SyncPayload, keys: [String]) -> S
     return nil
 }
 
-private func dedupePreservingOrder<ID: Hashable>(_ input: [ID]) -> [ID] {
-    var seen: Set<ID> = []
-    var output: [ID] = []
-    output.reserveCapacity(input.count)
-    for value in input {
-        if seen.insert(value).inserted {
-            output.append(value)
-        }
-    }
-    return output
-}
-
 private func syncFetchRelatedRows<Model: PersistentModel>(
     _ modelType: Model.Type,
     in context: ModelContext
@@ -474,14 +462,10 @@ private func syncApplyToManyRelationshipMembership<Owner, Model: PersistentModel
     markChanged: (() -> Void)? = nil
 ) -> Bool {
     let current = owner[keyPath: relationship]
-    guard modelIDSet(current) != modelIDSet(next) else { return false }
+    guard current.syncModelIDSet != next.syncModelIDSet else { return false }
     owner[keyPath: relationship] = next
     markChanged?()
     return true
-}
-
-private func modelIDSet<Model: PersistentModel>(_ models: [Model]) -> Set<PersistentIdentifier> {
-    Set(models.map(\.persistentModelID))
 }
 
 private func mergeUnorderedRelationships<Model: PersistentModel>(
