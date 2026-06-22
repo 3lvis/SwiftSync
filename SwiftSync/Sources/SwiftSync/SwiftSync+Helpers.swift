@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 extension SwiftSync {
-    static func normalize<Model: PersistentModel>(payload: [Any], model: Model.Type) throws -> [[String: Any]] {
+    static func normalize(payload: [Any], model: any PersistentModel.Type) throws -> [[String: Any]] {
         try payload.map { raw in
             guard let map = raw as? [String: Any] else {
                 throw SyncError.invalidPayload(
