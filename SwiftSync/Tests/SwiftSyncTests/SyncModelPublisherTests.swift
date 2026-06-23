@@ -1,7 +1,8 @@
 import Observation
 import SwiftData
-import SwiftSync
 import XCTest
+
+@testable import SwiftSync
 
 @Syncable
 @Model
@@ -155,6 +156,30 @@ final class SyncModelPublisherTests: XCTestCase {
             spy.values.contains(where: { $0 == [2, 3] }),
             "spy values: \(spy.values)"
         )
+    }
+
+    @MainActor
+    func testReloadFetchesByIdentityRatherThanScanningTheWholeTable() async throws {
+        let syncContainer = try makeContainer(modelTypes: ModelPubTask.self, ModelPubUser.self)
+        try await syncContainer.sync(
+            payload: [
+                ["id": "t1", "title": "One", "assignee_id": NSNull()],
+                ["id": "t2", "title": "Two", "assignee_id": NSNull()],
+                ["id": "t3", "title": "Three", "assignee_id": NSNull()],
+            ],
+            as: ModelPubTask.self
+        )
+
+        let (_, profile) = await SwiftSync.withMainActorPerformanceProfiling {
+            _ = SyncModelPublisher(ModelPubTask.self, id: "t2", in: syncContainer)
+        }
+
+        XCTAssertTrue(
+            profile.entered(.fetchExistingByIdentity),
+            "a single-row publisher should reload via an identity-targeted fetch")
+        XCTAssertFalse(
+            profile.entered(.fetchExisting),
+            "should not full-table scan when the model has a generated identity predicate")
     }
 
     @MainActor
