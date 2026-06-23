@@ -588,16 +588,15 @@ public final class DemoServerSimulator {
                     try self.sqlite.execute(
                         """
                         UPDATE items
-                        SET title = ?, position = ?, created_at = ?, updated_at = ?
+                        SET title = ?, position = ?, updated_at = ?
                         WHERE task_id = ? AND public_id = ?
                         """,
                         bind: { stmt in
                             self.sqlite.bind(text: item.title, at: 1, in: stmt)
                             sqlite3_bind_int64(stmt, 2, Int64(item.position))
-                            self.sqlite.bind(double: item.createdAt.timeIntervalSince1970, at: 3, in: stmt)
-                            self.sqlite.bind(double: item.updatedAt.timeIntervalSince1970, at: 4, in: stmt)
-                            self.sqlite.bind(int: taskID, at: 5, in: stmt)
-                            self.sqlite.bind(text: item.publicID, at: 6, in: stmt)
+                            self.sqlite.bind(double: item.updatedAt.timeIntervalSince1970, at: 3, in: stmt)
+                            self.sqlite.bind(int: taskID, at: 4, in: stmt)
+                            self.sqlite.bind(text: item.publicID, at: 5, in: stmt)
                         }
                     )
                 }
