@@ -63,6 +63,40 @@ final class OfflineHistoryTests: XCTestCase {
             "deleted row's id must be recovered from the history tombstone")
     }
 
+    func testInboundSyncTrimsOnlySwiftSyncAuthoredHistory() async throws {
+        XCTAssertEqual(SwiftSync.inboundAuthor, "com.github.3lvis.SwiftSync.inbound")
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("inbound-history-trim-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let configuration = ModelConfiguration(url: directory.appendingPathComponent("test.store"))
+        let container = try SyncContainer(for: HistoryRow.self, configurations: configuration)
+        let now = Date()
+
+        let local = container.mainContext
+        local.insert(HistoryRow(id: "local-1", title: "Local", updatedAt: now))
+        try local.save()
+
+        let widget = ModelContext(container.modelContainer)
+        widget.author = "widget"
+        widget.insert(HistoryRow(id: "widget-1", title: "Widget", updatedAt: now))
+        try widget.save()
+
+        try await container.sync(
+            payload: [["id": "server-1", "title": "Server", "updated_at": ISO8601DateFormatter().string(from: now)]],
+            as: HistoryRow.self
+        )
+
+        let history = try local.fetchHistory(HistoryDescriptor<DefaultHistoryTransaction>())
+        XCTAssertFalse(history.contains { $0.author == SwiftSync.inboundAuthor })
+        XCTAssertTrue(history.contains { $0.author == nil })
+        XCTAssertTrue(history.contains { $0.author == "widget" })
+
+        let pending = try SwiftSync.pendingChanges(for: HistoryRow.self, in: local)
+        XCTAssertEqual(Set(pending.inserts), Set(["local-1", "widget-1"]))
+    }
+
     /// Opt-in overhead benchmark: how much does a large pull cost under the History design?
     /// Expectation: ~baseline, because the pull writes no extra rows — offline tracking is a *read*
     /// of history at push time, not a write on the pull path.
@@ -96,6 +130,10 @@ final class OfflineHistoryTests: XCTestCase {
             try await context.sync(payload: payload, as: HistoryRow.self, keyStyle: .snakeCase)
             let pullMs = pullStart.duration(to: clock.now).msValue
 
+            let cleanupStart = clock.now
+            try context.trimSwiftSyncInboundHistory()
+            let cleanupMs = cleanupStart.duration(to: clock.now).msValue
+
             // Push-side detection over the same store: should be ~empty (all inbound-authored) and fast.
             let detectStart = clock.now
             let pending = try SwiftSync.pendingChanges(for: HistoryRow.self, in: context, since: nil)
@@ -103,8 +141,8 @@ final class OfflineHistoryTests: XCTestCase {
 
             print(
                 String(
-                    format: "[OfflineHistory] rows=%d pullMs=%.1f detectMs=%.1f pendingInserts=%d",
-                    count, pullMs, detectMs, pending.inserts.count))
+                    format: "[OfflineHistory] rows=%d pullMs=%.1f cleanupMs=%.1f detectMs=%.1f pendingInserts=%d",
+                    count, pullMs, cleanupMs, detectMs, pending.inserts.count))
         }
     }
 }

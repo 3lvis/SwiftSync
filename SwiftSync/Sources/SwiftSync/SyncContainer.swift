@@ -235,6 +235,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         await serializer.acquire()
         do {
             let result = try await operation()
+            try? ModelContext(modelContainer).trimSwiftSyncInboundHistory()
             await serializer.release()
             return result
         } catch {
