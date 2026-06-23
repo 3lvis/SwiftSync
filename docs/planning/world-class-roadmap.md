@@ -11,10 +11,6 @@ Companion audits:
 
 ## Now
 
-- [ ] **Preserve item identity during demo-backend updates.** Task updates currently replace the entire
-      item collection by deleting and reinserting it. Reconcile by `public_id`: update existing items,
-      insert new items, and delete missing items. Unchanged items must retain their internal database id.
-
 - [ ] **Make demo-backend upload upserts atomic.** `/sync/upload` currently looks up `public_id` and then
       chooses insert or update. Replace that race with `INSERT ... ON CONFLICT(public_id) DO UPDATE`, or
       recover a uniqueness conflict inside one transaction. The demo is single-threaded today, but the
