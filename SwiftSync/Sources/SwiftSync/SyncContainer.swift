@@ -4,7 +4,7 @@ import SwiftData
 
 /// Carries a non-Sendable value across an actor hop. Sound only when the value is handed off (not used
 /// concurrently) — here, a sync payload passed to the main actor and read only there.
-struct UncheckedSendableBox<Value>: @unchecked Sendable {
+private struct UncheckedSendableBox<Value>: @unchecked Sendable {
     let value: Value
     init(_ value: Value) { self.value = value }
 }
@@ -38,8 +38,8 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     }
 
     static let didSaveChangesNotification = Notification.Name("SwiftSync.SyncContainer.didSaveChanges")
-    static let changedIdentifiersUserInfoKey = "changedIdentifiers"
-    static let changedModelTypeNamesUserInfoKey = "changedModelTypeNames"
+    private static let changedIdentifiersUserInfoKey = "changedIdentifiers"
+    private static let changedModelTypeNamesUserInfoKey = "changedModelTypeNames"
 
     public let modelContainer: ModelContainer
     public let mainContext: ModelContext

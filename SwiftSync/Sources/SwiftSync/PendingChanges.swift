@@ -1,12 +1,7 @@
 import Foundation
 import SwiftData
 
-extension SwiftSync {
-    /// The transaction author SwiftSync stamps on inbound (pull) writes, so the push side can tell
-    /// server-applied changes from genuine local edits and never push pulled rows back. Local edits
-    /// use the store's default author; pull writes use this one and are filtered out of `pendingChanges`.
-    static let inboundAuthor = "swiftsync.inbound"
-}
+// MARK: - Pending changes
 
 /// Each array holds row `id`s (strings), not objects, so SwiftData objects never cross into your network
 /// call: `withPendingChanges` hands you the ids and you map each to your own request payload.
@@ -21,7 +16,7 @@ public struct SyncPendingChanges: Sendable {
 /// One pushed row the server rejected: the row `id` (kept pending) and the consumer's own `error`,
 /// bubbled up verbatim. Return only these from your `process` closure — the operation that failed is the
 /// library's to track, not yours.
-public struct SyncPushFailure: Sendable {
+public struct SyncPendingChangesFailure: Sendable {
     public let id: String
     public let error: any Error & Sendable
 
@@ -32,11 +27,14 @@ public struct SyncPushFailure: Sendable {
 }
 
 extension SwiftSync {
-    /// The local changes pending a push, read straight from SwiftData history since SwiftSync's stored
-    /// per-type token: transactions authored by anyone other than the inbound (pull) author. A row
-    /// inserted then edited collapses to a single insert; a row deleted after editing collapses to a
-    /// delete (its `id` recovered from the history tombstone — mark the identity
-    /// `.preserveValueOnDeletion`).
+    /// The transaction author SwiftSync stamps on inbound (pull) writes, so the push side can tell
+    /// server-applied changes from genuine local edits and never push pulled rows back. Local edits
+    /// use the store's default author; pull writes use this one and are filtered out of `pendingChanges`.
+    static let inboundAuthor = "swiftsync.inbound"
+
+    /// The local changes pending a push. A row inserted then edited collapses to a single insert; a row
+    /// deleted after editing collapses to a delete (its `id` recovered from the history tombstone — mark
+    /// the identity `.preserveValueOnDeletion`).
     public static func pendingChanges<Model: SyncUpdatableModel>(
         for _: Model.Type,
         in context: ModelContext
@@ -127,38 +125,6 @@ extension SwiftSync {
         return SyncPendingChanges(inserts: inserts, updates: updates, deletes: deletes)
     }
 
-    /// Hands your `process` closure the rows changed since the last-pushed token; you own the network call
-    /// and return the rejections. Everything you *don't* return is treated as confirmed — the client id is
-    /// the identity the server adopts, so it's an idempotent upsert with nothing to acknowledge. Only a
-    /// fully clean pass (no failures) advances the token and trims the now-redundant inbound history;
-    /// SwiftSync keeps no per-row state, so a failed — or any un-pushed — change stays past the token and
-    /// is re-detected next call.
-    @discardableResult
-    public static func withPendingChanges<Model: SyncUpdatableModel>(
-        for _: Model.Type,
-        in context: ModelContext,
-        isolation: isolated (any Actor)? = #isolation,
-        process: (SyncPendingChanges) async throws -> [SyncPushFailure]
-    ) async throws -> [SyncPushFailure] where Model.SyncID == String {
-        try requireOfflineCapable(Model.self, in: context)
-        try requireOfflinePushBookkeeping(in: context)
-        let token = lastPushedHistoryToken(for: Model.self, in: context)
-        let transactions = try localTransactions(since: token, in: context)
-        let pending = try pendingChanges(from: transactions, for: Model.self, in: context)
-        guard !pending.isEmpty else { return [] }
-        // The newest history token in this batch, captured *before* the upload. On success we advance the
-        // token only to here — never to the live head — so any local write that lands during the upload
-        // await stays past the token and is re-detected next push, instead of being silently skipped.
-        let uploadedThrough = transactions.last?.token
-
-        let failures = try await process(pending)
-        if failures.isEmpty, let uploadedThrough {
-            try setLastPushedHistoryToken(uploadedThrough, for: Model.self, in: context)
-            try? trimInboundHistory(through: uploadedThrough, in: context)
-        }
-        return failures
-    }
-
     /// Dirty persistent ids for the pull, but only for models that opted into offline round-trip by
     /// marking their identity `.preserveValueOnDeletion`. A plain (non-offline) model gets an empty
     /// set, so its pull keeps "server is authoritative, always apply" semantics — the behavior the core
@@ -171,11 +137,9 @@ extension SwiftSync {
         return (try? locallyDirtyPersistentIDs(for: Model.self, in: context)) ?? []
     }
 
-    /// The persistent identifiers of rows with **un-pushed local changes** for `Model` — local-authored
-    /// history since the stored token. The pull uses this to preserve never-pushed local inserts from
-    /// delete-missing and to keep a newer local edit from being clobbered (last-writer-wins). Reads
-    /// persistent ids (not row ids), so it needs no `SyncID == String` constraint.
-    static func locallyDirtyPersistentIDs<Model: SyncUpdatableModel>(
+    /// Persistent ids (not row ids — so no `SyncID == String` constraint) of rows with un-pushed local
+    /// changes: local-authored history since the stored token.
+    private static func locallyDirtyPersistentIDs<Model: SyncUpdatableModel>(
         for _: Model.Type, in context: ModelContext
     ) throws -> Set<PersistentIdentifier> {
         let transactions = try localTransactions(
@@ -212,17 +176,7 @@ extension SwiftSync {
         return try row.apply(payload)
     }
 
-    /// Trim inbound (pull-authored) history up to and including `token`. Only inbound transactions are
-    /// removed — local-authored history is the un-pushed-changes signal and a different model type may
-    /// still need its own un-pushed local changes, so those are never trimmed here.
-    static func trimInboundHistory(through token: DefaultHistoryToken, in context: ModelContext) throws {
-        let inbound = inboundAuthor
-        try context.deleteHistory(
-            HistoryDescriptor<DefaultHistoryTransaction>(
-                predicate: #Predicate { $0.token <= token && $0.author == inbound }))
-    }
-
-    static func localTransactions(since token: DefaultHistoryToken?, in context: ModelContext) throws
+    private static func localTransactions(since token: DefaultHistoryToken?, in context: ModelContext) throws
         -> [DefaultHistoryTransaction]
     {
         // A local write leaves `author` nil; in predicate/SQL semantics `nil != "inbound"` is NULL
@@ -237,5 +191,137 @@ extension SwiftSync {
             descriptor.predicate = #Predicate { $0.author == nil || $0.author != inbound }
         }
         return try context.fetchHistory(descriptor)
+    }
+
+    /// `.preserveValueOnDeletion` on the identity is the offline opt-in signal: it lets a deleted row's id
+    /// be recovered from its history tombstone (and is a harmless no-op otherwise).
+    private static func identityPreservesValueOnDeletion<Model: SyncModelable>(
+        _: Model.Type, in context: ModelContext
+    ) -> Bool {
+        let identityName = Model.syncIdentityPropertyName
+        guard !identityName.isEmpty else { return false }
+        guard
+            let attribute = context.container.schema
+                .entities.first(where: { $0.name == String(describing: Model.self) })?
+                .attributesByName[identityName]
+        else { return false }
+        return attribute.options.contains(.preserveValueOnDeletion)
+    }
+
+    /// Offline push requires `.preserveValueOnDeletion` on the identity — without it a deleted row's id
+    /// can't be recovered and the deletion is silently lost. Fail loudly rather than drop deletes.
+    private static func requireOfflineCapable<Model: SyncModelable>(_: Model.Type, in context: ModelContext) throws {
+        guard identityPreservesValueOnDeletion(Model.self, in: context) else {
+            throw SyncError.schemaValidation(
+                reason: """
+                    \(String(reflecting: Model.self)) is used with offline push, but its identity \
+                    ("\(Model.syncIdentityPropertyName)") is not marked @Attribute(.preserveValueOnDeletion). \
+                    Add that option to the identity so deletions can be recovered from store history and pushed.
+                    """)
+        }
+    }
+}
+
+// MARK: - Push
+
+extension SwiftSync {
+    /// Hands your `process` closure the rows changed since the last-pushed token; you own the network call
+    /// and return the rejections. Everything you *don't* return is treated as confirmed — the client id is
+    /// the identity the server adopts, so it's an idempotent upsert with nothing to acknowledge. Only a
+    /// fully clean pass (no failures) advances the token and trims the now-redundant inbound history;
+    /// SwiftSync keeps no per-row state, so a failed — or any un-pushed — change stays past the token and
+    /// is re-detected next call.
+    @discardableResult
+    public static func withPendingChanges<Model: SyncUpdatableModel>(
+        for _: Model.Type,
+        in context: ModelContext,
+        isolation: isolated (any Actor)? = #isolation,
+        process: (SyncPendingChanges) async throws -> [SyncPendingChangesFailure]
+    ) async throws -> [SyncPendingChangesFailure] where Model.SyncID == String {
+        try requireOfflineCapable(Model.self, in: context)
+        try requireOfflinePushBookkeeping(in: context)
+        let token = lastPushedHistoryToken(for: Model.self, in: context)
+        let transactions = try localTransactions(since: token, in: context)
+        let pending = try pendingChanges(from: transactions, for: Model.self, in: context)
+        guard !pending.isEmpty else { return [] }
+        // The newest history token in this batch, captured *before* the upload. On success we advance the
+        // token only to here — never to the live head — so any local write that lands during the upload
+        // await stays past the token and is re-detected next push, instead of being silently skipped.
+        let uploadedThrough = transactions.last?.token
+
+        let failures = try await process(pending)
+        if failures.isEmpty, let uploadedThrough {
+            try setLastPushedHistoryToken(uploadedThrough, for: Model.self, in: context)
+            try? trimInboundHistory(through: uploadedThrough, in: context)
+        }
+        return failures
+    }
+
+    /// `withPendingChanges` writes `PushHistoryTokenRecord` to advance its bookmark once the upload is
+    /// acknowledged. `SyncContainer` registers that model automatically; a caller who builds their own
+    /// `ModelContainer` may not. Validate it's in the schema *before* the upload, so an acknowledged
+    /// server write is never stranded by a token write that throws afterward.
+    private static func requireOfflinePushBookkeeping(in context: ModelContext) throws {
+        let name = String(describing: PushHistoryTokenRecord.self)
+        guard context.container.schema.entities.contains(where: { $0.name == name }) else {
+            throw SyncError.schemaValidation(
+                reason: """
+                    Offline push needs SwiftSync's bookkeeping model (\(name)) in the context's schema, \
+                    but it is missing. Build the container with SyncContainer, which registers it \
+                    automatically, so an acknowledged upload is never lost to a failed token write.
+                    """)
+        }
+    }
+
+    private static func lastPushedHistoryToken(for model: any PersistentModel.Type, in context: ModelContext)
+        -> DefaultHistoryToken?
+    {
+        let typeName = String(reflecting: model)
+        var descriptor = FetchDescriptor<PushHistoryTokenRecord>(predicate: #Predicate { $0.modelTypeName == typeName })
+        descriptor.fetchLimit = 1
+        guard let record = try? context.fetch(descriptor).first else { return nil }
+        return try? JSONDecoder().decode(DefaultHistoryToken.self, from: record.tokenData)
+    }
+
+    private static func setLastPushedHistoryToken(
+        _ token: DefaultHistoryToken, for model: any PersistentModel.Type, in context: ModelContext
+    )
+        throws
+    {
+        let typeName = String(reflecting: model)
+        guard let data = try? JSONEncoder().encode(token) else { return }
+        var descriptor = FetchDescriptor<PushHistoryTokenRecord>(predicate: #Predicate { $0.modelTypeName == typeName })
+        descriptor.fetchLimit = 1
+        if let record = try context.fetch(descriptor).first {
+            record.tokenData = data
+        } else {
+            context.insert(PushHistoryTokenRecord(modelTypeName: typeName, tokenData: data))
+        }
+        try context.save()
+    }
+
+    /// Trim inbound (pull-authored) history through `token`. Only inbound is removed — local-authored
+    /// history is the un-pushed-changes signal and must survive.
+    private static func trimInboundHistory(through token: DefaultHistoryToken, in context: ModelContext) throws {
+        let inbound = inboundAuthor
+        try context.deleteHistory(
+            HistoryDescriptor<DefaultHistoryTransaction>(
+                predicate: #Predicate { $0.token <= token && $0.author == inbound }))
+    }
+}
+
+/// SwiftSync's "how far have I pushed" bookmark, one row **per model type** (not per data row) — the only
+/// durable offline state SwiftSync keeps. The change log itself is SwiftData history; this records the
+/// last-pushed `DefaultHistoryToken` so the pull can tell un-pushed local edits from already-pushed ones.
+@Model
+final class PushHistoryTokenRecord {
+    @Attribute(.unique) var modelTypeName: String
+    /// A JSON-encoded `DefaultHistoryToken`. Stored as `Data` because the token is a `Codable` value,
+    /// not a `@Model`, so SwiftData can't persist it directly.
+    var tokenData: Data
+
+    init(modelTypeName: String, tokenData: Data) {
+        self.modelTypeName = modelTypeName
+        self.tokenData = tokenData
     }
 }

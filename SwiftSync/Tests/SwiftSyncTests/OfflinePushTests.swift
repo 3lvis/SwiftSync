@@ -29,7 +29,7 @@ final class OfflinePushTests: XCTestCase {
             configurations: ModelConfiguration(url: directory.appendingPathComponent("store.sqlite")))
     }
 
-    private func noFailures(_ pending: SyncPendingChanges) -> [SyncPushFailure] { [] }
+    private func noFailures(_ pending: SyncPendingChanges) -> [SyncPendingChangesFailure] { [] }
 
     /// History-derived partitioning: after a baseline push makes some rows "synced" (behind the
     /// token), a fresh round of local edits partitions into insert/update/delete — and a row inserted
@@ -83,7 +83,7 @@ final class OfflinePushTests: XCTestCase {
         try context.save()
 
         let failures = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context) { _ in
-            [SyncPushFailure(id: "c1", error: PushTestError(message: "422"))]
+            [SyncPendingChangesFailure(id: "c1", error: PushTestError(message: "422"))]
         }
 
         XCTAssertEqual(failures.first?.id, "c1")
@@ -103,7 +103,7 @@ final class OfflinePushTests: XCTestCase {
         try context.save()
 
         _ = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context) { _ in
-            [SyncPushFailure(id: "u1", error: PushTestError(message: "500"))]
+            [SyncPendingChangesFailure(id: "u1", error: PushTestError(message: "500"))]
         }
         XCTAssertEqual(
             try SwiftSync.pendingChanges(for: PushNote.self, in: context).updates, ["u1"],
@@ -121,7 +121,7 @@ final class OfflinePushTests: XCTestCase {
         try context.save()
 
         let failures = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context) { _ in
-            [SyncPushFailure(id: "c2", error: PushTestError(message: "422"))]
+            [SyncPendingChangesFailure(id: "c2", error: PushTestError(message: "422"))]
         }
         XCTAssertEqual(failures.map(\.id), ["c2"])
         XCTAssertEqual(

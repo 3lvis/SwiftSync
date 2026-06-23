@@ -23,9 +23,9 @@ import SwiftSync
 
 Yes, if the model uses parent-scoped identity.
 
-- `ParentScopedModel` defaults to `.scopedByParent`
-- explicit parent-relationship sync on non-`ParentScopedModel` types defaults to `.global`
-- `@Attribute(.unique)` on raw `id` still enforces global uniqueness at the store level
+- parent-scoped sync passes an explicit `relationship` key path
+- a model whose `id` is **not** `@Attribute(.unique)` is scoped by parent — two parents can each hold a child with the same `id`
+- `@Attribute(.unique)` on raw `id` makes identity global: the same `id` cannot repeat across parents
 
 See `docs/project/parent-scope.md`.
 

@@ -129,7 +129,7 @@ The **push/drain orchestration lives in the engine** (it's *when/ordering*, i.e.
 - The engine calls `SwiftSync.withPendingChanges(for:in:) { pending in <its upload> }`. SwiftSync brackets
   the storage token; the engine's closure does the transport (`/sync/upload`).
 - The client id **is** the row's identity the server adopts as its `public_id` — an idempotent upsert, so
-  the closure returns only the **rejected** rows (`[SyncPushFailure]`); everything else is confirmed by
+  the closure returns only the **rejected** rows (`[SyncPendingChangesFailure]`); everything else is confirmed by
   complement. A `stale` result means the server won last-writer-wins: adopt its state, not a failure.
 - **Reconnect** re-drains (the engine triggers it when `isOffline` flips back). **Concurrent drains
   coalesce** — a push-before-pull awaits the in-flight drain instead of racing the upload.

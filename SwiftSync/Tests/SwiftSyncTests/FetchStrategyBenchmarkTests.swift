@@ -73,11 +73,6 @@ final class BenchmarkScopedTask {
     }
 }
 
-extension BenchmarkScopedTask: ParentScopedModel {
-    typealias SyncParent = BenchmarkProject
-    static var parentRelationship: ReferenceWritableKeyPath<BenchmarkScopedTask, BenchmarkProject?> { \.project }
-}
-
 @Syncable
 @Model
 final class BenchmarkWorkItem {
@@ -167,11 +162,6 @@ final class ScenarioTask {
         self.tags = tags
         self.watchers = watchers
     }
-}
-
-extension ScenarioTask: ParentScopedModel {
-    typealias SyncParent = ScenarioProject
-    static var parentRelationship: ReferenceWritableKeyPath<ScenarioTask, ScenarioProject?> { \.project }
 }
 
 @MainActor

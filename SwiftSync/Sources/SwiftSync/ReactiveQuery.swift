@@ -102,6 +102,8 @@ private final class SyncQueryObserver<Model: PersistentModel> {
     }
 }
 
+/// SwiftUI property wrapper observing a **collection**; the UIKit/plain-Swift equivalent is
+/// `SyncQueryPublisher`. For a single row by id, use `@SyncModel`.
 @MainActor
 @propertyWrapper
 public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
@@ -393,6 +395,8 @@ private final class SyncModelObserver<Model: PersistentModel & SyncModelable> {
     }
 }
 
+/// SwiftUI property wrapper observing the **single row** matching an id; the UIKit/plain-Swift equivalent
+/// is `SyncModelPublisher`. For a collection, use `@SyncQuery`.
 @MainActor
 @propertyWrapper
 public struct SyncModel<Model: PersistentModel & SyncModelable>: DynamicProperty {

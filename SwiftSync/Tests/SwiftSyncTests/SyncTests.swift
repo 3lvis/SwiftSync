@@ -810,11 +810,6 @@ extension SuperNote: SyncUpdatableModel {
     }
 }
 
-extension SuperNote: ParentScopedModel {
-    typealias SyncParent = SuperUser
-    static var parentRelationship: ReferenceWritableKeyPath<SuperNote, SuperUser?> { \.superUser }
-}
-
 @Syncable
 @Model
 final class StatusItem {
@@ -845,11 +840,6 @@ final class MacroScopedNote {
         self.text = text
         self.folder = folder
     }
-}
-
-extension MacroScopedNote: ParentScopedModel {
-    typealias SyncParent = NoteFolder
-    static var parentRelationship: ReferenceWritableKeyPath<MacroScopedNote, NoteFolder?> { \.folder }
 }
 
 @Model
@@ -903,11 +893,6 @@ extension ScopedItem: SyncUpdatableModel {
     }
 }
 
-extension ScopedItem: ParentScopedModel {
-    typealias SyncParent = ScopedBucket
-    static var parentRelationship: ReferenceWritableKeyPath<ScopedItem, ScopedBucket?> { \.bucket }
-}
-
 @Model
 final class GlobalBucket {
     @Attribute(.unique) var id: Int
@@ -959,11 +944,6 @@ extension GlobalItem: SyncUpdatableModel {
     }
 }
 
-extension GlobalItem: ParentScopedModel {
-    typealias SyncParent = GlobalBucket
-    static var parentRelationship: ReferenceWritableKeyPath<GlobalItem, GlobalBucket?> { \.bucket }
-}
-
 @Model
 final class NoteFolder {
     @Attribute(.unique) var id: Int
@@ -1012,11 +992,6 @@ extension UniqueIDNote: SyncUpdatableModel {
     }
 }
 
-extension UniqueIDNote: ParentScopedModel {
-    typealias SyncParent = NoteFolder
-    static var parentRelationship: ReferenceWritableKeyPath<UniqueIDNote, NoteFolder?> { \.folder }
-}
-
 @Model
 final class UniqueEmailNote {
     var id: Int
@@ -1057,13 +1032,8 @@ extension UniqueEmailNote: SyncUpdatableModel {
     }
 }
 
-extension UniqueEmailNote: ParentScopedModel {
-    typealias SyncParent = NoteFolder
-    static var parentRelationship: ReferenceWritableKeyPath<UniqueEmailNote, NoteFolder?> { \.folder }
-}
-
-// InferredNote: non-unique id, NOT ParentScopedModel – uses the inferred sync overload.
-// Without @Attribute(.unique) on id, the new behavior should be scoped (two parents → two rows).
+// InferredNote: non-unique id – uses the inferred sync overload.
+// Without @Attribute(.unique) on id, the behavior is scoped by parent (two parents → two rows).
 @Model
 final class InferredNote {
     var id: Int
@@ -2588,7 +2558,7 @@ final class SyncTests: XCTestCase {
     }
 
     @MainActor
-    func testParentSyncWithExplicitRelationshipWithoutParentScopedModelConformance() async throws {
+    func testParentSyncWithExplicitRelationship() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: InferredTask.self, InferredComment.self, configurations: configuration)
         let context = ModelContext(container)
