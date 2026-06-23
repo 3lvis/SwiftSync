@@ -35,20 +35,22 @@ extension SwiftSync {
         }
     }
 
-    static func lastPushedHistoryToken<Model>(for _: Model.Type, in context: ModelContext) -> DefaultHistoryToken? {
-        let typeName = String(reflecting: Model.self)
+    static func lastPushedHistoryToken(for model: any PersistentModel.Type, in context: ModelContext)
+        -> DefaultHistoryToken?
+    {
+        let typeName = String(reflecting: model)
         var descriptor = FetchDescriptor<PushHistoryTokenRecord>(predicate: #Predicate { $0.modelTypeName == typeName })
         descriptor.fetchLimit = 1
         guard let record = try? context.fetch(descriptor).first else { return nil }
         return try? JSONDecoder().decode(DefaultHistoryToken.self, from: record.tokenData)
     }
 
-    static func setLastPushedHistoryToken<Model>(
-        _ token: DefaultHistoryToken, for _: Model.Type, in context: ModelContext
+    static func setLastPushedHistoryToken(
+        _ token: DefaultHistoryToken, for model: any PersistentModel.Type, in context: ModelContext
     )
         throws
     {
-        let typeName = String(reflecting: Model.self)
+        let typeName = String(reflecting: model)
         guard let data = try? JSONEncoder().encode(token) else { return }
         var descriptor = FetchDescriptor<PushHistoryTokenRecord>(predicate: #Predicate { $0.modelTypeName == typeName })
         descriptor.fetchLimit = 1

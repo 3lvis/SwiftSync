@@ -2700,12 +2700,11 @@ final class SyncTests: XCTestCase {
     }
 
     @MainActor
-    func testConcurrentSyncSameContextCausesRaceOrConflict() async throws {
+    func testConcurrentSyncContainerCallsSerializeSoLastWriterWins() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: ConcurrentRaceUser.self, configurations: configuration)
-        let context = ModelContext(container)
-        context.insert(ConcurrentRaceUser(id: 1, fullName: "Seed"))
-        try context.save()
+        let syncContainer = try SyncContainer(for: ConcurrentRaceUser.self, configurations: configuration)
+        syncContainer.mainContext.insert(ConcurrentRaceUser(id: 1, fullName: "Seed"))
+        try syncContainer.mainContext.save()
 
         await ConcurrentRaceHooks.shared.installFirstSyncBlocker()
         defer {
@@ -2715,21 +2714,24 @@ final class SyncTests: XCTestCase {
             }
         }
 
-        let firstTask = Task { @MainActor in
+        // The first call acquires SyncContainer's FIFO serializer and parks mid-apply (the id==1 hook),
+        // so it holds the mutex while blocked; the second call queues strictly behind it and its write
+        // lands last. Without serialization the two writes would race and the winner would be undefined.
+        let firstTask = Task {
             let payload: [Any] = [
                 ["id": 1, "full_name": "Refresh User"],
                 ["id": 99, "full_name": "Refresh Insert"],
             ]
-            try await context.sync(payload: payload, as: ConcurrentRaceUser.self)
+            try await syncContainer.sync(payload: payload, as: ConcurrentRaceUser.self)
         }
         await ConcurrentRaceHooks.shared.waitUntilFirstSyncBlocked()
 
-        let secondTask = Task { @MainActor in
+        let secondTask = Task {
             let payload: [Any] = [
                 ["id": 1, "full_name": "Websocket User"],
                 ["id": 99, "full_name": "Websocket Winner"],
             ]
-            try await context.sync(payload: payload, as: ConcurrentRaceUser.self)
+            try await syncContainer.sync(payload: payload, as: ConcurrentRaceUser.self)
         }
 
         await ConcurrentRaceHooks.shared.releaseFirstSync()
@@ -2737,7 +2739,8 @@ final class SyncTests: XCTestCase {
         try await firstTask.value
         try await secondTask.value
 
-        let rows = try context.fetch(FetchDescriptor<ConcurrentRaceUser>())
+        let readerContext = ModelContext(syncContainer.modelContainer)
+        let rows = try readerContext.fetch(FetchDescriptor<ConcurrentRaceUser>())
         XCTAssertEqual(Set(rows.map(\.id)), Set([1, 99]))
         XCTAssertEqual(rows.first(where: { $0.id == 99 })?.fullName, "Websocket Winner")
     }
@@ -3345,9 +3348,9 @@ final class SyncTests: XCTestCase {
             try await context.sync(item: ["id": 1, "full_name": "One Updated"], as: User.self)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase["fetch-existing-by-identity"])
-        XCTAssertNil(profile.totalsByPhase["fetch-existing"])
-        XCTAssertNil(profile.totalsByPhase["find-existing"])
+        XCTAssertTrue(profile.entered(.fetchExistingByIdentity))
+        XCTAssertFalse(profile.entered(.fetchExisting))
+        XCTAssertFalse(profile.entered(.findExisting))
     }
 
     @MainActor
@@ -3366,9 +3369,9 @@ final class SyncTests: XCTestCase {
             try await context.sync(item: ["id": 1, "full_name": "One Updated"], as: LooseUser.self)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase["fetch-existing"])
-        XCTAssertNotNil(profile.totalsByPhase["find-existing"])
-        XCTAssertNil(profile.totalsByPhase["fetch-existing-by-identity"])
+        XCTAssertTrue(profile.entered(.fetchExisting))
+        XCTAssertTrue(profile.entered(.findExisting))
+        XCTAssertFalse(profile.entered(.fetchExistingByIdentity))
     }
 
     @MainActor
@@ -3387,9 +3390,9 @@ final class SyncTests: XCTestCase {
             try await context.sync(item: ["id": 1, "name": "One Updated"], as: Team.self)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase["fetch-existing"])
-        XCTAssertNotNil(profile.totalsByPhase["find-existing"])
-        XCTAssertNil(profile.totalsByPhase["fetch-existing-by-identity"])
+        XCTAssertTrue(profile.entered(.fetchExisting))
+        XCTAssertTrue(profile.entered(.findExisting))
+        XCTAssertFalse(profile.entered(.fetchExistingByIdentity))
     }
 
     @MainActor
@@ -3415,13 +3418,13 @@ final class SyncTests: XCTestCase {
             try await context.sync(item: ["id": 1, "name": "Ava", "company_id": 10], as: AutoEmployee.self)
         }
 
-        XCTAssertNotNil(toOneProfile.totalsByPhase["relationship-apply-to-one-foreign-key"])
+        XCTAssertTrue(toOneProfile.entered(.relationshipApplyToOneForeignKey))
 
         let (_, toManyProfile) = try await SwiftSync.withMainActorPerformanceProfiling {
             try await context.sync(item: ["id": 10, "title": "Task 10", "tag_ids": [1, 2]], as: AutoTask.self)
         }
 
-        XCTAssertNotNil(toManyProfile.totalsByPhase["relationship-apply-to-many-foreign-keys"])
+        XCTAssertTrue(toManyProfile.entered(.relationshipApplyToManyForeignKeys))
     }
 
     @MainActor
@@ -3444,8 +3447,8 @@ final class SyncTests: XCTestCase {
             try await context.sync(item: ["id": 1, "name": "Ava", "company_id": 10], as: AutoEmployee.self)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase["relationship-fetch-by-identity"])
-        XCTAssertNil(profile.totalsByPhase["relationship-fetch"])
+        XCTAssertTrue(profile.entered(.relationshipFetchByIdentity))
+        XCTAssertFalse(profile.entered(.relationshipFetch))
     }
 
     @MainActor
@@ -3469,8 +3472,8 @@ final class SyncTests: XCTestCase {
             try await context.sync(item: ["id": 10, "title": "Task 10", "tag_ids": [1, 2]], as: ScenarioTask.self)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase["relationship-fetch-by-identity"])
-        XCTAssertNil(profile.totalsByPhase["relationship-fetch"])
+        XCTAssertTrue(profile.entered(.relationshipFetchByIdentity))
+        XCTAssertFalse(profile.entered(.relationshipFetch))
     }
 
     @MainActor
@@ -3493,8 +3496,8 @@ final class SyncTests: XCTestCase {
             try await context.sync(item: ["id": 10, "title": "Task 10", "tag_ids": [1, 2]], as: AutoTask.self)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase["relationship-fetch"])
-        XCTAssertNil(profile.totalsByPhase["relationship-fetch-by-identity"])
+        XCTAssertTrue(profile.entered(.relationshipFetch))
+        XCTAssertFalse(profile.entered(.relationshipFetchByIdentity))
     }
 
     @MainActor
@@ -3521,9 +3524,9 @@ final class SyncTests: XCTestCase {
                 ], as: MacroScopedNote.self, parent: folder, relationship: \MacroScopedNote.folder)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase["fetch-existing-by-parent"])
-        XCTAssertNil(profile.totalsByPhase["fetch-existing"])
-        XCTAssertNil(profile.totalsByPhase["filter-scope"])
+        XCTAssertTrue(profile.entered(.fetchExistingByParent))
+        XCTAssertFalse(profile.entered(.fetchExisting))
+        XCTAssertFalse(profile.entered(.filterScope))
     }
 
     @MainActor
@@ -3549,9 +3552,9 @@ final class SyncTests: XCTestCase {
                 ], as: SuperNote.self, parent: parent, relationship: \SuperNote.superUser)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase["fetch-existing"])
-        XCTAssertNotNil(profile.totalsByPhase["filter-scope"])
-        XCTAssertNil(profile.totalsByPhase["fetch-existing-by-parent"])
+        XCTAssertTrue(profile.entered(.fetchExisting))
+        XCTAssertTrue(profile.entered(.filterScope))
+        XCTAssertFalse(profile.entered(.fetchExistingByParent))
     }
 
     @MainActor
@@ -3601,10 +3604,10 @@ final class SyncTests: XCTestCase {
                 relationship: \MacroScopedNote.folder)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase["fetch-existing-by-identity"])
-        XCTAssertNil(profile.totalsByPhase["fetch-existing"])
-        XCTAssertNil(profile.totalsByPhase["filter-scope"])
-        XCTAssertNil(profile.totalsByPhase["find-existing"])
+        XCTAssertTrue(profile.entered(.fetchExistingByIdentity))
+        XCTAssertFalse(profile.entered(.fetchExisting))
+        XCTAssertFalse(profile.entered(.filterScope))
+        XCTAssertFalse(profile.entered(.findExisting))
     }
 
     @MainActor
@@ -3628,10 +3631,10 @@ final class SyncTests: XCTestCase {
                 relationship: \SuperNote.superUser)
         }
 
-        XCTAssertNotNil(profile.totalsByPhase["fetch-existing"])
-        XCTAssertNotNil(profile.totalsByPhase["filter-scope"])
-        XCTAssertNotNil(profile.totalsByPhase["find-existing"])
-        XCTAssertNil(profile.totalsByPhase["fetch-existing-by-identity"])
+        XCTAssertTrue(profile.entered(.fetchExisting))
+        XCTAssertTrue(profile.entered(.filterScope))
+        XCTAssertTrue(profile.entered(.findExisting))
+        XCTAssertFalse(profile.entered(.fetchExistingByIdentity))
     }
 
     @MainActor

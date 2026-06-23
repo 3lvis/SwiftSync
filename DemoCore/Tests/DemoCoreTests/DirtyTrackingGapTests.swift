@@ -84,7 +84,7 @@ final class DirtyTrackingGapTests: XCTestCase {
 
         let bgTasks = try bgContext.fetch(FetchDescriptor<Task>())
         guard let bgTask = bgTasks.first else { return XCTFail("Task not found") }
-        try syncApplyToManyForeignKeys(
+        try SwiftSync.syncApplyToManyForeignKeys(
             bgTask,
             relationship: \Task.reviewers,
             payload: SyncPayload(values: ["reviewerIDs": ["u1", "u2"]]),

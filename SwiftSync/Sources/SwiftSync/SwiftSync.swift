@@ -1,8 +1,8 @@
 import Foundation
 import SwiftData
 
-extension SwiftSync {
-    static func normalize<Model: PersistentModel>(payload: [Any], model: Model.Type) throws -> [[String: Any]] {
+public enum SwiftSync {
+    static func normalize(payload: [Any], model: any PersistentModel.Type) throws -> [[String: Any]] {
         try payload.map { raw in
             guard let map = raw as? [String: Any] else {
                 throw SyncError.invalidPayload(
@@ -51,6 +51,14 @@ extension SwiftSync {
         String(describing: identity)
     }
 
+    static func resolveIdentityKey<Model: SyncModelable>(from payload: SyncPayload, model: Model.Type) -> String? {
+        resolveIdentity(from: payload, model: model).map { identityKey(from: $0) }
+    }
+
+    static func resolveIdentityKey<Model: SyncModelable>(of row: Model) -> String? {
+        identityKey(from: row[keyPath: Model.syncIdentity])
+    }
+
     static func scopedIdentityKey<ID: Hashable>(
         from identity: ID,
         parentPersistentID: PersistentIdentifier
@@ -75,7 +83,7 @@ extension SwiftSync {
         _ parent: Parent,
         in context: ModelContext
     ) throws -> Parent? {
-        let parents = try syncProfile("fetch-parents") {
+        let parents = try syncPerformanceProfile(.fetchParents) {
             try context.fetch(FetchDescriptor<Parent>())
         }
         return parents.first { $0.persistentModelID == parent.persistentModelID }

@@ -462,7 +462,7 @@ public struct SyncableMacro: ExtensionMacro {
                             guard let exportable = anyChild as? any SyncUpdatableModel else { return nil }
                             return exportable.export(keyStyle: keyStyle, dateFormatter: dateFormatter)
                         }
-                        exportSetValue(exportedChildren, for: baseKey, into: &result)
+                        SwiftSync.exportSetValue(exportedChildren, for: baseKey, into: &result)
                     }
                     """
             }
@@ -472,9 +472,9 @@ public struct SyncableMacro: ExtensionMacro {
                     let anyChild: Any? = self.\(property.name)
                     if let exportable = anyChild as? any SyncUpdatableModel {
                         let child = exportable.export(keyStyle: keyStyle, dateFormatter: dateFormatter)
-                        exportSetValue(child, for: baseKey, into: &result)
+                        SwiftSync.exportSetValue(child, for: baseKey, into: &result)
                     } else {
-                        exportSetValue(NSNull(), for: baseKey, into: &result)
+                        SwiftSync.exportSetValue(NSNull(), for: baseKey, into: &result)
                     }
                 }
                 """
@@ -483,22 +483,22 @@ public struct SyncableMacro: ExtensionMacro {
         if property.isOptional {
             return """
                 if let value = self.\(property.name) {
-                    if let encoded = exportEncodeValue(value, dateFormatter: dateFormatter) {
-                        exportSetValue(encoded, for: \(keyExpr), into: &result)
+                    if let encoded = SwiftSync.exportEncodeValue(value, dateFormatter: dateFormatter) {
+                        SwiftSync.exportSetValue(encoded, for: \(keyExpr), into: &result)
                     } else {
-                        exportSetValue(NSNull(), for: \(keyExpr), into: &result)
+                        SwiftSync.exportSetValue(NSNull(), for: \(keyExpr), into: &result)
                     }
                 } else {
-                    exportSetValue(NSNull(), for: \(keyExpr), into: &result)
+                    SwiftSync.exportSetValue(NSNull(), for: \(keyExpr), into: &result)
                 }
                 """
         }
 
         return """
-            if let encoded = exportEncodeValue(self.\(property.name), dateFormatter: dateFormatter) {
-                exportSetValue(encoded, for: \(keyExpr), into: &result)
+            if let encoded = SwiftSync.exportEncodeValue(self.\(property.name), dateFormatter: dateFormatter) {
+                SwiftSync.exportSetValue(encoded, for: \(keyExpr), into: &result)
             } else {
-                exportSetValue(NSNull(), for: \(keyExpr), into: &result)
+                SwiftSync.exportSetValue(NSNull(), for: \(keyExpr), into: &result)
             }
             """
     }
@@ -569,7 +569,7 @@ public struct SyncableMacro: ExtensionMacro {
             if property.isToManyRelationship {
                 return """
                     if \(fkPresence) {
-                        if try syncApplyToManyForeignKeys(
+                        if try SwiftSync.syncApplyToManyForeignKeys(
                             self,
                             relationship: \\\(typeName).\(property.name),
                             payload: payload,
@@ -580,7 +580,7 @@ public struct SyncableMacro: ExtensionMacro {
                             changed = true
                         }
                     } else if \(nestedPresence) {
-                        if try syncApplyToManyNestedObjects(
+                        if try SwiftSync.syncApplyToManyNestedObjects(
                             self,
                             relationship: \\\(typeName).\(property.name),
                             payload: payload,
@@ -596,7 +596,7 @@ public struct SyncableMacro: ExtensionMacro {
 
             return """
                 if \(fkPresence) {
-                    if try syncApplyToOneForeignKey(
+                    if try SwiftSync.syncApplyToOneForeignKey(
                         self,
                         relationship: \\\(typeName).\(property.name),
                         payload: payload,
@@ -607,7 +607,7 @@ public struct SyncableMacro: ExtensionMacro {
                         changed = true
                     }
                 } else if \(nestedPresence) {
-                    if try syncApplyToOneNestedObject(
+                    if try SwiftSync.syncApplyToOneNestedObject(
                         self,
                         relationship: \\\(typeName).\(property.name),
                         payload: payload,

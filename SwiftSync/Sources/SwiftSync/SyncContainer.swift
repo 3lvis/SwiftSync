@@ -9,6 +9,10 @@ struct UncheckedSendableBox<Value>: @unchecked Sendable {
     init(_ value: Value) { self.value = value }
 }
 
+public protocol SyncPayloadConvertible: Sendable {
+    func toSyncPayloadDictionary() -> [String: Any]
+}
+
 public final class SyncContainer: NSObject, @unchecked Sendable {
     /// A FIFO async mutex. Serializes work spanning `await` points — which actor isolation alone does not,
     /// since an actor method suspended at an `await` lets another call enter.
@@ -70,7 +74,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         )
         self.mainContext = modelContainer.mainContext
         self.keyStyle = keyStyle
-        self.dateFormatter = dateFormatter ?? defaultExportDateFormatter()
+        self.dateFormatter = dateFormatter ?? DateFormatter.syncDefault()
         super.init()
         installDidSaveObserver()
     }
@@ -80,7 +84,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         self.modelContainer = modelContainer
         self.mainContext = modelContainer.mainContext
         self.keyStyle = keyStyle
-        self.dateFormatter = dateFormatter ?? defaultExportDateFormatter()
+        self.dateFormatter = dateFormatter ?? DateFormatter.syncDefault()
         super.init()
         installDidSaveObserver()
     }
@@ -468,5 +472,21 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             names.insert(String(reflecting: type(of: model)))
         }
         return names
+    }
+}
+
+extension SyncContainer {
+    static func changedIdentifiers(from userInfo: [AnyHashable: Any]?) -> Set<PersistentIdentifier> {
+        guard let raw = userInfo?[changedIdentifiersUserInfoKey] else { return [] }
+        if let setValue = raw as? Set<PersistentIdentifier> { return setValue }
+        if let arrayValue = raw as? [PersistentIdentifier] { return Set(arrayValue) }
+        return []
+    }
+
+    static func changedModelTypeNames(from userInfo: [AnyHashable: Any]?) -> Set<String> {
+        guard let raw = userInfo?[changedModelTypeNamesUserInfoKey] else { return [] }
+        if let setValue = raw as? Set<String> { return setValue }
+        if let arrayValue = raw as? [String] { return Set(arrayValue) }
+        return []
     }
 }

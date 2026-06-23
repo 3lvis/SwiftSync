@@ -21,6 +21,60 @@
 - The original explicit code is often more readable than abstracted helpers.
 - Focus on changes that have REAL impact: performance improvements, actual deletions, fixing bugs.
 
+## Code Placement & Refactoring
+
+Where a declaration lives is part of the design. These rules decide it; they are behavior-neutral —
+a move builds and passes `swift test` (SwiftSync) **and** `swift test` (DemoCore) both before and after.
+
+### File naming
+
+- A file is named after the type it contains (`SyncPayload.swift` holds `SyncPayload`). Don't let a
+  file become a grab-bag of unrelated types — when one does (the old `Core.swift`), split it one
+  public type per file. There is no `Core`/`Misc`/`Helpers`-style catch-all.
+- `Type+Feature.swift` is **only** for extending a type you don't own (a stdlib/framework type from
+  another module): `String+SnakeCase.swift`, `DateFormatter+Sync.swift`, `ModelContext+Sync.swift`.
+- An extension on a type defined in **this** module is part of that type's definition, **not** a
+  `+Feature` file: a protocol's default-impl extension, a type's `LocalizedError` conformance, and a
+  small helper extension all live in the *same file as the type* they extend. Never hoist them out.
+
+### No free functions — every function has an owner
+
+- Home an internal helper on the type it naturally operates on, as an extension (snake-casing →
+  `String`; a related-row fetch → `ModelContext`; dedupe → `Array`/`Sequence`).
+- When the function has **no single operand** (it takes a payload *and* a model, or is an
+  identity/namespace-level operation), home it as a `static` on the `SwiftSync` namespace enum.
+- **Public macro-SPI** (functions `@Syncable`-generated code calls cross-module — must be `public`)
+  goes on `SwiftSync` statics, **never** on a stdlib/model type. Homing it on `Dictionary`/the model
+  protocol would force *that type's* public API to carry sync internals for every consumer.
+- The only allowed free function is a control-flow wrapper with genuinely no operand that reads worse
+  namespaced, kept `internal` so it pollutes nothing (`syncProfile`). Justify it explicitly or don't.
+
+### When a type earns its own file vs. folds into a caller
+
+Measure first — `grep -rn TypeName` repo-wide — and **distinguish library `Sources` references (which
+decide the home) from test/consumer references (which are usage, not a home)**. Verify the claim; don't
+assume from a type's name what calls it.
+
+- **Multiple library callers** → its own file.
+- **Exactly one library caller** → fold it into that caller's file (`SyncPayloadConvertible` → only the
+  `SyncContainer.sync` overloads reference it → `SyncContainer.swift`; `SyncRelationshipSchemaDescriptor`
+  → only the `SyncModelable` requirement → `SyncModelable.swift`). A public type still conformed to by
+  consumers is fine to relocate — moving the *declaration* next to its one library caller doesn't change
+  the public surface.
+- **Zero library callers** (public API exercised only by consumers or by `@Syncable`-generated code) →
+  categorize by *what calls it*, not by a runtime caller:
+  - macro-generated-code SPI (e.g. `ExportState`, called only by the generated `export()`) homes with
+    its SPI siblings in `SyncableMacroSupport.swift` — same category as `exportEncodeValue`/`exportSetValue`.
+  - a model-family protocol consumers conform to by hand (e.g. `ParentScopedModel`, refining
+    `SyncUpdatableModel`) keeps its own file alongside `SyncModelable`/`SyncUpdatableModel` — it is not
+    macro-generated, so the macro file is the wrong home.
+
+### Macro module boundary
+
+`SyncableMacro.swift` lives in the **`MacrosImplementation`** plugin module (the compiler plugin) and
+**cannot** hold a public runtime type. Runtime macro-SPI — the `public` declarations generated code calls
+at runtime, including `ExportState` — lives in **`SyncableMacroSupport.swift`** in the `SwiftSync` module.
+
 ## Core Mantra
 
 - Convention-first with explicit relationship paths at API boundaries.
