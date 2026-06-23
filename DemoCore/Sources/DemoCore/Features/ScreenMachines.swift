@@ -120,7 +120,7 @@ public final class ProjectViewMachine {
     public private(set) var loadState: ScreenLoadState = .idle
     public private(set) var deleteState: SubmissionState = .idle
     public var project: Project? {
-        projectPublisher.rows.first(where: { $0.id == projectID })
+        projectPublisher.row
     }
     public var tasks: [Task] {
         // Offline-deleted tasks are hard-deleted (their deletion lives in store history), so they're
@@ -140,7 +140,7 @@ public final class ProjectViewMachine {
 
     private let projectID: String
     private let syncEngine: DemoSyncEngine
-    private let projectPublisher: SyncQueryPublisher<Project>
+    private let projectPublisher: SyncModelPublisher<Project>
     private let taskPublisher: SyncQueryPublisher<Task>
     private let loadMachine: ScreenLoadMachine
     private let deleteMachine: SubmissionMachine
@@ -152,11 +152,7 @@ public final class ProjectViewMachine {
     public init(projectID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
         self.projectID = projectID
         self.syncEngine = syncEngine
-        self.projectPublisher = SyncQueryPublisher(
-            Project.self,
-            in: syncContainer,
-            sortBy: [SortDescriptor(\Project.name), SortDescriptor(\Project.id)]
-        )
+        self.projectPublisher = SyncModelPublisher(Project.self, id: projectID, in: syncContainer)
         self.taskPublisher = SyncQueryPublisher(
             Task.self,
             relationship: \Task.project,
