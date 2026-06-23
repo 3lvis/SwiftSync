@@ -175,7 +175,7 @@ extension SwiftSync {
     /// history since the stored token. The pull uses this to preserve never-pushed local inserts from
     /// delete-missing and to keep a newer local edit from being clobbered (last-writer-wins). Reads
     /// persistent ids (not row ids), so it needs no `SyncID == String` constraint.
-    static func locallyDirtyPersistentIDs<Model: SyncUpdatableModel>(
+    private static func locallyDirtyPersistentIDs<Model: SyncUpdatableModel>(
         for _: Model.Type, in context: ModelContext
     ) throws -> Set<PersistentIdentifier> {
         let transactions = try localTransactions(
@@ -215,14 +215,14 @@ extension SwiftSync {
     /// Trim inbound (pull-authored) history up to and including `token`. Only inbound transactions are
     /// removed — local-authored history is the un-pushed-changes signal and a different model type may
     /// still need its own un-pushed local changes, so those are never trimmed here.
-    static func trimInboundHistory(through token: DefaultHistoryToken, in context: ModelContext) throws {
+    private static func trimInboundHistory(through token: DefaultHistoryToken, in context: ModelContext) throws {
         let inbound = inboundAuthor
         try context.deleteHistory(
             HistoryDescriptor<DefaultHistoryTransaction>(
                 predicate: #Predicate { $0.token <= token && $0.author == inbound }))
     }
 
-    static func localTransactions(since token: DefaultHistoryToken?, in context: ModelContext) throws
+    private static func localTransactions(since token: DefaultHistoryToken?, in context: ModelContext) throws
         -> [DefaultHistoryTransaction]
     {
         // A local write leaves `author` nil; in predicate/SQL semantics `nil != "inbound"` is NULL

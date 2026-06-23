@@ -8,7 +8,7 @@ struct SyncPerformanceReport: Sendable {
     }
 }
 
-final class SyncPerformanceProfiler: @unchecked Sendable {
+private final class SyncPerformanceProfiler: @unchecked Sendable {
     private let clock = ContinuousClock()
     private let lock = NSLock()
     private var totalsByPhase: [SyncPhase: Duration] = [:]
@@ -38,7 +38,7 @@ final class SyncPerformanceProfiler: @unchecked Sendable {
     }
 }
 
-enum SyncPerformanceProfilingState {
+private enum SyncPerformanceProfilingState {
     @TaskLocal static var current: SyncPerformanceProfiler?
 }
 

@@ -576,7 +576,7 @@ extension ModelContext {
 }
 
 extension ModelContext {
-    func syncFetchRelatedRows<Model: PersistentModel>(_ modelType: Model.Type) throws -> [Model] {
+    private func syncFetchRelatedRows<Model: PersistentModel>(_ modelType: Model.Type) throws -> [Model] {
         if let cache = SyncRelationshipLookupState.current {
             return try cache.rows(for: modelType, in: self)
         }

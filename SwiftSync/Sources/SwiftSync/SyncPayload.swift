@@ -50,19 +50,6 @@ public struct SyncPayload {
         throw SyncError.invalidPayload(model: "Payload", reason: "Missing or invalid '\(key)'")
     }
 
-    func strictRequired<T>(_ type: T.Type = T.self, for key: String) throws -> T {
-        if let value: T = strictValue(for: key, as: type) {
-            return value
-        }
-        if T.self == Date.self, contains(key) {
-            return Date(timeIntervalSince1970: 0) as! T
-        }
-        if isExplicitNull(for: key), let fallback: T = defaultValueForNull(as: type) {
-            return fallback
-        }
-        throw SyncError.invalidPayload(model: "Payload", reason: "Missing or invalid '\(key)'")
-    }
-
     private func candidateKeys(for key: String) -> [String] {
         if let cached = candidateKeysCache.cache[key] {
             return cached
