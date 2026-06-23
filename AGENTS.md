@@ -28,9 +28,11 @@ a move builds and passes `swift test` (SwiftSync) **and** `swift test` (DemoCore
 
 ### File naming
 
-- A file is named after the type it contains (`SyncPayload.swift` holds `SyncPayload`). Don't let a
-  file become a grab-bag of unrelated types — when one does (the old `Core.swift`), split it one
-  public type per file. There is no `Core`/`Misc`/`Helpers`-style catch-all.
+- A file is named after a type that **actually exists in it** (`SyncPayload.swift` holds `SyncPayload`) —
+  never a concept or a phantom type (`Push.swift` had no `Push`; `PushHistoryTokenStore.swift` had no
+  `…Store` — both renamed to their real contained type). Don't let a file become a grab-bag of unrelated
+  types — when one does (the old `Core.swift`), split it one public type per file. There is no
+  `Core`/`Misc`/`Helpers`-style catch-all.
 - `Type+Feature.swift` is **only** for extending a type you don't own (a stdlib/framework type from
   another module): `String+SnakeCase.swift`, `DateFormatter+Sync.swift`, `ModelContext+Sync.swift`.
 - An extension on a type defined in **this** module is part of that type's definition, **not** a
@@ -70,11 +72,33 @@ assume from a type's name what calls it.
     is genuinely consumer-facing: a public protocol with zero library callers that the library never
     dispatches on is dead surface to remove, not a seam to keep.
 
+### Visibility follows location
+
+- A relocation is also the moment to *audit*, not just move: is the symbol dead (no caller anywhere →
+  delete), over-exposed (now single-file → tighten), or vestigial public API (zero library callers, never
+  dispatched on → remove)? Moving code doesn't validate it — most of this session's dead code and stale
+  docs rode in on structural moves that skipped the audit.
+- When a symbol collapses to one file, tighten `internal` → `private`. Swift `private` reaches across
+  same-file `extension`s of a type, so a `private static` on `SwiftSync` is still callable from other
+  `extension SwiftSync` blocks in that file.
+- `@testable import` exposes `internal`, **not** `private` — so `internal` is the floor for anything a
+  separate-target test reads; don't drop those to `private`, and don't widen to `public` for tests' sake.
+
 ### Macro module boundary
 
 `SyncableMacro.swift` lives in the **`MacrosImplementation`** plugin module (the compiler plugin) and
 **cannot** hold a public runtime type. Runtime macro-SPI — the `public` declarations generated code calls
 at runtime, including `ExportState` — lives in **`MacroRuntimeSupport.swift`** in the `SwiftSync` module.
+
+## Docs: contracts, not snapshots
+
+- Don't keep a doc that must be hand-synced to code — type/file/function lists, generated-code examples,
+  diagrams of internals. It rots and misleads (we deleted `ARCHITECTURE.md` after it documented a removed
+  lease, a removed protocol, and a deleted file). The truth lives where it can't drift: code + tests;
+  targets in `Package.swift`; contracts/conventions here; public usage in `README`; how-to-layer-an-app
+  in `docs/project/architecture.md`.
+- Renaming or removing any symbol or file: grep the docs (`README`, `AGENTS.md`, `docs/**`) for
+  references and fix them in the *same* change.
 
 ## Core Mantra
 
