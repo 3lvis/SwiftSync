@@ -44,7 +44,7 @@ public final class DemoSyncEngine {
 
     private var inFlightOperations: Set<String> = []
     /// The drain in progress, if any — concurrent pushes (reconnect + push-before-pull) coalesce onto it.
-    private var activeDrain: _Concurrency.Task<[SyncPushFailure], Error>?
+    private var activeDrain: _Concurrency.Task<[SyncPendingChangesFailure], Error>?
 
     private let syncContainer: SyncContainer
     private let apiClient: FakeDemoAPIClient
@@ -201,7 +201,7 @@ public final class DemoSyncEngine {
     /// Drain the pending task changes to the server and stamp any rejections on the failures inbox.
     /// SwiftSync brackets the storage token; the `upload` closure is the networking half.
     @discardableResult
-    public func pushPendingChanges() async throws -> [SyncPushFailure]? {
+    public func pushPendingChanges() async throws -> [SyncPendingChangesFailure]? {
         guard !isOffline else { return nil }
         // Coalesce onto a running drain: it converges (re-reads the pending set after every upload), so a
         // caller that joins — a concurrent push-before-pull, or an edit landing mid-drain — is covered by
@@ -224,8 +224,8 @@ public final class DemoSyncEngine {
     /// advance past it), so nothing more can drain until the user resolves it — looping would spin. A
     /// throw (transport/server error) propagates without annotating, leaving the inbox intact — only a
     /// completed pass re-stamps `syncFailureReason`.
-    private func drainToConvergence() async throws -> [SyncPushFailure] {
-        var lastFailures: [SyncPushFailure] = []
+    private func drainToConvergence() async throws -> [SyncPendingChangesFailure] {
+        var lastFailures: [SyncPendingChangesFailure] = []
         repeat {
             lastFailures = try await SwiftSync.withPendingChanges(for: Task.self, in: syncContainer.mainContext) {
                 pending in try await self.upload(pending)
@@ -242,7 +242,7 @@ public final class DemoSyncEngine {
     /// that `id` as the row's `public_id` — no distinct server id comes back); tombstones are a `delete`
     /// by the same `id`. A `stale` result means the server won last-writer-wins — adopt its state locally
     /// and treat the row as resolved (not a failure) so it isn't re-sent.
-    private func upload(_ pending: SyncPendingChanges) async throws -> [SyncPushFailure] {
+    private func upload(_ pending: SyncPendingChanges) async throws -> [SyncPendingChangesFailure] {
         var operations: [[String: Any]] = []
 
         for id in pending.inserts + pending.updates {
@@ -264,7 +264,7 @@ public final class DemoSyncEngine {
 
         let results = try await apiClient.upload(operations: operations)
 
-        var failures: [SyncPushFailure] = []
+        var failures: [SyncPendingChangesFailure] = []
         for result in results {
             let operation = result["operation"] as? String
             let status = result["status"] as? String
@@ -284,7 +284,7 @@ public final class DemoSyncEngine {
                 // failures verbatim without interpreting them; the engine reads them back to annotate
                 // the inbox.
                 failures.append(
-                    SyncPushFailure(
+                    SyncPendingChangesFailure(
                         id: id ?? "",
                         error: DemoUploadRejection(
                             message: (result["message"] as? String) ?? "rejected")))
@@ -335,7 +335,7 @@ public final class DemoSyncEngine {
     /// Reflect a push's outcome onto the inbox: stamp `syncFailureReason` on each rejected row and
     /// clear it from any row that no longer fails (it succeeded, or its corrected edit went through).
     /// SwiftSync persists nothing — the failures inbox is entirely this app's concern.
-    private func annotateFailures(_ failures: [SyncPushFailure]) throws {
+    private func annotateFailures(_ failures: [SyncPendingChangesFailure]) throws {
         let reasonsByID = Dictionary(
             failures.map { ($0.id, $0.error.localizedDescription) },
             uniquingKeysWith: { first, _ in first })

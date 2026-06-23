@@ -21,7 +21,7 @@ public struct SyncPendingChanges: Sendable {
 /// One pushed row the server rejected: the row `id` (kept pending) and the consumer's own `error`,
 /// bubbled up verbatim. Return only these from your `process` closure — the operation that failed is the
 /// library's to track, not yours.
-public struct SyncPushFailure: Sendable {
+public struct SyncPendingChangesFailure: Sendable {
     public let id: String
     public let error: any Error & Sendable
 
@@ -32,11 +32,9 @@ public struct SyncPushFailure: Sendable {
 }
 
 extension SwiftSync {
-    /// The local changes pending a push, read straight from SwiftData history since SwiftSync's stored
-    /// per-type token: transactions authored by anyone other than the inbound (pull) author. A row
-    /// inserted then edited collapses to a single insert; a row deleted after editing collapses to a
-    /// delete (its `id` recovered from the history tombstone — mark the identity
-    /// `.preserveValueOnDeletion`).
+    /// The local changes pending a push. A row inserted then edited collapses to a single insert; a row
+    /// deleted after editing collapses to a delete (its `id` recovered from the history tombstone — mark
+    /// the identity `.preserveValueOnDeletion`).
     public static func pendingChanges<Model: SyncUpdatableModel>(
         for _: Model.Type,
         in context: ModelContext
@@ -138,8 +136,8 @@ extension SwiftSync {
         for _: Model.Type,
         in context: ModelContext,
         isolation: isolated (any Actor)? = #isolation,
-        process: (SyncPendingChanges) async throws -> [SyncPushFailure]
-    ) async throws -> [SyncPushFailure] where Model.SyncID == String {
+        process: (SyncPendingChanges) async throws -> [SyncPendingChangesFailure]
+    ) async throws -> [SyncPendingChangesFailure] where Model.SyncID == String {
         try requireOfflineCapable(Model.self, in: context)
         try requireOfflinePushBookkeeping(in: context)
         let token = lastPushedHistoryToken(for: Model.self, in: context)
@@ -171,10 +169,8 @@ extension SwiftSync {
         return (try? locallyDirtyPersistentIDs(for: Model.self, in: context)) ?? []
     }
 
-    /// The persistent identifiers of rows with **un-pushed local changes** for `Model` — local-authored
-    /// history since the stored token. The pull uses this to preserve never-pushed local inserts from
-    /// delete-missing and to keep a newer local edit from being clobbered (last-writer-wins). Reads
-    /// persistent ids (not row ids), so it needs no `SyncID == String` constraint.
+    /// Persistent ids (not row ids — so no `SyncID == String` constraint) of rows with un-pushed local
+    /// changes: local-authored history since the stored token.
     private static func locallyDirtyPersistentIDs<Model: SyncUpdatableModel>(
         for _: Model.Type, in context: ModelContext
     ) throws -> Set<PersistentIdentifier> {
@@ -212,9 +208,8 @@ extension SwiftSync {
         return try row.apply(payload)
     }
 
-    /// Trim inbound (pull-authored) history up to and including `token`. Only inbound transactions are
-    /// removed — local-authored history is the un-pushed-changes signal and a different model type may
-    /// still need its own un-pushed local changes, so those are never trimmed here.
+    /// Trim inbound (pull-authored) history through `token`. Only inbound is removed — local-authored
+    /// history is the un-pushed-changes signal and must survive.
     private static func trimInboundHistory(through token: DefaultHistoryToken, in context: ModelContext) throws {
         let inbound = inboundAuthor
         try context.deleteHistory(
@@ -239,11 +234,8 @@ extension SwiftSync {
         return try context.fetchHistory(descriptor)
     }
 
-    /// A model opts into offline round-trip by marking its identity `@Attribute(.preserveValueOnDeletion)`
-    /// — which offline genuinely requires (to recover a deleted row's id from its history tombstone) and
-    /// which is a harmless no-op otherwise. Its presence is therefore the offline signal: when set, the
-    /// pull honors pending local edits and preserves never-pushed local inserts; when absent, the pull
-    /// keeps plain "server is authoritative" semantics.
+    /// `.preserveValueOnDeletion` on the identity is the offline opt-in signal: it lets a deleted row's id
+    /// be recovered from its history tombstone (and is a harmless no-op otherwise).
     private static func identityPreservesValueOnDeletion<Model: SyncModelable>(
         _: Model.Type, in context: ModelContext
     ) -> Bool {
@@ -257,9 +249,8 @@ extension SwiftSync {
         return attribute.options.contains(.preserveValueOnDeletion)
     }
 
-    /// Offline push/pending requires the identity to be `.preserveValueOnDeletion` — otherwise a
-    /// deleted row's id can't be recovered from history and its deletion would be silently lost. Fail
-    /// loudly and actionably rather than dropping deletes.
+    /// Offline push requires `.preserveValueOnDeletion` on the identity — without it a deleted row's id
+    /// can't be recovered and the deletion is silently lost. Fail loudly rather than drop deletes.
     private static func requireOfflineCapable<Model: SyncModelable>(_: Model.Type, in context: ModelContext) throws {
         guard identityPreservesValueOnDeletion(Model.self, in: context) else {
             throw SyncError.schemaValidation(

@@ -631,12 +631,12 @@ The identity is the only id: it's client-generated and the backend adopts it, so
 
 `pendingChanges` partitions the un-pushed local changes (history authored by you, since SwiftSync's internal per-type history token) into inserts, updates, and deletes. A row inserted *and* deleted before it was ever pushed is dropped (the server never saw it).
 
-`withPendingChanges` runs one pass inside a scope SwiftSync manages (the `with…` idiom: it sets up the pending changes, your closure does the work, it commits the bookmark on the way out). It hands your closure a `Sendable` `SyncPendingChanges` (so SwiftData objects never cross into a network call — you own the request); the closure does the network work and **returns the failures** (`[SyncPushFailure]`), which the method returns straight back to you. Everything else is confirmed by complement — the client id *is* the identity the server adopts, so a push is an idempotent upsert with no acknowledgements to echo back. Only when the closure reports **no** failures does it advance its internal history token and trim the redundant history. It writes no per-row state; a failed (or otherwise un-pushed) change stays pending and is re-detected next call. Surface the returned failures however you like (discard / edit / retry).
+`withPendingChanges` runs one pass inside a scope SwiftSync manages (the `with…` idiom: it sets up the pending changes, your closure does the work, it commits the bookmark on the way out). It hands your closure a `Sendable` `SyncPendingChanges` (so SwiftData objects never cross into a network call — you own the request); the closure does the network work and **returns the failures** (`[SyncPendingChangesFailure]`), which the method returns straight back to you. Everything else is confirmed by complement — the client id *is* the identity the server adopts, so a push is an idempotent upsert with no acknowledgements to echo back. Only when the closure reports **no** failures does it advance its internal history token and trim the redundant history. It writes no per-row state; a failed (or otherwise un-pushed) change stays pending and is re-detected next call. Surface the returned failures however you like (discard / edit / retry).
 
 ```swift
 let failures = try await SwiftSync.withPendingChanges(for: Task.self, in: syncContainer.mainContext) { pending in
   // map pending.inserts / pending.updates / pending.deletes (the ids) to upsert/delete
-  // requests, call your API, and return a SyncPushFailure for each rejected id
+  // requests, call your API, and return a SyncPendingChangesFailure for each rejected id
   try await api.push(pending)
 }
 // No history token to persist — SwiftSync owns it. `failures` is empty on a fully clean pass.

@@ -41,7 +41,7 @@ Baseline: ~685 comment-bearing lines across 38 files (crude count, over-counts m
   - Killed: `inboundAuthor` "Internal —" line; `localTransactions` doc (restatement); `SyncError`
     `invalidPayload`/`cancelled`/`containerInitialization` case docs (restate the case; `errorDescription`
     carries the text). Kept `schemaValidation` (names the non-obvious triggers).
-  - Trimmed: `SyncPendingChanges` (cut field restatement, kept ids-not-objects contract); `SyncPushFailure`
+  - Trimmed: `SyncPendingChanges` (cut field restatement, kept ids-not-objects contract); `SyncPendingChangesFailure`
     (cut idempotent-upsert dup of `withPendingChanges`); `withPendingChanges` (cut what-it-does opener);
     `SyncContainer.sync(item:)` (cut box sentence dup of `UncheckedSendableBox`).
   - Fixed stale refs: `` `push` `` → `` `withPendingChanges` `` (Core, PushHistoryTokenStore, Push ×2) —

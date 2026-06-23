@@ -2,7 +2,7 @@ import Foundation
 
 /// The single error currency for SwiftSync: every SwiftSync operation that can fail throws one of
 /// these, so a consumer catches one type. (Per-operation push *rejections* are partial-success data,
-/// reported as `SyncPushFailure` in the response rather than thrown — see `withPendingChanges`.)
+/// reported as `SyncPendingChangesFailure` in the response rather than thrown — see `withPendingChanges`.)
 public enum SyncError: Error, Sendable, Equatable {
     case invalidPayload(model: String, reason: String)
     case cancelled
