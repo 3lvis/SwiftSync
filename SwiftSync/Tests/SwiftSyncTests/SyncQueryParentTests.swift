@@ -28,6 +28,24 @@ final class SyncQueryParentTests: XCTestCase {
     }
 
     @MainActor
+    func testSyncModelReturnsTheRowMatchingTheID() throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let modelContainer = try ModelContainer(for: InferredTask.self, configurations: configuration)
+        let syncContainer = SyncContainer(modelContainer)
+        let context = syncContainer.mainContext
+
+        context.insert(InferredTask(id: 1, title: "A"))
+        context.insert(InferredTask(id: 2, title: "B"))
+        context.insert(InferredTask(id: 3, title: "C"))
+        try context.save()
+
+        let model = SyncModel(InferredTask.self, id: 2, in: syncContainer)
+
+        XCTAssertEqual(model.wrappedValue?.id, 2)
+        XCTAssertEqual(model.wrappedValue?.title, "B")
+    }
+
+    @MainActor
     func testSyncQueryWithPredicateFiltersRows() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let modelContainer = try ModelContainer(
