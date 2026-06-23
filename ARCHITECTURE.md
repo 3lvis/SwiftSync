@@ -13,14 +13,14 @@ SwiftSync                 (library — public API, sync engine, reactive queries
 
 There is no separate `Core` / `SwiftDataBridge` / `Macros` / `TestingKit` target —
 everything public lives in the one `SwiftSync` target. The `@Syncable` family of macro
-*declarations* lives in `SwiftSync` (`SyncableMacro.swift`); the macro *implementation*
+*declarations* lives in `SwiftSync` (`MacroDeclarations.swift`); the macro *implementation*
 lives in `MacrosImplementation` (`SyncableMacro.swift`).
 
 ### What lives where
 
 | Target | Role | Key contents |
 |---|---|---|
-| `SwiftSync` | the library (public API) | `SyncPayload`, `SyncDateParser`, the protocols (`SyncModelable`, `SyncUpdatableModel`), `KeyStyle`, `SyncError`, `SwiftSync.sync()`, the relationship-apply globals (`SyncableMacroSupport.swift`), `SyncContainer`, the reactive query system (`@SyncQuery`/`@SyncModel`, `SyncModelPublisher`, `SyncQueryPublisher`), and the `@Syncable`/`@PrimaryKey`/`@RemoteKey`/`@NotExport` macro declarations |
+| `SwiftSync` | the library (public API) | `SyncPayload`, `SyncDateParser`, the protocols (`SyncModelable`, `SyncUpdatableModel`), `KeyStyle`, `SyncError`, `SwiftSync.sync()`, the relationship-apply globals (`MacroRuntimeSupport.swift`), `SyncContainer`, the reactive query system (`@SyncQuery`/`@SyncModel`, `SyncModelPublisher`, `SyncQueryPublisher`), and the `@Syncable`/`@PrimaryKey`/`@RemoteKey`/`@NotExport` macro declarations |
 | `MacrosImplementation` | compiler plugin (`.macro`, + swift-syntax) | `SyncableMacro` plus the `PrimaryKeyMacro` / `NotExportMacro` / `RemoteKeyMacro` no-op peer macros |
 | `ObjCExceptionCatcher` | ObjC helper | bridges `NSException` from `ModelContainer(for:)` into a Swift error |
 

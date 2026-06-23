@@ -64,7 +64,7 @@ assume from a type's name what calls it.
 - **Zero library callers** (public API exercised only by consumers or by `@Syncable`-generated code) →
   categorize by *what calls it*, not by a runtime caller:
   - macro-generated-code SPI (e.g. `ExportState`, called only by the generated `export()`) homes with
-    its SPI siblings in `SyncableMacroSupport.swift` — same category as `exportEncodeValue`/`exportSetValue`.
+    its SPI siblings in `MacroRuntimeSupport.swift` — same category as `exportEncodeValue`/`exportSetValue`.
   - a model-family protocol consumers conform to by hand keeps its own file alongside `SyncModelable`/
     `SyncUpdatableModel` — not macro-generated, so the macro file is the wrong home. But first confirm it
     is genuinely consumer-facing: a public protocol with zero library callers that the library never
@@ -74,7 +74,7 @@ assume from a type's name what calls it.
 
 `SyncableMacro.swift` lives in the **`MacrosImplementation`** plugin module (the compiler plugin) and
 **cannot** hold a public runtime type. Runtime macro-SPI — the `public` declarations generated code calls
-at runtime, including `ExportState` — lives in **`SyncableMacroSupport.swift`** in the `SwiftSync` module.
+at runtime, including `ExportState` — lives in **`MacroRuntimeSupport.swift`** in the `SwiftSync` module.
 
 ## Core Mantra
 
@@ -172,7 +172,7 @@ at runtime, including `ExportState` — lives in **`SyncableMacroSupport.swift`*
 - CI is split by the draft/ready signal:
   - **Every push (draft included)** runs the fast tier in `ci.yml`: swift-format, macOS `swift test` (×3 packages), the warnings gate, doc-links, and the perf subset.
   - **Only when a PR is marked ready for review** does the slow simulator tier in `ios-regression.yml` run — one `iOS Simulator Tests` job that runs both the `DemoUITests` UI suite and the iOS-specific dirty-tracking regression (`DirtyTrackingGapTests`) on a simulator. It skips on drafts (a skipped check still reports success) and there is no master-push run — this tier is pre-merge only.
-- So mark a PR **ready** to trigger the `iOS Simulator Tests` gate, then verify it green before merging. If a task touches `Core.swift`, `MacrosImplementation/`, or `SyncableMacro.swift`, note in the plan that marking the PR ready will run that simulator tier.
+- So mark a PR **ready** to trigger the `iOS Simulator Tests` gate, then verify it green before merging. If a task touches `MacrosImplementation/`, `MacroRuntimeSupport.swift`, or the core sync engine (`SyncContainer`/`ModelContext+Sync`), note in the plan that marking the PR ready will run that simulator tier.
 
 ### UI tests are a last resort (very expensive)
 
