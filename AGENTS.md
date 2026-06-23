@@ -29,10 +29,9 @@ a move builds and passes `swift test` (SwiftSync) **and** `swift test` (DemoCore
 ### File naming
 
 - A file is named after a type that **actually exists in it** (`SyncPayload.swift` holds `SyncPayload`) —
-  never a concept or a phantom type (`Push.swift` had no `Push`; `PushHistoryTokenStore.swift` had no
-  `…Store` — both renamed to their real contained type). Don't let a file become a grab-bag of unrelated
-  types — when one does (the old `Core.swift`), split it one public type per file. There is no
-  `Core`/`Misc`/`Helpers`-style catch-all.
+  never a concept or a phantom type (a `…Store.swift`/`…Manager.swift` with no such type in it). Don't
+  let a file become a grab-bag of unrelated types — split such a file one public type per file. There is
+  no `Core`/`Misc`/`Helpers`-style catch-all.
 - `Type+Feature.swift` is **only** for extending a type you don't own (a stdlib/framework type from
   another module): `String+SnakeCase.swift`, `DateFormatter+Sync.swift`, `ModelContext+Sync.swift`.
 - An extension on a type defined in **this** module is part of that type's definition, **not** a
@@ -49,7 +48,7 @@ a move builds and passes `swift test` (SwiftSync) **and** `swift test` (DemoCore
   goes on `SwiftSync` statics, **never** on a stdlib/model type. Homing it on `Dictionary`/the model
   protocol would force *that type's* public API to carry sync internals for every consumer.
 - The only allowed free function is a control-flow wrapper with genuinely no operand that reads worse
-  namespaced, kept `internal` so it pollutes nothing (`syncProfile`). Justify it explicitly or don't.
+  namespaced, kept `internal` so it pollutes nothing (`syncPerformanceProfile`). Justify it explicitly or don't.
 
 ### When a type earns its own file vs. folds into a caller
 
@@ -64,8 +63,8 @@ assume from a type's name what calls it.
   cohesive subsystem in a namespace/catch-all file, do the **reverse** — move the small installer/glue
   into the subsystem's own well-named file.
 - **Exactly one library caller** → fold it into that caller's file (`SyncPayloadConvertible` → only the
-  `SyncContainer.sync` overloads reference it → `SyncContainer.swift`; `SyncRelationshipSchemaDescriptor`
-  → only the `SyncModelable` requirement → `SyncModelable.swift`). A public type still conformed to by
+  `SyncContainer.sync` overloads reference it; `SyncRelationshipSchemaDescriptor` → only the
+  `SyncModelable` requirement). A public type still conformed to by
   consumers is fine to relocate — moving the *declaration* next to its one library caller doesn't change
   the public surface.
 - **Zero library callers** (public API exercised only by consumers or by `@Syncable`-generated code) →
@@ -86,8 +85,8 @@ assume from a type's name what calls it.
 
 - A relocation is also the moment to *audit*, not just move: is the symbol dead (no caller anywhere →
   delete), over-exposed (now single-file → tighten), or vestigial public API (zero library callers, never
-  dispatched on → remove)? Moving code doesn't validate it — most of this session's dead code and stale
-  docs rode in on structural moves that skipped the audit.
+  dispatched on → remove)? Moving code doesn't validate it — dead code and stale docs most often ride in
+  on structural moves that skip the audit.
 - Before removing public API, check git history for *why* it's unused — orphaned by a past refactor,
   superseded by a newer mechanism, or never used. "Currently unused" is not the justification; the *why*
   decides drop vs. preserve (superseded by an idiomatic equivalent → drop; a real capability with no
@@ -107,8 +106,8 @@ at runtime, including `ExportState` — lives in **`MacroRuntimeSupport.swift`**
 ## Docs: contracts, not snapshots
 
 - Don't keep a doc that must be hand-synced to code — type/file/function lists, generated-code examples,
-  diagrams of internals. It rots and misleads (we deleted `ARCHITECTURE.md` after it documented a removed
-  lease, a removed protocol, and a deleted file). The truth lives where it can't drift: code + tests;
+  diagrams of internals. It rots and misleads (`ARCHITECTURE.md` was deleted for exactly this — it had
+  drifted from the code it described). The truth lives where it can't drift: code + tests;
   targets in `Package.swift`; contracts/conventions here; public usage in `README`; how-to-layer-an-app
   in `docs/project/architecture.md`.
 - Renaming or removing any symbol or file: grep the docs (`README`, `AGENTS.md`, `docs/**`) for
@@ -208,7 +207,7 @@ at runtime, including `ExportState` — lives in **`MacroRuntimeSupport.swift`**
 - Default: run `swift test` (macOS/SPM) only.
 - Exception: if a task changes `Demo/Demo/**`, run the relevant demo app build even if the user did not explicitly ask for `xcodebuild`.
 - CI is split by the draft/ready signal:
-  - **Every push (draft included)** runs the fast tier in `ci.yml`: swift-format, macOS `swift test` (×3 packages), the warnings gate, doc-links, and the perf subset.
+  - **Every push (draft included)** runs the fast tier in `ci.yml`: swift-format, macOS `swift test` (per package), the warnings gate, doc-links, and the perf subset.
   - **Only when a PR is marked ready for review** does the slow simulator tier in `ios-regression.yml` run — one `iOS Simulator Tests` job that runs both the `DemoUITests` UI suite and the iOS-specific dirty-tracking regression (`DirtyTrackingGapTests`) on a simulator. It skips on drafts (a skipped check still reports success) and there is no master-push run — this tier is pre-merge only.
 - So mark a PR **ready** to trigger the `iOS Simulator Tests` gate, then verify it green before merging. If a task touches `MacrosImplementation/`, `MacroRuntimeSupport.swift`, or the core sync engine (`SyncContainer`/`ModelContext+Sync`), note in the plan that marking the PR ready will run that simulator tier.
 
