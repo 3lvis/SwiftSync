@@ -57,7 +57,12 @@ Measure first — `grep -rn TypeName` repo-wide — and **distinguish library `S
 decide the home) from test/consumer references (which are usage, not a home)**. Verify the claim; don't
 assume from a type's name what calls it.
 
-- **Multiple library callers** → its own file.
+- **Multiple library callers** → its own file — *unless* the type is a subsystem's vocabulary or a
+  protocol's parameter (a profiler's phase enum, an `OptionSet` a protocol method takes); that lives in
+  the owner's file however many sites reference it. Call-site count guards against cramming into an
+  *arbitrary* caller, not against co-locating with the conceptual owner. And if folding would bury a
+  cohesive subsystem in a namespace/catch-all file, do the **reverse** — move the small installer/glue
+  into the subsystem's own well-named file.
 - **Exactly one library caller** → fold it into that caller's file (`SyncPayloadConvertible` → only the
   `SyncContainer.sync` overloads reference it → `SyncContainer.swift`; `SyncRelationshipSchemaDescriptor`
   → only the `SyncModelable` requirement → `SyncModelable.swift`). A public type still conformed to by
@@ -72,12 +77,21 @@ assume from a type's name what calls it.
     is genuinely consumer-facing: a public protocol with zero library callers that the library never
     dispatches on is dead surface to remove, not a seam to keep.
 
+- **Duplicated parallel logic is a correctness hazard, not just clutter.** When two types carry the same
+  logic (a SwiftUI observer mirroring a plain publisher; a stub/real overload pair), a fix that lands in
+  one copy silently leaves the twin broken — and the *untested* copy is exactly where the bug hides.
+  Prefer eliminating the duplication (make one delegate to the other) over maintaining both in lockstep.
+
 ### Visibility follows location
 
 - A relocation is also the moment to *audit*, not just move: is the symbol dead (no caller anywhere →
   delete), over-exposed (now single-file → tighten), or vestigial public API (zero library callers, never
   dispatched on → remove)? Moving code doesn't validate it — most of this session's dead code and stale
   docs rode in on structural moves that skipped the audit.
+- Before removing public API, check git history for *why* it's unused — orphaned by a past refactor,
+  superseded by a newer mechanism, or never used. "Currently unused" is not the justification; the *why*
+  decides drop vs. preserve (superseded by an idiomatic equivalent → drop; a real capability with no
+  replacement → keep, or absorb into the canonical type).
 - When a symbol collapses to one file, tighten `internal` → `private`. Swift `private` reaches across
   same-file `extension`s of a type, so a `private static` on `SwiftSync` is still callable from other
   `extension SwiftSync` blocks in that file.
