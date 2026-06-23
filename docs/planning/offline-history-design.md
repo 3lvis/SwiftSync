@@ -1,9 +1,7 @@
 # Offline push via SwiftData History — design
 
-Status: **complete** on branch `spike/offline-zero-fields`. SwiftSync unit suite (168 tests) +
-DemoCore suite (36 tests, incl. the 16-case offline integration suite) green; Demo app builds.
-Supersedes API-surface-review item #2 ("macro-generate `SyncOfflineModel`") — there is no
-`SyncOfflineModel` to generate; offline rides SwiftData History instead.
+Status: **shipped**. This supersedes the earlier `SyncOfflineModel` and two-id designs. Offline state is
+derived from SwiftData History; models carry no SwiftSync-specific queue fields.
 
 ## The mental model
 
@@ -38,10 +36,26 @@ proved that applying offline last-writer-wins to every model breaks the "a plain
 existing rows" contract.
 
 **The cursor is internal.** SwiftSync stores a `DefaultHistoryToken` per model type in a tiny
-`SyncCursorRecord` model (O(model types) rows, written once per push — not per data row, no pull-path
+`PushHistoryTokenRecord` model (O(model types) rows, written once per push — not per data row, no pull-path
 cost), auto-registered in the container. The consumer never sees or manages a cursor. Push reads
 history since the stored cursor, uploads, and — only if everything was acknowledged — advances the
 cursor and trims the now-redundant inbound history.
+
+## Identity contract
+
+The client and server share one external identity:
+
+- Every client row has a stable string `id`; the client mints it for offline-created rows.
+- The backend stores its own internal primary key for joins and foreign keys. That key never appears on
+  the wire.
+- The backend also stores a unique `public_id`, exposed as `id` in every API. A client-created row adopts
+  the client's `id`; a server-created row receives a server-minted `public_id` before the client sees it.
+- REST routes, pull payloads, and `/sync/upload` all address the same external `id`. There is no
+  `localId`/`remoteId` pair and no client-side identity rewrite.
+
+Adopting a client-minted id makes an upsert retry-safe after a lost response: the retry addresses the
+same unique `public_id` and converges on the existing row. Keeping the backend's internal primary key
+separate preserves conventional database joins without exposing implementation identity.
 
 ### Why it works / why it's cheap
 
@@ -52,35 +66,10 @@ cursor and trims the now-redundant inbound history.
 - **Near-zero consumer surface.** One attribute option (`.preserveValueOnDeletion`) on the identity —
   no `syncRemoteID`/tombstone/`updatedAt` sync fields, no `SwiftSync.delete` ceremony. The consumer
   uses plain SwiftData inserts/edits/`context.delete`.
-- **Collapsed id model** (decided with the user): the client `id` *is* the identity the backend
+- **One external id.** The client `id` *is* the identity the backend
   adopts; there is no separate server-assigned id to map home. Push is an idempotent **upsert**, so
   insert vs update need not be distinguished on the wire — and confirmations need not be echoed: the
   `process` closure returns only `[SyncPendingChangesFailure]`, and the library confirms everything else by complement.
-
-## What changed in code
-
-- `Push.swift`: `SyncCursor` (= `DefaultHistoryToken`), `SwiftSync.inboundAuthor`, history-based
-  `pendingChanges(for:in:)` / `withPendingChanges(for:in:process:)` (cursor internal, no
-  `changedSince`/return cursor), `locallyDirtyPersistentIDs`, `trimInboundHistory`, `localTransactions`,
-  `latestToken`. The insert-then-delete-before-push case is dropped (server never saw it). Both the
-  `process` closure and `withPendingChanges` return `[SyncPendingChangesFailure]` (confirmations derived by
-  complement; no summary/cursor for the caller to handle).
-- `SyncCursorStore.swift`: internal `SyncCursorRecord` (per-type token) + read/write helpers.
-- `OfflineDetection.swift`: `identityPreservesValueOnDeletion` (the opt-in check) + `requireOfflineCapable`
-  (push/pending throw a clear diagnostic if the identity isn't `.preserveValueOnDeletion`).
-- `API.swift`: pull computes the dirty-set (`offlineDirtyPersistentIDs`, gated on the opt-in) and uses it
-  in `isUnsyncedLocalInsert` (delete-missing preservation) and `applyHonoringLocalEdit` (LWW).
-- `SyncContainer.swift`: registers `SyncCursorRecord`; bulk-sync contexts stamp `inboundAuthor`;
-  single-item `sync(item:)` stamps the author save-scoped (set + restore) so later local writes aren't
-  mislabeled. The `SyncMetadata` table, its `didSave` observer, and the gating flag are gone.
-- Demo `Task`: zero offline fields (kept demo-owned `@NotExport syncFailureReason`); id
-  `.preserveValueOnDeletion`. `DemoSyncEngine` does local writes as plain SwiftData (via the macro's
-  `make`/`apply`, local-authored), offline delete is a hard delete, push/pending use the new API.
-- Tests: `OfflineHistoryTests` (mechanism + 100k benchmark), `OfflinePushTests` (push partitioning,
-  acknowledgement, failures), `InboundPrunePreservesPendingTests` (the #625 guarantees, rebuilt).
-
-All open items from the spike (LWW + insert preservation, history trimming, single-item author tagging,
-the preserve-on-deletion requirement, parked-test migration, demo migration) are resolved.
 
 ## Notes / non-obvious decisions
 
