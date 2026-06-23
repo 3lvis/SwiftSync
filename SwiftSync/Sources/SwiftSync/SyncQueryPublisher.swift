@@ -2,6 +2,8 @@ import Foundation
 import Observation
 import SwiftData
 
+/// Observes a **collection** (`rows`), kept current as the store syncs — all rows, a `predicate`, or a
+/// relationship scope. For the single row matching an id use `SyncModelPublisher`; in SwiftUI, `@SyncQuery`.
 @MainActor
 @Observable
 public final class SyncQueryPublisher<Model: PersistentModel> {
