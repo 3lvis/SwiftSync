@@ -11,13 +11,6 @@ Companion audits:
 
 ## Now
 
-- [ ] **Trim already-pushed local history safely.** Offline detection reads locally authored SwiftData
-      history since a per-model pushed token. Successful pushes advance that token, but only inbound
-      history is trimmed because deleting local history through one model's token can erase pending
-      history for another model. Establish whether `DefaultStore` already applies retention, then trim
-      local history only through the minimum pushed token across every offline model type. This is slow
-      unbounded growth rather than immediate data loss, but it is the main remaining library issue.
-
 - [ ] **Preserve item identity during demo-backend updates.** Task updates currently replace the entire
       item collection by deleting and reinserting it. Reconcile by `public_id`: update existing items,
       insert new items, and delete missing items. Unchanged items must retain their internal database id.
@@ -37,6 +30,10 @@ Companion audits:
 
 ## Evidence-gated or deferred
 
+- [ ] Define app-owned retention for already-pushed local history when a shipped consumer shows material
+      disk growth or recovery latency. Local transactions use the app's default author, so SwiftSync must
+      not delete them automatically: another history consumer may still need them. Any future cleanup
+      needs a safe watermark covering every consumer, not only SwiftSync's per-model pushed tokens.
 - [ ] Finish the sync-protocol prior-art scan only before hardening the pull/cursor contract further.
       Failure-model research is complete; do not perform research without a pending contract decision.
 - [ ] Design offline-safe queue migrations and versioning when a shipped consumer has persisted pending

@@ -2,6 +2,13 @@ import Foundation
 import SwiftData
 
 extension ModelContext {
+    func trimSwiftSyncInboundHistory() throws {
+        let inbound = SwiftSync.inboundAuthor
+        try deleteHistory(
+            HistoryDescriptor<DefaultHistoryTransaction>(
+                predicate: #Predicate { $0.author == inbound }))
+    }
+
     func sync<Model: SyncUpdatableModel>(
         payload: [Any],
         as _: Model.Type,

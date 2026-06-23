@@ -66,9 +66,10 @@ SwiftSync is **storage, and only storage**. Its public surface is small and netw
   (since a per-type token) and reports the un-pushed local inserts/updates/deletes. No side table, no
   flags on the model.
 - **The push bracket** — `SwiftSync.withPendingChanges(for:in:) { pending in … }` reads pending, hands it
-  to a closure (the caller does the network), and — only on a clean return — advances the token and trims
-  redundant history. It is the *storage* half of a push; the closure is the *networking* half (supplied
-  from the layer above).
+  to a closure (the caller does the network), and — only on a clean return — advances the token.
+  Inbound sync separately removes its own author-tagged history; app-authored history remains available
+  to other consumers. The bracket is the *storage* half of a push; the closure is the *networking* half
+  (supplied from the layer above).
 - **`SyncContainer`** is the store handle: `@unchecked Sendable` (its bulk `sync(payload:)` runs off the
   main actor by design), no UI state, no orchestration.
 

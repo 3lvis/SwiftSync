@@ -39,7 +39,8 @@ existing rows" contract.
 `PushHistoryTokenRecord` model (O(model types) rows, written once per push — not per data row, no pull-path
 cost), auto-registered in the container. The consumer never sees or manages a cursor. Push reads
 history since the stored cursor, uploads, and — only if everything was acknowledged — advances the
-cursor and trims the now-redundant inbound history.
+cursor. Each successful inbound sync deletes its own author-tagged history after notifying observers;
+ordinary app-authored history remains app-owned because other history consumers may still need it.
 
 ## Identity contract
 

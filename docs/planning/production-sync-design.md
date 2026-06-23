@@ -96,7 +96,8 @@ Knowing or minting an id is not authorization.
 
 ## Still open
 
-- Safe trimming of already-pushed locally authored history.
+- App-owned retention for already-pushed local history, triggered by production evidence and coordinated
+  across every history consumer.
 - Offline-safe queue migration/versioning once shipped consumers have persisted pending changes.
 - A multi-consumer lifecycle event stream for observability.
 - Pull/cursor protocol research only if that contract is hardened beyond the current consumer-owned

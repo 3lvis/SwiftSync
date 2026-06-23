@@ -30,7 +30,7 @@ extension SwiftSync {
     /// The transaction author SwiftSync stamps on inbound (pull) writes, so the push side can tell
     /// server-applied changes from genuine local edits and never push pulled rows back. Local edits
     /// use the store's default author; pull writes use this one and are filtered out of `pendingChanges`.
-    static let inboundAuthor = "swiftsync.inbound"
+    static let inboundAuthor = "com.github.3lvis.SwiftSync.inbound"
 
     /// The local changes pending a push. A row inserted then edited collapses to a single insert; a row
     /// deleted after editing collapses to a delete (its `id` recovered from the history tombstone — mark
@@ -252,7 +252,7 @@ extension SwiftSync {
         let failures = try await process(pending)
         if failures.isEmpty, let uploadedThrough {
             try setLastPushedHistoryToken(uploadedThrough, for: Model.self, in: context)
-            try? trimInboundHistory(through: uploadedThrough, in: context)
+            try? context.trimSwiftSyncInboundHistory()
         }
         return failures
     }
@@ -300,14 +300,6 @@ extension SwiftSync {
         try context.save()
     }
 
-    /// Trim inbound (pull-authored) history through `token`. Only inbound is removed — local-authored
-    /// history is the un-pushed-changes signal and must survive.
-    private static func trimInboundHistory(through token: DefaultHistoryToken, in context: ModelContext) throws {
-        let inbound = inboundAuthor
-        try context.deleteHistory(
-            HistoryDescriptor<DefaultHistoryTransaction>(
-                predicate: #Predicate { $0.token <= token && $0.author == inbound }))
-    }
 }
 
 /// SwiftSync's "how far have I pushed" bookmark, one row **per model type** (not per data row) — the only
