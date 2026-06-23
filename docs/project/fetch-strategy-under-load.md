@@ -333,7 +333,7 @@ The honest status on this branch is:
 That means the next meaningful gain likely requires one of:
 
 - broader API or model changes that make scoped predicates expressible
-- a much narrower specialized fast path tied to `ParentScopedModel.parentRelationship`
+- a much narrower specialized fast path tied to the explicit parent `relationship` key path
 - or more macro-generated concrete predicate hooks for paths where the generic form is blocked
 - or accepting the current operating envelope as the product boundary and documenting it clearly
 

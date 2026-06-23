@@ -65,9 +65,10 @@ assume from a type's name what calls it.
   categorize by *what calls it*, not by a runtime caller:
   - macro-generated-code SPI (e.g. `ExportState`, called only by the generated `export()`) homes with
     its SPI siblings in `SyncableMacroSupport.swift` — same category as `exportEncodeValue`/`exportSetValue`.
-  - a model-family protocol consumers conform to by hand (e.g. `ParentScopedModel`, refining
-    `SyncUpdatableModel`) keeps its own file alongside `SyncModelable`/`SyncUpdatableModel` — it is not
-    macro-generated, so the macro file is the wrong home.
+  - a model-family protocol consumers conform to by hand keeps its own file alongside `SyncModelable`/
+    `SyncUpdatableModel` — not macro-generated, so the macro file is the wrong home. But first confirm it
+    is genuinely consumer-facing: a public protocol with zero library callers that the library never
+    dispatches on is dead surface to remove, not a seam to keep.
 
 ### Macro module boundary
 

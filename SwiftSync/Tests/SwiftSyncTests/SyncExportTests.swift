@@ -161,11 +161,6 @@ final class ExportChild {
     }
 }
 
-extension ExportChild: ParentScopedModel {
-    typealias SyncParent = ExportParent
-    static var parentRelationship: ReferenceWritableKeyPath<ExportChild, ExportParent?> { \.parent }
-}
-
 @Model
 final class ManualExportParent {
     @Attribute(.unique) var id: Int
@@ -217,11 +212,6 @@ extension ManualExportChild: SyncUpdatableModel {
             "text": text,
         ]
     }
-}
-
-extension ManualExportChild: ParentScopedModel {
-    typealias SyncParent = ManualExportParent
-    static var parentRelationship: ReferenceWritableKeyPath<ManualExportChild, ManualExportParent?> { \.parent }
 }
 
 @Syncable

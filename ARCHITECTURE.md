@@ -20,7 +20,7 @@ lives in `MacrosImplementation` (`SyncableMacro.swift`).
 
 | Target | Role | Key contents |
 |---|---|---|
-| `SwiftSync` | the library (public API) | `SyncPayload`, `SyncDateParser`, the protocols (`SyncModelable`, `SyncUpdatableModel`, `ParentScopedModel`), `KeyStyle`, `SyncError`, `SwiftSync.sync()`, the relationship-apply globals (`Core.swift`), `SyncContainer`, the reactive query system (`@SyncQuery`/`@SyncModel`, `SyncModelPublisher`, `SyncQueryPublisher`), and the `@Syncable`/`@PrimaryKey`/`@RemoteKey`/`@NotExport` macro declarations |
+| `SwiftSync` | the library (public API) | `SyncPayload`, `SyncDateParser`, the protocols (`SyncModelable`, `SyncUpdatableModel`), `KeyStyle`, `SyncError`, `SwiftSync.sync()`, the relationship-apply globals (`SyncableMacroSupport.swift`), `SyncContainer`, the reactive query system (`@SyncQuery`/`@SyncModel`, `SyncModelPublisher`, `SyncQueryPublisher`), and the `@Syncable`/`@PrimaryKey`/`@RemoteKey`/`@NotExport` macro declarations |
 | `MacrosImplementation` | compiler plugin (`.macro`, + swift-syntax) | `SyncableMacro` plus the `PrimaryKeyMacro` / `NotExportMacro` / `RemoteKeyMacro` no-op peer macros |
 | `ObjCExceptionCatcher` | ObjC helper | bridges `NSException` from `ModelContainer(for:)` into a Swift error |
 
@@ -35,8 +35,7 @@ PersistentModel (SwiftData)
   └─ SyncModelable          syncIdentity, syncIdentityRemoteKeys, syncDefaultRefreshModelTypes,
     │                       syncRelationshipSchemaDescriptors
     └─ SyncUpdatableModel       make(from:), apply(_:) → Bool,
-          │                     applyRelationships(_:in:operations:) → Bool (default no-op)
-          └─ ParentScopedModel  parentRelationship keypath
+                                applyRelationships(_:in:operations:) → Bool (default no-op)
 ```
 
 **@Syncable makes a class conform to all of:**
@@ -97,7 +96,7 @@ Result cached per `SyncPayload` instance in `CandidateKeysCache`.
 - `.global` — identity unique across all rows (default)
 - `.scopedByParent` — identity unique within parent scope
   - Scoped key: `"TypeName|<PersistentIdentifier>|<identityValue>"`
-  - Default for `ParentScopedModel`
+  - Default when the model's `id` is not `@Attribute(.unique)`
 
 ### Duplicate handling
 
