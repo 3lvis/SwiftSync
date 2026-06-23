@@ -98,14 +98,4 @@ public enum SwiftSync {
         }
         return false
     }
-
-    static func withRelationshipLookupCache<T>(
-        isolation: isolated (any Actor)? = #isolation,
-        operation: () async throws -> T
-    ) async rethrows -> T {
-        let cache = SyncRelationshipLookupCache()
-        return try await SyncRelationshipLookupState.$current.withValue(cache) {
-            try await operation()
-        }
-    }
 }

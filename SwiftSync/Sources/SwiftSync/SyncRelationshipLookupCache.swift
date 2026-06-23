@@ -99,3 +99,15 @@ final class SyncRelationshipLookupCache: @unchecked Sendable {
 enum SyncRelationshipLookupState {
     @TaskLocal static var current: SyncRelationshipLookupCache?
 }
+
+extension SwiftSync {
+    static func withRelationshipLookupCache<T>(
+        isolation: isolated (any Actor)? = #isolation,
+        operation: () async throws -> T
+    ) async rethrows -> T {
+        let cache = SyncRelationshipLookupCache()
+        return try await SyncRelationshipLookupState.$current.withValue(cache) {
+            try await operation()
+        }
+    }
+}
