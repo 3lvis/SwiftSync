@@ -34,12 +34,6 @@ _Nothing actively committed — open work is evidence-gated below or deferred to
       conflict is a client racing its own retry of the *same* row, which is impossible in the
       single-threaded demo where sequential update-else-create already converges. Revisit with
       `INSERT ... ON CONFLICT(public_id) DO UPDATE` (or one-transaction conflict recovery) then.
-- [ ] Add sync lifecycle observability (a multi-consumer `events()` stream) only when a real *out-of-band*
-      consumer needs it — an autonomous background drain, or a status view spanning many concurrent syncs.
-      For the current explicit-`await` model the call boundary already gives the caller start, completion,
-      duration, and failure (`throws`); counts are a `fetch` away. The predecessor `3lvis/Sync` shipped for
-      years on an `error`-only completion and never surfaced counts/duration. Don't build a stream until a
-      consumer genuinely can't get the same by awaiting the call.
 
 ## First release
 
