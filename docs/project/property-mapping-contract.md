@@ -151,3 +151,16 @@ existing many-to-many inverse check). `#Index` on any property is unaffected —
 query planning and is safe to use freely. Hand-written `SyncUpdatableModel` conformances are not
 checked (they leave `syncIdentityPropertyName` empty); the same rule applies to them by
 convention.
+
+## SwiftData query features (`#Index`, `#Expression`)
+
+Both are **transparent to SwiftSync** — use them freely. SwiftSync builds only identity- and
+parent-scope predicates internally and never inspects or restricts how a consumer constructs a
+query:
+
+- `#Index` affects only query planning, never sync semantics. (The uniqueness guardrail above
+  rejects a non-identity *unique* constraint, but leaves indexes untouched.)
+- `#Expression` composes into a consumer's `#Predicate`. `@SyncQuery` / `SyncQueryPublisher` accept
+  any `Predicate<Model>` and pass it straight to `FetchDescriptor`, so an `#Expression`-built
+  predicate works unchanged. SwiftSync neither requires nor exposes `#Expression` in its own API —
+  it is out of scope for the library surface and fully available to consumers.

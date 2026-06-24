@@ -15,10 +15,6 @@ Companion audits:
       completion, applied/stale/rejected outcomes, counts, and duration. Errors continue to bubble and
       per-row failures remain consumer-owned; the stream observes outcomes rather than persisting policy.
 
-- [ ] **Decide the SwiftData-modern stance per feature.** Classify `#Unique`, `#Index`, History, custom
-      `DataStore`, and `#Expression` as adopted, interoperable with documented constraints, or out of
-      scope. Do not expand the public API until each choice has a demonstrated consumer need.
-
 ## Evidence-gated or deferred
 
 - [ ] Define app-owned retention for already-pushed local history when a shipped consumer shows material
