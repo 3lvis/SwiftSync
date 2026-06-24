@@ -11,10 +11,6 @@ Companion audits:
 
 ## Now
 
-- [ ] **Preserve item identity during demo-backend updates.** Task updates currently replace the entire
-      item collection by deleting and reinserting it. Reconcile by `public_id`: update existing items,
-      insert new items, and delete missing items. Unchanged items must retain their internal database id.
-
 - [ ] **Add sync lifecycle observability.** Provide a multi-consumer `events()` stream for sync start and
       completion, applied/stale/rejected outcomes, counts, and duration. Errors continue to bubble and
       per-row failures remain consumer-owned; the stream observes outcomes rather than persisting policy.

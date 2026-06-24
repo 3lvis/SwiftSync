@@ -521,13 +521,12 @@ public final class DemoServerSimulator {
         let normalizedTitle = try validatedNonEmpty(title, field: "title")
         let normalizedDescription = description?.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedState = try validatedTaskState(stateID)
-        let itemsToReplace: [ItemInput]?
+        let itemsToReconcile: [ItemInput]?
+        let existingItemPublicIDs: Set<String>
         if body.keys.contains("items") {
             guard let rawItems = body["items"] as? [[String: Any]] else {
                 throw DemoBackendError.validation(message: "items must be an array of objects")
             }
-            // Carry an unchanged item's title forward when the client omits it, matched by the item's
-            // public_id (the payload `id`).
             let existingRows = try itemsPayload(taskID: taskID)
             let existingTitlesByPublicID = Dictionary(
                 uniqueKeysWithValues: existingRows.compactMap { row -> (String, String)? in
@@ -537,9 +536,11 @@ public final class DemoServerSimulator {
                     return (publicID, title)
                 }
             )
-            itemsToReplace = try parseItems(rawItems, existingTitlesByID: existingTitlesByPublicID)
+            existingItemPublicIDs = Set(existingTitlesByPublicID.keys)
+            itemsToReconcile = try parseItems(rawItems, existingTitlesByID: existingTitlesByPublicID)
         } else {
-            itemsToReplace = nil
+            existingItemPublicIDs = []
+            itemsToReconcile = nil
         }
 
         // assignee_id: present key means update (NSNull clears, String sets)
@@ -577,14 +578,41 @@ public final class DemoServerSimulator {
                 }
             )
 
-            if let itemsToReplace {
-                try self.sqlite.execute(
-                    "DELETE FROM items WHERE task_id = ?",
-                    bind: { stmt in
-                        self.sqlite.bind(int: taskID, at: 1, in: stmt)
-                    }
-                )
-                try insertItems(itemsToReplace, forTaskID: taskID)
+            if let itemsToReconcile {
+                let incomingItemPublicIDs = Set(itemsToReconcile.map(\.publicID))
+                guard incomingItemPublicIDs.count == itemsToReconcile.count else {
+                    throw DemoBackendError.validation(message: "item ids must be unique")
+                }
+
+                for item in itemsToReconcile where existingItemPublicIDs.contains(item.publicID) {
+                    try self.sqlite.execute(
+                        """
+                        UPDATE items
+                        SET title = ?, position = ?, updated_at = ?
+                        WHERE task_id = ? AND public_id = ?
+                        """,
+                        bind: { stmt in
+                            self.sqlite.bind(text: item.title, at: 1, in: stmt)
+                            sqlite3_bind_int64(stmt, 2, Int64(item.position))
+                            self.sqlite.bind(double: item.updatedAt.timeIntervalSince1970, at: 3, in: stmt)
+                            self.sqlite.bind(int: taskID, at: 4, in: stmt)
+                            self.sqlite.bind(text: item.publicID, at: 5, in: stmt)
+                        }
+                    )
+                }
+
+                let newItems = itemsToReconcile.filter { !existingItemPublicIDs.contains($0.publicID) }
+                try insertItems(newItems, forTaskID: taskID)
+
+                for publicID in existingItemPublicIDs.subtracting(incomingItemPublicIDs) {
+                    try self.sqlite.execute(
+                        "DELETE FROM items WHERE task_id = ? AND public_id = ?",
+                        bind: { stmt in
+                            self.sqlite.bind(int: taskID, at: 1, in: stmt)
+                            self.sqlite.bind(text: publicID, at: 2, in: stmt)
+                        }
+                    )
+                }
             }
 
             try self.sqlite.execute("COMMIT;")

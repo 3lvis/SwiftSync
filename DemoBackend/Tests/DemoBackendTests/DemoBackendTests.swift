@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 import XCTest
 
 @testable import DemoBackend
@@ -396,6 +397,128 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(updatedItems.map { $0["id"] as? String }, ["item-b", "item-a"])
         XCTAssertTrue(updatedItems.allSatisfy { $0["done"] == nil })
         XCTAssertFalse(updatedItems.contains { ($0["id"] as? String) == "initial-item" })
+    }
+
+    func testUpdateTaskPreservesDatabaseIdentityForExistingItems() throws {
+        let url = makeTemporaryDatabaseURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
+        let now = iso8601(Date())
+        let targetTaskID = UUID().uuidString
+        _ = try backend.createTask(body: [
+            "id": targetTaskID,
+            "project_id": projectID,
+            "title": "Target task",
+            "description": "Initial",
+            "state": ["id": "todo"],
+            "author_id": userID,
+            "created_at": now,
+            "updated_at": now,
+            "items": [["id": "stable-item", "title": "Before", "position": 0]],
+        ])
+        _ = try backend.createTask(body: [
+            "id": UUID().uuidString,
+            "project_id": projectID,
+            "title": "Later task",
+            "description": "Keeps the row ID sequence ahead",
+            "state": ["id": "todo"],
+            "author_id": userID,
+            "created_at": now,
+            "updated_at": now,
+            "items": [["id": "later-item", "title": "Later", "position": 0]],
+        ])
+
+        var database: OpaquePointer?
+        XCTAssertEqual(sqlite3_open_v2(url.path, &database, SQLITE_OPEN_READONLY, nil), SQLITE_OK)
+        defer { sqlite3_close(database) }
+
+        var statement: OpaquePointer?
+        XCTAssertEqual(
+            sqlite3_prepare_v2(database, "SELECT id FROM items WHERE public_id = 'stable-item'", -1, &statement, nil),
+            SQLITE_OK
+        )
+        XCTAssertEqual(sqlite3_step(statement), SQLITE_ROW)
+        let originalDatabaseID = sqlite3_column_int64(statement, 0)
+        sqlite3_finalize(statement)
+
+        _ = try backend.updateTask(
+            publicID: targetTaskID,
+            body: [
+                "id": targetTaskID,
+                "title": "Target task",
+                "description": "Updated",
+                "state": ["id": "todo"],
+                "items": [["id": "stable-item", "title": "After", "position": 0]],
+            ])
+
+        statement = nil
+        XCTAssertEqual(
+            sqlite3_prepare_v2(database, "SELECT id FROM items WHERE public_id = 'stable-item'", -1, &statement, nil),
+            SQLITE_OK
+        )
+        XCTAssertEqual(sqlite3_step(statement), SQLITE_ROW)
+        let updatedDatabaseID = sqlite3_column_int64(statement, 0)
+        sqlite3_finalize(statement)
+
+        XCTAssertEqual(updatedDatabaseID, originalDatabaseID)
+    }
+
+    func testUpdateTaskPreservesCreatedAtForExistingItems() throws {
+        let url = makeTemporaryDatabaseURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
+        let now = iso8601(Date())
+        let targetTaskID = UUID().uuidString
+        let pinnedCreatedAt = iso8601(Date(timeIntervalSince1970: 1_000_000_000))
+        _ = try backend.createTask(body: [
+            "id": targetTaskID,
+            "project_id": projectID,
+            "title": "Target task",
+            "description": "Initial",
+            "state": ["id": "todo"],
+            "author_id": userID,
+            "created_at": now,
+            "updated_at": now,
+            "items": [["id": "stable-item", "title": "Before", "position": 0, "created_at": pinnedCreatedAt]],
+        ])
+
+        var database: OpaquePointer?
+        XCTAssertEqual(sqlite3_open_v2(url.path, &database, SQLITE_OPEN_READONLY, nil), SQLITE_OK)
+        defer { sqlite3_close(database) }
+
+        var statement: OpaquePointer?
+        XCTAssertEqual(
+            sqlite3_prepare_v2(database, "SELECT created_at FROM items WHERE public_id = 'stable-item'", -1, &statement, nil),
+            SQLITE_OK
+        )
+        XCTAssertEqual(sqlite3_step(statement), SQLITE_ROW)
+        let originalCreatedAt = sqlite3_column_double(statement, 0)
+        sqlite3_finalize(statement)
+
+        XCTAssertEqual(originalCreatedAt, 1_000_000_000, accuracy: 0.001)
+
+        _ = try backend.updateTask(
+            publicID: targetTaskID,
+            body: [
+                "id": targetTaskID,
+                "title": "Target task",
+                "description": "Updated",
+                "state": ["id": "todo"],
+                "items": [["id": "stable-item", "title": "After", "position": 0]],
+            ])
+
+        statement = nil
+        XCTAssertEqual(
+            sqlite3_prepare_v2(database, "SELECT created_at FROM items WHERE public_id = 'stable-item'", -1, &statement, nil),
+            SQLITE_OK
+        )
+        XCTAssertEqual(sqlite3_step(statement), SQLITE_ROW)
+        let updatedCreatedAt = sqlite3_column_double(statement, 0)
+        sqlite3_finalize(statement)
+
+        XCTAssertEqual(updatedCreatedAt, originalCreatedAt, accuracy: 0.001)
     }
 
     func testUpdateTaskFromBodyDictItemsKeyAbsentPreservesItems() throws {
