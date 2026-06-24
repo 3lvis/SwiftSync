@@ -154,9 +154,10 @@ convention.
 
 ## SwiftData query features (`#Index`, `#Expression`)
 
-Both are **transparent to SwiftSync** — use them freely. SwiftSync builds only identity- and
-parent-scope predicates internally and never inspects or restricts how a consumer constructs a
-query:
+Both are **transparent to SwiftSync** — use them freely. For consumer-model queries SwiftSync builds
+only identity- and parent-scope predicates internally (its own history-author and token-record
+predicates are a separate, internal concern), and never inspects or restricts how a consumer
+constructs a query:
 
 - `#Index` affects only query planning, never sync semantics. (The uniqueness guardrail above
   rejects a non-identity *unique* constraint, but leaves indexes untouched.)
