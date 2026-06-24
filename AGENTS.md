@@ -113,6 +113,22 @@ at runtime, including `ExportState` — lives in **`MacroRuntimeSupport.swift`**
 - Renaming or removing any symbol or file: grep the docs (`README`, `AGENTS.md`, `docs/**`) for
   references and fix them in the *same* change.
 
+## Public API Surface — minimal and macro-derived
+
+The public API is **sacred** and stays **minimal**. `@Syncable` reads the model surface (`@PrimaryKey`,
+per-field `@RemoteKey`, `@NotExport`, relationships, the sync identity) and generates *all* sync plumbing
+— a pure `@Syncable` model has the consumer hand-write **zero** sync code. That is the bar.
+
+- **Litmus test for every public symbol or consumer-facing requirement:** can the macro derive it from
+  the `@Syncable` surface, or can a convention replace the configuration? If yes, it must **not** be
+  consumer-facing.
+- **Hard stop:** adding any *new* consumer-facing requirement — a protocol member, a mandatory parameter,
+  a struct the consumer must construct — needs an explicit decision first. Macros are cheap; public API
+  is not; prefer removing an option to adding one.
+- Watch hand-written conformances hardest: a multi-member extension the consumer must satisfy is usually
+  surface the macro or a convention should derive — reabsorb it rather than let it stand. (Offline
+  support drifted this way once and was pulled back to ride SwiftData History with zero model fields.)
+
 ## Core Mantra
 
 - Convention-first with explicit relationship paths at API boundaries.
