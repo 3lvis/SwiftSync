@@ -11,11 +11,6 @@ Companion audits:
 
 ## Now
 
-- [ ] **Make demo-backend upload upserts atomic.** `/sync/upload` currently looks up `public_id` and then
-      chooses insert or update. Replace that race with `INSERT ... ON CONFLICT(public_id) DO UPDATE`, or
-      recover a uniqueness conflict inside one transaction. The demo is single-threaded today, but the
-      endpoint contract promises idempotent upserts and should model the concurrency-safe shape.
-
 - [ ] **Add sync lifecycle observability.** Provide a multi-consumer `events()` stream for sync start and
       completion, applied/stale/rejected outcomes, counts, and duration. Errors continue to bubble and
       per-row failures remain consumer-owned; the stream observes outcomes rather than persisting policy.
@@ -40,6 +35,11 @@ Companion audits:
       an attribute to an existing stored property. Runtime validation is the current contract.
 - [ ] Add authorization and ownership checks in a real authenticated backend. The demo has no principals;
       client-minted ids are not an authorization boundary.
+- [ ] Harden `/sync/upload` upserts against a same-`public_id` write race only once a real concurrent
+      backend exists. Distinct rows can't collide — client-minted UUIDs are unique per row — so the only
+      conflict is a client racing its own retry of the *same* row, which is impossible in the
+      single-threaded demo where sequential update-else-create already converges. Revisit with
+      `INSERT ... ON CONFLICT(public_id) DO UPDATE` (or one-transaction conflict recovery) then.
 
 ## First release
 
