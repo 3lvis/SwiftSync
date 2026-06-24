@@ -72,6 +72,35 @@ final class SyncQueryParentTests: XCTestCase {
     }
 
     @MainActor
+    func testSyncQueryAcceptsAnExpressionBuiltPredicate() throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let modelContainer = try ModelContainer(
+            for: InferredTask.self,
+            configurations: configuration
+        )
+        let syncContainer = SyncContainer(modelContainer)
+        let context = syncContainer.mainContext
+
+        context.insert(InferredTask(id: 1, title: "A"))
+        context.insert(InferredTask(id: 2, title: "B"))
+        context.insert(InferredTask(id: 3, title: "C"))
+        try context.save()
+
+        // Guards the documented stance: a consumer may compose a predicate with #Expression and
+        // SwiftSync passes it straight to FetchDescriptor. Goes red if SyncQuery ever rewrites predicates.
+        let isAtLeastTwo = #Expression<InferredTask, Bool> { $0.id >= 2 }
+        let predicate = #Predicate<InferredTask> { isAtLeastTwo.evaluate($0) }
+        let query = SyncQuery(
+            InferredTask.self,
+            predicate: predicate,
+            in: syncContainer,
+            sortBy: [SortDescriptor(\InferredTask.id)]
+        )
+
+        XCTAssertEqual(query.wrappedValue.map(\.id), [2, 3])
+    }
+
+    @MainActor
     func testSyncQueryRelationshipToOneFiltersToParentScope() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let modelContainer = try ModelContainer(
