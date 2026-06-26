@@ -18,8 +18,8 @@ final class DemoBackendTests: XCTestCase {
         let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
 
         let projects = try decodeArray(backend.getProjectsPayload())
-        let users = try backend.getUsersPayload()
-        let taskStates = try backend.getTaskStateOptionsPayload()
+        let users = try decodeArray(backend.getUsersPayload())
+        let taskStates = try decodeArray(backend.getTaskStateOptionsPayload())
         let projectTasks = try backend.getProjectTasksPayload(projectID: projectID)
 
         XCTAssertEqual(projects.count, 1)
@@ -61,7 +61,7 @@ final class DemoBackendTests: XCTestCase {
         let backend = try DemoServerSimulator(databaseURL: url, seedData: seed)
 
         let projects = try decodeArray(backend.getProjectsPayload())
-        let users = try backend.getUsersPayload()
+        let users = try decodeArray(backend.getUsersPayload())
         let tasks = try backend.getProjectTasksPayload(projectID: seed.projects[0].id)
         let firstTaskID = try XCTUnwrap(tasks.first?["id"] as? String)
         let detail = try backend.getTaskDetailPayload(publicID: firstTaskID)

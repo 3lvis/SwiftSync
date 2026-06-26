@@ -99,7 +99,7 @@ public final class DemoServerSimulator {
         )
     }
 
-    public func getUsersPayload() throws -> [[String: Any]] {
+    public func getUsersPayload() throws -> Data {
         let rows = try self.sqlite.query(
             """
             SELECT id, display_name, created_at, updated_at
@@ -107,19 +107,20 @@ public final class DemoServerSimulator {
             ORDER BY id ASC
             """
         )
-        return rows.map { row in
-            [
-                "id": row.string("id"),
-                "display_name": row.string("display_name"),
-                "created_at": iso8601(row.double("created_at")),
-                "updated_at": iso8601(row.double("updated_at")),
-            ]
-        }
+        return try Self.responseData(
+            rows.map { row in
+                [
+                    "id": row.string("id"),
+                    "display_name": row.string("display_name"),
+                    "created_at": iso8601(row.double("created_at")),
+                    "updated_at": iso8601(row.double("updated_at")),
+                ]
+            })
     }
 
-    public func getTaskStateOptionsPayload() throws -> [[String: Any]] {
+    public func getTaskStateOptionsPayload() throws -> Data {
         let timestamp = iso8601(0)
-        return [
+        return try Self.responseData([
             [
                 "id": "todo",
                 "label": "To Do",
@@ -141,7 +142,7 @@ public final class DemoServerSimulator {
                 "created_at": timestamp,
                 "updated_at": timestamp,
             ],
-        ]
+        ])
     }
 
     public func getTaskDetailPayload(publicID: String) throws -> [String: Any]? {

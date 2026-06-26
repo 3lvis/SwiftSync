@@ -95,7 +95,7 @@ public final class FakeDemoAPIClient {
 
     public func getUsers() async throws -> [DemoSyncPayload] {
         try await networkGate(endpoint: "GET /users")
-        return try backend.getUsersPayload().map(Self.makePayload)
+        return try Self.parseArray(backend.getUsersPayload()).map(Self.makePayload)
     }
 
     public func getTaskDetail(taskID: String) async throws -> DemoSyncPayload? {
@@ -106,7 +106,7 @@ public final class FakeDemoAPIClient {
 
     public func getTaskStateOptions() async throws -> [DemoSyncPayload] {
         try await networkGate(endpoint: "GET /task-state-options")
-        return try backend.getTaskStateOptionsPayload().map(Self.makePayload)
+        return try Self.parseArray(backend.getTaskStateOptionsPayload()).map(Self.makePayload)
     }
 
     public func patchTaskState(taskID: String, state: String) async throws -> DemoSyncPayload? {
