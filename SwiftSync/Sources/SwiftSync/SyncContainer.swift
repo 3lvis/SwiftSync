@@ -13,6 +13,22 @@ public protocol SyncPayloadConvertible: Sendable {
     func toSyncPayloadDictionary() -> [String: Any]
 }
 
+extension SyncPayloadConvertible where Self: Encodable {
+    /// A Codable DTO needs no hand-written mapping — its payload dictionary is derived by encoding.
+    /// Dates encode as ISO 8601 (the inbound parser accepts ISO 8601 and unix timestamps); property
+    /// names are emitted as declared and the container's `keyStyle` maps them to the model on the way in.
+    public func toSyncPayloadDictionary() -> [String: Any] {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(self),
+            let dictionary = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return [:]
+        }
+        return dictionary
+    }
+}
+
 public final class SyncContainer: NSObject, @unchecked Sendable {
     /// A FIFO async mutex. Serializes work spanning `await` points — which actor isolation alone does not,
     /// since an actor method suspended at an `await` lets another call enter.

@@ -513,6 +513,21 @@ Use these annotations when you need them:
 
 See [Property Mapping Contract](docs/project/property-mapping-contract.md) for the complete mapping rules.
 
+## Typed Payloads
+
+`sync(payload:)` and `sync(item:)` take raw `[String: Any]` dictionaries, which is convenient when you already have decoded JSON. If you'd rather hand `sync` a typed value — your own API DTO, say — make it `Codable` and conform it to `SyncPayloadConvertible`. With `Codable` the dictionary conversion is derived for you, so you write no mapping:
+
+```swift
+struct NewUser: Codable, Sendable, SyncPayloadConvertible {
+  let id: Int
+  let name: String
+}
+
+try await syncContainer.sync(payload: [NewUser(id: 1, name: "Ada")], as: User.self)
+```
+
+The DTO's property names resolve against your model through the container's `keyStyle`, exactly as a dictionary payload would. For a non-`Codable` type, implement `toSyncPayloadDictionary()` yourself.
+
 ## Reactive Reads
 
 SwiftSync is built around local reactive reads. That means your views do not fetch directly from the network and then hold onto that response as UI state. Instead, sync writes backend changes into SwiftData, and the UI reads from SwiftData as its source of truth.
