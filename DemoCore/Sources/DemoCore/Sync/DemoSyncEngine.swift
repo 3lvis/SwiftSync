@@ -46,7 +46,7 @@ public final class DemoSyncEngine {
     /// The drain in progress, if any — concurrent pushes (reconnect + push-before-pull) coalesce onto it.
     private var activeDrain: _Concurrency.Task<[SyncPendingChangesFailure], Error>?
 
-    private let syncContainer: SyncContainer
+    public let syncContainer: SyncContainer
     private let apiClient: FakeDemoAPIClient
 
     public init(syncContainer: SyncContainer, apiClient: FakeDemoAPIClient) {

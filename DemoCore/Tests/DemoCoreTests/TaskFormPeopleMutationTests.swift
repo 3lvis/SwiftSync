@@ -30,7 +30,7 @@ final class TaskFormPeopleMutationTests: XCTestCase {
 
         let editContext = ModelContext(syncContainer.modelContainer)
         editContext.autosaveEnabled = false
-        let machine = TaskFormSheetMachine(syncContainer: syncContainer, syncEngine: engine, editContext: editContext)
+        let machine = TaskFormSheetMachine(syncEngine: engine, editContext: editContext)
         machine.send(.metadata(.onAppear))
         try await waitUntil {
             machine.userOptionsState == .available && machine.taskStateOptionsState == .available
@@ -88,7 +88,7 @@ final class TaskFormPeopleMutationTests: XCTestCase {
         try await engine.syncTaskDetail(taskID: taskID)
         try await engine.syncTaskFormMetadata()
 
-        let detailMachine = TaskViewMachine(taskID: taskID, syncContainer: syncContainer, syncEngine: engine)
+        let detailMachine = TaskViewMachine(taskID: taskID, syncEngine: engine)
         detailMachine.send(.onAppear)
         try await waitUntil {
             detailMachine.task?.id == taskID
@@ -108,8 +108,7 @@ final class TaskFormPeopleMutationTests: XCTestCase {
         let originalTask = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
         let editContext = ModelContext(syncContainer.modelContainer)
         editContext.autosaveEnabled = false
-        let formMachine = TaskFormSheetMachine(
-            syncContainer: syncContainer, syncEngine: engine, editContext: editContext)
+        let formMachine = TaskFormSheetMachine(syncEngine: engine, editContext: editContext)
         formMachine.send(.metadata(.onAppear))
         try await waitUntil {
             formMachine.userOptionsState == .available && formMachine.taskStateOptionsState == .available

@@ -81,10 +81,10 @@ public final class ProjectsViewMachine {
         resolveProjectsListStatusState(phase: synced.phase, hasRows: !rows.isEmpty)
     }
 
-    public init(syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
+    public init(syncEngine: DemoSyncEngine) {
         synced = SyncedQueryPublisher(
             Project.self,
-            in: syncContainer,
+            in: syncEngine.syncContainer,
             sortBy: [SortDescriptor(\Project.name), SortDescriptor(\Project.id)],
             fallbackMessage: "Could not load projects."
         ) { [syncEngine] in
@@ -134,15 +134,15 @@ public final class ProjectViewMachine {
         case dismissError
     }
 
-    public init(projectID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
+    public init(projectID: String, syncEngine: DemoSyncEngine) {
         self.projectID = projectID
         self.syncEngine = syncEngine
-        self.projectPublisher = SyncModelPublisher(Project.self, id: projectID, in: syncContainer)
+        self.projectPublisher = SyncModelPublisher(Project.self, id: projectID, in: syncEngine.syncContainer)
         self.tasksSynced = SyncedQueryPublisher(
             Task.self,
             relationship: \Task.project,
             relationshipID: projectID,
-            in: syncContainer,
+            in: syncEngine.syncContainer,
             sortBy: [
                 SortDescriptor(\Task.updatedAt, order: .reverse),
                 SortDescriptor(\Task.id),
@@ -219,9 +219,9 @@ public final class TaskViewMachine {
 
     private let taskSynced: SyncedModelPublisher<Task>
     private let itemPublisher: SyncQueryPublisher<Item>
-    public init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
+    public init(taskID: String, syncEngine: DemoSyncEngine) {
         self.taskSynced = SyncedModelPublisher(
-            Task.self, id: taskID, in: syncContainer, fallbackMessage: "Could not load this task yet."
+            Task.self, id: taskID, in: syncEngine.syncContainer, fallbackMessage: "Could not load this task yet."
         ) { [syncEngine, taskID] in
             try await syncEngine.syncTaskDetail(taskID: taskID)
         }
@@ -229,7 +229,7 @@ public final class TaskViewMachine {
             Item.self,
             relationship: \Item.task,
             relationshipID: taskID,
-            in: syncContainer,
+            in: syncEngine.syncContainer,
             sortBy: [SortDescriptor(\Item.position, order: .forward), SortDescriptor(\Item.id, order: .forward)]
         )
     }
@@ -258,7 +258,6 @@ public final class TaskFormSheetMachine {
         metadataLoadState.errorPresentation
     }
 
-    private let syncContainer: SyncContainer
     private let syncEngine: DemoSyncEngine
     private let editContext: ModelContext
     private let metadataLoadMachine: ScreenLoadMachine
@@ -276,8 +275,7 @@ public final class TaskFormSheetMachine {
         case dismissSaveError
     }
 
-    public init(syncContainer: SyncContainer, syncEngine: DemoSyncEngine, editContext: ModelContext) {
-        self.syncContainer = syncContainer
+    public init(syncEngine: DemoSyncEngine, editContext: ModelContext) {
         self.syncEngine = syncEngine
         self.editContext = editContext
         self.metadataLoadMachine = ScreenLoadMachine { error in
@@ -329,7 +327,7 @@ public final class TaskFormSheetMachine {
 
             guard saveMachine.send(.submit) else { return }
 
-            var body = syncContainer.export(draft)
+            var body = syncEngine.syncContainer.export(draft)
             let capturedReviewerIDs = draft.reviewers.map(\.id).sorted()
             let capturedWatcherIDs = draft.watchers.map(\.id).sorted()
 

@@ -1,23 +1,20 @@
 import DemoCore
-import SwiftSync
 import SwiftUI
 
 struct ProjectView: View {
     let projectID: String
-    let syncContainer: SyncContainer
     let syncEngine: DemoSyncEngine
 
     @State private var machine: ProjectViewMachine
     @State private var isShowingCreateTaskSheet = false
     @State private var taskPendingDelete: TaskDeletePrompt?
 
-    init(projectID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
+    init(projectID: String, syncEngine: DemoSyncEngine) {
         self.projectID = projectID
-        self.syncContainer = syncContainer
         self.syncEngine = syncEngine
 
         _machine = State(
-            initialValue: ProjectViewMachine(projectID: projectID, syncContainer: syncContainer, syncEngine: syncEngine)
+            initialValue: ProjectViewMachine(projectID: projectID, syncEngine: syncEngine)
         )
     }
 
@@ -86,7 +83,6 @@ struct ProjectView: View {
     private var createTaskSheet: some View {
         TaskFormSheet(
             mode: .create(projectID: projectID),
-            syncContainer: syncContainer,
             syncEngine: syncEngine
         )
     }
@@ -166,7 +162,7 @@ struct ProjectView: View {
             } else {
                 ForEach(machine.tasks, id: \.id) { task in
                     NavigationLink {
-                        TaskView(taskID: task.id, syncContainer: syncContainer, syncEngine: syncEngine)
+                        TaskView(taskID: task.id, syncEngine: syncEngine)
                     } label: {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(task.title)

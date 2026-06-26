@@ -7,21 +7,19 @@ import SwiftUI
 /// by editing the task (fix → re-syncs) or discarding the change (restores the server's version). The
 /// list is a reactive store query, so it updates itself as failures appear and clear.
 struct FailuresSheet: View {
-    let syncContainer: SyncContainer
     let syncEngine: DemoSyncEngine
 
     @Environment(\.dismiss) private var dismiss
     @State private var failures: SyncQueryPublisher<Task>
     @State private var editingTask: Task?
 
-    init(syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
-        self.syncContainer = syncContainer
+    init(syncEngine: DemoSyncEngine) {
         self.syncEngine = syncEngine
         _failures = State(
             initialValue: SyncQueryPublisher(
                 Task.self,
                 predicate: #Predicate { $0.syncFailureReason != nil },
-                in: syncContainer,
+                in: syncEngine.syncContainer,
                 sortBy: [SortDescriptor(\Task.updatedAt, order: .reverse)]))
     }
 
@@ -63,7 +61,7 @@ struct FailuresSheet: View {
             }
             .accessibilityIdentifier("failures-sheet")
             .sheet(item: $editingTask) { task in
-                TaskFormSheet(mode: .edit(task: task), syncContainer: syncContainer, syncEngine: syncEngine)
+                TaskFormSheet(mode: .edit(task: task), syncEngine: syncEngine)
             }
         }
     }

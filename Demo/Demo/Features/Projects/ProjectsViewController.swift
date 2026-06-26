@@ -1,5 +1,4 @@
 import DemoCore
-import SwiftSync
 import UIKit
 
 final class ProjectsViewController: UITableViewController {
@@ -45,9 +44,9 @@ final class ProjectsViewController: UITableViewController {
     }()
 
     @MainActor
-    init(syncContainer: SyncContainer, syncEngine: DemoSyncEngine, onSelect: @escaping (String) -> Void) {
+    init(syncEngine: DemoSyncEngine, onSelect: @escaping (String) -> Void) {
         self.onSelect = onSelect
-        self.machine = ProjectsViewMachine(syncContainer: syncContainer, syncEngine: syncEngine)
+        self.machine = ProjectsViewMachine(syncEngine: syncEngine)
         super.init(style: .plain)
     }
 

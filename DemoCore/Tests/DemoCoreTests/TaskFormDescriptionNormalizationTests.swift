@@ -24,7 +24,7 @@ final class TaskFormDescriptionNormalizationTests: XCTestCase {
 
         let editContext = ModelContext(syncContainer.modelContainer)
         editContext.autosaveEnabled = false
-        let machine = TaskFormSheetMachine(syncContainer: syncContainer, syncEngine: engine, editContext: editContext)
+        let machine = TaskFormSheetMachine(syncEngine: engine, editContext: editContext)
         machine.send(.metadata(.onAppear))
         try await waitUntil {
             machine.userOptionsState == .available && machine.taskStateOptionsState == .available

@@ -1,22 +1,19 @@
 import DemoCore
-import SwiftSync
 import SwiftUI
 
 struct TaskView: View {
     let taskID: String
-    let syncContainer: SyncContainer
     let syncEngine: DemoSyncEngine
 
     @State private var machine: TaskViewMachine
     @State private var showingEditSheet = false
 
-    init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
+    init(taskID: String, syncEngine: DemoSyncEngine) {
         self.taskID = taskID
-        self.syncContainer = syncContainer
         self.syncEngine = syncEngine
 
         _machine = State(
-            initialValue: TaskViewMachine(taskID: taskID, syncContainer: syncContainer, syncEngine: syncEngine)
+            initialValue: TaskViewMachine(taskID: taskID, syncEngine: syncEngine)
         )
     }
 
@@ -81,7 +78,6 @@ extension TaskView {
         if let taskModel = task {
             TaskFormSheet(
                 mode: .edit(task: taskModel),
-                syncContainer: syncContainer,
                 syncEngine: syncEngine
             )
         }

@@ -1,11 +1,10 @@
-import SwiftData
 import DemoCore
+import SwiftData
 import SwiftSync
 import SwiftUI
 
 struct TaskFormSheet: View {
     let mode: TaskFormMode
-    let syncContainer: SyncContainer
     let syncEngine: DemoSyncEngine
 
     @Environment(\.dismiss) private var dismiss
@@ -25,16 +24,15 @@ struct TaskFormSheet: View {
     @State private var reviewerToAdd: String?
     @State private var watcherToAdd: String?
 
-    init(mode: TaskFormMode, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
+    init(mode: TaskFormMode, syncEngine: DemoSyncEngine) {
         self.mode = mode
-        self.syncContainer = syncContainer
         self.syncEngine = syncEngine
 
-        let ctx = ModelContext(syncContainer.modelContainer)
+        let ctx = ModelContext(syncEngine.syncContainer.modelContainer)
         ctx.autosaveEnabled = false
         self.editContext = ctx
         _machine = State(
-            initialValue: TaskFormSheetMachine(syncContainer: syncContainer, syncEngine: syncEngine, editContext: ctx)
+            initialValue: TaskFormSheetMachine(syncEngine: syncEngine, editContext: ctx)
         )
 
         switch mode {
@@ -57,12 +55,12 @@ struct TaskFormSheet: View {
     var body: some View {
         NavigationStack {
             List { content }
-            .listStyle(.plain)
-            .accessibilityIdentifier("task-form")
-            .environment(\.editMode, $itemEditMode)
-            .navigationTitle(navigationTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { toolbarContent }
+                .listStyle(.plain)
+                .accessibilityIdentifier("task-form")
+                .environment(\.editMode, $itemEditMode)
+                .navigationTitle(navigationTitle)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { toolbarContent }
         }
         .task(loadMetadata)
         .task(id: defaultsTaskID, applyDefaults)
@@ -126,7 +124,7 @@ extension TaskFormSheet {
 
     var isSaveDisabled: Bool {
         guard machine.saveState != .submitting,
-              !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return true }
         if case .create = mode {
             return draft.state.isEmpty || draft.authorID.isEmpty
@@ -166,9 +164,12 @@ extension TaskFormSheet {
     }
 
     func save() {
-        machine.send(.save(mode: mode, draft: draft, onSuccess: {
-            dismiss()
-        }))
+        machine.send(
+            .save(
+                mode: mode, draft: draft,
+                onSuccess: {
+                    dismiss()
+                }))
     }
 
     func loadMetadata() {
@@ -214,23 +215,25 @@ extension TaskFormSheet {
     fileprivate func addReviewer(_ userID: String?) {
         defer { reviewerToAdd = nil }
         guard let userID,
-              let user = machine.users.first(where: { $0.id == userID }),
-              !draft.reviewers.contains(where: { $0.id == userID }) else { return }
+            let user = machine.users.first(where: { $0.id == userID }),
+            !draft.reviewers.contains(where: { $0.id == userID })
+        else { return }
         draft.reviewers.append(user)
     }
 
     fileprivate func addWatcher(_ userID: String?) {
         defer { watcherToAdd = nil }
         guard let userID,
-              let user = machine.users.first(where: { $0.id == userID }),
-              !draft.watchers.contains(where: { $0.id == userID }) else { return }
+            let user = machine.users.first(where: { $0.id == userID }),
+            !draft.watchers.contains(where: { $0.id == userID })
+        else { return }
         draft.watchers.append(user)
     }
 
 }
 
-private extension View {
-    func taskFormPresentations(
+extension View {
+    fileprivate func taskFormPresentations(
         saveFailureIsPresented: Binding<Bool>,
         saveFailureMessage: String
     ) -> some View {
@@ -579,7 +582,7 @@ extension TaskFormSheet {
     }
 }
 
-fileprivate enum PeoplePickerRoute: String {
+private enum PeoplePickerRoute: String {
     case reviewers
     case watchers
 }
