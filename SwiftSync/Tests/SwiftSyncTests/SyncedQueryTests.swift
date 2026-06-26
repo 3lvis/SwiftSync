@@ -21,7 +21,6 @@ final class SyncedQueryTests: XCTestCase {
 
         XCTAssertEqual(published.phase, .loaded)
         XCTAssertEqual(published.rows.map(\.id), [1, 2])
-        XCTAssertFalse(published.results.isEmpty)
     }
 
     @MainActor
@@ -50,5 +49,19 @@ final class SyncedQueryTests: XCTestCase {
         await published.load()
 
         XCTAssertEqual(published.phase, .failed(message: "boom"))
+    }
+
+    @MainActor
+    func testBlankErrorDescriptionFallsBackToProvidedMessage() async throws {
+        struct BlankError: LocalizedError { var errorDescription: String? { "   " } }
+        let container = try SyncContainer(for: InferredTask.self, configurations: .init(isStoredInMemoryOnly: true))
+
+        let published = SyncedQueryPublisher(InferredTask.self, in: container, fallbackMessage: "Could not load tasks.") {
+            throw BlankError()
+        }
+
+        await published.load()
+
+        XCTAssertEqual(published.phase, .failed(message: "Could not load tasks."))
     }
 }

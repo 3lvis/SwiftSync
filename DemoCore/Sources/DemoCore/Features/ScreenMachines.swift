@@ -85,7 +85,8 @@ public final class ProjectsViewMachine {
         synced = SyncedQueryPublisher(
             Project.self,
             in: syncContainer,
-            sortBy: [SortDescriptor(\Project.name), SortDescriptor(\Project.id)]
+            sortBy: [SortDescriptor(\Project.name), SortDescriptor(\Project.id)],
+            fallbackMessage: "Could not load projects."
         ) { [syncEngine] in
             try await syncEngine.syncProjects()
             // Warm reference data (users + task states) so the new-task form has options offline.
@@ -145,7 +146,8 @@ public final class ProjectViewMachine {
             sortBy: [
                 SortDescriptor(\Task.updatedAt, order: .reverse),
                 SortDescriptor(\Task.id),
-            ]
+            ],
+            fallbackMessage: "Could not load this project yet."
         ) { [syncEngine, projectID] in
             try await syncEngine.syncProjectTasks(projectID: projectID)
         }
@@ -218,7 +220,9 @@ public final class TaskViewMachine {
     private let taskSynced: SyncedModelPublisher<Task>
     private let itemPublisher: SyncQueryPublisher<Item>
     public init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
-        self.taskSynced = SyncedModelPublisher(Task.self, id: taskID, in: syncContainer) { [syncEngine, taskID] in
+        self.taskSynced = SyncedModelPublisher(
+            Task.self, id: taskID, in: syncContainer, fallbackMessage: "Could not load this task yet."
+        ) { [syncEngine, taskID] in
             try await syncEngine.syncTaskDetail(taskID: taskID)
         }
         self.itemPublisher = SyncQueryPublisher(
