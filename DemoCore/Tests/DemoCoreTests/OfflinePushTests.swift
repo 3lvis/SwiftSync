@@ -748,3 +748,12 @@ final class OfflinePushTests: XCTestCase {
         try context.fetch(FetchDescriptor<Task>(predicate: #Predicate { $0.id == id })).first
     }
 }
+
+// Test-only dict bridge over the real JSON-`Data` upload wire (overloads by parameter type).
+extension DemoServerSimulator {
+    @discardableResult
+    func upload(operations: [[String: Any]]) throws -> [String: Any] {
+        try JSONSerialization.jsonObject(with: upload(operations: JSONSerialization.data(withJSONObject: operations)))
+            as! [String: Any]
+    }
+}

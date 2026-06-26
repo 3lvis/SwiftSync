@@ -10,7 +10,7 @@ final class UploadEndpointTests: XCTestCase {
     func testUploadUpsertAdoptsPublicIDAndIsIdempotent() throws {
         let backend = try makeBackend()
         let id = "11111111-1111-1111-1111-111111111111"
-        let before = try backend.getProjectTasksPayload(projectID: projectID).count
+        let before = try decodeArray(backend.getProjectTasksPayload(projectID: projectID)).count
 
         let first = try result(of: backend.upload(operations: [upsertOp(id: id, title: "Offline task")]))
         XCTAssertEqual(first["status"] as? String, "applied")
@@ -18,7 +18,7 @@ final class UploadEndpointTests: XCTestCase {
         // The internal int id never leaves the server — no remoteId in the response.
         XCTAssertNil(first["remoteId"])
 
-        let tasks = try backend.getProjectTasksPayload(projectID: projectID)
+        let tasks = try decodeArray(backend.getProjectTasksPayload(projectID: projectID))
         XCTAssertEqual(tasks.count, before + 1)
         // The client's id is adopted as the row's public_id (its sole identity).
         let inserted = try XCTUnwrap(tasks.first { ($0["id"] as? String) == id })
@@ -29,7 +29,7 @@ final class UploadEndpointTests: XCTestCase {
         let retry = try result(of: backend.upload(operations: [upsertOp(id: id, title: "Offline task")]))
         XCTAssertNotEqual(retry["status"] as? String, "rejected")
         XCTAssertNil(retry["remoteId"])
-        XCTAssertEqual(try backend.getProjectTasksPayload(projectID: projectID).count, before + 1)
+        XCTAssertEqual(try decodeArray(backend.getProjectTasksPayload(projectID: projectID)).count, before + 1)
     }
 
     func testUploadUpsertIsLastWriterWins() throws {
@@ -58,7 +58,7 @@ final class UploadEndpointTests: XCTestCase {
                 upsertOp(id: id, title: "Fresh edit", updatedAt: "2030-01-01T00:00:00.000Z")
             ]))
         XCTAssertEqual(applied["status"] as? String, "applied")
-        let detail = try XCTUnwrap(backend.getTaskDetailPayload(publicID: id))
+        let detail = try XCTUnwrap(decodeObject(backend.getTaskDetailPayload(publicID: id)))
         XCTAssertEqual(detail["title"] as? String, "Fresh edit")
     }
 
@@ -73,9 +73,9 @@ final class UploadEndpointTests: XCTestCase {
             ]))
         XCTAssertEqual(deleted["status"] as? String, "applied")
 
-        XCTAssertNil(try backend.getTaskDetailPayload(publicID: id), "tombstoned row is hidden from detail")
+        XCTAssertNil(try decodeObject(backend.getTaskDetailPayload(publicID: id)), "tombstoned row is hidden from detail")
         XCTAssertFalse(
-            try backend.getProjectTasksPayload(projectID: projectID).contains {
+            try decodeArray(backend.getProjectTasksPayload(projectID: projectID)).contains {
                 ($0["id"] as? String) == id
             },
             "tombstoned row is hidden from the list")
@@ -97,7 +97,7 @@ final class UploadEndpointTests: XCTestCase {
         XCTAssertEqual(stale["status"] as? String, "stale")
         XCTAssertNotNil(stale["server"] as? [String: Any])
         XCTAssertNotNil(
-            try backend.getTaskDetailPayload(publicID: id), "a stale delete must not tombstone the row")
+            try decodeObject(backend.getTaskDetailPayload(publicID: id)), "a stale delete must not tombstone the row")
 
         // A newer delete wins.
         let applied = try result(
@@ -105,7 +105,7 @@ final class UploadEndpointTests: XCTestCase {
                 deleteOp(id: id, updatedAt: "2040-01-01T00:00:00.000Z")
             ]))
         XCTAssertEqual(applied["status"] as? String, "applied")
-        XCTAssertNil(try backend.getTaskDetailPayload(publicID: id))
+        XCTAssertNil(try decodeObject(backend.getTaskDetailPayload(publicID: id)))
     }
 
     func testUploadUpsertRevivesTombstonedRowWhenEditIsNewer() throws {
@@ -119,7 +119,7 @@ final class UploadEndpointTests: XCTestCase {
             of: backend.upload(operations: [
                 deleteOp(id: id, updatedAt: "2040-01-01T00:00:00.000Z")
             ]))
-        XCTAssertNil(try backend.getTaskDetailPayload(publicID: id), "precondition: tombstoned")
+        XCTAssertNil(try decodeObject(backend.getTaskDetailPayload(publicID: id)), "precondition: tombstoned")
 
         // An edit newer than the delete wins LWW: it revives the row, not a phantom "applied".
         let revived = try result(
@@ -128,7 +128,7 @@ final class UploadEndpointTests: XCTestCase {
             ]))
         XCTAssertEqual(revived["status"] as? String, "applied")
         let detail = try XCTUnwrap(
-            backend.getTaskDetailPayload(publicID: id), "a newer edit must resurrect the tombstoned row")
+            decodeObject(backend.getTaskDetailPayload(publicID: id)), "a newer edit must resurrect the tombstoned row")
         XCTAssertEqual(detail["title"] as? String, "Revived")
         XCTAssertEqual(detail["id"] as? String, id, "revival keeps the same public_id")
     }
@@ -151,7 +151,7 @@ final class UploadEndpointTests: XCTestCase {
                 upsertOp(id: id, title: "Too late", updatedAt: "2035-01-01T00:00:00.000Z")
             ]))
         XCTAssertEqual(stale["status"] as? String, "stale")
-        XCTAssertNil(try backend.getTaskDetailPayload(publicID: id), "the row stays deleted")
+        XCTAssertNil(try decodeObject(backend.getTaskDetailPayload(publicID: id)), "the row stays deleted")
     }
 
     func testUploadFailsClosedOnMissingOrUnknownOperation() throws {

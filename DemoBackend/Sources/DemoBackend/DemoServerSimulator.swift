@@ -79,7 +79,7 @@ public final class DemoServerSimulator {
             })
     }
 
-    public func getProjectTasksPayload(projectID: String) throws -> [[String: Any]] {
+    public func getProjectTasksPayload(projectID: String) throws -> Data {
         if enableAmbientProjectMutationsOnRead, shouldApplyAmbientProjectMutationOnRead() {
             let next = (ambientProjectReadCounters[projectID] ?? 0) + 1
             ambientProjectReadCounters[projectID] = next
@@ -89,7 +89,7 @@ public final class DemoServerSimulator {
             }
         }
 
-        return try getProjectTasksPayloadRaw(projectID: projectID)
+        return try Self.responseData(getProjectTasksPayloadRaw(projectID: projectID))
     }
 
     private func getProjectTasksPayloadRaw(projectID: String) throws -> [[String: Any]] {
@@ -145,9 +145,9 @@ public final class DemoServerSimulator {
         ])
     }
 
-    public func getTaskDetailPayload(publicID: String) throws -> [String: Any]? {
+    public func getTaskDetailPayload(publicID: String) throws -> Data? {
         guard let rowID = try taskRowID(forPublicID: publicID, includeTombstoned: true) else { return nil }
-        return try taskDetailPayload(rowID: rowID)
+        return try taskDetailPayload(rowID: rowID).map { try Self.responseData($0) }
     }
 
     private func taskDetailPayload(rowID: Int) throws -> [String: Any]? {
@@ -167,7 +167,7 @@ public final class DemoServerSimulator {
     }
 
     @discardableResult
-    public func patchTaskState(publicID: String, state: String) throws -> [String: Any]? {
+    public func patchTaskState(publicID: String, state: String) throws -> Data? {
         _ = try validatedTaskState(state)
         guard let rowID = try taskRowID(forPublicID: publicID),
             let current = try taskDetailPayload(rowID: rowID)
@@ -188,11 +188,11 @@ public final class DemoServerSimulator {
                 self.sqlite.bind(int: rowID, at: 3, in: stmt)
             }
         )
-        return try taskDetailPayload(rowID: rowID)
+        return try taskDetailPayload(rowID: rowID).map { try Self.responseData($0) }
     }
 
     @discardableResult
-    public func patchTaskAssignee(publicID: String, assigneeID: String?) throws -> [String: Any]? {
+    public func patchTaskAssignee(publicID: String, assigneeID: String?) throws -> Data? {
         if let assigneeID, !(try exists(in: "users", id: assigneeID)) {
             throw DemoBackendError.invalidReference(entity: "assignee_id", id: assigneeID)
         }
@@ -215,13 +215,13 @@ public final class DemoServerSimulator {
                 self.sqlite.bind(int: rowID, at: 3, in: stmt)
             }
         )
-        return try taskDetailPayload(rowID: rowID)
+        return try taskDetailPayload(rowID: rowID).map { try Self.responseData($0) }
     }
 
     @discardableResult
-    public func replaceTaskReviewers(publicID: String, reviewerIDs: [String]) throws -> [String: Any]? {
+    public func replaceTaskReviewers(publicID: String, reviewerIDs: [String]) throws -> Data? {
         guard let rowID = try taskRowID(forPublicID: publicID, includeTombstoned: true) else { return nil }
-        return try replaceReviewers(rowID: rowID, reviewerIDs: reviewerIDs)
+        return try replaceReviewers(rowID: rowID, reviewerIDs: reviewerIDs).map { try Self.responseData($0) }
     }
 
     /// Int-keyed internal so callers that already resolved the row (e.g. `uploadUpsert`) don't re-resolve
@@ -282,9 +282,9 @@ public final class DemoServerSimulator {
     }
 
     @discardableResult
-    public func replaceTaskWatchers(publicID: String, watcherIDs: [String]) throws -> [String: Any]? {
+    public func replaceTaskWatchers(publicID: String, watcherIDs: [String]) throws -> Data? {
         guard let rowID = try taskRowID(forPublicID: publicID, includeTombstoned: true) else { return nil }
-        return try replaceWatchers(rowID: rowID, watcherIDs: watcherIDs)
+        return try replaceWatchers(rowID: rowID, watcherIDs: watcherIDs).map { try Self.responseData($0) }
     }
 
     @discardableResult
@@ -342,7 +342,8 @@ public final class DemoServerSimulator {
         return try taskDetailPayload(rowID: rowID)
     }
 
-    public func createTask(body: [String: Any]) throws -> [String: Any] {
+    public func createTask(body bodyData: Data) throws -> Data {
+        let body = try Self.requestObject(bodyData)
         // Client-originated rows adopt the body's `id` as public_id; server-origin rows (no `id`)
         // get a freshly minted lowercased UUID.
         let publicID = (body["id"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? UUID().uuidString.lowercased()
@@ -402,14 +403,14 @@ public final class DemoServerSimulator {
 
         guard body["reviewer_ids"] is [String] || body["watcher_ids"] is [String],
             let rowID = try taskRowID(forPublicID: publicID, includeTombstoned: true)
-        else { return created }
+        else { return try Self.responseData(created) }
         if let reviewerIDs = body["reviewer_ids"] as? [String] {
             _ = try replaceReviewers(rowID: rowID, reviewerIDs: reviewerIDs)
         }
         if let watcherIDs = body["watcher_ids"] as? [String] {
             _ = try replaceWatchers(rowID: rowID, watcherIDs: watcherIDs)
         }
-        return try taskDetailPayload(rowID: rowID) ?? created
+        return try Self.responseData(taskDetailPayload(rowID: rowID) ?? created)
     }
 
     @discardableResult
@@ -484,11 +485,12 @@ public final class DemoServerSimulator {
     /// id, project_id, author_id, and created_at are immutable; they are validated for consistency
     /// but not updated. updated_at is always advanced by the server regardless of the incoming value.
     @discardableResult
-    public func updateTask(publicID: String, body: [String: Any]) throws -> [String: Any] {
+    public func updateTask(publicID: String, body bodyData: Data) throws -> Data {
+        let body = try Self.requestObject(bodyData)
         guard let rowID = try taskRowID(forPublicID: publicID) else {
             throw DemoBackendError.notFound(entity: "task", id: publicID)
         }
-        return try updateTaskInternal(rowID: rowID, body: body)
+        return try Self.responseData(updateTaskInternal(rowID: rowID, body: body))
     }
 
     @discardableResult
@@ -655,9 +657,10 @@ public final class DemoServerSimulator {
     // row's public_id. The internal int id never leaves the server. `upsert` is find-by-public_id →
     // update-else-create, `delete` tombstones by public_id. Both are idempotent.
 
-    public func upload(operations: [[String: Any]]) throws -> [String: Any] {
+    public func upload(operations operationsData: Data) throws -> Data {
+        let operations = try Self.requestArray(operationsData)
         let results = operations.map(applyUploadOperation(_:))
-        return ["results": results, "cursor": iso8601(Date().timeIntervalSince1970)]
+        return try Self.responseData(["results": results, "cursor": iso8601(Date().timeIntervalSince1970)])
     }
 
     private func applyUploadOperation(_ payload: [String: Any]) -> [String: Any] {
@@ -705,7 +708,7 @@ public final class DemoServerSimulator {
             )
             _ = try updateTaskInternal(rowID: existingID, body: body)
         } else {
-            _ = try createTask(body: body)
+            _ = try createTask(body: Self.responseData(body))
         }
         return ["operation": "upsert", "id": id, "status": "applied"]
     }
@@ -1156,6 +1159,21 @@ public final class DemoServerSimulator {
     /// these bytes back into values, exactly as it would over a network.
     static func responseData(_ object: Any) throws -> Data {
         try JSONSerialization.data(withJSONObject: object)
+    }
+
+    /// Parses a JSON request body off the wire — the server's side of decoding the client's bytes.
+    static func requestObject(_ data: Data) throws -> [String: Any] {
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw DemoBackendError.validation(message: "request body must be a JSON object")
+        }
+        return object
+    }
+
+    static func requestArray(_ data: Data) throws -> [[String: Any]] {
+        guard let array = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw DemoBackendError.validation(message: "request body must be a JSON array")
+        }
+        return array
     }
 
     private func shouldApplyAmbientProjectMutationOnRead() -> Bool {

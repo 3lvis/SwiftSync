@@ -20,7 +20,7 @@ final class DemoBackendTests: XCTestCase {
         let projects = try decodeArray(backend.getProjectsPayload())
         let users = try decodeArray(backend.getUsersPayload())
         let taskStates = try decodeArray(backend.getTaskStateOptionsPayload())
-        let projectTasks = try backend.getProjectTasksPayload(projectID: projectID)
+        let projectTasks = try decodeArray(backend.getProjectTasksPayload(projectID: projectID))
 
         XCTAssertEqual(projects.count, 1)
         XCTAssertEqual(users.count, 1)
@@ -62,9 +62,9 @@ final class DemoBackendTests: XCTestCase {
 
         let projects = try decodeArray(backend.getProjectsPayload())
         let users = try decodeArray(backend.getUsersPayload())
-        let tasks = try backend.getProjectTasksPayload(projectID: seed.projects[0].id)
+        let tasks = try decodeArray(backend.getProjectTasksPayload(projectID: seed.projects[0].id))
         let firstTaskID = try XCTUnwrap(tasks.first?["id"] as? String)
-        let detail = try backend.getTaskDetailPayload(publicID: firstTaskID)
+        let detail = try decodeObject(backend.getTaskDetailPayload(publicID: firstTaskID))
         let taskItems = items(in: detail)
 
         // Reference data (projects/users) keeps TEXT UUID ids.
@@ -145,26 +145,26 @@ final class DemoBackendTests: XCTestCase {
 
         let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
 
-        let patchedState = try backend.patchTaskState(publicID: taskID, state: "done")
+        let patchedState = try decodeObject(backend.patchTaskState(publicID: taskID, state: "done"))
         XCTAssertEqual(stateID(in: patchedState), "done")
         XCTAssertEqual(stateLabel(in: patchedState), "Done")
 
-        let clearedAssignee = try backend.patchTaskAssignee(publicID: taskID, assigneeID: nil)
+        let clearedAssignee = try decodeObject(backend.patchTaskAssignee(publicID: taskID, assigneeID: nil))
         XCTAssertTrue((clearedAssignee?["assignee_id"] is NSNull))
 
-        let reassigned = try backend.patchTaskAssignee(publicID: taskID, assigneeID: userID)
+        let reassigned = try decodeObject(backend.patchTaskAssignee(publicID: taskID, assigneeID: userID))
         XCTAssertEqual(reassigned?["assignee_id"] as? String, userID)
 
-        let clearedReviewers = try backend.replaceTaskReviewers(publicID: taskID, reviewerIDs: [])
+        let clearedReviewers = try decodeObject(backend.replaceTaskReviewers(publicID: taskID, reviewerIDs: []))
         XCTAssertEqual(clearedReviewers?["reviewer_ids"] as? [String], [])
 
-        let reReviewed = try backend.replaceTaskReviewers(publicID: taskID, reviewerIDs: [userID])
+        let reReviewed = try decodeObject(backend.replaceTaskReviewers(publicID: taskID, reviewerIDs: [userID]))
         XCTAssertEqual(reReviewed?["reviewer_ids"] as? [String], [userID])
 
-        let rewatched = try backend.replaceTaskWatchers(publicID: taskID, watcherIDs: [userID])
+        let rewatched = try decodeObject(backend.replaceTaskWatchers(publicID: taskID, watcherIDs: [userID]))
         XCTAssertEqual(rewatched?["watcher_ids"] as? [String], [userID])
 
-        let clearedWatchers = try backend.replaceTaskWatchers(publicID: taskID, watcherIDs: [])
+        let clearedWatchers = try decodeObject(backend.replaceTaskWatchers(publicID: taskID, watcherIDs: []))
         XCTAssertEqual(clearedWatchers?["watcher_ids"] as? [String], [])
     }
 
@@ -350,7 +350,7 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(createdItems.map { $0["position"] as? Int }, [0, 1])
         XCTAssertEqual(createdItems.map { $0["task_id"] as? String }, [serverID, serverID])
 
-        let detail = try backend.getTaskDetailPayload(publicID: serverID)
+        let detail = try decodeObject(backend.getTaskDetailPayload(publicID: serverID))
         let detailItems = items(in: detail)
         XCTAssertEqual(detailItems.count, 2)
         XCTAssertEqual(detailItems.map { $0["id"] as? String }, ["item-1", "item-2"])
@@ -638,10 +638,10 @@ final class DemoBackendTests: XCTestCase {
                 ],
             ])
 
-        let detail = try backend.getTaskDetailPayload(publicID: serverID)
+        let detail = try decodeObject(backend.getTaskDetailPayload(publicID: serverID))
         XCTAssertEqual(items(in: detail).map { $0["id"] as? String }, ["item-b", "item-a"])
 
-        let projectTasks = try backend.getProjectTasksPayload(projectID: projectID)
+        let projectTasks = try decodeArray(backend.getProjectTasksPayload(projectID: projectID))
         let persistedTask = projectTasks.first { ($0["id"] as? String) == serverID }
         XCTAssertEqual(items(in: persistedTask).map { $0["id"] as? String }, ["item-b", "item-a"])
     }
@@ -679,15 +679,15 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(stateID(in: created), "todo")
         XCTAssertEqual(stateLabel(in: created), "To Do")
 
-        let projectTasksAfterCreate = try backend.getProjectTasksPayload(projectID: projectID)
+        let projectTasksAfterCreate = try decodeArray(backend.getProjectTasksPayload(projectID: projectID))
         XCTAssertEqual(projectTasksAfterCreate.count, 2)
         XCTAssertTrue(projectTasksAfterCreate.contains { ($0["id"] as? String) == serverID })
 
         try backend.deleteTask(publicID: serverID)
 
-        XCTAssertNil(try backend.getTaskDetailPayload(publicID: serverID))
+        XCTAssertNil(try decodeObject(backend.getTaskDetailPayload(publicID: serverID)))
 
-        let projectTasksAfterDelete = try backend.getProjectTasksPayload(projectID: projectID)
+        let projectTasksAfterDelete = try decodeArray(backend.getProjectTasksPayload(projectID: projectID))
         XCTAssertEqual(projectTasksAfterDelete.count, 1)
         XCTAssertEqual(projectTasksAfterDelete[0]["id"] as? String, taskID)
     }
@@ -698,7 +698,7 @@ final class DemoBackendTests: XCTestCase {
 
         let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
 
-        let before = try backend.getTaskDetailPayload(publicID: taskID)
+        let before = try decodeObject(backend.getTaskDetailPayload(publicID: taskID))
         let beforeUpdatedAt = before?["updated_at"] as? String
 
         // Build a body that mirrors the shape SwiftSync's exportObject produces:
@@ -733,7 +733,7 @@ final class DemoBackendTests: XCTestCase {
 
         let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
 
-        let before = try XCTUnwrap(backend.getTaskDetailPayload(publicID: taskID))
+        let before = try XCTUnwrap(decodeObject(backend.getTaskDetailPayload(publicID: taskID)))
         XCTAssertEqual(before["reviewer_ids"] as? [String], [userID])
         XCTAssertEqual(before["watcher_ids"] as? [String], [userID])
 
@@ -902,10 +902,10 @@ final class DemoBackendTests: XCTestCase {
         )
 
         for _ in 1...8 {
-            _ = try backend.getProjectTasksPayload(projectID: projectID)
+            _ = try decodeArray(backend.getProjectTasksPayload(projectID: projectID))
         }
 
-        let projectTasks = try backend.getProjectTasksPayload(projectID: projectID)
+        let projectTasks = try decodeArray(backend.getProjectTasksPayload(projectID: projectID))
         XCTAssertFalse(projectTasks.isEmpty)
         XCTAssertTrue(projectTasks.allSatisfy { ($0["project_id"] as? String) == projectID })
 
@@ -935,15 +935,6 @@ final class DemoBackendTests: XCTestCase {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f.string(from: date)
-    }
-
-    /// Decodes a JSON `Data` response from the backend back into a dictionary, as a real client would.
-    private func decodeArray(_ data: Data) throws -> [[String: Any]] {
-        try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [[String: Any]])
-    }
-
-    private func decodeObject(_ data: Data) throws -> [String: Any] {
-        try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
     private func makeTemporaryDatabaseURL() -> URL {
@@ -992,4 +983,42 @@ final class DemoBackendTests: XCTestCase {
             ]
         )
     }
+}
+
+// Test-only dict-in/dict-out bridges over the real JSON-`Data` wire methods, so existing dict-based
+// backend tests keep working without re-encoding/decoding at every call site. These overload by
+// parameter type (`[String: Any]` vs `Data`), so the compiler picks them for dict literals.
+extension DemoServerSimulator {
+    func createTask(body: [String: Any]) throws -> [String: Any] {
+        try JSONSerialization.jsonObject(with: createTask(body: JSONSerialization.data(withJSONObject: body)))
+            as! [String: Any]
+    }
+
+    func updateTask(publicID: String, body: [String: Any]) throws -> [String: Any] {
+        try JSONSerialization.jsonObject(
+            with: updateTask(publicID: publicID, body: JSONSerialization.data(withJSONObject: body))) as! [String: Any]
+    }
+
+    func upload(operations: [[String: Any]]) throws -> [String: Any] {
+        try JSONSerialization.jsonObject(with: upload(operations: JSONSerialization.data(withJSONObject: operations)))
+            as! [String: Any]
+    }
+}
+
+// Shared test helpers: decode the backend's JSON `Data` responses / encode request bodies, as a client would.
+func decodeArray(_ data: Data) throws -> [[String: Any]] {
+    try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [[String: Any]])
+}
+
+func decodeObject(_ data: Data) throws -> [String: Any] {
+    try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+}
+
+func decodeObject(_ data: Data?) throws -> [String: Any]? {
+    guard let data else { return nil }
+    return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+}
+
+func encodeData(_ object: Any) throws -> Data {
+    try JSONSerialization.data(withJSONObject: object)
 }
