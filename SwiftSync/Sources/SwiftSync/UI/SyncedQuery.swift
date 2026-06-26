@@ -60,7 +60,7 @@ public struct SyncedResults<Model: PersistentModel> {
 
 /// Pairs a reactive **collection** query with the sync that populates it — the load-state machine +
 /// observation a screen otherwise hand-wires. Declare *what* to read and *how* to load it; read back
-/// live `rows` plus a `phase`. UIKit-facing and `@Observable`; the SwiftUI wrapper is `@SyncedQuery`.
+/// live `rows` plus a `phase`. Plain-Swift and `@Observable`; the SwiftUI wrapper is `@SyncedQuery`.
 @MainActor
 @Observable
 public final class SyncedQueryPublisher<Model: PersistentModel> {
@@ -98,7 +98,7 @@ public final class SyncedQueryPublisher<Model: PersistentModel> {
     public func startIfNeeded() { driver.startIfNeeded() }
 }
 
-/// Pairs a reactive **single-row** read (by id) with the sync that populates it. UIKit-facing and
+/// Pairs a reactive **single-row** read (by id) with the sync that populates it. Plain-Swift and
 /// `@Observable`; the SwiftUI wrapper is `@SyncedModel`.
 @MainActor
 @Observable
@@ -124,7 +124,7 @@ public final class SyncedModelPublisher<Model: PersistentModel & SyncModelable> 
 }
 
 /// SwiftUI property wrapper exposing `SyncedResults` (live `rows` + sync `phase`), auto-running the load
-/// on first appearance. The UIKit/plain-Swift equivalent is `SyncedQueryPublisher`, which it wraps.
+/// on first appearance. The plain-Swift equivalent is `SyncedQueryPublisher`, which it wraps.
 @MainActor
 @propertyWrapper
 public struct SyncedQuery<Model: PersistentModel>: DynamicProperty {
@@ -162,7 +162,7 @@ public struct SyncedQuery<Model: PersistentModel>: DynamicProperty {
 }
 
 /// SwiftUI property wrapper exposing the single row matching an id plus the sync `phase`, auto-running
-/// the load on first appearance. The UIKit/plain-Swift equivalent is `SyncedModelPublisher`.
+/// the load on first appearance. The plain-Swift equivalent is `SyncedModelPublisher`.
 @MainActor
 @propertyWrapper
 public struct SyncedModel<Model: PersistentModel & SyncModelable>: DynamicProperty {

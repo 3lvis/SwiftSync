@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 import SwiftUI
 
-/// SwiftUI property wrapper observing a **collection** (`rows`); the UIKit/plain-Swift equivalent is
+/// SwiftUI property wrapper observing a **collection** (`rows`); the plain-Swift equivalent is
 /// `SyncQueryPublisher`, which it wraps. For a single row by id, use `@SyncModel`.
 @MainActor
 @propertyWrapper
