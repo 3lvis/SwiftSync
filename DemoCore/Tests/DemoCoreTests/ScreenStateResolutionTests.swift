@@ -6,21 +6,21 @@ final class ScreenStateResolutionTests: XCTestCase {
 
     func testProjectsListStatusState_loadingWithoutRows_showsLoading() {
         XCTAssertEqual(
-            resolveProjectsListStatusState(loadState: .loading, hasRows: false),
+            resolveProjectsListStatusState(phase: .loading, hasRows: false),
             .loading
         )
     }
 
     func testProjectsListStatusState_loadingWithRows_hidesStatus() {
         XCTAssertEqual(
-            resolveProjectsListStatusState(loadState: .loading, hasRows: true),
+            resolveProjectsListStatusState(phase: .loading, hasRows: true),
             .hidden
         )
     }
 
     func testProjectsListStatusState_loadedWithoutRows_showsEmpty() {
         XCTAssertEqual(
-            resolveProjectsListStatusState(loadState: .loaded, hasRows: false),
+            resolveProjectsListStatusState(phase: .loaded, hasRows: false),
             .empty
         )
     }
@@ -28,7 +28,7 @@ final class ScreenStateResolutionTests: XCTestCase {
     func testProjectsListStatusState_error_showsError() {
         XCTAssertEqual(
             resolveProjectsListStatusState(
-                loadState: .error(ErrorPresentationState(message: "boom")),
+                phase: .failed(message: "boom"),
                 hasRows: false
             ),
             .error(ErrorPresentationState(message: "boom"))

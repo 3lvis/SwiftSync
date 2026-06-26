@@ -33,16 +33,16 @@ public enum TaskFormOptionsState: Equatable {
     case unavailable
 }
 
-func resolveProjectsListStatusState(loadState: ScreenLoadState, hasRows: Bool) -> ProjectsListStatusState {
-    switch loadState {
+func resolveProjectsListStatusState(phase: SyncLoadPhase, hasRows: Bool) -> ProjectsListStatusState {
+    switch phase {
     case .idle:
         return .hidden
     case .loading:
         return hasRows ? .hidden : .loading
     case .loaded:
         return hasRows ? .hidden : .empty
-    case .error(let presentation):
-        return .error(presentation)
+    case .failed(let message):
+        return .error(ErrorPresentationState(message: message))
     }
 }
 
@@ -74,44 +74,30 @@ func resolveTaskFormOptionsState(loadState: ScreenLoadState, hasOptions: Bool) -
 @MainActor
 @Observable
 public final class ProjectsViewMachine {
-    public private(set) var loadState: ScreenLoadState = .idle
-    public var rows: [Project] {
-        rowsPublisher.rows
-    }
+    private let synced: SyncedQueryPublisher<Project>
+
+    public var rows: [Project] { synced.rows }
     public var statusState: ProjectsListStatusState {
-        resolveProjectsListStatusState(loadState: loadState, hasRows: !rows.isEmpty)
+        resolveProjectsListStatusState(phase: synced.phase, hasRows: !rows.isEmpty)
     }
 
-    private let syncEngine: DemoSyncEngine
-    private let rowsPublisher: SyncQueryPublisher<Project>
-    private let loadMachine: ScreenLoadMachine
     public init(syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
-        self.syncEngine = syncEngine
-        self.rowsPublisher = SyncQueryPublisher(
+        synced = SyncedQueryPublisher(
             Project.self,
             in: syncContainer,
             sortBy: [SortDescriptor(\Project.name), SortDescriptor(\Project.id)]
-        )
-        self.loadMachine = ScreenLoadMachine { error in
-            presentError(error, fallbackMessage: "Could not load projects.")
-        }
-
-        observeContinuously {
-            self.loadState = self.loadMachine.state
+        ) { [syncEngine] in
+            try await syncEngine.syncProjects()
+            // Warm reference data (users + task states) so the new-task form has options offline.
+            try await syncEngine.syncTaskFormMetadata()
         }
     }
 
     public func send(_ event: ScreenLoadEvent) {
-        loadMachine.send(
-            event,
-            run: { [syncEngine] in
-                try await syncEngine.syncProjects()
-                // Warm reference data (users + task states) on the home screen so it is cached for
-                // offline task creation — otherwise the new-task form has no options while offline.
-                try await syncEngine.syncTaskFormMetadata()
-            })
+        if case .onAppear = event {
+            _Concurrency.Task { await synced.load() }
+        }
     }
-
 }
 
 @MainActor
