@@ -52,7 +52,7 @@ public final class DemoServerSimulator {
         try Self.prepareSchema(self.sqlite, seedData: seedData)
     }
 
-    public func getProjectsPayload() throws -> [[String: Any]] {
+    public func getProjectsPayload() throws -> Data {
         let rows = try self.sqlite.query(
             """
             SELECT
@@ -67,15 +67,16 @@ public final class DemoServerSimulator {
             ORDER BY projects.id ASC
             """
         )
-        return rows.map { row in
-            [
-                "id": row.string("id"),
-                "name": row.string("name"),
-                "task_count": Int(row.int64("task_count")),
-                "created_at": iso8601(row.double("created_at")),
-                "updated_at": iso8601(row.double("updated_at")),
-            ]
-        }
+        return try Self.responseData(
+            rows.map { row in
+                [
+                    "id": row.string("id"),
+                    "name": row.string("name"),
+                    "task_count": Int(row.int64("task_count")),
+                    "created_at": iso8601(row.double("created_at")),
+                    "updated_at": iso8601(row.double("updated_at")),
+                ]
+            })
     }
 
     public func getProjectTasksPayload(projectID: String) throws -> [[String: Any]] {
@@ -1148,6 +1149,12 @@ public final class DemoServerSimulator {
 
     private func iso8601(_ secondsSince1970: Double) -> String {
         formatter.string(from: Date(timeIntervalSince1970: secondsSince1970))
+    }
+
+    /// Serializes a response body to JSON bytes — the server's side of the wire. The client decodes
+    /// these bytes back into values, exactly as it would over a network.
+    static func responseData(_ object: Any) throws -> Data {
+        try JSONSerialization.data(withJSONObject: object)
     }
 
     private func shouldApplyAmbientProjectMutationOnRead() -> Bool {

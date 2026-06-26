@@ -17,7 +17,7 @@ final class DemoBackendTests: XCTestCase {
 
         let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
 
-        let projects = try backend.getProjectsPayload()
+        let projects = try decodeArray(backend.getProjectsPayload())
         let users = try backend.getUsersPayload()
         let taskStates = try backend.getTaskStateOptionsPayload()
         let projectTasks = try backend.getProjectTasksPayload(projectID: projectID)
@@ -60,7 +60,7 @@ final class DemoBackendTests: XCTestCase {
         let seed = DemoSeedData.generate()
         let backend = try DemoServerSimulator(databaseURL: url, seedData: seed)
 
-        let projects = try backend.getProjectsPayload()
+        let projects = try decodeArray(backend.getProjectsPayload())
         let users = try backend.getUsersPayload()
         let tasks = try backend.getProjectTasksPayload(projectID: seed.projects[0].id)
         let firstTaskID = try XCTUnwrap(tasks.first?["id"] as? String)
@@ -935,6 +935,15 @@ final class DemoBackendTests: XCTestCase {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f.string(from: date)
+    }
+
+    /// Decodes a JSON `Data` response from the backend back into a dictionary, as a real client would.
+    private func decodeArray(_ data: Data) throws -> [[String: Any]] {
+        try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [[String: Any]])
+    }
+
+    private func decodeObject(_ data: Data) throws -> [String: Any] {
+        try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
     private func makeTemporaryDatabaseURL() -> URL {

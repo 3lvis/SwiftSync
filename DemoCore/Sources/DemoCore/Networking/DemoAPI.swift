@@ -85,7 +85,7 @@ public final class FakeDemoAPIClient {
 
     public func getProjects() async throws -> [DemoSyncPayload] {
         try await networkGate(endpoint: "GET /projects")
-        return try backend.getProjectsPayload().map(Self.makePayload)
+        return try Self.parseArray(backend.getProjectsPayload()).map(Self.makePayload)
     }
 
     public func getProjectTasks(projectID: String) async throws -> [DemoSyncPayload] {
@@ -201,6 +201,22 @@ public final class FakeDemoAPIClient {
         let hash = endpoint.unicodeScalars.reduce(0) { ($0 * 31 + Int($1.value)) % 10_000 }
         let jitter = UInt64((hash + callIndex * 17) % 250)
         try await _Concurrency.Task.sleep(nanoseconds: (baseDelayMS + jitter + mutationExtra) * 1_000_000)
+    }
+
+    /// Parses JSON response bytes from the backend — the client side of the wire (`JSONSerialization`
+    /// preserves `null` as `NSNull` and raw value shapes, which is what inbound sync needs).
+    private static func parseArray(_ data: Data) throws -> [[String: Any]] {
+        guard let array = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw DemoAPIError.invalidPayload("Expected a JSON array response")
+        }
+        return array
+    }
+
+    private static func parseObject(_ data: Data) throws -> [String: Any] {
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw DemoAPIError.invalidPayload("Expected a JSON object response")
+        }
+        return object
     }
 
     private static func makePayload(_ dictionary: [String: Any]) throws -> DemoSyncPayload {
