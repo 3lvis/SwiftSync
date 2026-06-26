@@ -114,7 +114,7 @@ final class OfflinePushTests: XCTestCase {
         body["items"] = items
 
         try await engine.updateTask(
-            taskID: taskID, projectID: projectID, body: try DemoSyncPayload(dictionary: body))
+            taskID: taskID, projectID: projectID, body: try SyncJSON(dictionary: body))
 
         let updated = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
         let titles = updated.items.map(\.title)
@@ -170,7 +170,7 @@ final class OfflinePushTests: XCTestCase {
         var dictionary = syncContainer.export(task)
         dictionary["title"] = String(repeating: "A", count: 100)
         try await engine.updateTask(
-            taskID: taskID, projectID: projectID, body: try DemoSyncPayload(dictionary: dictionary))
+            taskID: taskID, projectID: projectID, body: try SyncJSON(dictionary: dictionary))
 
         // Reconnect + push: the server rejects, and the failure is recorded on the row.
         engine.isOffline = false
@@ -207,7 +207,7 @@ final class OfflinePushTests: XCTestCase {
         var dictionary = syncContainer.export(task)
         dictionary["title"] = String(repeating: "A", count: 100)
         try await engine.updateTask(
-            taskID: taskID, projectID: projectID, body: try DemoSyncPayload(dictionary: dictionary))
+            taskID: taskID, projectID: projectID, body: try SyncJSON(dictionary: dictionary))
         engine.isOffline = false
         _ = try await engine.pushPendingChanges()
         XCTAssertNotNil(try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext)).syncFailureReason)
@@ -240,7 +240,7 @@ final class OfflinePushTests: XCTestCase {
         createDictionary["title"] = String(repeating: "A", count: 100)
         createDictionary.removeValue(forKey: "items")
         try await engine.createTask(
-            body: try DemoSyncPayload(dictionary: createDictionary), projectID: projectID)
+            body: try SyncJSON(dictionary: createDictionary), projectID: projectID)
 
         engine.isOffline = false
         _ = try await engine.pushPendingChanges()
@@ -253,7 +253,7 @@ final class OfflinePushTests: XCTestCase {
         fixDictionary["title"] = "Fixed"
         fixDictionary.removeValue(forKey: "items")
         try await engine.updateTask(
-            taskID: id, projectID: projectID, body: try DemoSyncPayload(dictionary: fixDictionary))
+            taskID: id, projectID: projectID, body: try SyncJSON(dictionary: fixDictionary))
 
         let fixed = try XCTUnwrap(fetchTask(id: id, in: syncContainer.mainContext))
         XCTAssertNil(fixed.syncFailureReason, "the failure is resolved")
@@ -281,7 +281,7 @@ final class OfflinePushTests: XCTestCase {
         badDictionary["title"] = String(repeating: "A", count: 100)
         badDictionary.removeValue(forKey: "items")
         try await engine.updateTask(
-            taskID: taskID, projectID: projectID, body: try DemoSyncPayload(dictionary: badDictionary))
+            taskID: taskID, projectID: projectID, body: try SyncJSON(dictionary: badDictionary))
 
         engine.isOffline = false
         _ = try await engine.pushPendingChanges()
@@ -294,7 +294,7 @@ final class OfflinePushTests: XCTestCase {
         fixDictionary["title"] = "Fixed online"
         fixDictionary.removeValue(forKey: "items")
         try await engine.updateTask(
-            taskID: taskID, projectID: projectID, body: try DemoSyncPayload(dictionary: fixDictionary))
+            taskID: taskID, projectID: projectID, body: try SyncJSON(dictionary: fixDictionary))
 
         let fixed = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
         XCTAssertNil(fixed.syncFailureReason, "the failure clears once the corrected edit saves")
@@ -325,7 +325,7 @@ final class OfflinePushTests: XCTestCase {
         localEdit["title"] = "Local edit"
         localEdit.removeValue(forKey: "items")
         try await engine.updateTask(
-            taskID: taskID, projectID: projectID, body: try DemoSyncPayload(dictionary: localEdit))
+            taskID: taskID, projectID: projectID, body: try SyncJSON(dictionary: localEdit))
 
         // Then another client advances the server's copy (timestamp T2 > T1), so our edit loses LWW.
         let serverTitle = "Server wins \(UUID().uuidString.prefix(6))"
@@ -371,7 +371,7 @@ final class OfflinePushTests: XCTestCase {
         editDictionary.removeValue(forKey: "items")
         try await engine.updateTask(
             taskID: "OFFLINE-EDIT-1", projectID: projectID,
-            body: try DemoSyncPayload(dictionary: editDictionary))
+            body: try SyncJSON(dictionary: editDictionary))
 
         let edited = try XCTUnwrap(fetchTask(id: "OFFLINE-EDIT-1", in: syncContainer.mainContext))
         XCTAssertEqual(edited.title, "Renamed offline", "the edit updates the local row's title")
@@ -405,7 +405,7 @@ final class OfflinePushTests: XCTestCase {
         var body = syncContainer.export(task)
         body["reviewer_ids"] = newReviewers
         try await engine.updateTask(
-            taskID: taskID, projectID: projectID, body: try DemoSyncPayload(dictionary: body))
+            taskID: taskID, projectID: projectID, body: try SyncJSON(dictionary: body))
 
         let offline = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
         XCTAssertEqual(
@@ -588,7 +588,7 @@ final class OfflinePushTests: XCTestCase {
 
         engine.isOffline = true
         let task = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
-        let body = try mutating(try DemoSyncPayload(dictionary: syncContainer.export(task))) {
+        let body = try mutating(try SyncJSON(dictionary: syncContainer.export(task))) {
             $0["title"] = "edited offline"
         }
         try await engine.updateTask(taskID: taskID, projectID: projectID, body: body)
@@ -622,7 +622,7 @@ final class OfflinePushTests: XCTestCase {
         engine.isOffline = true
         let task = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
         let invalidTitle = String(repeating: "A", count: 100)
-        let body = try mutating(try DemoSyncPayload(dictionary: syncContainer.export(task))) {
+        let body = try mutating(try SyncJSON(dictionary: syncContainer.export(task))) {
             $0["title"] = invalidTitle
         }
         try await engine.updateTask(taskID: taskID, projectID: projectID, body: body)
@@ -650,7 +650,7 @@ final class OfflinePushTests: XCTestCase {
         // Pollute: offline edit to an invalid (too-long) title the server rejects on push.
         engine.isOffline = true
         let task = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
-        let invalidBody = try mutating(try DemoSyncPayload(dictionary: syncContainer.export(task))) {
+        let invalidBody = try mutating(try SyncJSON(dictionary: syncContainer.export(task))) {
             $0["title"] = String(repeating: "A", count: 100)
         }
         try await engine.updateTask(taskID: taskID, projectID: projectID, body: invalidBody)
@@ -690,7 +690,7 @@ final class OfflinePushTests: XCTestCase {
         engine.isOffline = true
         let polluted = try XCTUnwrap(fetchTask(id: pollutedID, in: syncContainer.mainContext))
         let invalidTitle = String(repeating: "A", count: 100)
-        let invalidBody = try mutating(try DemoSyncPayload(dictionary: syncContainer.export(polluted))) {
+        let invalidBody = try mutating(try SyncJSON(dictionary: syncContainer.export(polluted))) {
             $0["title"] = invalidTitle
         }
         try await engine.updateTask(taskID: pollutedID, projectID: projectID, body: invalidBody)
@@ -710,24 +710,24 @@ final class OfflinePushTests: XCTestCase {
         XCTAssertEqual(siblingRow.title, siblingTitle, "a sibling row still refreshes — the pull isn't blocked")
     }
 
-    private func mutating(_ body: DemoSyncPayload, _ transform: (inout [String: Any]) -> Void) throws
-        -> DemoSyncPayload
+    private func mutating(_ body: SyncJSON, _ transform: (inout [String: Any]) -> Void) throws
+        -> SyncJSON
     {
         var dictionary = body.toSyncPayloadDictionary()
         transform(&dictionary)
-        return try DemoSyncPayload(dictionary: dictionary)
+        return try SyncJSON(dictionary: dictionary)
     }
 
     @MainActor
     private func createBody(from templateID: String, newID: String, in syncContainer: SyncContainer) throws
-        -> DemoSyncPayload
+        -> SyncJSON
     {
         let template = try XCTUnwrap(fetchTask(id: templateID, in: syncContainer.mainContext))
         var dictionary = syncContainer.export(template)
         dictionary["id"] = newID
         dictionary["title"] = "Offline task"
         dictionary.removeValue(forKey: "items")
-        return try DemoSyncPayload(dictionary: dictionary)
+        return try SyncJSON(dictionary: dictionary)
     }
 
     @MainActor

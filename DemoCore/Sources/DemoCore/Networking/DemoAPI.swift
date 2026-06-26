@@ -1,5 +1,6 @@
 import DemoBackend
 import Foundation
+import SwiftSync
 
 public typealias DemoSeedData = DemoBackend.DemoSeedData
 public typealias DemoServerSimulator = DemoBackend.DemoServerSimulator
@@ -83,45 +84,45 @@ public final class FakeDemoAPIClient {
         }
     }
 
-    public func getProjects() async throws -> [DemoSyncPayload] {
+    public func getProjects() async throws -> [SyncJSON] {
         try await networkGate(endpoint: "GET /projects")
         return try backend.getProjectsPayload().map(Self.makePayload)
     }
 
-    public func getProjectTasks(projectID: String) async throws -> [DemoSyncPayload] {
+    public func getProjectTasks(projectID: String) async throws -> [SyncJSON] {
         try await networkGate(endpoint: "GET /projects/{id}/tasks")
         return try backend.getProjectTasksPayload(projectID: projectID).map(Self.makePayload)
     }
 
-    public func getUsers() async throws -> [DemoSyncPayload] {
+    public func getUsers() async throws -> [SyncJSON] {
         try await networkGate(endpoint: "GET /users")
         return try backend.getUsersPayload().map(Self.makePayload)
     }
 
-    public func getTaskDetail(taskID: String) async throws -> DemoSyncPayload? {
+    public func getTaskDetail(taskID: String) async throws -> SyncJSON? {
         try await networkGate(endpoint: "GET /tasks/{id}")
         guard let payload = try backend.getTaskDetailPayload(publicID: taskID) else { return nil }
         return try Self.makePayload(payload)
     }
 
-    public func getTaskStateOptions() async throws -> [DemoSyncPayload] {
+    public func getTaskStateOptions() async throws -> [SyncJSON] {
         try await networkGate(endpoint: "GET /task-state-options")
         return try backend.getTaskStateOptionsPayload().map(Self.makePayload)
     }
 
-    public func patchTaskState(taskID: String, state: String) async throws -> DemoSyncPayload? {
+    public func patchTaskState(taskID: String, state: String) async throws -> SyncJSON? {
         try await networkGate(endpoint: "PATCH /tasks/{id} (state)")
         guard let payload = try backend.patchTaskState(publicID: taskID, state: state) else { return nil }
         return try Self.makePayload(payload)
     }
 
-    public func patchTaskAssignee(taskID: String, assigneeID: String?) async throws -> DemoSyncPayload? {
+    public func patchTaskAssignee(taskID: String, assigneeID: String?) async throws -> SyncJSON? {
         try await networkGate(endpoint: "PATCH /tasks/{id} (assignee_id)")
         guard let payload = try backend.patchTaskAssignee(publicID: taskID, assigneeID: assigneeID) else { return nil }
         return try Self.makePayload(payload)
     }
 
-    public func replaceTaskReviewers(taskID: String, reviewerIDs: [String]) async throws -> DemoSyncPayload? {
+    public func replaceTaskReviewers(taskID: String, reviewerIDs: [String]) async throws -> SyncJSON? {
         try await networkGate(endpoint: "PUT /tasks/{id}/reviewers")
         guard let payload = try backend.replaceTaskReviewers(publicID: taskID, reviewerIDs: reviewerIDs) else {
             return nil
@@ -129,7 +130,7 @@ public final class FakeDemoAPIClient {
         return try Self.makePayload(payload)
     }
 
-    public func replaceTaskWatchers(taskID: String, watcherIDs: [String]) async throws -> DemoSyncPayload? {
+    public func replaceTaskWatchers(taskID: String, watcherIDs: [String]) async throws -> SyncJSON? {
         try await networkGate(endpoint: "PUT /tasks/{id}/watchers")
         guard let payload = try backend.replaceTaskWatchers(publicID: taskID, watcherIDs: watcherIDs) else {
             return nil
@@ -137,13 +138,13 @@ public final class FakeDemoAPIClient {
         return try Self.makePayload(payload)
     }
 
-    public func createTask(body: DemoSyncPayload) async throws -> DemoSyncPayload {
+    public func createTask(body: SyncJSON) async throws -> SyncJSON {
         try await networkGate(endpoint: "POST /tasks")
         let created = try backend.createTask(body: body.toSyncPayloadDictionary())
         return try Self.makePayload(created)
     }
 
-    public func updateTask(taskID: String, body: DemoSyncPayload) async throws -> DemoSyncPayload? {
+    public func updateTask(taskID: String, body: SyncJSON) async throws -> SyncJSON? {
         try await networkGate(endpoint: "PUT /tasks/{id}")
         let updated = try backend.updateTask(publicID: taskID, body: body.toSyncPayloadDictionary())
         return try Self.makePayload(updated)
@@ -203,9 +204,9 @@ public final class FakeDemoAPIClient {
         try await _Concurrency.Task.sleep(nanoseconds: (baseDelayMS + jitter + mutationExtra) * 1_000_000)
     }
 
-    private static func makePayload(_ dictionary: [String: Any]) throws -> DemoSyncPayload {
+    private static func makePayload(_ dictionary: [String: Any]) throws -> SyncJSON {
         do {
-            return try DemoSyncPayload(dictionary: dictionary)
+            return try SyncJSON(dictionary: dictionary)
         } catch {
             throw DemoAPIError.invalidPayload(error.localizedDescription)
         }

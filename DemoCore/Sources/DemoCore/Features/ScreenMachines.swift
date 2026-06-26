@@ -386,7 +386,7 @@ public final class TaskFormSheetMachine {
 
             _Concurrency.Task {
                 do {
-                    let payload = try DemoSyncPayload(dictionary: requestBody)
+                    let payload = try SyncJSON(dictionary: requestBody)
                     switch mode {
                     case .create(let projectID):
                         try await syncEngine.createTask(body: payload, projectID: projectID)

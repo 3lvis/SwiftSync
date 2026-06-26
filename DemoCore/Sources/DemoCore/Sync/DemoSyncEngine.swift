@@ -89,7 +89,7 @@ public final class DemoSyncEngine {
         }
     }
 
-    public func createTask(body: DemoSyncPayload, projectID: String) async throws {
+    public func createTask(body: SyncJSON, projectID: String) async throws {
         if isOffline {
             guard let project = try project(withID: projectID) else {
                 throw SyncTaskDetailError.missingProject(projectID)
@@ -107,7 +107,7 @@ public final class DemoSyncEngine {
         }
     }
 
-    public func updateTask(taskID: String, projectID: String?, body: DemoSyncPayload) async throws {
+    public func updateTask(taskID: String, projectID: String?, body: SyncJSON) async throws {
         // A row the server doesn't have yet (offline-created, or a rejected insert) can't be PUT — it
         // must be (re)sent as an upsert. Apply locally so it stays a pending change; online, push it.
         let neverSynced = isNeverPushed(taskID)
@@ -275,7 +275,7 @@ public final class DemoSyncEngine {
                 // hard-deleted row when a delete loses) and treat the row as resolved, not a failure.
                 if let server = result["server"] as? [String: Any] {
                     try? await syncContainer.sync(
-                        item: DemoSyncPayload(dictionary: server), as: Task.self)
+                        item: SyncJSON(dictionary: server), as: Task.self)
                 }
             case ("upsert", "applied"), ("delete", "applied"):
                 break
@@ -305,7 +305,7 @@ public final class DemoSyncEngine {
     /// Apply a payload to the local store as a *local* edit (default author), so it's tracked as a
     /// pending change — unlike `syncContainer.sync(item:)`, which stamps writes as inbound (pulled).
     /// Reuses the `@Syncable`-generated `make`/`apply`, so no field mapping is duplicated here.
-    private func applyLocalTask(_ body: DemoSyncPayload, project: Project? = nil) throws {
+    private func applyLocalTask(_ body: SyncJSON, project: Project? = nil) throws {
         let values = body.toSyncPayloadDictionary()
         let payload = SyncPayload(values: values, keyStyle: syncContainer.keyStyle)
         let context = syncContainer.mainContext
@@ -449,7 +449,7 @@ public final class DemoSyncEngine {
         try await syncItemsIfPresent(in: payload, taskID: taskID)
     }
 
-    private func syncTaskDetailItem(_ payload: DemoSyncPayload) async throws {
+    private func syncTaskDetailItem(_ payload: SyncJSON) async throws {
         guard let projectID = payload.string("project_id"), !projectID.isEmpty else {
             throw SyncTaskDetailError.missingProjectID
         }
@@ -491,7 +491,7 @@ public final class DemoSyncEngine {
         ).first
     }
 
-    private func syncItemsIfPresent(in payload: DemoSyncPayload, taskID: String) async throws {
+    private func syncItemsIfPresent(in payload: SyncJSON, taskID: String) async throws {
         guard let itemPayload = payload.objectArray("items") else { return }
         guard let resolvedTask = try task(withID: taskID) else { return }
         nonisolated(unsafe) let task = resolvedTask
