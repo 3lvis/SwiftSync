@@ -47,21 +47,21 @@ func resolveProjectsListStatusState(phase: SyncLoadPhase, hasRows: Bool) -> Proj
 }
 
 func resolveProjectDetailContentState(
-    loadState: ScreenLoadState,
+    phase: SyncLoadPhase,
     hasProject: Bool,
     hasTasks: Bool
 ) -> ProjectDetailContentState {
     if hasProject || hasTasks {
         return .content
     }
-    return loadState.isLoading ? .loading : .notFound
+    return phase == .loading ? .loading : .notFound
 }
 
-func resolveTaskDetailContentState(loadState: ScreenLoadState, hasTask: Bool) -> TaskDetailContentState {
+func resolveTaskDetailContentState(phase: SyncLoadPhase, hasTask: Bool) -> TaskDetailContentState {
     if hasTask {
         return .content
     }
-    return loadState.isLoading ? .loading : .notFound
+    return phase == .loading ? .loading : .notFound
 }
 
 func resolveTaskFormOptionsState(loadState: ScreenLoadState, hasOptions: Bool) -> TaskFormOptionsState {
@@ -103,7 +103,6 @@ public final class ProjectsViewMachine {
 @MainActor
 @Observable
 public final class ProjectViewMachine {
-    public private(set) var loadState: ScreenLoadState = .idle
     public private(set) var deleteState: SubmissionState = .idle
     public var project: Project? {
         projectPublisher.row
@@ -111,24 +110,23 @@ public final class ProjectViewMachine {
     public var tasks: [Task] {
         // Offline-deleted tasks are hard-deleted (their deletion lives in store history), so they're
         // already absent from the publisher — no soft-delete flag to filter on.
-        taskPublisher.rows
+        tasksSynced.rows
     }
     public var contentState: ProjectDetailContentState {
         resolveProjectDetailContentState(
-            loadState: loadState,
+            phase: tasksSynced.phase,
             hasProject: project != nil,
             hasTasks: !tasks.isEmpty
         )
     }
     public var loadErrorPresentation: ErrorPresentationState? {
-        loadState.errorPresentation
+        tasksSynced.phase.failureMessage.map { ErrorPresentationState(message: $0) }
     }
 
     private let projectID: String
     private let syncEngine: DemoSyncEngine
     private let projectPublisher: SyncModelPublisher<Project>
-    private let taskPublisher: SyncQueryPublisher<Task>
-    private let loadMachine: ScreenLoadMachine
+    private let tasksSynced: SyncedQueryPublisher<Task>
     private let deleteMachine: SubmissionMachine
     public enum DeleteEvent {
         case request(taskID: String)
@@ -139,7 +137,7 @@ public final class ProjectViewMachine {
         self.projectID = projectID
         self.syncEngine = syncEngine
         self.projectPublisher = SyncModelPublisher(Project.self, id: projectID, in: syncContainer)
-        self.taskPublisher = SyncQueryPublisher(
+        self.tasksSynced = SyncedQueryPublisher(
             Task.self,
             relationship: \Task.project,
             relationshipID: projectID,
@@ -148,28 +146,22 @@ public final class ProjectViewMachine {
                 SortDescriptor(\Task.updatedAt, order: .reverse),
                 SortDescriptor(\Task.id),
             ]
-        )
-        self.loadMachine = ScreenLoadMachine { error in
-            presentError(error, fallbackMessage: "Could not load this project yet.")
+        ) { [syncEngine, projectID] in
+            try await syncEngine.syncProjectTasks(projectID: projectID)
         }
         self.deleteMachine = SubmissionMachine { error in
             presentError(error, fallbackMessage: "Could not delete this task.")
         }
 
         observeContinuously {
-            self.loadState = self.loadMachine.state
-        }
-        observeContinuously {
             self.deleteState = self.deleteMachine.state
         }
     }
 
     public func send(_ event: ScreenLoadEvent) {
-        loadMachine.send(
-            event,
-            run: { [syncEngine, projectID] in
-                try await syncEngine.syncProjectTasks(projectID: projectID)
-            })
+        if case .onAppear = event {
+            _Concurrency.Task { await tasksSynced.load() }
+        }
     }
 
     public func sendDelete(_ event: DeleteEvent) {
@@ -200,9 +192,8 @@ public final class ProjectViewMachine {
 @MainActor
 @Observable
 public final class TaskViewMachine {
-    public private(set) var loadState: ScreenLoadState = .idle
     public var task: Task? {
-        taskPublisher.row
+        taskSynced.row
     }
     public var items: [Item] {
         itemPublisher.rows
@@ -218,25 +209,18 @@ public final class TaskViewMachine {
             .map(\.displayName)
     }
     public var contentState: TaskDetailContentState {
-        resolveTaskDetailContentState(loadState: loadState, hasTask: task != nil)
+        resolveTaskDetailContentState(phase: taskSynced.phase, hasTask: task != nil)
     }
     public var loadErrorPresentation: ErrorPresentationState? {
-        loadState.errorPresentation
+        taskSynced.phase.failureMessage.map { ErrorPresentationState(message: $0) }
     }
 
-    private let taskID: String
-    private let syncEngine: DemoSyncEngine
-    private let taskPublisher: SyncModelPublisher<Task>
+    private let taskSynced: SyncedModelPublisher<Task>
     private let itemPublisher: SyncQueryPublisher<Item>
-    private let loadMachine: ScreenLoadMachine
     public init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
-        self.taskID = taskID
-        self.syncEngine = syncEngine
-        self.taskPublisher = SyncModelPublisher(
-            Task.self,
-            id: taskID,
-            in: syncContainer,
-        )
+        self.taskSynced = SyncedModelPublisher(Task.self, id: taskID, in: syncContainer) { [syncEngine, taskID] in
+            try await syncEngine.syncTaskDetail(taskID: taskID)
+        }
         self.itemPublisher = SyncQueryPublisher(
             Item.self,
             relationship: \Item.task,
@@ -244,21 +228,12 @@ public final class TaskViewMachine {
             in: syncContainer,
             sortBy: [SortDescriptor(\Item.position, order: .forward), SortDescriptor(\Item.id, order: .forward)]
         )
-        self.loadMachine = ScreenLoadMachine { error in
-            presentError(error, fallbackMessage: "Could not load this task yet.")
-        }
-
-        observeContinuously {
-            self.loadState = self.loadMachine.state
-        }
     }
 
     public func send(_ event: ScreenLoadEvent) {
-        loadMachine.send(
-            event,
-            run: { [syncEngine, taskID] in
-                try await syncEngine.syncTaskDetail(taskID: taskID)
-            })
+        if case .onAppear = event {
+            _Concurrency.Task { await taskSynced.load() }
+        }
     }
 }
 

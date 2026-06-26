@@ -25,6 +25,20 @@ final class SyncedQueryTests: XCTestCase {
     }
 
     @MainActor
+    func testModelLoadExposesRowAndLoadedPhase() async throws {
+        let container = try SyncContainer(for: InferredTask.self, configurations: .init(isStoredInMemoryOnly: true))
+        container.mainContext.insert(InferredTask(id: 5, title: "X"))
+        try container.mainContext.save()
+
+        let published = SyncedModelPublisher(InferredTask.self, id: 5, in: container) {}
+
+        await published.load()
+
+        XCTAssertEqual(published.phase, .loaded)
+        XCTAssertEqual(published.row?.id, 5)
+    }
+
+    @MainActor
     func testLoadFailureBecomesFailedPhase() async throws {
         struct LoadError: LocalizedError { var errorDescription: String? { "boom" } }
         let container = try SyncContainer(for: InferredTask.self, configurations: .init(isStoredInMemoryOnly: true))
