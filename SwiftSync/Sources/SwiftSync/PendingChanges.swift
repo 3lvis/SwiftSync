@@ -257,6 +257,26 @@ extension SwiftSync {
         return failures
     }
 
+    /// Drain pending changes pass by pass until the queue empties, re-reading the pending set after each
+    /// pass via `withPendingChanges` — so a local edit that lands *during* an upload (past the token this
+    /// pass advanced to) is caught by a later pass instead of being stranded. Stops on the first pass that
+    /// returns failures: a rejection pins the push token (`withPendingChanges` won't advance past it), so
+    /// nothing behind it can drain until the caller resolves it — looping would spin. A `process` throw
+    /// (transport/server error) propagates and ends the drain.
+    @discardableResult
+    public static func drainPendingChanges<Model: SyncUpdatableModel>(
+        for _: Model.Type,
+        in context: ModelContext,
+        isolation: isolated (any Actor)? = #isolation,
+        process: (SyncPendingChanges) async throws -> [SyncPendingChangesFailure]
+    ) async throws -> [SyncPendingChangesFailure] where Model.SyncID == String {
+        var failures: [SyncPendingChangesFailure] = []
+        repeat {
+            failures = try await withPendingChanges(for: Model.self, in: context, process: process)
+        } while try failures.isEmpty && !pendingChanges(for: Model.self, in: context).isEmpty
+        return failures
+    }
+
     /// `withPendingChanges` writes `PushHistoryTokenRecord` to advance its bookmark once the upload is
     /// acknowledged. `SyncContainer` registers that model automatically; a caller who builds their own
     /// `ModelContainer` may not. Validate it's in the schema *before* the upload, so an acknowledged

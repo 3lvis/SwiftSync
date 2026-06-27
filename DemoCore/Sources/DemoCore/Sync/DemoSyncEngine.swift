@@ -208,32 +208,22 @@ public final class DemoSyncEngine {
         // a later pass and never stranded on a stale snapshot.
         if let activeDrain { return try await activeDrain.value }
 
-        let task = _Concurrency.Task { @MainActor in try await self.drainToConvergence() }
+        let task = _Concurrency.Task { @MainActor in
+            // SwiftSync drains pass by pass to convergence; the inbox annotation and pending count are the
+            // app's once-at-the-end bookkeeping (a clean pass returns no failures, so annotating the final
+            // result is equivalent to per-pass).
+            let failures = try await SwiftSync.drainPendingChanges(for: Task.self, in: self.syncContainer.mainContext) {
+                pending in try await self.upload(pending)
+            }
+            try self.annotateFailures(failures)
+            self.refreshPendingCount()
+            return failures
+        }
         activeDrain = task
         defer { activeDrain = nil }
         isSyncing = true
         defer { isSyncing = !inFlightOperations.isEmpty }
         return try await task.value
-    }
-
-    /// Upload pending changes pass by pass until the queue is empty, re-reading the pending set after each
-    /// pass. The history token advances only on a clean pass, so an edit that lands mid-upload stays
-    /// pending and is picked up by the next pass instead of being stranded (the P1 strand).
-    ///
-    /// Stops on a pass that leaves failures: a rejected row pins the token (`withPendingChanges` won't
-    /// advance past it), so nothing more can drain until the user resolves it — looping would spin. A
-    /// throw (transport/server error) propagates without annotating, leaving the inbox intact — only a
-    /// completed pass re-stamps `syncFailureReason`.
-    private func drainToConvergence() async throws -> [SyncPendingChangesFailure] {
-        var lastFailures: [SyncPendingChangesFailure] = []
-        repeat {
-            lastFailures = try await SwiftSync.withPendingChanges(for: Task.self, in: syncContainer.mainContext) {
-                pending in try await self.upload(pending)
-            }
-            try annotateFailures(lastFailures)
-            refreshPendingCount()
-        } while !isOffline && lastFailures.isEmpty && pendingChangeCount > 0
-        return lastFailures
     }
 
     /// Serialize the pending batch into the `/sync/upload` operation list, POST it once, and return only

@@ -131,6 +131,47 @@ final class OfflinePushTests: XCTestCase {
 
     /// A local write during the upload await wasn't in the batch, so the token must not advance past it:
     /// it stays pending rather than being silently swallowed.
+    func testDrainConvergesAcrossWritesThatLandDuringUpload() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        context.insert(PushNote(id: "p1", title: "first"))
+        try context.save()
+
+        var passes = 0
+        let failures = try await SwiftSync.drainPendingChanges(for: PushNote.self, in: context) { pending in
+            passes += 1
+            if passes == 1 {
+                XCTAssertEqual(pending.inserts, ["p1"])
+                // A new local row lands while "uploading" the first batch — past the token this pass advances to.
+                context.insert(PushNote(id: "p2", title: "during upload"))
+                try context.save()
+            }
+            return []
+        }
+
+        XCTAssertTrue(failures.isEmpty)
+        XCTAssertEqual(passes, 2, "the write that landed during the first upload must be drained by a second pass")
+        XCTAssertTrue(
+            try SwiftSync.pendingChanges(for: PushNote.self, in: context).isEmpty,
+            "drain must converge — nothing left pending")
+    }
+
+    func testDrainStopsWhenAPassReturnsFailures() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        context.insert(PushNote(id: "c1", title: "rejected"))
+        try context.save()
+
+        var passes = 0
+        let failures = try await SwiftSync.drainPendingChanges(for: PushNote.self, in: context) { _ in
+            passes += 1
+            return [SyncPendingChangesFailure(id: "c1", error: PushTestError(message: "no"))]
+        }
+
+        XCTAssertEqual(passes, 1, "a failing pass pins the token; the drain must stop, not spin")
+        XCTAssertEqual(failures.map(\.id), ["c1"])
+    }
+
     func testLocalWriteDuringUploadStaysPending() async throws {
         let container = try makeContainer()
         let context = container.mainContext
