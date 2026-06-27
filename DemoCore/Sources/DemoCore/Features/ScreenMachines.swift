@@ -104,7 +104,7 @@ public final class ProjectsViewMachine {
 @MainActor
 @Observable
 public final class ProjectViewMachine {
-    public private(set) var deleteState: SubmissionState = .idle
+    public var deleteState: SyncSubmissionPhase { deleteDriver.phase }
     public var project: Project? {
         projectPublisher.row
     }
@@ -128,7 +128,7 @@ public final class ProjectViewMachine {
     private let syncEngine: DemoSyncEngine
     private let projectPublisher: SyncModelPublisher<Project>
     private let tasksSynced: SyncedQueryPublisher<Task>
-    private let deleteMachine: SubmissionMachine
+    private let deleteDriver = SyncSubmissionDriver(fallbackMessage: "Could not delete this task.")
     public enum DeleteEvent {
         case request(taskID: String)
         case dismissError
@@ -151,13 +151,6 @@ public final class ProjectViewMachine {
         ) { [syncEngine, projectID] in
             try await syncEngine.syncProjectTasks(projectID: projectID)
         }
-        self.deleteMachine = SubmissionMachine { error in
-            presentError(error, fallbackMessage: "Could not delete this task.")
-        }
-
-        observeContinuously {
-            self.deleteState = self.deleteMachine.state
-        }
     }
 
     public func send(_ event: ScreenLoadEvent) {
@@ -169,23 +162,14 @@ public final class ProjectViewMachine {
     public func sendDelete(_ event: DeleteEvent) {
         switch event {
         case .request(let taskID):
-            guard deleteMachine.send(.submit) else { return }
-
             _Concurrency.Task {
-                do {
-                    try await syncEngine.deleteTask(taskID: taskID, projectID: projectID)
-                    await MainActor.run {
-                        _ = deleteMachine.send(.success)
-                    }
-                } catch {
-                    await MainActor.run {
-                        _ = deleteMachine.send(.failure(error))
-                    }
+                await self.deleteDriver.submit {
+                    try await self.syncEngine.deleteTask(taskID: taskID, projectID: self.projectID)
                 }
             }
 
         case .dismissError:
-            _ = deleteMachine.send(.dismissError)
+            deleteDriver.dismissFailure()
         }
     }
 
@@ -247,7 +231,7 @@ public final class TaskFormSheetMachine {
     public private(set) var users: [User] = []
     public private(set) var taskStateOptions: [TaskStateOption] = []
     public private(set) var metadataLoadState: ScreenLoadState = .idle
-    public private(set) var saveState: SubmissionState = .idle
+    public var saveState: SyncSubmissionPhase { saveDriver.phase }
     public var taskStateOptionsState: TaskFormOptionsState {
         resolveTaskFormOptionsState(loadState: metadataLoadState, hasOptions: !taskStateOptions.isEmpty)
     }
@@ -261,7 +245,7 @@ public final class TaskFormSheetMachine {
     private let syncEngine: DemoSyncEngine
     private let editContext: ModelContext
     private let metadataLoadMachine: ScreenLoadMachine
-    private let saveMachine: SubmissionMachine
+    private let saveDriver = SyncSubmissionDriver(fallbackMessage: "Could not save this task.")
     public enum ItemMutation {
         case add(title: String)
         case updateTitle(item: Item, title: String)
@@ -284,18 +268,8 @@ public final class TaskFormSheetMachine {
                 fallbackMessage: "Could not load form options yet."
             )
         }
-        self.saveMachine = SubmissionMachine { error in
-            presentError(
-                error,
-                fallbackMessage: "Could not save this task."
-            )
-        }
-
-        observeContinuously {
+        SwiftSync.observeContinuously {
             self.metadataLoadState = self.metadataLoadMachine.state
-        }
-        observeContinuously {
-            self.saveState = self.saveMachine.state
         }
     }
 
@@ -325,8 +299,6 @@ public final class TaskFormSheetMachine {
             normalizeItemPositions(in: draft)
             draft.updatedAt = Date()
 
-            guard saveMachine.send(.submit) else { return }
-
             var body = syncEngine.syncContainer.export(draft)
             let capturedReviewerIDs = draft.reviewers.map(\.id).sorted()
             let capturedWatcherIDs = draft.watchers.map(\.id).sorted()
@@ -348,27 +320,21 @@ public final class TaskFormSheetMachine {
             let requestBody = body
 
             _Concurrency.Task {
-                do {
+                await self.saveDriver.submit {
                     let payload = try SyncJSON(dictionary: requestBody)
                     switch mode {
                     case .create(let projectID):
-                        try await syncEngine.createTask(body: payload, projectID: projectID)
+                        try await self.syncEngine.createTask(body: payload, projectID: projectID)
                     case .edit(let task):
-                        try await syncEngine.updateTask(taskID: task.id, projectID: task.projectID, body: payload)
+                        try await self.syncEngine.updateTask(
+                            taskID: task.id, projectID: task.projectID, body: payload)
                     }
-                    await MainActor.run {
-                        _ = saveMachine.send(.success)
-                        onSuccess()
-                    }
-                } catch {
-                    await MainActor.run {
-                        _ = saveMachine.send(.failure(error))
-                    }
+                    onSuccess()
                 }
             }
 
         case .dismissSaveError:
-            _ = saveMachine.send(.dismissError)
+            saveDriver.dismissFailure()
         }
     }
 

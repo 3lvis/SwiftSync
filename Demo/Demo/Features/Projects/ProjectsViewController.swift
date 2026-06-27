@@ -1,4 +1,5 @@
 import DemoCore
+import SwiftSync
 import UIKit
 
 final class ProjectsViewController: UITableViewController {
@@ -61,14 +62,14 @@ final class ProjectsViewController: UITableViewController {
         tableView.accessibilityIdentifier = "projects.table"
         statusLabel.accessibilityIdentifier = "projects.status"
 
-        observeContinuously { [weak self] in
+        SwiftSync.observeContinuously { [weak self] in
             guard let self else { return }
             var snapshot = NSDiffableDataSourceSnapshot<String, String>()
             snapshot.appendSections(["projects"])
             snapshot.appendItems(machine.rows.map(\.id), toSection: "projects")
             diffableDataSource.apply(snapshot, animatingDifferences: true)
         }
-        observeContinuously { [weak self] in
+        SwiftSync.observeContinuously { [weak self] in
             guard let self else { return }
             renderStatusState(machine.statusState)
         }

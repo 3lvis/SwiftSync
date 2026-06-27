@@ -8,12 +8,12 @@ public enum ScreenLoadState: Equatable {
     case error(ErrorPresentationState)
 }
 
-public extension ScreenLoadState {
-    var isLoading: Bool {
+extension ScreenLoadState {
+    public var isLoading: Bool {
         self == .loading
     }
 
-    var errorPresentation: ErrorPresentationState? {
+    public var errorPresentation: ErrorPresentationState? {
         guard case .error(let presentation) = self else { return nil }
         return presentation
     }
@@ -96,53 +96,6 @@ public final class ScreenLoadMachine {
             } catch {
                 self?.send(.loadFailed(error))
             }
-        }
-    }
-}
-
-public enum SubmissionEvent {
-    case submit
-    case success
-    case failure(Error)
-    case dismissError
-}
-
-public enum SubmissionState: Equatable {
-    case idle
-    case submitting
-    case failed(ErrorPresentationState)
-}
-
-@MainActor
-@Observable
-public final class SubmissionMachine {
-    public private(set) var state: SubmissionState = .idle
-
-    private let presentFailure: (Error) -> ErrorPresentationState
-
-    public init(presentFailure: @escaping (Error) -> ErrorPresentationState) {
-        self.presentFailure = presentFailure
-    }
-
-    @discardableResult
-    public func send(_ event: SubmissionEvent) -> Bool {
-        switch event {
-        case .submit:
-            guard state != .submitting else { return false }
-            state = .submitting
-            return true
-
-        case .success:
-            state = .idle
-            return false
-
-        case .failure(let error):
-            state = .failed(presentFailure(error))
-            return false
-
-        case .dismissError:
-            state = .idle
-            return false
         }
     }
 }

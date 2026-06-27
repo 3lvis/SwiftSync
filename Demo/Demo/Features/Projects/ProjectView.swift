@@ -1,4 +1,5 @@
 import DemoCore
+import SwiftSync
 import SwiftUI
 
 struct ProjectView: View {
@@ -109,8 +110,8 @@ struct ProjectView: View {
     }
 
     private var deleteFailureMessage: String {
-        if case .failed(let presentation) = machine.deleteState {
-            return presentation.message
+        if case .failed(let message) = machine.deleteState {
+            return message
         }
         return "Could not delete this task."
     }

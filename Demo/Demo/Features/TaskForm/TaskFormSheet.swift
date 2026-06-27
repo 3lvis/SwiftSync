@@ -157,8 +157,8 @@ extension TaskFormSheet {
     }
 
     var saveFailureMessage: String {
-        if case .failed(let error) = machine.saveState {
-            return error.message
+        if case .failed(let message) = machine.saveState {
+            return message
         }
         return "Unknown error"
     }
