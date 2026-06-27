@@ -6,7 +6,6 @@ import XCTest
 // Models that bolt modern SwiftData features onto an otherwise-correct @Syncable model,
 // to characterise how those features interact with SwiftSync's identity/upsert patterns.
 
-// `#Index` on a non-identity field.
 @Syncable
 @Model
 final class InteropIndexedNote {
@@ -21,7 +20,6 @@ final class InteropIndexedNote {
     }
 }
 
-// `@Attribute(.unique)` on a non-identity field.
 @Syncable
 @Model
 final class InteropUniqueEmailUser {
@@ -35,7 +33,6 @@ final class InteropUniqueEmailUser {
     }
 }
 
-// Compound `#Unique` across non-identity fields.
 @Syncable
 @Model
 final class InteropCompoundUniqueEvent {
@@ -52,8 +49,7 @@ final class InteropCompoundUniqueEvent {
 
 final class SyncFeatureInteropTests: XCTestCase {
 
-    /// `#Index` on a non-identity property is transparent to SwiftSync: it only affects query
-    /// planning, so identity-based upsert is unaffected. This is the "safe to use freely" case.
+    /// `#Index` only affects query planning, so identity-based upsert is unaffected — safe to use freely.
     @MainActor
     func testIndexOnNonIdentityFieldIsTransparentToSync() async throws {
         let context = ModelContext(
@@ -67,7 +63,6 @@ final class SyncFeatureInteropTests: XCTestCase {
                 ["id": 2, "title": "B", "category": "x"],
             ], as: InteropIndexedNote.self)
 
-        // Re-sync id 1 with changed fields — must update the same row, not create a new one.
         try await context.sync(item: ["id": 1, "title": "A2", "category": "y"], as: InteropIndexedNote.self)
 
         let notes = try context.fetch(FetchDescriptor<InteropIndexedNote>())
@@ -76,11 +71,6 @@ final class SyncFeatureInteropTests: XCTestCase {
             notes.first { $0.id == 1 }?.title, "A2", "upsert-by-id must still update in place")
     }
 
-    /// A unique constraint on a *non-identity* property breaks SwiftSync's core invariant
-    /// (one row per `syncIdentity`). When sync inserts an identity-distinct row whose unique
-    /// field collides with an existing row, SwiftData performs a constraint-based upsert and
-    /// silently overwrites/destroys the other row — local data ends up disagreeing with the
-    /// backend, with no error. Put uniqueness only on the sync identity.
     @MainActor
     func testUniqueOnNonIdentityFieldCausesSilentSyncDataLoss() async throws {
         XCTExpectFailure(
@@ -93,7 +83,7 @@ final class SyncFeatureInteropTests: XCTestCase {
                 configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
 
         try await context.sync(item: ["id": 1, "email": "a@x.com", "name": "Alice"], as: InteropUniqueEmailUser.self)
-        // id 2 is a distinct record per SwiftSync identity, but collides on the unique email.
+        // Distinct sync identity (id 2), but collides on the unique email.
         try await context.sync(item: ["id": 2, "email": "a@x.com", "name": "Bob"], as: InteropUniqueEmailUser.self)
 
         let users = try context.fetch(FetchDescriptor<InteropUniqueEmailUser>())
@@ -101,9 +91,6 @@ final class SyncFeatureInteropTests: XCTestCase {
         XCTAssertTrue(users.contains { $0.id == 1 }, "the original row must not be destroyed")
     }
 
-    /// Compound `#Unique` across non-identity fields has the same hazard as a single-field
-    /// unique constraint: an identity-distinct row that collides on the compound key destroys
-    /// the existing row during sync.
     @MainActor
     func testCompoundUniqueOnSyncedFieldsCausesSilentSyncDataLoss() async throws {
         XCTExpectFailure(
@@ -123,10 +110,6 @@ final class SyncFeatureInteropTests: XCTestCase {
         XCTAssertTrue(events.contains { $0.id == 1 }, "the original row must not be destroyed")
     }
 
-    // MARK: - Guardrail: SyncContainer refuses the data-loss footgun at init
-
-    /// `#Index` on a non-identity field is safe, so a `SyncContainer` built from such a model
-    /// initialises normally.
     @MainActor
     func testSyncContainerAcceptsIndexAndIdentityUniqueModel() throws {
         XCTAssertNoThrow(
@@ -135,8 +118,6 @@ final class SyncFeatureInteropTests: XCTestCase {
                 configurations: ModelConfiguration(isStoredInMemoryOnly: true)))
     }
 
-    /// A `@Syncable` model with `@Attribute(.unique)` on a non-identity field must be rejected at
-    /// `SyncContainer` init — same guardrail style as the many-to-many inverse check.
     @MainActor
     func testSyncContainerRejectsUniqueOnNonIdentityField() throws {
         XCTAssertThrowsError(
@@ -153,7 +134,6 @@ final class SyncFeatureInteropTests: XCTestCase {
         }
     }
 
-    /// Compound `#Unique` across non-identity fields is rejected at `SyncContainer` init.
     @MainActor
     func testSyncContainerRejectsCompoundUniqueOnNonIdentityFields() throws {
         XCTAssertThrowsError(

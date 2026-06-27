@@ -17,7 +17,7 @@ final class PruneProject {
 @Syncable
 @Model
 final class PruneTask {
-    // Offline opt-in: identity preserved on deletion → this model gets dirty-set pull semantics.
+    // .preserveValueOnDeletion is the offline opt-in: it gives this model dirty-set pull semantics.
     @Attribute(.unique, .preserveValueOnDeletion) var id: String
     var title: String
     @NotExport var project: PruneProject?
@@ -29,9 +29,8 @@ final class PruneTask {
     }
 }
 
-/// The #625 guarantee, rebuilt on SwiftData history: an inbound pull preserves a never-pushed local
-/// insert (it's in the history dirty-set) but still prunes a row the server genuinely deleted (which
-/// arrived via an inbound pull and so isn't dirty).
+/// An inbound pull preserves a never-pushed local insert (it's in the history dirty-set) but still
+/// prunes a server-deleted row (which arrived via a pull and so isn't dirty).
 @MainActor
 final class InboundPrunePreservesPendingTests: XCTestCase {
     private func makeContainer() throws -> SyncContainer {
@@ -49,7 +48,6 @@ final class InboundPrunePreservesPendingTests: XCTestCase {
         let context = container.mainContext
         let project = PruneProject(id: "p1")
         context.insert(project)
-        // A local-only insert the server has never seen (offline-created).
         context.insert(PruneTask(id: "t-local", title: "offline created", project: project))
         try context.save()
 
@@ -69,11 +67,11 @@ final class InboundPrunePreservesPendingTests: XCTestCase {
         context.insert(project)
         try context.save()
 
-        // The row arrives via an inbound pull (server-known, not dirty)…
+        // Arrives via a pull, so it's server-known and not dirty…
         try await container.sync(
             payload: [["id": "t-synced", "title": "synced"]],
             as: PruneTask.self, parent: project, relationship: \PruneTask.project)
-        // …then the server omits it → genuinely deleted server-side, so the prune must remove it.
+        // …then an empty pull omits it, meaning server-side deletion, so the prune must remove it.
         try await container.sync(
             payload: [], as: PruneTask.self, parent: project, relationship: \PruneTask.project)
 

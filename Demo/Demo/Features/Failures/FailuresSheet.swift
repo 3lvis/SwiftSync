@@ -3,9 +3,6 @@ import SwiftData
 import SwiftSync
 import SwiftUI
 
-/// The failures inbox: rows the server rejected (a `syncFailureReason` is set). The user resolves each
-/// by editing the task (fix → re-syncs) or discarding the change (restores the server's version). The
-/// list is a reactive store query, so it updates itself as failures appear and clear.
 struct FailuresSheet: View {
     let syncEngine: DemoSyncEngine
 

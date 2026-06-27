@@ -1,7 +1,6 @@
 import Foundation
 
-/// A measured step of a sync operation. The raw value is the key under which `SyncPerformanceProfiler`
-/// accumulates the step's duration — and the label shown in the benchmark's per-phase report.
+/// The raw value is both the accumulation key and the label shown in the benchmark's per-phase report.
 enum SyncPhase: String {
     case normalizePayload = "normalize-payload"
     case fetchExisting = "fetch-existing"

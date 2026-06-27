@@ -27,7 +27,7 @@ public final class DemoSyncEngine {
 
     public private(set) var isSyncing = false
 
-    /// Simulated airplane mode the UI binds to. Flipping back online drains the offline queue.
+    /// Simulated airplane mode. Flipping back online drains the offline queue.
     public var isOffline = false {
         didSet {
             apiClient.isOffline = isOffline
@@ -91,13 +91,12 @@ public final class DemoSyncEngine {
         }
     }
 
-    /// Run an inbound pull, tolerating a dead transport: while offline the refresh is skipped and the
-    /// UI keeps reading the local cache (a failed refresh is a non-event, never a surfaced error).
+    /// Run an inbound pull, tolerating a dead transport: a failed refresh is a non-event, never surfaced.
     private func pull(_ key: String, _ operation: () async throws -> Void) async throws {
         do {
             try await runOperation(key, operation)
         } catch DemoAPIError.offline {
-            // Offline: keep serving what's already in the local store.
+            // Offline: keep serving the local cache.
         }
     }
 
@@ -126,7 +125,7 @@ public final class DemoSyncEngine {
             try applyLocalTask(body)
             if let task = try task(withID: taskID) {
                 task.updatedAt = Date()
-                task.syncFailureReason = nil  // the corrected edit gets a fresh attempt
+                task.syncFailureReason = nil  // the correction gets a fresh attempt
                 try syncContainer.mainContext.save()
             }
             if !isOffline {
@@ -275,9 +274,8 @@ public final class DemoSyncEngine {
             case ("upsert", "applied"), ("delete", "applied"):
                 break
             default:
-                // Bubble the backend's rejection up as this app's own error. SwiftSync returns the
-                // failures verbatim without interpreting them; the engine reads them back to annotate
-                // the inbox.
+                // Bubble the backend's rejection up as this app's own error; SwiftSync returns failures
+                // verbatim without interpreting them.
                 failures.append(
                     SyncPendingChangesFailure(
                         id: id ?? "",
@@ -321,14 +319,12 @@ public final class DemoSyncEngine {
         try context.save()
     }
 
-    /// A task whose only history is a never-pushed local insert (it's in the pending-insert set).
     private func isNeverPushed(_ taskID: String) -> Bool {
         let pending = try? SwiftSync.pendingChanges(for: Task.self, in: syncContainer.mainContext)
         return pending?.inserts.contains(taskID) ?? false
     }
 
-    /// Reflect a push's outcome onto the inbox: stamp `syncFailureReason` on each rejected row and
-    /// clear it from any row that no longer fails (it succeeded, or its corrected edit went through).
+    /// Stamp `syncFailureReason` on each rejected row and clear it from any row that no longer fails.
     /// SwiftSync persists nothing — the failures inbox is entirely this app's concern.
     private func annotateFailures(_ failures: [SyncPendingChangesFailure]) throws {
         let reasonsByID = Dictionary(
@@ -343,7 +339,6 @@ public final class DemoSyncEngine {
         try syncContainer.mainContext.save()
     }
 
-    /// Tasks the server rejected (a failure reason is set), newest first — the failures inbox.
     public func failedTasks() -> [Task] {
         (try? syncContainer.mainContext.fetch(
             FetchDescriptor<Task>(
@@ -351,8 +346,6 @@ public final class DemoSyncEngine {
                 sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]))) ?? []
     }
 
-    /// Resolve a rejected change: drop a never-synced row, or restore the server's version of an
-    /// edited row (abandoning the local edit) and clear its failure.
     public func discardFailedChange(taskID: String) async throws {
         guard let task = try task(withID: taskID) else { return }
         if isNeverPushed(taskID) {

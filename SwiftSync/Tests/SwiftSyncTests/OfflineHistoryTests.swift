@@ -19,9 +19,8 @@ final class HistoryRow {
 
 @MainActor
 final class OfflineHistoryTests: XCTestCase {
-    /// The core of the SwiftData-History design: `pendingChanges` reads the store's change history,
-    /// counts only locally-authored changes (ignoring inbound/pull writes), and recovers a deleted
-    /// row's id from the history tombstone — with zero offline fields on the model.
+    /// `pendingChanges` reads local history (ignoring inbound writes) and recovers a deleted row's id
+    /// from the tombstone — with zero offline fields on the model.
     func testPendingChangesReadsLocalHistoryAndIgnoresInbound() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("offline-history-\(UUID().uuidString)", isDirectory: true)
@@ -31,13 +30,13 @@ final class OfflineHistoryTests: XCTestCase {
         let container = try SyncContainer(for: HistoryRow.self, configurations: configuration)
         let now = Date()
 
-        // Inbound (pull) write — author = inboundAuthor. Must be ignored by pendingChanges.
+        // inboundAuthor marks this as a pull write, which pendingChanges must ignore.
         let inbound = ModelContext(container.modelContainer)
         inbound.author = SwiftSync.inboundAuthor
         inbound.insert(HistoryRow(id: "server-1", title: "From server", updatedAt: now))
         try inbound.save()
 
-        // Local write — default author. Must be detected as a pending insert.
+        // Default author marks a local write, detected as pending.
         let local = container.mainContext
         local.insert(HistoryRow(id: "local-1", title: "Made offline", updatedAt: now))
         try local.save()
@@ -47,11 +46,11 @@ final class OfflineHistoryTests: XCTestCase {
         XCTAssertTrue(pending.updates.isEmpty)
         XCTAssertTrue(pending.deletes.isEmpty)
 
-        // Push it so it's "synced" (token advances past its insert); now a later delete is a genuine
-        // pending deletion rather than an insert-then-delete the server never saw.
+        // Push first so the row is synced; the later delete is then a genuine pending deletion,
+        // not an insert-then-delete the server never saw.
         _ = try await SwiftSync.withPendingChanges(for: HistoryRow.self, in: local) { _ in [] }
 
-        // Delete the synced row with a plain context.delete — the tombstone must yield its id.
+        // Plain context.delete — no special API; the id must still come back from the tombstone.
         let row = try XCTUnwrap(
             try local.fetch(FetchDescriptor<HistoryRow>(predicate: #Predicate { $0.id == "local-1" })).first)
         local.delete(row)
@@ -97,9 +96,8 @@ final class OfflineHistoryTests: XCTestCase {
         XCTAssertEqual(Set(pending.inserts), Set(["local-1", "widget-1"]))
     }
 
-    /// Opt-in overhead benchmark: how much does a large pull cost under the History design?
-    /// Expectation: ~baseline, because the pull writes no extra rows — offline tracking is a *read*
-    /// of history at push time, not a write on the pull path.
+    /// Opt-in benchmark. Expectation: ~baseline, because offline tracking reads history at push time
+    /// rather than writing extra rows on the pull path.
     ///   SWIFTSYNC_RUN_BENCHMARKS=1 SWIFTSYNC_BENCHMARK_TIERS=100000 \
     ///     swift test --filter OfflineHistoryTests/testBulkPullOverhead
     func testBulkPullOverhead() async throws {
@@ -134,7 +132,7 @@ final class OfflineHistoryTests: XCTestCase {
             try context.trimSwiftSyncInboundHistory()
             let cleanupMs = cleanupStart.duration(to: clock.now).msValue
 
-            // Push-side detection over the same store: should be ~empty (all inbound-authored) and fast.
+            // Push-side detection should be ~empty and fast: every row was inbound-authored.
             let detectStart = clock.now
             let pending = try SwiftSync.pendingChanges(for: HistoryRow.self, in: context, since: nil)
             let detectMs = detectStart.duration(to: clock.now).msValue

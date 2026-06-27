@@ -7,13 +7,9 @@ import XCTest
 
 final class ConvergingDrainTests: XCTestCase {
 
-    /// P1 strand: an edit that lands *after* a drain reads its pending snapshot but *before* that drain
-    /// finishes must still reach the server. A coalescing drain covers only its original snapshot and
-    /// never re-reads, so the late edit is stranded; a converging drain re-reads until pending is empty.
-    ///
-    /// Deterministic by construction: the drain is driven with an explicit handle (no reconnect `didSet`),
-    /// only the first upload parks, and convergence's later uploads flow through — so the test never
-    /// assumes how many uploads a correct drain performs.
+    /// An edit that lands *after* a drain reads its pending snapshot but *before* that drain finishes must
+    /// still reach the server. A coalescing drain covers only its original snapshot and never re-reads, so
+    /// the late edit is stranded; a converging drain re-reads until pending is empty.
     @MainActor
     func testLateEditDuringDrainReachesServer() async throws {
         let seed = DemoSeedData.generate()
@@ -42,8 +38,8 @@ final class ConvergingDrainTests: XCTestCase {
         syncContainer.mainContext.insert(row)
         try syncContainer.mainContext.save()
 
-        // Park only the first upload mid-flight; convergence's later uploads flow straight through, so the
-        // test never assumes how many uploads a correct drain performs.
+        // Park only the first upload; convergence's later uploads flow through, so the test never assumes
+        // how many uploads a correct drain performs.
         nonisolated(unsafe) var uploadStarted: CheckedContinuation<Void, Never>?
         nonisolated(unsafe) var releaseGate: CheckedContinuation<Void, Never>?
         nonisolated(unsafe) var didPark = false

@@ -89,7 +89,7 @@ public final class ProjectsViewMachine {
             fallbackMessage: "Could not load projects."
         ) { [syncEngine] in
             try await syncEngine.syncProjects()
-            // Warm reference data (users + task states) so the new-task form has options offline.
+            // Warm reference data so the new-task form has options offline.
             try await syncEngine.syncTaskFormMetadata()
         }
     }

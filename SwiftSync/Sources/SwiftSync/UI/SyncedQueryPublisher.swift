@@ -2,9 +2,6 @@ import Foundation
 import Observation
 import SwiftData
 
-/// Pairs a reactive **collection** query with the sync that populates it — the load-state machine +
-/// observation a screen otherwise hand-wires. Declare *what* to read and *how* to load it; read back
-/// live `rows` plus a `phase`. Plain-Swift and `@Observable`.
 @MainActor
 @Observable
 public final class SyncedQueryPublisher<Model: PersistentModel> {

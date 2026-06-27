@@ -172,7 +172,6 @@ final class OfflinePushTests: XCTestCase {
         try await engine.updateTask(
             taskID: taskID, projectID: projectID, body: try SyncJSON(dictionary: dictionary))
 
-        // Reconnect + push: the server rejects, and the failure is recorded on the row.
         engine.isOffline = false
         let pushResult = try await engine.pushPendingChanges()
         let failures = try XCTUnwrap(pushResult)
@@ -212,7 +211,6 @@ final class OfflinePushTests: XCTestCase {
         _ = try await engine.pushPendingChanges()
         XCTAssertNotNil(try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext)).syncFailureReason)
 
-        // Discard: restores the server's title and clears the failure.
         try await engine.discardFailedChange(taskID: taskID)
         let discarded = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
         XCTAssertNil(discarded.syncFailureReason, "discard clears the failure")
@@ -289,7 +287,6 @@ final class OfflinePushTests: XCTestCase {
         XCTAssertNotNil(failed.syncFailureReason, "the rejected edit is flagged")
         XCTAssertEqual(engine.failedChangeCount, 1)
 
-        // Fix it with a valid title while online: the corrected save must resolve the failure.
         var fixDictionary = syncContainer.export(failed)
         fixDictionary["title"] = "Fixed online"
         fixDictionary.removeValue(forKey: "items")
@@ -344,7 +341,6 @@ final class OfflinePushTests: XCTestCase {
         engine.isOffline = false
         _ = try await engine.pushPendingChanges()
 
-        // The held row must show the adopted server value at once — not the stale local edit.
         XCTAssertEqual(held.title, serverTitle, "conflict resolution must reflect on the live row immediately")
     }
 
@@ -446,7 +442,6 @@ final class OfflinePushTests: XCTestCase {
 
         let newReviewers = [DemoSeedData.SeedIDs.Users.miaPatel, DemoSeedData.SeedIDs.Users.ethanLee]
 
-        // Offline: assign people. Mutates the Task (its reviewers + updatedAt) → a pending Task update.
         engine.isOffline = true
         try await engine.replaceTaskReviewers(taskID: taskID, projectID: projectID, reviewerIDs: newReviewers)
         let offline = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
@@ -530,13 +525,11 @@ final class OfflinePushTests: XCTestCase {
             ]
         ])
 
-        // Offline: a pull must not reach the server — no error, and no new data.
         engine.isOffline = true
         try await engine.syncProjectTasks(projectID: projectID)
         let offlineCount = try syncContainer.mainContext.fetch(FetchDescriptor<Task>()).count
         XCTAssertEqual(offlineCount, onlineCount, "offline pull serves the local cache, never the server")
 
-        // Reconnect: the server task is pulled in.
         engine.isOffline = false
         try await engine.syncProjectTasks(projectID: projectID)
         let refreshedCount = try syncContainer.mainContext.fetch(FetchDescriptor<Task>()).count

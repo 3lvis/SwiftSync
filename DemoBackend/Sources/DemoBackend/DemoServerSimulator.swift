@@ -222,8 +222,7 @@ public final class DemoServerSimulator {
         return try replaceReviewers(rowID: rowID, reviewerIDs: reviewerIDs)
     }
 
-    /// Int-keyed internal so callers that already resolved the row (e.g. `uploadUpsert`) don't re-resolve
-    /// the public_id.
+    /// Int-keyed so callers that already resolved the row (e.g. `uploadUpsert`) don't re-resolve the public_id.
     @discardableResult
     private func replaceReviewers(rowID: Int, reviewerIDs: [String]) throws -> [String: Any]? {
         let uniqueReviewerIDs = Array(Set(reviewerIDs)).sorted()
@@ -341,8 +340,7 @@ public final class DemoServerSimulator {
     }
 
     public func createTask(body: [String: Any]) throws -> [String: Any] {
-        // Client-originated rows adopt the body's `id` as public_id; server-origin rows (no `id`)
-        // get a freshly minted lowercased UUID.
+        // Client-originated rows adopt the body's `id` as public_id; server-origin rows (no `id`) mint one.
         let publicID = (body["id"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? UUID().uuidString.lowercased()
         guard let projectID = body["project_id"] as? String else {
             throw DemoBackendError.validation(message: "project_id is required")
@@ -477,10 +475,8 @@ public final class DemoServerSimulator {
         return payload
     }
 
-    /// PUT /tasks/:publicID — full-object update. Accepts the same field shape that createTask produces
-    /// (exported via SwiftSync's exportObject), reads all mutable scalar fields, and applies them.
-    /// id, project_id, author_id, and created_at are immutable; they are validated for consistency
-    /// but not updated. updated_at is always advanced by the server regardless of the incoming value.
+    /// PUT /tasks/:publicID full-object update. id, project_id, author_id, created_at are immutable
+    /// (validated, not updated); updated_at is always advanced by the server regardless of the incoming value.
     @discardableResult
     public func updateTask(publicID: String, body: [String: Any]) throws -> [String: Any] {
         guard let rowID = try taskRowID(forPublicID: publicID) else {
@@ -495,7 +491,7 @@ public final class DemoServerSimulator {
             throw DemoBackendError.notFound(entity: "task", id: String(taskID))
         }
 
-        // Validate immutable identity consistency: the client's `id` is the row's public_id.
+        // The client's `id` is the row's public_id and is immutable.
         if let incomingID = body["id"] as? String {
             let currentPublicID = current["id"] as? String
             if incomingID != currentPublicID {
@@ -543,12 +539,11 @@ public final class DemoServerSimulator {
             itemsToReconcile = nil
         }
 
-        // assignee_id: present key means update (NSNull clears, String sets)
+        // Payload contract: absent key preserves, NSNull clears, String sets.
         let assigneeID: String?
         if body.keys.contains("assignee_id") {
-            assigneeID = body["assignee_id"] as? String  // nil if NSNull
+            assigneeID = body["assignee_id"] as? String
         } else {
-            // Preserve current value if key is absent
             assigneeID = current["assignee_id"] as? String
         }
 
@@ -647,11 +642,9 @@ public final class DemoServerSimulator {
         )
     }
 
-    // MARK: - POST /sync/upload (offline batch push)
-    // See docs/project/upload-endpoint-contract.md. A flat, op-tagged operation list; per-operation
-    // results (no all-or-nothing). Operations are keyed by the client's stable `id`, which is the
-    // row's public_id. The internal int id never leaves the server. `upsert` is find-by-public_id →
-    // update-else-create, `delete` tombstones by public_id. Both are idempotent.
+    // See docs/project/upload-endpoint-contract.md. Op-tagged operation list with per-operation results
+    // (no all-or-nothing), keyed by the client's stable `id` (the row's public_id). `upsert` is
+    // find-by-public_id → update-else-create, `delete` tombstones by public_id. Both are idempotent.
 
     public func upload(operations: [[String: Any]]) throws -> [String: Any] {
         let results = operations.map(applyUploadOperation(_:))
@@ -675,9 +668,6 @@ public final class DemoServerSimulator {
         }
     }
 
-    /// Insert-or-update keyed by the client's stable `id` (the row's public_id). Found ⇒ update
-    /// (last-writer-wins); absent ⇒ create, adopting that public_id. The internal int id never leaves
-    /// the server. Idempotent: re-sending converges, no duplicate row.
     private func uploadUpsert(_ payload: [String: Any]) throws -> [String: Any] {
         try requireTasksType(payload)
         let id = try requireID(payload)
@@ -695,8 +685,7 @@ public final class DemoServerSimulator {
                     "server": try taskDetailPayload(rowID: existingID) ?? NSNull(),
                 ]
             }
-            // An edit newer than a delete wins LWW: revive the tombstoned row before updating it
-            // (updateTask ignores tombstoned rows). A no-op for a live row.
+            // Revive a tombstoned row before updating it — updateTask ignores tombstoned rows. No-op when live.
             try self.sqlite.execute(
                 "UPDATE tasks SET deleted_at = NULL WHERE id = ?",
                 bind: { stmt in self.sqlite.bind(int: existingID, at: 1, in: stmt) }
@@ -716,7 +705,7 @@ public final class DemoServerSimulator {
             // Already absent (or never synced) ⇒ idempotent success.
             return ["operation": "delete", "id": id, "status": "applied"]
         }
-        // Last-writer-wins applies to deletes too: an older delete must not erase a newer server edit.
+        // An older delete must not erase a newer server edit (LWW).
         if try isStale(rowID: rowID, incoming: incoming) {
             return [
                 "operation": "delete", "id": id, "status": "stale",
@@ -724,8 +713,8 @@ public final class DemoServerSimulator {
             ]
         }
         suspendAmbientMutationsAfterWrite()
-        // Record the delete's logical timestamp in updated_at too, so a later upsert that targets this
-        // (now tombstoned) row compares LWW against *the delete*, not the pre-delete edit.
+        // Record the delete's timestamp in updated_at so a later upsert compares LWW against the delete,
+        // not the pre-delete edit.
         try self.sqlite.execute(
             "UPDATE tasks SET deleted_at = ?, updated_at = ? WHERE id = ?",
             bind: { stmt in
@@ -757,8 +746,7 @@ public final class DemoServerSimulator {
         return date
     }
 
-    /// The internal int id for the row with this `public_id`, or nil if none exists. With
-    /// `includeTombstoned`, also matches tombstoned rows so a delete/revive can find its target.
+    /// With `includeTombstoned`, also matches tombstoned rows so a delete/revive can find its target.
     private func taskRowID(forPublicID publicID: String, includeTombstoned: Bool = false) throws -> Int? {
         let scope = includeTombstoned ? "" : " AND deleted_at IS NULL"
         let rows = try self.sqlite.query(
@@ -775,7 +763,7 @@ public final class DemoServerSimulator {
             bind: { stmt in self.sqlite.bind(int: rowID, at: 1, in: stmt) }
         )
         guard let stored = rows.first?.double("updated_at") else { return false }
-        // Contract: an incoming write older *or equal* loses (server wins ties).
+        // An incoming write older *or equal* loses — server wins ties.
         return incoming.timeIntervalSince1970 <= stored
     }
 
@@ -1266,8 +1254,8 @@ public final class DemoServerSimulator {
                 )
             }
 
-            // Seeds carry a stable public_id; the DB auto-assigns the internal int id, which we capture
-            // to wire up relationships and child items (whose seed parent reference is a public_id).
+            // Capture each row's auto-assigned int id to wire up reviewers/watchers and child items
+            // (whose seed parent reference is a public_id).
             var taskRowIDByPublicID: [String: Int] = [:]
             for task in seedData.tasks {
                 try sqlite.execute(

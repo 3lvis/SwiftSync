@@ -113,8 +113,7 @@ public struct DemoSeedData {
         self.items = items
     }
 
-    // Stable UUID constants for the canonical seed dataset.
-    // These are fixed — not random — so the demo loads consistent data across fresh installs.
+    // Fixed, not random, so the demo loads consistent data across fresh installs.
     public enum SeedIDs {
         public enum Projects {
             public static let accountSecurity = "C3E7A1B2-1001-0000-0000-000000000001"

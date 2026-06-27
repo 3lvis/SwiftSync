@@ -30,7 +30,7 @@ final class PubUser {
     }
 }
 
-// Unrelated to PubTask/PubUser — used to verify no spurious reloads across type boundaries.
+// Used to verify a sync of one type triggers no reload on a query of another.
 @Syncable
 @Model
 final class PubUnrelatedTag {
@@ -45,16 +45,12 @@ final class PubUnrelatedTag {
 
 final class SyncQueryPublisherTests: XCTestCase {
 
-    // MARK: - Helpers
-
     @MainActor
     private func makeContainer(modelTypes: any PersistentModel.Type...) throws -> SyncContainer {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let modelContainer = try ModelContainer(for: Schema(modelTypes), configurations: config)
         return SyncContainer(modelContainer)
     }
-
-    // MARK: - Basic population
 
     @MainActor
     func testPublisherEmitsInitialRows() throws {
@@ -72,8 +68,6 @@ final class SyncQueryPublisherTests: XCTestCase {
 
         XCTAssertEqual(publisher.rows.map(\.id), ["t1", "t2"])
     }
-
-    // MARK: - Reactive reload after sync
 
     @MainActor
     func testPublisherReloadsAfterSync() async throws {
@@ -124,8 +118,6 @@ final class SyncQueryPublisherTests: XCTestCase {
         XCTAssertEqual(publisher.rows.first?.title, "New Title")
     }
 
-    // MARK: - Predicate filtering
-
     @MainActor
     func testPublisherWithPredicateFiltersRows() async throws {
         let syncContainer = try makeContainer(modelTypes: PubTask.self, PubUser.self)
@@ -151,8 +143,6 @@ final class SyncQueryPublisherTests: XCTestCase {
 
         XCTAssertEqual(publisher.rows.map(\.id).sorted(), ["t1", "t3"])
     }
-
-    // MARK: - No spurious reload for unrelated types
 
     @MainActor
     func testPublisherDoesNotReloadForUnrelatedTypeChange() async throws {
@@ -180,8 +170,6 @@ final class SyncQueryPublisherTests: XCTestCase {
 
         XCTAssertEqual(publisher.rows.map(\.id), originalRows)
     }
-
-    // MARK: - postFetchFilter (relationship)
 
     @MainActor
     func testPublisherWithToOneRelationshipIDFilter() async throws {
@@ -280,8 +268,6 @@ final class SyncQueryPublisherTests: XCTestCase {
         XCTAssertEqual(publisher.rows.first?.title, "Updated")
     }
 
-    // MARK: - Current rows surface
-
     @MainActor
     func testRowsReflectLatestValues() async throws {
         let syncContainer = try makeContainer(modelTypes: PubTask.self, PubUser.self)
@@ -363,20 +349,17 @@ final class SyncQueryPublisherTests: XCTestCase {
         XCTFail("Timed out waiting for condition: \(description)")
     }
 
-    // MARK: - single-object writes land in place
-
     @MainActor
     func testSingleItemSyncUpdatesRegisteredRowInPlace() async throws {
         let container = try makeContainer(modelTypes: PubTask.self)
         container.mainContext.insert(PubTask(id: "t1", title: "Original"))
         try container.mainContext.save()
 
-        // A live query / SwiftUI view holds the registered main-context instance.
+        // Stands in for a live query/view holding the registered main-context instance.
         let row = try XCTUnwrap(
             container.mainContext.fetch(FetchDescriptor<PubTask>()).first { $0.id == "t1" })
 
-        // A single-object sync applies on the main context, so the edit lands on the already-registered
-        // instance at once (no cross-context merge to wait on).
+        // Single-object sync applies on the main context, so the edit lands in place — no merge to await.
         try await container.sync(item: ["id": "t1", "title": "Edited"], as: PubTask.self)
 
         XCTAssertEqual(row.title, "Edited")

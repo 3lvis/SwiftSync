@@ -13,7 +13,7 @@ final class SyncedQueryTests: XCTestCase {
         let published = SyncedQueryPublisher(
             InferredTask.self, in: container, sortBy: [SortDescriptor(\InferredTask.id)]
         ) {
-            // a real screen would sync here; success is all this test needs
+            // Empty by design: the load closure normally syncs; this test only needs it to succeed.
         }
 
         XCTAssertEqual(published.phase, .idle)

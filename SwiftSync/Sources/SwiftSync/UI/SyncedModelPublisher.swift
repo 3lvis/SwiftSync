@@ -2,8 +2,6 @@ import Foundation
 import Observation
 import SwiftData
 
-/// Pairs a reactive **single-row** read (by id) with the sync that populates it — the single-row
-/// counterpart of `SyncedQueryPublisher`. Plain-Swift and `@Observable`.
 @MainActor
 @Observable
 public final class SyncedModelPublisher<Model: PersistentModel & SyncModelable> {

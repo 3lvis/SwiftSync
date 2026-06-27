@@ -6,8 +6,6 @@ import Foundation
 public enum SyncError: Error, Sendable, Equatable {
     case invalidPayload(model: String, reason: String)
     case cancelled
-    /// A model's schema is invalid for sync (e.g. an unanchored many-to-many, or a uniqueness
-    /// constraint off the sync identity).
     case schemaValidation(reason: String)
     case containerInitialization(reason: String)
 }

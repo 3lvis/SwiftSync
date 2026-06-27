@@ -38,12 +38,6 @@ final class TaskFormPeopleMutationTests: XCTestCase {
 
         let draft = try XCTUnwrap(fetchTask(id: taskID, in: editContext))
 
-        // Match the UI flow:
-        // assignee -> Mia
-        // reviewer Noah off
-        // reviewer Sofia on
-        // watcher Ethan off
-        // watcher Sofia on
         draft.assigneeID = DemoSeedData.SeedIDs.Users.miaPatel
         draft.reviewers.removeAll(where: { $0.id == DemoSeedData.SeedIDs.Users.noahKim })
         if !draft.reviewers.contains(where: { $0.id == DemoSeedData.SeedIDs.Users.sofiaGarcia }) {
