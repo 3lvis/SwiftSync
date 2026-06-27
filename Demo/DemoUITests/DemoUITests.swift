@@ -72,7 +72,7 @@ final class DemoUITests: XCTestCase {
         let app = configuredApp()
         app.launch()
 
-        // Online: the home screen warms reference data (users + task states) into the cache.
+        // Opening online first warms reference data (users + task states) into the cache.
         openProject(app, id: DemoSeedProjectID.accountSecurity)
         XCTAssertTrue(
             app.staticTexts["Add session timeout controls to account settings"].waitForExistence(timeout: 2))
@@ -83,7 +83,7 @@ final class DemoUITests: XCTestCase {
         toggle.tap()
         XCTAssertEqual(app.buttons["offline-toggle"].label, "Offline")
 
-        // Create a task offline. With reference data cached, the form fills its defaults and Create enables.
+        // Cached reference data lets the offline form fill defaults so Create enables.
         openProject(app, id: DemoSeedProjectID.accountSecurity)
         openCreateTaskForm(app)
         let title = uniqueTitle(prefix: "Offline Created")
@@ -92,18 +92,16 @@ final class DemoUITests: XCTestCase {
         app.buttons["task-form.save"].tap()
         XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 3))
 
-        // It appears locally and is queued.
         XCTAssertTrue(findAfterScrolling(app.staticTexts[title], in: app))
         goBack(app)
         XCTAssertTrue(app.staticTexts["pending-count"].waitForExistence(timeout: 2), "the create is queued")
 
-        // Reconnect: the queue syncs automatically — no button tap.
+        // Reconnecting auto-syncs the queue — no button tap.
         app.buttons["offline-toggle"].tap()
         XCTAssertTrue(
             app.staticTexts["pending-count"].waitForNonExistence(timeout: 5),
             "reconnecting auto-syncs the queue")
 
-        // It survived the sync: reopening online (a real refresh) still shows it.
         openProject(app, id: DemoSeedProjectID.accountSecurity)
         XCTAssertTrue(findAfterScrolling(app.staticTexts[title], in: app))
     }
@@ -118,14 +116,13 @@ final class DemoUITests: XCTestCase {
         openTaskDetail(
             app, projectID: DemoSeedProjectID.accountSecurity, taskID: DemoSeedTaskID.sessionTimeout)
 
-        // Offline: rename the task to a title the server will reject (too long).
+        // Rename to a title the server will reject (too long) so the offline push fails on sync.
         app.buttons["offline-toggle"].tap()
         openEditTaskForm(app)
         replaceText(in: app.textFields["task-form.title"], with: String(repeating: "A", count: 100), app: app)
         app.buttons["task-form.save"].tap()
         XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 3))
 
-        // Reconnect: auto-sync pushes it, the server rejects it, and it surfaces in the inbox.
         app.buttons["offline-toggle"].tap()
         let failuresButton = app.buttons["failures-button"]
         XCTAssertTrue(
@@ -137,7 +134,6 @@ final class DemoUITests: XCTestCase {
 
         discard.tap()
 
-        // Discarding resolves the failure: the row leaves the inbox.
         XCTAssertTrue(discard.waitForNonExistence(timeout: 5), "discard clears the failure")
     }
 

@@ -1,11 +1,7 @@
 import Foundation
 
-/// A `Sendable`, structured JSON value.
-///
-/// `sync(...)` runs off the main actor, so a payload crossing into it must be `Sendable` — which a raw
-/// `[String: Any]` is not. `SyncJSON` is the carrier: box your JSON once with `init(dictionary:)`, hand it
-/// to `sync` across actor boundaries, and read it back with the keyed accessors. It conforms to
-/// `SyncPayloadConvertible`, so it feeds `sync(payload:)` / `sync(item:)` directly.
+/// A `Sendable`, structured JSON value. `sync(...)` runs off the main actor, so a payload crossing into
+/// it must be `Sendable` — which a raw `[String: Any]` is not. `SyncJSON` is the carrier.
 public enum SyncJSON: Sendable, SyncPayloadConvertible {
     case string(String)
     case int(Int)
@@ -43,7 +39,6 @@ public enum SyncJSON: Sendable, SyncPayloadConvertible {
         }
     }
 
-    /// Boxes a JSON object.
     public init(dictionary: [String: Any]) throws {
         self = .object(try dictionary.mapValues { try SyncJSON($0) })
     }
@@ -53,13 +48,11 @@ public enum SyncJSON: Sendable, SyncPayloadConvertible {
         return members.mapValues(\.foundationValue)
     }
 
-    /// The string at `key` when this is an object whose value there is a string.
     public func string(_ key: String) -> String? {
         guard case .object(let members) = self, case .string(let value)? = members[key] else { return nil }
         return value
     }
 
-    /// The object elements of the array at `key` when this is an object.
     public func objectArray(_ key: String) -> [SyncJSON]? {
         guard case .object(let members) = self, case .array(let elements)? = members[key] else { return nil }
         return elements.filter { if case .object = $0 { return true } else { return false } }

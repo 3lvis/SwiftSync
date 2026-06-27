@@ -18,8 +18,8 @@ public protocol SyncUpdatableModel: SyncModelable {
     func export(keyStyle: KeyStyle, dateFormatter: DateFormatter) -> [String: Any]
 
     /// Forces a scalar write so iOS CoreData marks the owning row dirty after a to-many change.
-    /// `@Syncable` generates `self.id = self.id`. Hand-written conformances get a no-op default
-    /// — override if your model has to-many relationships. See docs/project/ios-dirty-tracking-gap.md.
+    /// Hand-written conformances get a no-op default — override if your model has to-many relationships.
+    /// See docs/project/ios-dirty-tracking-gap.md.
     func syncMarkChanged()
 }
 
@@ -48,7 +48,6 @@ extension SyncUpdatableModel {
     }
 }
 
-/// Which relationship mutations a `applyRelationships(_:in:operations:)` pass is allowed to perform.
 public struct SyncRelationshipOperations: OptionSet, Sendable {
     public let rawValue: Int
 

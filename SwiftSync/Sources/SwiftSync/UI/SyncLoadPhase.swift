@@ -1,22 +1,18 @@
 import Foundation
 import Observation
 
-/// The lifecycle of the sync that backs a synced read.
 public enum SyncLoadPhase: Equatable, Sendable {
     case idle
     case loading
     case loaded
     case failed(message: String)
 
-    /// The failure message, if this phase is `.failed`.
     public var failureMessage: String? {
         if case .failed(let message) = self { return message }
         return nil
     }
 }
 
-/// Drives one load action through the phases. Shared by the synced publishers so the load logic lives in
-/// exactly one place.
 @MainActor
 @Observable
 final class SyncLoadDriver {

@@ -52,7 +52,7 @@ extension SwiftSync {
 
             let relatedByID = try context.syncFetchRelatedRowsByIdentity(Related.self, matching: [nextID])
             guard let nextRelated = relatedByID[SwiftSync.identityKey(from: nextID)] else {
-                // Old Sync parity: unknown FK row is a soft no-op.
+                // An unknown FK is intentionally a no-op, not an error.
                 return false
             }
 
@@ -180,7 +180,6 @@ extension SwiftSync {
                 return false
             }
 
-            // Old Sync behavior avoids duplicate membership.
             let desiredIDs = rawIDs.syncDedupedPreservingOrder()
             let relatedByID = try context.syncFetchRelatedRowsByIdentity(Related.self, matching: desiredIDs)
             let desiredRelated = desiredIDs.compactMap { relatedByID[SwiftSync.identityKey(from: $0)] }
@@ -494,13 +493,11 @@ extension SwiftSync {
     }
 }
 
-/// Cycle-detection state for recursive relationship export.
-/// This type is an implementation detail of `@Syncable`-generated code.
-/// Do not instantiate or reference it directly.
+/// Cycle-detection state for recursive relationship export; an implementation detail of
+/// `@Syncable`-generated code — do not reference it directly.
 public enum ExportState {
     private static let threadDictionaryKey = "SwiftSync.ExportState"
 
-    /// Returns false if already visiting (cycle detected).
     public static func enter<Model: PersistentModel>(_ model: Model) -> Bool {
         let key = String(describing: model.persistentModelID)
         var visiting = currentVisiting()

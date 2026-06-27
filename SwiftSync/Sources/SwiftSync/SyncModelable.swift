@@ -4,8 +4,8 @@ import SwiftData
 public protocol SyncModelable: PersistentModel {
     associatedtype SyncID: Hashable & Codable & Sendable
     static var syncIdentity: KeyPath<Self, SyncID> { get }
-    /// Swift property name of the identity (synthesised by `@Syncable`). Empty for hand-written
-    /// conformances; used by `SyncContainer` to reject uniqueness constraints on non-identity fields.
+    /// Swift property name of the identity (synthesised by `@Syncable`); empty for hand-written
+    /// conformances.
     static var syncIdentityPropertyName: String { get }
     static func syncIdentityPredicate(matching identity: SyncID) -> Predicate<Self>?
     static func syncIdentityPredicate(matchingAny identities: [SyncID]) -> Predicate<Self>?

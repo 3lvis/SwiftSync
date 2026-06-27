@@ -2,9 +2,7 @@ import Foundation
 import Observation
 import SwiftData
 
-/// Observes the **single row** matching `id` (`row`), kept current as the store syncs — the single-row
-/// counterpart of `SyncQueryPublisher` (collection); in SwiftUI, `@SyncModel`. Requires `SyncModelable`
-/// (not just `PersistentModel`) because it fetches by sync identity.
+/// Requires `SyncModelable` (not just `PersistentModel`): it fetches by sync identity.
 @MainActor
 @Observable
 public final class SyncModelPublisher<Model: PersistentModel & SyncModelable> {

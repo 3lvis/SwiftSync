@@ -8,7 +8,7 @@ import XCTest
 final class MissingInverseRegressionTag {
     @Attribute(.unique) var id: Int
     var name: String
-    // Intentionally missing explicit inverse to reproduce the bug we saw in Demo.
+    // Intentionally no explicit inverse — reproduces the Demo bug; don't "fix" it.
     var tasks: [MissingInverseRegressionTask]
 
     init(id: Int, name: String, tasks: [MissingInverseRegressionTask] = []) {
@@ -206,11 +206,8 @@ extension ExplicitInverseRegressionTask: SyncUpdatableModel {
     }
 }
 
-// MARK: - Models for syncMarkChanged spy tests
-
-// Models that mirror the Demo pattern: Task owns a to-many relationship to User
-// where User has NO back-reference property. This is the one-sided relationship
-// pattern believed to trigger SwiftData's dirty-tracking gap on iOS persistent stores.
+// One-sided to-many (User has no back-reference) — the pattern that triggers SwiftData's
+// dirty-tracking gap on iOS persistent stores.
 @Model
 final class OneSidedUser {
     @Attribute(.unique) var id: Int
@@ -228,8 +225,7 @@ final class OneSidedTask {
     var title: String
     var syncChangeToken: Int
 
-    // No explicit inverse — OneSidedUser has no back-reference to OneSidedTask.
-    // This mirrors Task.reviewers / Task.watchers in the Demo.
+    // No explicit inverse, mirroring Task.reviewers / Task.watchers in the Demo.
     @Relationship var members: [OneSidedUser]
 
     init(id: Int, title: String, syncChangeToken: Int = 0, members: [OneSidedUser] = []) {
@@ -265,8 +261,7 @@ extension OneSidedUser: SyncUpdatableModel {
 }
 
 extension OneSidedTask: SyncUpdatableModel {
-    // Spy counter — incremented by syncMarkChanged() so tests can assert it was called.
-    // nonisolated(unsafe) because it is mutated from test code without actor isolation.
+    // Spy counter incremented by syncMarkChanged(); nonisolated(unsafe) as test code mutates it unisolated.
     nonisolated(unsafe) static var syncMarkChangedCallCount: Int = 0
 
     typealias SyncID = Int
@@ -424,20 +419,13 @@ extension OneSidedNestedTask: SyncUpdatableModel {
     }
 }
 
-// MARK: - syncMarkChanged call-site tests
-
-/// Verifies syncApplyToManyForeignKeys calls syncMarkChanged() at the right times.
-/// Spy-based so the contract is testable on macOS (notification behavior differs per platform).
+/// Spy-based so the contract is testable on macOS — notification behavior differs per platform.
 final class SyncMarkChangedCallSiteTests: XCTestCase {
     override func setUp() {
         super.setUp()
         OneSidedTask.syncMarkChangedCallCount = 0
     }
 
-    // Verifies the core contract: syncApplyToManyForeignKeys must call syncMarkChanged()
-    // on the owning model whenever the to-many membership actually changes.
-    //
-    // This test is RED without the fix (count is 0, expected 1) and GREEN after it.
     func testSyncApplyToManyForeignKeysCallsSyncMarkChangedAfterMembershipChange() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(
@@ -446,7 +434,6 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
         )
         let context = ModelContext(container)
 
-        // Seed two users and a task with no members.
         try await context.sync(
             payload: [["id": 1, "name": "Alice"], ["id": 2, "name": "Bob"]], as: OneSidedUser.self)
         try await context.sync(
@@ -455,14 +442,11 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
         let task = try XCTUnwrap(context.fetch(FetchDescriptor<OneSidedTask>()).first)
         XCTAssertEqual(task.members.count, 0, "precondition: task starts with no members")
 
-        // Reset spy before the sync under test.
         OneSidedTask.syncMarkChangedCallCount = 0
 
-        // Sync a to-many membership change: [] → [1, 2]. No scalar (title) changes.
+        // Membership change [] → [1, 2] with title unchanged, so only the relationship triggers the mark.
         try await context.sync(payload: [["id": 10, "title": "Task 10", "member_ids": [1, 2]]], as: OneSidedTask.self)
 
-        // syncApplyToManyForeignKeys must have called syncMarkChanged() exactly once.
-        // Without the fix this count is 0 — the test fails, reproducing the bug contract.
         XCTAssertEqual(
             OneSidedTask.syncMarkChangedCallCount, 1,
             "syncApplyToManyForeignKeys must call syncMarkChanged() after a membership change "
@@ -470,12 +454,9 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
                 + "Count was \(OneSidedTask.syncMarkChangedCallCount), expected 1."
         )
 
-        // Relationship data must also be correct after the sync.
         XCTAssertEqual(Set(task.members.map(\.id)), Set([1, 2]))
     }
 
-    // Verifies syncMarkChanged() is NOT called when membership is unchanged —
-    // no spurious dirty-marks when nothing actually changed.
     func testSyncApplyToManyForeignKeysDoesNotCallSyncMarkChangedWhenUnchanged() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(
@@ -486,12 +467,10 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
 
         try await context.sync(
             payload: [["id": 1, "name": "Alice"], ["id": 2, "name": "Bob"]], as: OneSidedUser.self)
-        // Seed with existing membership [1, 2].
         try await context.sync(payload: [["id": 10, "title": "Task 10", "member_ids": [1, 2]]], as: OneSidedTask.self)
 
         OneSidedTask.syncMarkChangedCallCount = 0
 
-        // Sync with the same membership — no actual change.
         try await context.sync(payload: [["id": 10, "title": "Task 10", "member_ids": [1, 2]]], as: OneSidedTask.self)
 
         XCTAssertEqual(
@@ -633,11 +612,8 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
         let task = try XCTUnwrap(context.fetch(FetchDescriptor<OneSidedTask>()).first)
         XCTAssertEqual(task.members.map(\.id).sorted(), [1, 2])
 
-        // A direct withObservationTracking observer of the to-many relationship must be
-        // notified when membership-changing sync mutates it. onChange fires synchronously
-        // during the mutation, so the flag is set by the time the sync's await returns;
-        // asserting it directly avoids the polling/re-registration that flakes under
-        // concurrent test-suite load.
+        // onChange fires synchronously during the mutation, so the flag is set by the time the sync's
+        // await returns — asserting it directly avoids the polling/re-registration that flakes under load.
         let observedChange = ObservationFlag()
         withObservationTracking {
             _ = task.members.map(\.id).sorted()
@@ -655,8 +631,7 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
     }
 }
 
-/// Thread-safe one-shot flag. `withObservationTracking`'s `onChange` is `@Sendable` and may
-/// fire off the main actor, so the box guards its state with a lock.
+/// `onChange` is `@Sendable` and may fire off the main actor, so the flag guards its state with a lock.
 private final class ObservationFlag: @unchecked Sendable {
     private let lock = NSLock()
     private var fired = false
@@ -673,8 +648,6 @@ private final class ObservationFlag: @unchecked Sendable {
         return fired
     }
 }
-
-// MARK: -
 
 final class RelationshipIntegrityRegressionTests: XCTestCase {
     @MainActor
@@ -698,7 +671,7 @@ final class RelationshipIntegrityRegressionTests: XCTestCase {
                 ["id": 3, "name": "Tag 3"],
             ], as: MissingInverseRegressionTag.self)
 
-        // Mirrors the demo flow: a single-task sync happens first after a mutation.
+        // Repro needs the demo ordering: a single-task sync first…
         try await context.sync(
             payload: [
                 [
@@ -708,7 +681,7 @@ final class RelationshipIntegrityRegressionTests: XCTestCase {
                 ]
             ], as: MissingInverseRegressionTask.self)
 
-        // Then a task-list batch sync arrives with another task sharing one tag.
+        // …then a batch sync whose second task shares tag 2 — the membership the bug drops.
         try await context.sync(
             payload: [
                 ["id": 10, "title": "Task 10", "tag_ids": [1, 2]],

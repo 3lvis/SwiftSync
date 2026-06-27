@@ -51,9 +51,11 @@ public final class DemoRuntime {
     }
 
     nonisolated private static func localStoreURL() -> URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        let appSupport =
+            FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
-        return appSupport
+        return
+            appSupport
             .appendingPathComponent("SwiftSyncDemo", isDirectory: true)
             .appendingPathComponent("client-cache.store")
     }
@@ -64,8 +66,8 @@ public final class DemoRuntime {
     }
 }
 
-private extension DemoRuntime {
-    struct LaunchConfiguration {
+extension DemoRuntime {
+    fileprivate struct LaunchConfiguration {
         let scenario: DemoNetworkScenario
         let seedData: DemoSeedData?
         let storeURL: URL

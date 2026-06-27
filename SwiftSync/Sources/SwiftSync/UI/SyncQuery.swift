@@ -2,8 +2,6 @@ import Foundation
 import SwiftData
 import SwiftUI
 
-/// SwiftUI property wrapper observing a **collection** (`rows`); the plain-Swift equivalent is
-/// `SyncQueryPublisher`, which it wraps. For a single row by id, use `@SyncModel`.
 @MainActor
 @propertyWrapper
 public struct SyncQuery<Model: PersistentModel>: DynamicProperty {

@@ -340,7 +340,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
                 $0.ownerTypeName == relationship.relatedTypeName && $0.relatedTypeName == relationship.ownerTypeName
                     && $0.isToMany
             }
-            guard !reciprocalToMany.isEmpty else { continue }  // not many-to-many
+            guard !reciprocalToMany.isEmpty else { continue }
 
             let hasAnchor =
                 relationship.hasExplicitInverseAnchor || reciprocalToMany.contains(where: \.hasExplicitInverseAnchor)
@@ -420,8 +420,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         let changedModelTypeNames: Set<String>
         if sourceContext == mainContext {
             // A local (immediate) write already landed in the main context, so its rows are current
-            // here — don't re-touch the context during its own did-save (avoid reentrancy); just notify
-            // publishers to re-fetch. Type names come from the source (main) context: a safe read.
+            // here — don't re-touch the context during its own did-save (avoid reentrancy); just notify.
             changedModelTypeNames = Set(
                 changedIDs.map { String(reflecting: type(of: sourceContext.model(for: $0))) })
         } else {

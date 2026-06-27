@@ -11,12 +11,11 @@ struct ContentView: View {
 
     var body: some View {
         ProjectsView(syncEngine: runtime.syncEngine)
-            // A safe-area inset, not a `.bottomBar` toolbar: the toolbar would attach outside
-            // ProjectsView's own NavigationStack and drop out on re-render. This stays put.
+            // Not a `.bottomBar` toolbar: that attaches outside ProjectsView's NavigationStack and
+            // drops out on re-render.
             .safeAreaInset(edge: .bottom) { offlineBar }
             .toolbar {
-                // The scenario picker is dev chrome with non-deterministic network behavior, so it
-                // stays hidden under UI testing. The offline bar above is a real feature (and tested).
+                // Hidden under UI testing: the scenario picker's network behavior is non-deterministic.
                 if !runtime.isUITesting {
                     ToolbarItem(placement: .topBarTrailing) {
                         Picker("Scenario", selection: $runtime.scenario) {

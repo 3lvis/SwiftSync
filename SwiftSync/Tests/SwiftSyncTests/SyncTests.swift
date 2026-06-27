@@ -468,7 +468,6 @@ extension Team {
                 }
                 desiredMembers = resolvedMembers
             } else {
-                // Explicit null for members means clear membership.
                 desiredMembers = []
             }
             if members.map(\.id) != desiredMembers.map(\.id) {
@@ -544,7 +543,6 @@ extension Employee {
         in context: ModelContext,
         isolation: isolated (any Actor)? = #isolation
     ) async throws -> Bool {
-        // Support to-one by foreign key scalar (company_id).
         guard payload.contains("company_id") else { return false }
 
         let companyID: Int? = payload.value(for: "company_id")
@@ -616,7 +614,6 @@ extension UserWithNotes {
         in context: ModelContext,
         isolation: isolated (any Actor)? = #isolation
     ) async throws -> Bool {
-        // Support to-many by foreign key scalar array (notes_ids).
         guard payload.contains("notes_ids") else { return false }
 
         let desiredIDs: [Int]
@@ -1032,8 +1029,7 @@ extension UniqueEmailNote: SyncUpdatableModel {
     }
 }
 
-// InferredNote: non-unique id – uses the inferred sync overload.
-// Without @Attribute(.unique) on id, the behavior is scoped by parent (two parents → two rows).
+// Without @Attribute(.unique) on id, sync is scoped by parent (two parents → two rows).
 @Model
 final class InferredNote {
     var id: Int
@@ -1426,10 +1422,6 @@ final class SyncTests: XCTestCase {
 
     @MainActor
     func testSyncAppliesNestedRemoteKeyFieldsOnUpdate() async throws {
-        // Regression: apply(_:) must update fields mapped via @RemoteKey with dot-notation
-        // (e.g. @RemoteKey("status.id"), @RemoteKey("status.label")) when the payload contains
-        // a nested dict. Previously these fields were silently skipped on update because
-        // apply(_:) did not traverse nested dicts for @RemoteKey dot-paths.
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: StatusItem.self, configurations: configuration)
         let context = ModelContext(container)
@@ -1641,7 +1633,6 @@ final class SyncTests: XCTestCase {
         let container = try ModelContainer(for: Profile.self, OptionalDateProfile.self, configurations: configuration)
         let context = ModelContext(container)
 
-        // Required Date field defaults to epoch on invalid input.
         try await context.sync(
             payload: [
                 [
@@ -1654,7 +1645,6 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(requiredRows.count, 1)
         XCTAssertEqual(requiredRows.first?.updatedAt, Date(timeIntervalSince1970: 0))
 
-        // Optional Date field stays nil on invalid input.
         try await context.sync(
             payload: [
                 [
@@ -1972,7 +1962,6 @@ final class SyncTests: XCTestCase {
 
     @MainActor
     func testSyncToManyObjectArrayNullClearsRelationshipSetAndMatchesEmptySemantics() async throws {
-        // Snapshot A: clear with empty array.
         let configurationA = ModelConfiguration(isStoredInMemoryOnly: true)
         let containerA = try ModelContainer(for: UserTagsByObjects.self, Tag.self, configurations: configurationA)
         let contextA = ModelContext(containerA)
@@ -1997,7 +1986,6 @@ final class SyncTests: XCTestCase {
             ], as: UserTagsByObjects.self)
         let usersA = try contextA.fetch(FetchDescriptor<UserTagsByObjects>())
 
-        // Snapshot B: clear with null.
         let configurationB = ModelConfiguration(isStoredInMemoryOnly: true)
         let containerB = try ModelContainer(for: UserTagsByObjects.self, Tag.self, configurations: configurationB)
         let contextB = ModelContext(containerB)
@@ -2153,7 +2141,7 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(employees.count, 1)
         XCTAssertEqual(employees[0].company?.id, 10)
 
-        // Strict FK typing: string payload for Int FK should be ignored.
+        // Strict FK typing: a string payload for an Int FK is ignored, not coerced.
         try await context.sync(
             payload: [
                 [
@@ -2165,7 +2153,6 @@ final class SyncTests: XCTestCase {
         employees = try context.fetch(FetchDescriptor<AutoEmployee>())
         XCTAssertEqual(employees[0].company?.id, 10)
 
-        // Missing key should not clear existing relationship.
         try await context.sync(
             payload: [
                 [
@@ -2177,7 +2164,7 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(employees[0].name, "Ava Updated")
         XCTAssertEqual(employees[0].company?.id, 10)
 
-        // Unknown FK keeps current relation unchanged.
+        // An FK to a row that doesn't exist leaves the current relation unchanged.
         try await context.sync(
             payload: [
                 [
@@ -2189,7 +2176,6 @@ final class SyncTests: XCTestCase {
         employees = try context.fetch(FetchDescriptor<AutoEmployee>())
         XCTAssertEqual(employees[0].company?.id, 10)
 
-        // Explicit null clears relation.
         try await context.sync(
             payload: [
                 [
@@ -2314,7 +2300,6 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(tasks.count, 1)
         XCTAssertEqual(Set(tasks[0].tags.map(\.id)), Set([1, 2]))
 
-        // Missing key should preserve current to-many links.
         try await context.sync(
             payload: [
                 [
@@ -2326,7 +2311,6 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(tasks[0].title, "Task A Updated")
         XCTAssertEqual(Set(tasks[0].tags.map(\.id)), Set([1, 2]))
 
-        // Explicit null clears links.
         try await context.sync(
             payload: [
                 [
@@ -2447,13 +2431,11 @@ final class SyncTests: XCTestCase {
         let objectGraph = try await runManyToManyObjectsScenario()
         let idsGraph = try await runManyToManyIDsScenario()
 
-        // No duplicate join edges in either graph.
         XCTAssertEqual(objectGraph[1]?.count, 2)
         XCTAssertEqual(objectGraph[2]?.count, 1)
         XCTAssertEqual(idsGraph[1]?.count, 2)
         XCTAssertEqual(idsGraph[2]?.count, 1)
 
-        // Same add/remove outcomes after update payload.
         XCTAssertFalse(objectGraph[1]?.contains(1) ?? true)
         XCTAssertFalse(idsGraph[1]?.contains(1) ?? true)
         XCTAssertTrue(objectGraph[1]?.contains(4) ?? false)
@@ -2506,7 +2488,6 @@ final class SyncTests: XCTestCase {
                 ["id": 3, "text": "b3"],
             ], as: SuperNote.self, parent: userB, relationship: \SuperNote.superUser)
 
-        // Sync user A scope with one child; user B scope must remain untouched.
         try await context.sync(
             payload: [
                 ["id": 1, "text": "a1-updated"]
@@ -2684,9 +2665,8 @@ final class SyncTests: XCTestCase {
             }
         }
 
-        // The first call acquires SyncContainer's FIFO serializer and parks mid-apply (the id==1 hook),
-        // so it holds the mutex while blocked; the second call queues strictly behind it and its write
-        // lands last. Without serialization the two writes would race and the winner would be undefined.
+        // First call parks mid-apply (id==1 hook) holding the FIFO serializer, so the second queues behind
+        // it and its write lands last. Without serialization the two writes would race for an undefined winner.
         let firstTask = Task {
             let payload: [Any] = [
                 ["id": 1, "full_name": "Refresh User"],
@@ -3859,13 +3839,11 @@ final class SyncTests: XCTestCase {
 
         try await context.sync(payload: [["id": 1, "name": "Ava"]], as: AutoEmployee.self)
 
-        // String "10" should NOT coerce to Int 10 for strict FK typing.
         try await context.sync(payload: [["id": 1, "name": "Ava", "company_id": "10"]], as: AutoEmployee.self)
 
         var rows = try context.fetch(FetchDescriptor<AutoEmployee>())
         XCTAssertNil(rows.first?.company)
 
-        // Integer 10 matches the expected type and should resolve the FK.
         try await context.sync(payload: [["id": 1, "name": "Ava", "company_id": 10]], as: AutoEmployee.self)
 
         rows = try context.fetch(FetchDescriptor<AutoEmployee>())

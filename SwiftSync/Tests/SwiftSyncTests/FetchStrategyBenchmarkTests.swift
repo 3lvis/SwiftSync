@@ -878,9 +878,7 @@ private struct BenchmarkEnvironment {
     let scopeSize: Int
     let sampleCount: Int
     let phaseProfilingEnabled: Bool
-    /// Optional CI regression ceiling: if set, a benchmark whose median exceeds this many
-    /// milliseconds fails the test. Set generously — this is a catastrophic/algorithmic
-    /// regression guard, not precise perf tracking (CI hardware varies and is noisy).
+    /// Set generously — a catastrophic/algorithmic-regression guard, not perf tracking (CI hardware is noisy).
     let maxMedianMilliseconds: Double?
 
     static var current: BenchmarkEnvironment {

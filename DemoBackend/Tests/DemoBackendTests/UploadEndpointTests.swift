@@ -15,17 +15,16 @@ final class UploadEndpointTests: XCTestCase {
         let first = try result(of: backend.upload(operations: [upsertOp(id: id, title: "Offline task")]))
         XCTAssertEqual(first["status"] as? String, "applied")
         XCTAssertEqual(first["id"] as? String, id)
-        // The internal int id never leaves the server — no remoteId in the response.
+        // The internal int id never leaves the server.
         XCTAssertNil(first["remoteId"])
 
         let tasks = try backend.getProjectTasksPayload(projectID: projectID)
         XCTAssertEqual(tasks.count, before + 1)
-        // The client's id is adopted as the row's public_id (its sole identity).
         let inserted = try XCTUnwrap(tasks.first { ($0["id"] as? String) == id })
         XCTAssertNil(inserted["local_id"])
 
-        // Re-upsert the same public_id (lost-response retry): no duplicate row. The identical updatedAt
-        // loses the LWW tie, so it's a converged no-op — not a failure.
+        // Lost-response retry: an identical updatedAt loses the LWW tie, so it's a converged no-op,
+        // not a duplicate row or a failure.
         let retry = try result(of: backend.upload(operations: [upsertOp(id: id, title: "Offline task")]))
         XCTAssertNotEqual(retry["status"] as? String, "rejected")
         XCTAssertNil(retry["remoteId"])
@@ -41,7 +40,6 @@ final class UploadEndpointTests: XCTestCase {
             ]))
         XCTAssertEqual(created["status"] as? String, "applied")
 
-        // Older write loses: kept server state returned, title unchanged.
         let stale = try result(
             of: backend.upload(operations: [
                 upsertOp(id: id, title: "Stale edit", updatedAt: "2020-01-01T00:00:00.000Z")
@@ -52,7 +50,6 @@ final class UploadEndpointTests: XCTestCase {
         XCTAssertEqual(server["title"] as? String, "Original")
         XCTAssertEqual(server["id"] as? String, id)
 
-        // Newer write wins.
         let applied = try result(
             of: backend.upload(operations: [
                 upsertOp(id: id, title: "Fresh edit", updatedAt: "2030-01-01T00:00:00.000Z")
@@ -89,7 +86,6 @@ final class UploadEndpointTests: XCTestCase {
                 upsertOp(id: id, title: "Live", updatedAt: "2030-01-01T00:00:00.000Z")
             ]))
 
-        // A delete older than the server's version must lose: stale + server state, not a tombstone.
         let stale = try result(
             of: backend.upload(operations: [
                 deleteOp(id: id, updatedAt: "2020-01-01T00:00:00.000Z")
@@ -99,7 +95,6 @@ final class UploadEndpointTests: XCTestCase {
         XCTAssertNotNil(
             try backend.getTaskDetailPayload(publicID: id), "a stale delete must not tombstone the row")
 
-        // A newer delete wins.
         let applied = try result(
             of: backend.upload(operations: [
                 deleteOp(id: id, updatedAt: "2040-01-01T00:00:00.000Z")
@@ -121,7 +116,6 @@ final class UploadEndpointTests: XCTestCase {
             ]))
         XCTAssertNil(try backend.getTaskDetailPayload(publicID: id), "precondition: tombstoned")
 
-        // An edit newer than the delete wins LWW: it revives the row, not a phantom "applied".
         let revived = try result(
             of: backend.upload(operations: [
                 upsertOp(id: id, title: "Revived", updatedAt: "2050-01-01T00:00:00.000Z")
@@ -145,7 +139,6 @@ final class UploadEndpointTests: XCTestCase {
                 deleteOp(id: id, updatedAt: "2040-01-01T00:00:00.000Z")
             ]))
 
-        // An edit older than the delete loses LWW: stale, and the row stays deleted (no phantom apply).
         let stale = try result(
             of: backend.upload(operations: [
                 upsertOp(id: id, title: "Too late", updatedAt: "2035-01-01T00:00:00.000Z")
@@ -157,16 +150,14 @@ final class UploadEndpointTests: XCTestCase {
     func testUploadFailsClosedOnMissingOrUnknownOperation() throws {
         let backend = try makeBackend()
         let response = try backend.upload(operations: [
-            ["type": "tasks", "id": "x", "data": [:]],  // no operation
-            ["operation": "destroy", "type": "tasks", "id": "y"],  // unknown
+            ["type": "tasks", "id": "x", "data": [:]],
+            ["operation": "destroy", "type": "tasks", "id": "y"],
         ])
         let results = try XCTUnwrap(response["results"] as? [[String: Any]])
         XCTAssertEqual(results.allSatisfy { ($0["status"] as? String) == "rejected" }, true)
         XCTAssertEqual(results[0]["code"] as? String, "missing_operation")
         XCTAssertEqual(results[1]["code"] as? String, "unknown_operation")
     }
-
-    // MARK: - Helpers
 
     private func makeBackend() throws -> DemoServerSimulator {
         let url = FileManager.default.temporaryDirectory

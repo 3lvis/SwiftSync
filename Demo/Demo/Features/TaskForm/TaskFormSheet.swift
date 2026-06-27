@@ -9,14 +9,11 @@ struct TaskFormSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    // Throwaway context — autosave disabled. Never saved to the store.
-    // On cancel it is simply released; on save we export the values and call the API.
+    // Isolated context, never saved to the store: on save we export the draft's values and call the API.
     let editContext: ModelContext
 
-    // The draft lives in editContext. For create it is a freshly-inserted Task.
-    // For edit it is the same row fetched into this isolated context.
-    // Relationship arrays (reviewers, watchers) are real [User] objects from editContext,
-    // so the pickers can assign them directly without cross-context crashes.
+    // The draft and its relationship arrays (reviewers, watchers) live in editContext, so the pickers
+    // assign [User] objects from the same context — assigning cross-context would crash.
     @State private var draft: Task
 
     @State private var machine: TaskFormSheetMachine
@@ -45,9 +42,8 @@ struct TaskFormSheet: View {
             let taskID = task.id
             let descriptor = FetchDescriptor<Task>(predicate: #Predicate { $0.id == taskID })
             let fetched = (try? ctx.fetch(descriptor))?.first
-            // Fallback should never be reached in practice — the row is always in the store.
-            // If it somehow is, we fall back to the passed object (which lives in mainContext,
-            // so edits won't reach the store either, preserving the no-save guarantee).
+            // Fallback is unreachable in practice; the passed object lives in mainContext, so its edits
+            // also won't reach the store — the no-save guarantee holds either way.
             _draft = State(initialValue: fetched ?? task)
         }
     }
@@ -267,8 +263,6 @@ extension TaskFormSheet {
         }
     }
 
-    // Required fields are marked; only Title, State, and Author gate Create (see isSaveDisabled).
-    // Assignee, Description, Reviewers, Watchers, and Items are optional.
     @ViewBuilder
     var requiredPill: some View {
         Text("Required")

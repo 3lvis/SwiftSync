@@ -43,9 +43,9 @@ final class OfflinePushTests: XCTestCase {
         // Baseline push: a, b, d become synced (token advances past their inserts).
         _ = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context, process: noFailures)
 
-        try mutate(context) { $0.first { $0.id == "b" }?.title = "edited" }  // update
-        try delete("d", in: context)  // delete
-        context.insert(PushNote(id: "c", title: "new"))  // insert
+        try mutate(context) { $0.first { $0.id == "b" }?.title = "edited" }
+        try delete("d", in: context)
+        context.insert(PushNote(id: "c", title: "new"))
         let e = PushNote(id: "e", title: "ephemeral")  // insert-then-delete → dropped
         context.insert(e)
         try context.save()
@@ -97,7 +97,7 @@ final class OfflinePushTests: XCTestCase {
         let context = container.mainContext
         context.insert(PushNote(id: "u1", title: "v1"))
         try context.save()
-        _ = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context, process: noFailures)  // synced
+        _ = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context, process: noFailures)
 
         try mutate(context) { $0.first { $0.id == "u1" }?.title = "v2" }
         try context.save()
@@ -254,9 +254,7 @@ final class OfflinePushTests: XCTestCase {
                 return []
             }
             XCTFail("expected push to throw when the bookkeeping model is not registered")
-        } catch {
-            // Expected: push throws rather than completing a stranded upload.
-        }
+        } catch {}
         XCTAssertFalse(
             uploadCalled, "push must fail before uploading, so an acknowledged server write is never stranded")
     }

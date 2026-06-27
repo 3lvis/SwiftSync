@@ -4,7 +4,6 @@ import XCTest
 
 @testable import DemoBackend
 
-// Stable constants for the test fixture — deterministic across runs.
 // projectID/userID are reference data (TEXT ids); the task's identity is its public_id (a UUID).
 private let projectID = "A1B2C3D4-0000-0000-0000-000000000001"
 private let userID = "A1B2C3D4-0000-0000-0000-000000000002"
@@ -67,7 +66,6 @@ final class DemoBackendTests: XCTestCase {
         let detail = try backend.getTaskDetailPayload(publicID: firstTaskID)
         let taskItems = items(in: detail)
 
-        // Reference data (projects/users) keeps TEXT UUID ids.
         for project in projects {
             let id = project["id"] as? String ?? ""
             XCTAssertNotNil(UUID(uuidString: id), "project id '\(id)' is not a UUID")
@@ -76,13 +74,12 @@ final class DemoBackendTests: XCTestCase {
             let id = user["id"] as? String ?? ""
             XCTAssertNotNil(UUID(uuidString: id), "user id '\(id)' is not a UUID")
         }
-        // The task's only external identity is its public_id (a UUID); the int id never leaks.
+        // The task's only external identity is its public_id; the int id never leaks.
         for task in tasks {
             let id = task["id"] as? String ?? ""
             XCTAssertNotNil(UUID(uuidString: id), "task id '\(id)' is not a UUID")
             XCTAssertNil(task["local_id"], "there is no separate local_id key — id IS the public_id")
         }
-        // Items expose their public_id as `id` and the parent's public_id as `task_id`.
         for item in taskItems {
             let id = item["id"] as? String ?? ""
             XCTAssertNotNil(UUID(uuidString: id), "item id '\(id)' is not a UUID")
@@ -112,7 +109,6 @@ final class DemoBackendTests: XCTestCase {
         ]
         let created = try backend.createTask(body: body)
 
-        // The client's id is adopted as public_id and is the only identity returned.
         XCTAssertEqual(created["id"] as? String, clientID)
         XCTAssertNil(created["local_id"])
     }
@@ -192,7 +188,6 @@ final class DemoBackendTests: XCTestCase {
 
         let created = try backend.createTask(body: body)
 
-        // The client id is adopted as the public_id (the sole identity); no separate local_id.
         XCTAssertEqual(created["id"] as? String, newID)
         XCTAssertNil(created["local_id"])
         XCTAssertEqual(created["project_id"] as? String, projectID)
@@ -204,7 +199,6 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(stateLabel(in: created), "In Progress")
         XCTAssertEqual(created["reviewer_ids"] as? [String], [])
         XCTAssertEqual(created["watcher_ids"] as? [String], [])
-        // timestamps round-trip
         XCTAssertEqual(created["created_at"] as? String, createdAtString)
         XCTAssertEqual(created["updated_at"] as? String, updatedAtString)
     }
@@ -249,62 +243,51 @@ final class DemoBackendTests: XCTestCase {
             "updated_at": now,
         ]
 
-        // missing id is allowed: a server-origin row mints its own public_id
+        // A server-origin row (no id) mints its own public_id, so a missing id must not throw.
         var missingID = base
         missingID.removeValue(forKey: "id")
         XCTAssertNoThrow(try backend.createTask(body: missingID))
 
-        // missing project_id
         var missingProject = base
         missingProject.removeValue(forKey: "project_id")
         XCTAssertThrowsError(try backend.createTask(body: missingProject))
 
-        // unknown project_id
         var badProject = base
         badProject["project_id"] = "00000000-0000-0000-0000-000000000000"
         XCTAssertThrowsError(try backend.createTask(body: badProject))
 
-        // missing title
         var missingTitle = base
         missingTitle.removeValue(forKey: "title")
         XCTAssertThrowsError(try backend.createTask(body: missingTitle))
 
-        // empty title
         var emptyTitle = base
         emptyTitle["title"] = "   "
         XCTAssertThrowsError(try backend.createTask(body: emptyTitle))
 
-        // missing author_id
         var missingAuthor = base
         missingAuthor.removeValue(forKey: "author_id")
         XCTAssertThrowsError(try backend.createTask(body: missingAuthor))
 
-        // unknown author_id
         var badAuthor = base
         badAuthor["author_id"] = "00000000-0000-0000-0000-000000000000"
         XCTAssertThrowsError(try backend.createTask(body: badAuthor))
 
-        // invalid state value
         var badState = base
         badState["state"] = ["id": "flying"]
         XCTAssertThrowsError(try backend.createTask(body: badState))
 
-        // missing state dict
         var noState = base
         noState.removeValue(forKey: "state")
         XCTAssertThrowsError(try backend.createTask(body: noState))
 
-        // missing created_at
         var missingCreatedAt = base
         missingCreatedAt.removeValue(forKey: "created_at")
         XCTAssertThrowsError(try backend.createTask(body: missingCreatedAt))
 
-        // missing updated_at
         var missingUpdatedAt = base
         missingUpdatedAt.removeValue(forKey: "updated_at")
         XCTAssertThrowsError(try backend.createTask(body: missingUpdatedAt))
 
-        // duplicate public_id (client id)
         var firstBody = base
         let sharedID = UUID().uuidString
         firstBody["id"] = sharedID
@@ -701,9 +684,8 @@ final class DemoBackendTests: XCTestCase {
         let before = try backend.getTaskDetailPayload(publicID: taskID)
         let beforeUpdatedAt = before?["updated_at"] as? String
 
-        // Build a body that mirrors the shape SwiftSync's exportObject produces:
-        // - description (not description_text) from @RemoteKey("description")
-        // - state as a nested dict with id+label from @RemoteKey("state.id") / @RemoteKey("state.label")
+        // Mirrors the body shape SwiftSync's exportObject produces: `description` (not description_text)
+        // and `state` as a nested id+label dict.
         let body: [String: Any] = [
             "title": "Updated title via PUT",
             "description": "Updated description via PUT",
@@ -721,9 +703,7 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertTrue(
             updated["assignee_id"] is NSNull || updated["assignee_id"] == nil,
             "NSNull assignee_id must clear the assignee")
-        // updated_at must advance
         XCTAssertNotEqual(updated["updated_at"] as? String, beforeUpdatedAt)
-        // created_at must not change
         XCTAssertEqual(updated["created_at"] as? String, before?["created_at"] as? String)
     }
 
@@ -879,7 +859,6 @@ final class DemoBackendTests: XCTestCase {
 
         let backend = try DemoServerSimulator(databaseURL: url, seedData: smallSeedData())
 
-        // The seeded task has assigneeID = userID. Omitting assignee_id from body must preserve it.
         let body: [String: Any] = [
             "title": "No assignee key",
             "description": "Preserve existing assignee",
@@ -916,8 +895,6 @@ final class DemoBackendTests: XCTestCase {
             XCTAssertNotNil(task["created_at"])
         }
     }
-
-    // MARK: - Helpers
 
     private func stateID(in task: [String: Any]?) -> String? {
         (task?["state"] as? [String: Any])?["id"] as? String

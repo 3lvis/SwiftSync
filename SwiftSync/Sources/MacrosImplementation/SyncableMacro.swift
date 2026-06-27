@@ -308,7 +308,7 @@ public struct SyncableMacro: ExtensionMacro {
                 }
             }
 
-            // Marker without explicit remote key defaults to local property name.
+            // Empty string is the sentinel for "marker present, no explicit remote key" → use local name.
             return ""
         }
         return nil

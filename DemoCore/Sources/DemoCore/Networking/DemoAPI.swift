@@ -47,10 +47,8 @@ public final class FakeDemoAPIClient {
 
     public var scenario: DemoNetworkScenario
 
-    /// Simulated airplane mode at the transport: when on, every endpoint is unreachable (throws
-    /// `.offline`), exactly like a device with no connectivity. This is where "offline" lives — the
-    /// link between app and server — not in business logic. The sync engine reacts to it (reads keep
-    /// serving the local cache, writes queue).
+    /// Simulated airplane mode at the transport: when on, every endpoint throws `.offline`. Offline lives
+    /// at the link between app and server, not in business logic.
     public var isOffline = false
 
     private let backend: DemoServerSimulator
@@ -155,12 +153,11 @@ public final class FakeDemoAPIClient {
         try backend.deleteTask(publicID: taskID)
     }
 
-    /// Test-only seam: awaited at the start of every `upload(operations:)`, before the network gate, so a
-    /// test can deterministically park or observe each individual drain upload. `internal` so it never
-    /// becomes part of the public surface — tests reach it via `@testable import`. Nil in production (inert).
+    /// Test-only seam awaited at the start of every `upload`, before the network gate, so a test can
+    /// deterministically park or observe each drain upload. `internal` so it stays off the public surface.
     var beforeUpload: (@MainActor () async -> Void)?
 
-    /// POST /sync/upload — the batched offline push. Returns the per-operation `results` array.
+    /// POST /sync/upload — the batched offline push.
     public func upload(operations: [[String: Any]]) async throws -> [[String: Any]] {
         await beforeUpload?()
         try await networkGate(endpoint: "POST /sync/upload")

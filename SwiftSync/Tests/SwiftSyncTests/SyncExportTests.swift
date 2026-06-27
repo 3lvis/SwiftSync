@@ -228,9 +228,6 @@ final class CycleNode {
     }
 }
 
-/// A Task-like model used to test that update bodies via export
-/// correctly honor @RemoteKey("description") and @RemoteKey("state.id/label"),
-/// matching the gap that existed before update adopted the export pattern.
 @Syncable
 @Model
 final class UpdateTaskLike {
@@ -247,9 +244,7 @@ final class UpdateTaskLike {
     }
 }
 
-// Compile-time regression: export must be a requirement of SyncUpdatableModel,
-// not a separate ExportModel protocol. This function would not compile if export
-// were missing from SyncUpdatableModel.
+// Compile-time regression: fails to compile if `export` stops being a `SyncUpdatableModel` requirement.
 private func _assertExportIsOnSyncUpdatableModel<M: SyncUpdatableModel>(
     _ model: M,
     keyStyle: KeyStyle,
@@ -443,10 +438,6 @@ final class ExportTests: XCTestCase {
         XCTAssertTrue(body["nickname"] is NSNull, "Nil optional scalar must always emit NSNull")
     }
 
-    /// Scenario A — PATCH with explicit null to clear a field.
-    /// exportObject always emits NSNull for nil optionals. Callers can then overwrite specific
-    /// fields with NSNull() to signal "clear this field", or overwrite with a new value.
-    /// Both result in the key being present in the body — the intended behavior for partial-update APIs.
     @MainActor
     func testExportNilFieldCanBeExplicitlyClearedAfterExport() throws {
         let schema = Schema([ExportTask.self])
@@ -455,18 +446,15 @@ final class ExportTests: XCTestCase {
         let syncContainer = SyncContainer(modelContainer)
         let context = syncContainer.mainContext
 
-        // A task with nickname already nil in the model
         context.insert(ExportTask(id: 10, completed: false, createdAt: Date(timeIntervalSince1970: 0), nickname: nil))
         try context.save()
         let task = try context.fetch(FetchDescriptor<ExportTask>()).first!
 
-        // Export produces NSNull for nickname automatically — no manual NSNull() needed
         let body = syncContainer.export(task)
         XCTAssertTrue(
             body["nickname"] is NSNull,
             "Nil optional must appear as NSNull in body so server clears the field")
 
-        // Caller can still override any key after export (e.g. to set a new value)
         var mutableBody = body
         mutableBody["nickname"] = "new-name"
         XCTAssertEqual(mutableBody["nickname"] as? String, "new-name")
@@ -506,15 +494,8 @@ final class ExportTests: XCTestCase {
         XCTAssertEqual(childBody["id"] as? Int, 2)
     }
 
-    // MARK: - Update body via export
-
-    /// Regression: buildUpdateBody must use @RemoteKey mappings,
-    /// not raw Swift property names. This mirrors the pattern used in DemoSyncEngine
-    /// for createTask and must apply equally to updateTask.
     @MainActor
     func testBuildUpdateBodyUsesRemoteKeyMappings() throws {
-        // ExportMappedFields has @RemoteKey("type") on userType and @RemoteKey("profile.contact.email") on email.
-        // Simulate the buildUpdateBody pattern: transient model → exportObject → inspect keys.
         let schema = Schema([ExportMappedFields.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: config)
@@ -528,11 +509,9 @@ final class ExportTests: XCTestCase {
             dateFormatter: DateFormatter.syncDefault()
         )
 
-        // @RemoteKey("type") must appear as "type", not "user_type"
         XCTAssertEqual(body["type"] as? String, "editor", "Expected @RemoteKey(\"type\") to map userType → \"type\"")
         XCTAssertNil(body["user_type"], "Raw snake_case key must not appear when @RemoteKey overrides it")
 
-        // @RemoteKey("profile.contact.email") must appear nested
         let profile = body["profile"] as? [String: Any]
         let contact = profile?["contact"] as? [String: Any]
         XCTAssertEqual(
@@ -540,14 +519,10 @@ final class ExportTests: XCTestCase {
             "Expected @RemoteKey(\"profile.contact.email\") to produce nested structure")
         XCTAssertNil(body["email"], "Flat key must not appear when nested @RemoteKey overrides it")
 
-        // @NotExport field must be absent
         XCTAssertNil(body["local_only"], "@NotExport field must be excluded from update body")
         XCTAssertNil(body["localOnly"], "@NotExport field must be excluded from update body (camelCase variant)")
     }
 
-    /// Regression: buildUpdateBody for a Task-like model must use @RemoteKey("description")
-    /// for descriptionText and nested state dict for @RemoteKey("state.id") / @RemoteKey("state.label").
-    /// This is the exact mapping gap that existed before update adopted export.
     @MainActor
     func testBuildUpdateBodyUsesRemoteKeyForTaskLikeModel() throws {
         let schema = Schema([UpdateTaskLike.self])
@@ -568,7 +543,6 @@ final class ExportTests: XCTestCase {
             dateFormatter: DateFormatter.syncDefault()
         )
 
-        // descriptionText → @RemoteKey("description") → must appear as "description"
         XCTAssertEqual(
             body["description"] as? String, "Updated body text",
             "Expected @RemoteKey(\"description\") to map descriptionText → \"description\"")
@@ -579,7 +553,6 @@ final class ExportTests: XCTestCase {
             body["descriptionText"],
             "Camel-case key must not appear when @RemoteKey overrides it")
 
-        // state → @RemoteKey("state.id") → must appear nested under "state" dict
         let stateDict = body["state"] as? [String: Any]
         XCTAssertEqual(
             stateDict?["id"] as? String, "inProgress",
@@ -590,8 +563,6 @@ final class ExportTests: XCTestCase {
         XCTAssertNil(body["state_id"], "Flat state_id key must not appear")
         XCTAssertNil(body["state_label"], "Flat state_label key must not appear")
     }
-
-    // MARK: - SyncContainer.export(_:) derives keyStyle and dateFormatter from SyncContainer
 
     @MainActor
     func testExportForContainerDerivesKeyStyleFromContainer() throws {
@@ -607,7 +578,6 @@ final class ExportTests: XCTestCase {
         let task = try context.fetch(FetchDescriptor<ExportTask>()).first!
         let body = syncContainer.export(task)
 
-        // camelCase keyStyle from container: createdAt, not created_at
         XCTAssertNotNil(body["createdAt"], "Expected camelCase key from container.keyStyle")
         XCTAssertNil(body["created_at"], "Snake_case key must not appear when container uses camelCase")
     }

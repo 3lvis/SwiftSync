@@ -1,10 +1,8 @@
 import Foundation
 import SwiftData
 
-// MARK: - Pending changes
-
 /// Each array holds row `id`s (strings), not objects, so SwiftData objects never cross into your network
-/// call: `withPendingChanges` hands you the ids and you map each to your own request payload.
+/// call.
 public struct SyncPendingChanges: Sendable {
     public let inserts: [String]
     public let updates: [String]
@@ -65,10 +63,8 @@ extension SwiftSync {
             return SyncPendingChanges(inserts: [], updates: [], deletes: [])
         }
 
-        // Resolve every changed persistent id to its id. Live rows come from a fetch; deleted
-        // rows are gone from the store, so their (now-invalidated) insert/update changes can't be read
-        // — their id comes from the delete tombstone instead (mark the identity `.preserveValueOnDeletion`).
-        // Resolving deleted rows lets us recognise an insert-then-delete that never reached the server.
+        // Deleted rows are gone from the store, so their id comes from the delete tombstone (needs the
+        // identity marked `.preserveValueOnDeletion`); resolving them catches a never-pushed insert+delete.
         var idByPID: [PersistentIdentifier: String] = Dictionary(
             try context.fetch(FetchDescriptor<Model>()).map { ($0.persistentModelID, $0[keyPath: Model.syncIdentity]) },
             uniquingKeysWith: { lhs, _ in lhs })
@@ -221,8 +217,6 @@ extension SwiftSync {
         }
     }
 }
-
-// MARK: - Push
 
 extension SwiftSync {
     /// Hands your `process` closure the rows changed since the last-pushed token; you own the network call
