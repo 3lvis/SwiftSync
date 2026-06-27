@@ -10,7 +10,7 @@ struct ContentView: View {
     private var engine: DemoSyncEngine { runtime.syncEngine }
 
     var body: some View {
-        ProjectsView(syncContainer: runtime.syncContainer, syncEngine: runtime.syncEngine)
+        ProjectsView(syncEngine: runtime.syncEngine)
             // A safe-area inset, not a `.bottomBar` toolbar: the toolbar would attach outside
             // ProjectsView's own NavigationStack and drop out on re-render. This stays put.
             .safeAreaInset(edge: .bottom) { offlineBar }
@@ -29,7 +29,7 @@ struct ContentView: View {
                 }
             }
             .sheet(isPresented: $showingFailures) {
-                FailuresSheet(syncContainer: runtime.syncContainer, syncEngine: engine)
+                FailuresSheet(syncEngine: engine)
             }
     }
 

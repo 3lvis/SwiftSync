@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 import SwiftUI
 
-/// SwiftUI property wrapper observing a **collection** (`rows`); the UIKit/plain-Swift equivalent is
+/// SwiftUI property wrapper observing a **collection** (`rows`); the plain-Swift equivalent is
 /// `SyncQueryPublisher`, which it wraps. For a single row by id, use `@SyncModel`.
 @MainActor
 @propertyWrapper
@@ -53,23 +53,5 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
             initialValue: SyncQueryPublisher(
                 Model.self, relationship: relationship, relationshipID: relationshipID, in: syncContainer,
                 sortBy: sortBy))
-    }
-}
-
-/// SwiftUI property wrapper observing the **single row** matching an id (`row`); the UIKit/plain-Swift
-/// equivalent is `SyncModelPublisher`, which it wraps. For a collection, use `@SyncQuery`.
-@MainActor
-@propertyWrapper
-public struct SyncModel<Model: PersistentModel & SyncModelable>: DynamicProperty {
-    @State private var publisher: SyncModelPublisher<Model>
-
-    public var wrappedValue: Model? { publisher.row }
-
-    public init(
-        _ _: Model.Type,
-        id: Model.SyncID,
-        in syncContainer: SyncContainer
-    ) {
-        _publisher = State(initialValue: SyncModelPublisher(Model.self, id: id, in: syncContainer))
     }
 }

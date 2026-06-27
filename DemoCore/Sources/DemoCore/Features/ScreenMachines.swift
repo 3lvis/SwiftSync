@@ -33,35 +33,35 @@ public enum TaskFormOptionsState: Equatable {
     case unavailable
 }
 
-func resolveProjectsListStatusState(loadState: ScreenLoadState, hasRows: Bool) -> ProjectsListStatusState {
-    switch loadState {
+func resolveProjectsListStatusState(phase: SyncLoadPhase, hasRows: Bool) -> ProjectsListStatusState {
+    switch phase {
     case .idle:
         return .hidden
     case .loading:
         return hasRows ? .hidden : .loading
     case .loaded:
         return hasRows ? .hidden : .empty
-    case .error(let presentation):
-        return .error(presentation)
+    case .failed(let message):
+        return .error(ErrorPresentationState(message: message))
     }
 }
 
 func resolveProjectDetailContentState(
-    loadState: ScreenLoadState,
+    phase: SyncLoadPhase,
     hasProject: Bool,
     hasTasks: Bool
 ) -> ProjectDetailContentState {
     if hasProject || hasTasks {
         return .content
     }
-    return loadState.isLoading ? .loading : .notFound
+    return phase == .loading ? .loading : .notFound
 }
 
-func resolveTaskDetailContentState(loadState: ScreenLoadState, hasTask: Bool) -> TaskDetailContentState {
+func resolveTaskDetailContentState(phase: SyncLoadPhase, hasTask: Bool) -> TaskDetailContentState {
     if hasTask {
         return .content
     }
-    return loadState.isLoading ? .loading : .notFound
+    return phase == .loading ? .loading : .notFound
 }
 
 func resolveTaskFormOptionsState(loadState: ScreenLoadState, hasOptions: Bool) -> TaskFormOptionsState {
@@ -74,138 +74,102 @@ func resolveTaskFormOptionsState(loadState: ScreenLoadState, hasOptions: Bool) -
 @MainActor
 @Observable
 public final class ProjectsViewMachine {
-    public private(set) var loadState: ScreenLoadState = .idle
-    public var rows: [Project] {
-        rowsPublisher.rows
-    }
+    private let synced: SyncedQueryPublisher<Project>
+
+    public var rows: [Project] { synced.rows }
     public var statusState: ProjectsListStatusState {
-        resolveProjectsListStatusState(loadState: loadState, hasRows: !rows.isEmpty)
+        resolveProjectsListStatusState(phase: synced.phase, hasRows: !rows.isEmpty)
     }
 
-    private let syncEngine: DemoSyncEngine
-    private let rowsPublisher: SyncQueryPublisher<Project>
-    private let loadMachine: ScreenLoadMachine
-    public init(syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
-        self.syncEngine = syncEngine
-        self.rowsPublisher = SyncQueryPublisher(
+    public init(syncEngine: DemoSyncEngine) {
+        synced = SyncedQueryPublisher(
             Project.self,
-            in: syncContainer,
-            sortBy: [SortDescriptor(\Project.name), SortDescriptor(\Project.id)]
-        )
-        self.loadMachine = ScreenLoadMachine { error in
-            presentError(error, fallbackMessage: "Could not load projects.")
-        }
-
-        observeContinuously {
-            self.loadState = self.loadMachine.state
+            in: syncEngine.syncContainer,
+            sortBy: [SortDescriptor(\Project.name), SortDescriptor(\Project.id)],
+            fallbackMessage: "Could not load projects."
+        ) { [syncEngine] in
+            try await syncEngine.syncProjects()
+            // Warm reference data (users + task states) so the new-task form has options offline.
+            try await syncEngine.syncTaskFormMetadata()
         }
     }
 
     public func send(_ event: ScreenLoadEvent) {
-        loadMachine.send(
-            event,
-            run: { [syncEngine] in
-                try await syncEngine.syncProjects()
-                // Warm reference data (users + task states) on the home screen so it is cached for
-                // offline task creation — otherwise the new-task form has no options while offline.
-                try await syncEngine.syncTaskFormMetadata()
-            })
+        if case .onAppear = event {
+            _Concurrency.Task { await synced.load() }
+        }
     }
-
 }
 
 @MainActor
 @Observable
 public final class ProjectViewMachine {
-    public private(set) var loadState: ScreenLoadState = .idle
-    public private(set) var deleteState: SubmissionState = .idle
+    public var deleteState: SyncSubmissionPhase { deleteDriver.phase }
     public var project: Project? {
         projectPublisher.row
     }
     public var tasks: [Task] {
         // Offline-deleted tasks are hard-deleted (their deletion lives in store history), so they're
         // already absent from the publisher — no soft-delete flag to filter on.
-        taskPublisher.rows
+        tasksSynced.rows
     }
     public var contentState: ProjectDetailContentState {
         resolveProjectDetailContentState(
-            loadState: loadState,
+            phase: tasksSynced.phase,
             hasProject: project != nil,
             hasTasks: !tasks.isEmpty
         )
     }
     public var loadErrorPresentation: ErrorPresentationState? {
-        loadState.errorPresentation
+        tasksSynced.phase.failureMessage.map { ErrorPresentationState(message: $0) }
     }
 
     private let projectID: String
     private let syncEngine: DemoSyncEngine
     private let projectPublisher: SyncModelPublisher<Project>
-    private let taskPublisher: SyncQueryPublisher<Task>
-    private let loadMachine: ScreenLoadMachine
-    private let deleteMachine: SubmissionMachine
+    private let tasksSynced: SyncedQueryPublisher<Task>
+    private let deleteDriver = SyncSubmissionDriver(fallbackMessage: "Could not delete this task.")
     public enum DeleteEvent {
         case request(taskID: String)
         case dismissError
     }
 
-    public init(projectID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
+    public init(projectID: String, syncEngine: DemoSyncEngine) {
         self.projectID = projectID
         self.syncEngine = syncEngine
-        self.projectPublisher = SyncModelPublisher(Project.self, id: projectID, in: syncContainer)
-        self.taskPublisher = SyncQueryPublisher(
+        self.projectPublisher = SyncModelPublisher(Project.self, id: projectID, in: syncEngine.syncContainer)
+        self.tasksSynced = SyncedQueryPublisher(
             Task.self,
             relationship: \Task.project,
             relationshipID: projectID,
-            in: syncContainer,
+            in: syncEngine.syncContainer,
             sortBy: [
                 SortDescriptor(\Task.updatedAt, order: .reverse),
                 SortDescriptor(\Task.id),
-            ]
-        )
-        self.loadMachine = ScreenLoadMachine { error in
-            presentError(error, fallbackMessage: "Could not load this project yet.")
-        }
-        self.deleteMachine = SubmissionMachine { error in
-            presentError(error, fallbackMessage: "Could not delete this task.")
-        }
-
-        observeContinuously {
-            self.loadState = self.loadMachine.state
-        }
-        observeContinuously {
-            self.deleteState = self.deleteMachine.state
+            ],
+            fallbackMessage: "Could not load this project yet."
+        ) { [syncEngine, projectID] in
+            try await syncEngine.syncProjectTasks(projectID: projectID)
         }
     }
 
     public func send(_ event: ScreenLoadEvent) {
-        loadMachine.send(
-            event,
-            run: { [syncEngine, projectID] in
-                try await syncEngine.syncProjectTasks(projectID: projectID)
-            })
+        if case .onAppear = event {
+            _Concurrency.Task { await tasksSynced.load() }
+        }
     }
 
     public func sendDelete(_ event: DeleteEvent) {
         switch event {
         case .request(let taskID):
-            guard deleteMachine.send(.submit) else { return }
-
             _Concurrency.Task {
-                do {
-                    try await syncEngine.deleteTask(taskID: taskID, projectID: projectID)
-                    await MainActor.run {
-                        _ = deleteMachine.send(.success)
-                    }
-                } catch {
-                    await MainActor.run {
-                        _ = deleteMachine.send(.failure(error))
-                    }
+                await self.deleteDriver.submit {
+                    try await self.syncEngine.deleteTask(taskID: taskID, projectID: self.projectID)
                 }
             }
 
         case .dismissError:
-            _ = deleteMachine.send(.dismissError)
+            deleteDriver.dismissFailure()
         }
     }
 
@@ -214,9 +178,8 @@ public final class ProjectViewMachine {
 @MainActor
 @Observable
 public final class TaskViewMachine {
-    public private(set) var loadState: ScreenLoadState = .idle
     public var task: Task? {
-        taskPublisher.row
+        taskSynced.row
     }
     public var items: [Item] {
         itemPublisher.rows
@@ -232,47 +195,33 @@ public final class TaskViewMachine {
             .map(\.displayName)
     }
     public var contentState: TaskDetailContentState {
-        resolveTaskDetailContentState(loadState: loadState, hasTask: task != nil)
+        resolveTaskDetailContentState(phase: taskSynced.phase, hasTask: task != nil)
     }
     public var loadErrorPresentation: ErrorPresentationState? {
-        loadState.errorPresentation
+        taskSynced.phase.failureMessage.map { ErrorPresentationState(message: $0) }
     }
 
-    private let taskID: String
-    private let syncEngine: DemoSyncEngine
-    private let taskPublisher: SyncModelPublisher<Task>
+    private let taskSynced: SyncedModelPublisher<Task>
     private let itemPublisher: SyncQueryPublisher<Item>
-    private let loadMachine: ScreenLoadMachine
-    public init(taskID: String, syncContainer: SyncContainer, syncEngine: DemoSyncEngine) {
-        self.taskID = taskID
-        self.syncEngine = syncEngine
-        self.taskPublisher = SyncModelPublisher(
-            Task.self,
-            id: taskID,
-            in: syncContainer,
-        )
+    public init(taskID: String, syncEngine: DemoSyncEngine) {
+        self.taskSynced = SyncedModelPublisher(
+            Task.self, id: taskID, in: syncEngine.syncContainer, fallbackMessage: "Could not load this task yet."
+        ) { [syncEngine, taskID] in
+            try await syncEngine.syncTaskDetail(taskID: taskID)
+        }
         self.itemPublisher = SyncQueryPublisher(
             Item.self,
             relationship: \Item.task,
             relationshipID: taskID,
-            in: syncContainer,
+            in: syncEngine.syncContainer,
             sortBy: [SortDescriptor(\Item.position, order: .forward), SortDescriptor(\Item.id, order: .forward)]
         )
-        self.loadMachine = ScreenLoadMachine { error in
-            presentError(error, fallbackMessage: "Could not load this task yet.")
-        }
-
-        observeContinuously {
-            self.loadState = self.loadMachine.state
-        }
     }
 
     public func send(_ event: ScreenLoadEvent) {
-        loadMachine.send(
-            event,
-            run: { [syncEngine, taskID] in
-                try await syncEngine.syncTaskDetail(taskID: taskID)
-            })
+        if case .onAppear = event {
+            _Concurrency.Task { await taskSynced.load() }
+        }
     }
 }
 
@@ -282,7 +231,7 @@ public final class TaskFormSheetMachine {
     public private(set) var users: [User] = []
     public private(set) var taskStateOptions: [TaskStateOption] = []
     public private(set) var metadataLoadState: ScreenLoadState = .idle
-    public private(set) var saveState: SubmissionState = .idle
+    public var saveState: SyncSubmissionPhase { saveDriver.phase }
     public var taskStateOptionsState: TaskFormOptionsState {
         resolveTaskFormOptionsState(loadState: metadataLoadState, hasOptions: !taskStateOptions.isEmpty)
     }
@@ -293,11 +242,10 @@ public final class TaskFormSheetMachine {
         metadataLoadState.errorPresentation
     }
 
-    private let syncContainer: SyncContainer
     private let syncEngine: DemoSyncEngine
     private let editContext: ModelContext
     private let metadataLoadMachine: ScreenLoadMachine
-    private let saveMachine: SubmissionMachine
+    private let saveDriver = SyncSubmissionDriver(fallbackMessage: "Could not save this task.")
     public enum ItemMutation {
         case add(title: String)
         case updateTitle(item: Item, title: String)
@@ -311,8 +259,7 @@ public final class TaskFormSheetMachine {
         case dismissSaveError
     }
 
-    public init(syncContainer: SyncContainer, syncEngine: DemoSyncEngine, editContext: ModelContext) {
-        self.syncContainer = syncContainer
+    public init(syncEngine: DemoSyncEngine, editContext: ModelContext) {
         self.syncEngine = syncEngine
         self.editContext = editContext
         self.metadataLoadMachine = ScreenLoadMachine { error in
@@ -321,18 +268,8 @@ public final class TaskFormSheetMachine {
                 fallbackMessage: "Could not load form options yet."
             )
         }
-        self.saveMachine = SubmissionMachine { error in
-            presentError(
-                error,
-                fallbackMessage: "Could not save this task."
-            )
-        }
-
-        observeContinuously {
+        SwiftSync.observeContinuously {
             self.metadataLoadState = self.metadataLoadMachine.state
-        }
-        observeContinuously {
-            self.saveState = self.saveMachine.state
         }
     }
 
@@ -362,9 +299,7 @@ public final class TaskFormSheetMachine {
             normalizeItemPositions(in: draft)
             draft.updatedAt = Date()
 
-            guard saveMachine.send(.submit) else { return }
-
-            var body = syncContainer.export(draft)
+            var body = syncEngine.syncContainer.export(draft)
             let capturedReviewerIDs = draft.reviewers.map(\.id).sorted()
             let capturedWatcherIDs = draft.watchers.map(\.id).sorted()
 
@@ -385,27 +320,21 @@ public final class TaskFormSheetMachine {
             let requestBody = body
 
             _Concurrency.Task {
-                do {
+                await self.saveDriver.submit {
                     let payload = try SyncJSON(dictionary: requestBody)
                     switch mode {
                     case .create(let projectID):
-                        try await syncEngine.createTask(body: payload, projectID: projectID)
+                        try await self.syncEngine.createTask(body: payload, projectID: projectID)
                     case .edit(let task):
-                        try await syncEngine.updateTask(taskID: task.id, projectID: task.projectID, body: payload)
+                        try await self.syncEngine.updateTask(
+                            taskID: task.id, projectID: task.projectID, body: payload)
                     }
-                    await MainActor.run {
-                        _ = saveMachine.send(.success)
-                        onSuccess()
-                    }
-                } catch {
-                    await MainActor.run {
-                        _ = saveMachine.send(.failure(error))
-                    }
+                    onSuccess()
                 }
             }
 
         case .dismissSaveError:
-            _ = saveMachine.send(.dismissError)
+            saveDriver.dismissFailure()
         }
     }
 
