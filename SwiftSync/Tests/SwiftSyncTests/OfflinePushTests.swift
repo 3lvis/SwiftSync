@@ -167,6 +167,35 @@ final class OfflinePushTests: XCTestCase {
             "drain must converge — nothing left pending")
     }
 
+    func testDrainAfterPassRunsPerCompletedPassNotForThrowingPass() async throws {
+        struct Boom: Error {}
+        let container = try makeContainer()
+        let context = container.mainContext
+        context.insert(PushNote(id: "p1", title: "first"))
+        try context.save()
+
+        var passes = 0
+        var afterPassCalls = 0
+        do {
+            _ = try await SwiftSync.drainPendingChanges(
+                for: PushNote.self, in: context,
+                process: { _ in
+                    passes += 1
+                    if passes == 1 {
+                        context.insert(PushNote(id: "p2", title: "second"))  // forces a 2nd pass
+                        try context.save()
+                        return []
+                    }
+                    throw Boom()
+                },
+                afterPass: { _ in afterPassCalls += 1 })
+            XCTFail("the throwing second pass must propagate")
+        } catch is Boom {}
+
+        XCTAssertEqual(passes, 2)
+        XCTAssertEqual(afterPassCalls, 1, "afterPass runs for the completed pass, not the one whose process threw")
+    }
+
     func testDrainStopsWhenAPassReturnsFailures() async throws {
         let container = try makeContainer()
         let context = container.mainContext

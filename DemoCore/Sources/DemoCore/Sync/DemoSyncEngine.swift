@@ -216,14 +216,13 @@ public final class DemoSyncEngine {
         if let activeDrain { return try await activeDrain.value }
 
         let task = _Concurrency.Task { @MainActor in
-            // SwiftSync drains pass by pass to convergence; the inbox annotation and pending count are the
-            // app's once-at-the-end bookkeeping (a clean pass returns no failures, so annotating the final
-            // result is equivalent to per-pass).
-            let failures = try await SwiftSync.drainPendingChanges(for: Task.self, in: self.syncContainer.mainContext) {
-                pending in try await self.upload(pending)
-            }
-            try self.annotateFailures(failures)
-            return failures
+            // Annotate the inbox per completed pass, not once at the end: a row accepted in an earlier pass
+            // must clear even if a later pass throws (afterPass is skipped for the throwing pass). The
+            // pending count is reactive (PendingChangesPublisher), so it needs no explicit refresh.
+            try await SwiftSync.drainPendingChanges(
+                for: Task.self, in: self.syncContainer.mainContext,
+                process: { pending in try await self.upload(pending) },
+                afterPass: { failures in try self.annotateFailures(failures) })
         }
         activeDrain = task
         defer { activeDrain = nil }
