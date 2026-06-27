@@ -37,10 +37,20 @@ public final class DemoSyncEngine {
         }
     }
 
-    public private(set) var pendingChangeCount = 0
+    /// Un-pushed changes not currently surfaced as failures — a rejected row stays in the queue but reads
+    /// as *failed*, not *pending*, so the same task isn't counted twice. Reactive via `pendingPublisher`.
+    public var pendingChangeCount: Int {
+        let pending = pendingPublisher.pendingChanges
+        let failedIDs = Set(failedTasks().map(\.id))
+        return (pending.inserts + pending.updates + pending.deletes).filter { !failedIDs.contains($0) }.count
+    }
 
-    /// Rows the server rejected (a failure reason is set). Drives the failures inbox.
-    public private(set) var failedChangeCount = 0
+    /// Rows the server rejected (a failure reason is set). Drives the failures inbox. Touch the pending
+    /// publisher so the offline bar re-reads this when the store saves (failures appear/clear on save).
+    public var failedChangeCount: Int {
+        _ = pendingPublisher.pendingChanges
+        return failedTasks().count
+    }
 
     private var inFlightOperations: Set<String> = []
     /// The drain in progress, if any — concurrent pushes (reconnect + push-before-pull) coalesce onto it.
@@ -48,10 +58,12 @@ public final class DemoSyncEngine {
 
     public let syncContainer: SyncContainer
     private let apiClient: FakeDemoAPIClient
+    @ObservationIgnored private let pendingPublisher: PendingChangesPublisher<Task>
 
     public init(syncContainer: SyncContainer, apiClient: FakeDemoAPIClient) {
         self.syncContainer = syncContainer
         self.apiClient = apiClient
+        self.pendingPublisher = PendingChangesPublisher(Task.self, in: syncContainer)
     }
 
     public func syncProjects() async throws {
@@ -95,7 +107,6 @@ public final class DemoSyncEngine {
                 throw SyncTaskDetailError.missingProject(projectID)
             }
             try applyLocalTask(body, project: project)
-            refreshPendingCount()
             return
         }
         try await runOperation("createTask-\(projectID)") {
@@ -118,7 +129,6 @@ public final class DemoSyncEngine {
                 task.syncFailureReason = nil  // the corrected edit gets a fresh attempt
                 try syncContainer.mainContext.save()
             }
-            refreshPendingCount()
             if !isOffline {
                 _ = try await pushPendingChanges()
             }
@@ -133,7 +143,6 @@ public final class DemoSyncEngine {
             if let task = try task(withID: taskID), task.syncFailureReason != nil {
                 task.syncFailureReason = nil
                 try syncContainer.mainContext.save()
-                refreshPendingCount()
             }
         }
     }
@@ -146,7 +155,6 @@ public final class DemoSyncEngine {
                 syncContainer.mainContext.delete(task)
                 try syncContainer.mainContext.save()
             }
-            refreshPendingCount()
             return
         }
         try await runOperation("deleteTask-\(taskID)") {
@@ -187,7 +195,6 @@ public final class DemoSyncEngine {
         if let watcherIDs { task.watchers = try users(for: watcherIDs) }
         task.updatedAt = Date()
         try syncContainer.mainContext.save()
-        refreshPendingCount()
     }
 
     private func users(for ids: [String]) throws -> [User] {
@@ -216,7 +223,6 @@ public final class DemoSyncEngine {
                 pending in try await self.upload(pending)
             }
             try self.annotateFailures(failures)
-            self.refreshPendingCount()
             return failures
         }
         activeDrain = task
@@ -338,21 +344,6 @@ public final class DemoSyncEngine {
         try syncContainer.mainContext.save()
     }
 
-    private func refreshPendingCount() {
-        let pending = try? SwiftSync.pendingChanges(for: Task.self, in: syncContainer.mainContext)
-        // A rejected row stays pending in the queue (pure-bubble) but reads as *failed*, not *pending* —
-        // otherwise the same task is counted twice ("1 pending, 1 failed"). Pending is the queue minus
-        // whatever is currently surfaced in the failures inbox. A deleted row is gone from the store, so
-        // it can't carry a failure reason — count it as pending regardless.
-        let pendingIDs = pending.map { $0.inserts + $0.updates + $0.deletes } ?? []
-        let failedIDs = Set(failedTasks().map(\.id))
-        pendingChangeCount = pendingIDs.filter { !failedIDs.contains($0) }.count
-
-        let failed = try? syncContainer.mainContext.fetch(
-            FetchDescriptor<Task>(predicate: #Predicate { $0.syncFailureReason != nil }))
-        failedChangeCount = failed?.count ?? 0
-    }
-
     /// Tasks the server rejected (a failure reason is set), newest first — the failures inbox.
     public func failedTasks() -> [Task] {
         (try? syncContainer.mainContext.fetch(
@@ -375,13 +366,6 @@ public final class DemoSyncEngine {
                 try syncContainer.mainContext.save()
             }
         }
-        refreshPendingCount()
-    }
-
-    /// After an inbound pull, refresh the pending count. Freshly-pulled rows aren't mistaken for local
-    /// edits because the pull stamps them with the inbound author, which the push side filters out.
-    private func markPulled() {
-        refreshPendingCount()
     }
 
     private func syncProjectsData() async throws {
@@ -423,7 +407,6 @@ public final class DemoSyncEngine {
             parent: project,
             relationship: \Task.project
         )
-        markPulled()
         try await syncProjectsData()
     }
 
@@ -447,7 +430,6 @@ public final class DemoSyncEngine {
             throw SyncTaskDetailError.missingProject(projectID)
         }
         try await syncContainer.sync(item: payload, as: Task.self)
-        markPulled()
     }
 
     private func syncTaskAfterMutation(taskID: String, projectID: String?) async throws {

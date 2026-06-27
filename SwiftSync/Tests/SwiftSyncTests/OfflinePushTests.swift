@@ -131,6 +131,17 @@ final class OfflinePushTests: XCTestCase {
 
     /// A local write during the upload await wasn't in the batch, so the token must not advance past it:
     /// it stays pending rather than being silently swallowed.
+    func testPendingChangesPublisherReflectsLocalInsertAfterSave() async throws {
+        let container = try makeContainer()
+        let publisher = PendingChangesPublisher(PushNote.self, in: container)
+        XCTAssertTrue(publisher.pendingChanges.isEmpty)
+
+        container.mainContext.insert(PushNote(id: "a", title: "a"))
+        try container.mainContext.save()
+
+        XCTAssertEqual(publisher.pendingChanges.inserts, ["a"], "the publisher must reflect the live pending set")
+    }
+
     func testDrainConvergesAcrossWritesThatLandDuringUpload() async throws {
         let container = try makeContainer()
         let context = container.mainContext
