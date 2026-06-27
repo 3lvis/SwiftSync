@@ -513,6 +513,22 @@ Use these annotations when you need them:
 
 See [Property Mapping Contract](docs/project/property-mapping-contract.md) for the complete mapping rules.
 
+## Sendable Payloads
+
+`sync(payload:)` takes `[String: Any]`, which is fine when you decode and sync on the same actor. But `[String: Any]` is not `Sendable`, so if a payload has to cross an actor boundary — e.g. you decode a response on one actor and `sync` it on another — Swift 6 will flag the hop.
+
+`SyncJSON` is the carrier for that case: a `Sendable`, structured JSON value that conforms to `SyncPayloadConvertible`, so it feeds `sync` directly. Box your JSON once, carry it across actors, and read it back with keyed accessors:
+
+```swift
+let payload = try SyncJSON(dictionary: responseDictionary)   // Sendable; crosses actors freely
+try await syncContainer.sync(payload: [payload], as: User.self)
+
+payload.string("id")            // typed read
+payload.objectArray("items")    // nested objects
+```
+
+It preserves `null` (so a sync can clear a field) and the underlying value shapes, exactly like the dictionary would.
+
 ## Reactive Reads
 
 SwiftSync is built around local reactive reads. That means your views do not fetch directly from the network and then hold onto that response as UI state. Instead, sync writes backend changes into SwiftData, and the UI reads from SwiftData as its source of truth.
