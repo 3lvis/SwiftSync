@@ -193,7 +193,7 @@ per-field `@RemoteKey`, `@NotExport`, relationships, the sync identity) and gene
 - **Enable it once per clone:** `./scripts/setup.sh` (or `git config core.hooksPath .githooks`).
 - To format manually: `swift format --in-place --recursive SwiftSync/Sources SwiftSync/Tests` (Swift 6 toolchain; no standalone binary needed).
 - CI enforces formatting by re-running `swift format --in-place` and failing on any diff — commits that skip the hook still fail the check.
-- Use the Xcode 26.2 / Swift 6.x toolchain to match CI; older toolchains may format differently and cause spurious diffs.
+- Use the Xcode 27 / Swift 6.4 toolchain to match CI; older toolchains may format differently and cause spurious diffs.
 
 ## Pre-Commit Checkpoint
 
@@ -225,6 +225,7 @@ per-field `@RemoteKey`, `@NotExport`, relationships, the sync identity) and gene
 - CI is split by the draft/ready signal:
   - **Every push (draft included)** runs the fast tier in `ci.yml`: swift-format, macOS `swift test` (per package), the warnings gate, doc-links, and the perf subset.
   - **Only when a PR is marked ready for review** does the slow simulator tier in `ios-regression.yml` run — one `iOS Simulator Tests` job that runs both the `DemoUITests` UI suite and the iOS-specific dirty-tracking regression (`DirtyTrackingGapTests`) on a simulator. It skips on drafts (a skipped check still reports success) and there is no master-push run — this tier is pre-merge only.
+- Locally, `test-sim -s DemoCore -p DemoCore` and `test-sim -s Demo` run the two halves of that tier on this repo's persistent simulator, from the primary checkout or from any worktree: `DemoCore` names its dependency on the root package (`.package(name: "SwiftSync", path: "../")`), so a checkout called `SwiftSync-<branch>` resolves like one called `SwiftSync`.
 - So mark a PR **ready** to trigger the `iOS Simulator Tests` gate, then verify it green before merging. If a task touches `MacrosImplementation/`, `MacroRuntimeSupport.swift`, or the core sync engine (`SyncContainer`/`ModelContext+Sync`), note in the plan that marking the PR ready will run that simulator tier.
 
 ### UI tests are a last resort (very expensive)

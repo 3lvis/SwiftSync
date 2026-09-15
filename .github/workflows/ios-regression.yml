@@ -17,12 +17,12 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+  DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
 
 jobs:
   ios-simulator:
     name: iOS Simulator Tests
-    runs-on: macos-15
+    runs-on: xcode-27
     if: github.event.pull_request.draft == false
 
     steps:

@@ -16,12 +16,12 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+  DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
 
 jobs:
   swift-format-check:
     name: swift-format check
-    runs-on: macos-15
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v5
       - name: Check formatting
@@ -34,7 +34,7 @@ jobs:
 
   macos-tests:
     name: macOS Swift Test (${{ matrix.package.name }})
-    runs-on: macos-15
+    runs-on: xcode-27
     strategy:
       fail-fast: false
       matrix:
@@ -64,7 +64,7 @@ jobs:
 
   warnings:
     name: Warnings gate (${{ matrix.package.name }})
-    runs-on: macos-15
+    runs-on: xcode-27
     strategy:
       fail-fast: false
       matrix:
@@ -91,7 +91,7 @@ jobs:
 
   doc-links:
     name: Doc link check
-    runs-on: macos-15
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v5
       - name: Check relative markdown links resolve
@@ -99,7 +99,7 @@ jobs:
 
   perf-regression:
     name: Perf regression gate
-    runs-on: macos-15
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v5
 
@@ -128,7 +128,7 @@ jobs:
   # annotations + delta) in the step summary, but never fails CI and is intentionally not a required check.
   core-coverage:
     name: Core coverage (SwiftSync)
-    runs-on: macos-15
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v5
         with:

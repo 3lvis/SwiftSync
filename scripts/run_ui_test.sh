@@ -5,7 +5,14 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 WORKSPACE="$ROOT_DIR/SwiftSync.xcworkspace"
 SCHEME="Demo"
 DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT_DIR/.build/xcode-ui-tests}"
-SIMULATOR_UDID="${SIMULATOR_UDID:-A40EFA3C-8E6A-40B2-9FF1-C4C1944B3CC7}"
+SIMULATOR_UDID="${SIMULATOR_UDID:-$(xcrun simctl list devices available --json | python3 -c '
+import json, re, sys
+candidates = []
+for runtime, rows in json.load(sys.stdin)["devices"].items():
+    match = re.search(r"iOS-(\d+)-(\d+)$", runtime)
+    if match:
+        candidates += [((int(match.group(1)), int(match.group(2))), row["name"], row["udid"]) for row in rows if row["name"].startswith("iPhone")]
+print(max(candidates)[2])')}"
 ONLY_TESTING="${1:-}"
 FORCE_BUILD="${FORCE_BUILD:-0}"
 
