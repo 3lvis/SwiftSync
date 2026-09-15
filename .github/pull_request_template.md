@@ -1,15 +1,30 @@
+<!-- Written the way we write everything else here — VOICE.md. -->
+
 ## Why
 
-<!-- A fix says what was wrong, in plain words. A feature says what was asked for, and what the
-     library can do now. -->
+<!-- A fix says what was wrong, in plain words. A feature says what was asked for, and what the library
+     can do now. -->
 
 ## The approach
 
 <!-- How you fixed or built it. Explain a piece of the code only where that saves the reviewer time. -->
 
+## Screenshots
+
+<!-- Required whenever the change is visible: the reviewer should never have to build the branch
+     to see it. A fix shows before and after. A feature shows one column, unless it is a revamp,
+     where the old one belongs beside it. The table holds each image to half the width.
+
+<table>
+  <tr><td align="center"><b>Before</b></td><td align="center"><b>After</b></td></tr>
+  <tr><td><img src="" width="100%"></td><td><img src="" width="100%"></td></tr>
+</table>
+
+-->
+
 ## Testing
 
-<!-- One line on how it was tested, rather than what the testing found. -->
+<!-- One line on how it was tested, rather than what the testing found. `swift test` per package is the fast tier; marking the PR ready runs the simulator tier. -->
 
 ## Learnings
 
