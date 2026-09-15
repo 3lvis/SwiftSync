@@ -1,5 +1,9 @@
 # AGENTS.md
 
+[`LEARNINGS.md`](LEARNINGS.md) holds what sessions keep running into, searched by symptom. Yours goes in a
+file of its own, `LEARNINGS/<YYYY-MM-DD-HHMM>-<slug>.md`, so branches writing at once stay clear of each
+other. Leave the filing, the grouping and the graduating to the periodic pass that document describes.
+
 ## Code Style Preferences
 
 - Prefer pure functions that return values over void functions with side effects.
