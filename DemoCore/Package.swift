@@ -11,7 +11,7 @@ let package = Package(
         .library(name: "DemoCore", targets: ["DemoCore"])
     ],
     dependencies: [
-        .package(path: "../"),
+        .package(name: "SwiftSync", path: "../"),
         .package(path: "../DemoBackend"),
         .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "602.0.0"),
     ],
