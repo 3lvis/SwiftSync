@@ -8,6 +8,8 @@ Graduating into [`AGENTS.md`](AGENTS.md) takes that document's own bar: a line e
 being live in almost every session, which recurrence alone leaves unanswered. Recurrence makes a lesson a
 candidate; the citations below are what settle it.
 
+Written the way we write everything else here — [`VOICE.md`](VOICE.md).
+
 ## One lesson, one file
 
 Everything lives in [`LEARNINGS/`](LEARNINGS/), a file per lesson, named for the minute you wrote it:
