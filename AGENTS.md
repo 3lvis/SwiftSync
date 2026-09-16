@@ -193,14 +193,19 @@ per-field `@RemoteKey`, `@NotExport`, relationships, the sync identity) and gene
 - For Git, run these sequentially only: `git add`, `git rm`, `git mv`, `git commit`, `git merge`, `git rebase`, `git cherry-pick`, `git checkout`, `git stash`, `git reset`, `git clean`.
 - If a Git command fails due to `index.lock`, stop, remove the stale lock, and retry the same command sequentially.
 
-## Code Formatting (swift-format)
+## Lint and formatting (oida)
 
-- The package is formatted with `swift-format` (config: `.swift-format`).
-- A tracked pre-commit hook in `.githooks/pre-commit` formats staged `*.swift` files automatically.
-- **Enable it once per clone:** `./scripts/setup.sh` (or `git config core.hooksPath .githooks`).
-- To format manually: `swift format --in-place --recursive SwiftSync/Sources SwiftSync/Tests` (Swift 6 toolchain supplies it).
-- CI enforces formatting by re-running `swift format --in-place` and failing on any diff — commits that skip the hook still fail the check.
-- Use the Xcode 27 / Swift 6.4 toolchain to match CI; older toolchains may format differently and cause spurious diffs.
+- `bin/lint --fix` before you finish, and `--check` is what CI runs. One tool does both jobs: oida
+  decides which lists split and which join, then hands the files to swift-format (config:
+  `.swift-format`), so `⇧⌃I` in Xcode agrees with the result.
+- The rules live in `.oida.yml`, the version in `.oida-version`, and `bin/lint` verifies the download
+  against `.oida-checksum-<platform>` so CI and a laptop run the same bytes.
+- **Enable the hook once per clone:** `./scripts/setup.sh` (or `git config core.hooksPath .githooks`).
+  It runs `bin/lint --staged`.
+- Justify a violation in place with `// oida:disable:next <rule>` and a reason. The repository sits at
+  zero, so every violation CI finds is one this branch introduced.
+- Documents are linted too — VOICE.md's rules cover every root document and `LEARNINGS/` note, with
+  `docs/` left out as working notes.
 
 ## Pre-Commit Checkpoint
 
@@ -208,15 +213,16 @@ per-field `@RemoteKey`, `@NotExport`, relationships, the sync identity) and gene
   **draft** PR proactively once a branch is a complete, green unit — go straight ahead, skipping the
   title/body. **Merge only on an explicit ask** — *except the doc-only fast path below.*
 - **Doc-only fast path.** A PR whose changes are *only* `**.md` / `docs/**` skips the heavy CI
-  (`paths-ignore` in `ci.yml` + `ios-regression.yml`), so the required checks stay silent. Because
-  `enforce_admins` is off on `master`, such a PR may be **opened and admin-merged immediately without
-  asking** — `gh pr merge <n> --squash --admin --delete-branch`. This is the *only* merge allowed without
-  an explicit ask. A mixed doc+code PR runs full CI and follows the normal gate (green, then ask).
+  (`paths-ignore` in `ci.yml` + `ios-regression.yml`) and runs the oida gate alone, which is Linux and
+  takes about a minute. Because `enforce_admins` is off on `master`, such a PR may be **opened and
+  admin-merged without asking** once that one check is green —
+  `gh pr merge <n> --squash --admin --delete-branch`. This is the *only* merge allowed without an
+  explicit ask. A mixed doc+code PR runs full CI and follows the normal gate (green, then ask).
 - Before every commit:
   - run `git status --short`
   - confirm only intended files are staged
   - then run the commit command (sequentially)
-- The pre-commit hook reformats and re-stages fully-staged `*.swift` files at commit time, so committed content may differ from what `git status` showed; partially-staged files are skipped (format them manually).
+- The pre-commit hook lints and reformats staged files at commit time, so committed content may differ from what `git status` showed.
 - Leave the attribution footer off commits:
 
   ```

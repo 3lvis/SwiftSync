@@ -36,16 +36,17 @@ excluded:
   - "**/GeneratedSources"
   - "**/Intermediates.noindex"
 
-# Root documents and LEARNINGS/ are VOICE.md's own. docs/planning and docs/project are working notes —
-# plans with checkboxes and design scratch — which VOICE.md leaves alone. A dead link is a defect
-# anywhere, so document_links_resolve stays unscoped.
+# Every document is VOICE.md's except docs/, which holds working notes — plans with checkboxes and
+# design scratch — that VOICE.md leaves alone. Scoped by exclusion so the rules keep covering a
+# document added anywhere later, and so they survive a checkout directory named after a branch. A dead
+# link is a defect anywhere, so document_links_resolve stays unscoped.
 document_says_what_is:
   severity: error
-  included: "SwiftSync[^/]*/([^/]+\\.md|LEARNINGS/[^/]+\\.md)$"
+  excluded: "/docs/"
 
 document_avoids_retired_words:
   severity: error
-  included: "SwiftSync[^/]*/([^/]+\\.md|LEARNINGS/[^/]+\\.md)$"
+  excluded: "/docs/"
 
 # Errors, not warnings: what these find is written by whoever is not reading the code around it, and a
 # warning is what a reader scrolls past.
