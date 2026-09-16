@@ -71,7 +71,10 @@ final class ProjectsViewController: UITableViewController {
         }
         SwiftSync.observeContinuously { [weak self] in
             guard let self else { return }
-            renderStatusState(machine.statusState)
+            let status = Self.statusPresentation(for: machine.statusState)
+            if status.isAnimating { statusIndicator.startAnimating() } else { statusIndicator.stopAnimating() }
+            statusLabel.text = status.message
+            tableView.backgroundView?.isHidden = status.isBackgroundHidden
         }
         machine.send(.onAppear)
     }
@@ -82,24 +85,18 @@ final class ProjectsViewController: UITableViewController {
         onSelect(projectID)
     }
 
-    private func renderStatusState(_ state: ProjectsListStatusState) {
+    // What the status area shows for a state, as a value — so the decision is readable, and testable,
+    // without a view controller to read it off.
+    static func statusPresentation(for state: ProjectsListStatusState) -> (isAnimating: Bool, message: String?, isBackgroundHidden: Bool) {
         switch state {
         case .hidden:
-            statusIndicator.stopAnimating()
-            statusLabel.text = nil
-            tableView.backgroundView?.isHidden = true
+            return (isAnimating: false, message: nil, isBackgroundHidden: true)
         case .loading:
-            statusIndicator.startAnimating()
-            statusLabel.text = "Loading projects..."
-            tableView.backgroundView?.isHidden = false
+            return (isAnimating: true, message: "Loading projects...", isBackgroundHidden: false)
         case .empty:
-            statusIndicator.stopAnimating()
-            statusLabel.text = "No projects yet."
-            tableView.backgroundView?.isHidden = false
+            return (isAnimating: false, message: "No projects yet.", isBackgroundHidden: false)
         case .error(let presentation):
-            statusIndicator.stopAnimating()
-            statusLabel.text = presentation.message
-            tableView.backgroundView?.isHidden = false
+            return (isAnimating: false, message: presentation.message, isBackgroundHidden: false)
         }
     }
 

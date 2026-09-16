@@ -479,30 +479,33 @@ extension SwiftSync {
     ) {
         let parts = keyPath.split(separator: ".").map(String.init)
         guard !parts.isEmpty else { return }
-        exportSetValue(
+        target = exportSetting(
             value,
-            path: parts,
-            into: &target
+            at: parts,
+            in: target
         )
     }
 
-    private static func exportSetValue(
+    // Answers the dictionary with `value` written at `path`, rather than writing through an `inout`:
+    // each level of the walk returns its own nested dictionary and the level above stores it.
+    private static func exportSetting(
         _ value: Any,
-        path: [String],
-        into target: inout [String: Any]
-    ) {
-        guard let head = path.first else { return }
+        at path: [String],
+        in target: [String: Any]
+    ) -> [String: Any] {
+        guard let head = path.first else { return target }
+        var result = target
         if path.count == 1 {
-            target[head] = value
-            return
+            result[head] = value
+            return result
         }
-        var nested = (target[head] as? [String: Any]) ?? [:]
-        exportSetValue(
+        let nested = (target[head] as? [String: Any]) ?? [:]
+        result[head] = exportSetting(
             value,
-            path: Array(path.dropFirst()),
-            into: &nested
+            at: Array(path.dropFirst()),
+            in: nested
         )
-        target[head] = nested
+        return result
     }
 }
 
