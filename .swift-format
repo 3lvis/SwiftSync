@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lineLength": 10000,
+  "lineLength": 100000,
   "indentation": {
     "spaces": 4
   },
