@@ -49,7 +49,8 @@ public final class DemoServerSimulator {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
         try self.sqlite.execute("PRAGMA foreign_keys = ON;")
-        try Self.prepareSchema(self.sqlite, seedData: seedData)
+        try self.sqlite.executeScript(Self.schemaSQL)
+        try Self.seedIfNeeded(self.sqlite, seedData: seedData)
     }
 
     public func getProjectsPayload() throws -> [[String: Any]] {
@@ -94,7 +95,13 @@ public final class DemoServerSimulator {
     private func getProjectTasksPayloadRaw(projectID: String) throws -> [[String: Any]] {
         try getTasksPayload(
             whereClause: "WHERE project_id = ?",
-            bind: { stmt in self.sqlite.bind(text: projectID, at: 1, in: stmt) }
+            bind: { stmt in
+                self.sqlite.bind(
+                    text: projectID,
+                    at: 1,
+                    in: stmt
+                )
+            }
         )
     }
 
@@ -157,7 +164,11 @@ public final class DemoServerSimulator {
             LIMIT 1
             """,
             bind: { stmt in
-                self.sqlite.bind(int: rowID, at: 1, in: stmt)
+                self.sqlite.bind(
+                    int: rowID,
+                    at: 1,
+                    in: stmt
+                )
             }
         )
         guard let row = rows.first else { return nil }
@@ -167,9 +178,7 @@ public final class DemoServerSimulator {
     @discardableResult
     public func patchTaskState(publicID: String, state: String) throws -> [String: Any]? {
         _ = try validatedTaskState(state)
-        guard let rowID = try taskRowID(forPublicID: publicID),
-            let current = try taskDetailPayload(rowID: rowID)
-        else { return nil }
+        guard let rowID = try taskRowID(forPublicID: publicID), let current = try taskDetailPayload(rowID: rowID) else { return nil }
         suspendAmbientMutationsAfterWrite()
         let currentUpdatedAt = try parseISO8601(current["updated_at"])
         let next = nextTimestamp(after: currentUpdatedAt)
@@ -181,9 +190,21 @@ public final class DemoServerSimulator {
             WHERE id = ?
             """,
             bind: { stmt in
-                self.sqlite.bind(text: state, at: 1, in: stmt)
-                self.sqlite.bind(double: next.timeIntervalSince1970, at: 2, in: stmt)
-                self.sqlite.bind(int: rowID, at: 3, in: stmt)
+                self.sqlite.bind(
+                    text: state,
+                    at: 1,
+                    in: stmt
+                )
+                self.sqlite.bind(
+                    double: next.timeIntervalSince1970,
+                    at: 2,
+                    in: stmt
+                )
+                self.sqlite.bind(
+                    int: rowID,
+                    at: 3,
+                    in: stmt
+                )
             }
         )
         return try taskDetailPayload(rowID: rowID)
@@ -194,9 +215,7 @@ public final class DemoServerSimulator {
         if let assigneeID, !(try exists(in: "users", id: assigneeID)) {
             throw DemoBackendError.invalidReference(entity: "assignee_id", id: assigneeID)
         }
-        guard let rowID = try taskRowID(forPublicID: publicID),
-            let current = try taskDetailPayload(rowID: rowID)
-        else { return nil }
+        guard let rowID = try taskRowID(forPublicID: publicID), let current = try taskDetailPayload(rowID: rowID) else { return nil }
         suspendAmbientMutationsAfterWrite()
         let currentUpdatedAt = try parseISO8601(current["updated_at"])
         let next = nextTimestamp(after: currentUpdatedAt)
@@ -208,9 +227,21 @@ public final class DemoServerSimulator {
             WHERE id = ?
             """,
             bind: { stmt in
-                self.sqlite.bind(nullableText: assigneeID, at: 1, in: stmt)
-                self.sqlite.bind(double: next.timeIntervalSince1970, at: 2, in: stmt)
-                self.sqlite.bind(int: rowID, at: 3, in: stmt)
+                self.sqlite.bind(
+                    nullableText: assigneeID,
+                    at: 1,
+                    in: stmt
+                )
+                self.sqlite.bind(
+                    double: next.timeIntervalSince1970,
+                    at: 2,
+                    in: stmt
+                )
+                self.sqlite.bind(
+                    int: rowID,
+                    at: 3,
+                    in: stmt
+                )
             }
         )
         return try taskDetailPayload(rowID: rowID)
@@ -241,7 +272,11 @@ public final class DemoServerSimulator {
             try self.sqlite.execute(
                 "DELETE FROM task_reviewers WHERE task_id = ?",
                 bind: { stmt in
-                    self.sqlite.bind(int: taskID, at: 1, in: stmt)
+                    self.sqlite.bind(
+                        int: taskID,
+                        at: 1,
+                        in: stmt
+                    )
                 }
             )
 
@@ -252,8 +287,16 @@ public final class DemoServerSimulator {
                     VALUES (?, ?)
                     """,
                     bind: { stmt in
-                        self.sqlite.bind(int: taskID, at: 1, in: stmt)
-                        self.sqlite.bind(text: reviewerID, at: 2, in: stmt)
+                        self.sqlite.bind(
+                            int: taskID,
+                            at: 1,
+                            in: stmt
+                        )
+                        self.sqlite.bind(
+                            text: reviewerID,
+                            at: 2,
+                            in: stmt
+                        )
                     }
                 )
             }
@@ -265,8 +308,16 @@ public final class DemoServerSimulator {
                 WHERE id = ?
                 """,
                 bind: { stmt in
-                    self.sqlite.bind(double: next.timeIntervalSince1970, at: 1, in: stmt)
-                    self.sqlite.bind(int: taskID, at: 2, in: stmt)
+                    self.sqlite.bind(
+                        double: next.timeIntervalSince1970,
+                        at: 1,
+                        in: stmt
+                    )
+                    self.sqlite.bind(
+                        int: taskID,
+                        at: 2,
+                        in: stmt
+                    )
                 }
             )
             try self.sqlite.execute("COMMIT;")
@@ -302,7 +353,11 @@ public final class DemoServerSimulator {
             try self.sqlite.execute(
                 "DELETE FROM task_watchers WHERE task_id = ?",
                 bind: { stmt in
-                    self.sqlite.bind(int: taskID, at: 1, in: stmt)
+                    self.sqlite.bind(
+                        int: taskID,
+                        at: 1,
+                        in: stmt
+                    )
                 }
             )
 
@@ -313,8 +368,16 @@ public final class DemoServerSimulator {
                     VALUES (?, ?)
                     """,
                     bind: { stmt in
-                        self.sqlite.bind(int: taskID, at: 1, in: stmt)
-                        self.sqlite.bind(text: watcherID, at: 2, in: stmt)
+                        self.sqlite.bind(
+                            int: taskID,
+                            at: 1,
+                            in: stmt
+                        )
+                        self.sqlite.bind(
+                            text: watcherID,
+                            at: 2,
+                            in: stmt
+                        )
                     }
                 )
             }
@@ -326,8 +389,16 @@ public final class DemoServerSimulator {
                 WHERE id = ?
                 """,
                 bind: { stmt in
-                    self.sqlite.bind(double: next.timeIntervalSince1970, at: 1, in: stmt)
-                    self.sqlite.bind(int: taskID, at: 2, in: stmt)
+                    self.sqlite.bind(
+                        double: next.timeIntervalSince1970,
+                        at: 1,
+                        in: stmt
+                    )
+                    self.sqlite.bind(
+                        int: taskID,
+                        at: 2,
+                        in: stmt
+                    )
                 }
             )
             try self.sqlite.execute("COMMIT;")
@@ -354,22 +425,16 @@ public final class DemoServerSimulator {
         } else {
             throw DemoBackendError.validation(message: "description is required")
         }
-        guard let stateDict = body["state"] as? [String: Any],
-            let stateID = stateDict["id"] as? String
-        else {
+        guard let stateDict = body["state"] as? [String: Any], let stateID = stateDict["id"] as? String else {
             throw DemoBackendError.validation(message: "state.id is required")
         }
         guard let authorID = body["author_id"] as? String else {
             throw DemoBackendError.validation(message: "author_id is required")
         }
-        guard let createdAtString = body["created_at"] as? String,
-            let createdAt = parseISO8601String(createdAtString)
-        else {
+        guard let createdAtString = body["created_at"] as? String, let createdAt = parseISO8601String(createdAtString) else {
             throw DemoBackendError.validation(message: "created_at is required (ISO 8601)")
         }
-        guard let updatedAtString = body["updated_at"] as? String,
-            let updatedAt = parseISO8601String(updatedAtString)
-        else {
+        guard let updatedAtString = body["updated_at"] as? String, let updatedAt = parseISO8601String(updatedAtString) else {
             throw DemoBackendError.validation(message: "updated_at is required (ISO 8601)")
         }
         let assigneeID = body["assignee_id"] as? String
@@ -396,9 +461,7 @@ public final class DemoServerSimulator {
             items: items
         )
 
-        guard body["reviewer_ids"] is [String] || body["watcher_ids"] is [String],
-            let rowID = try taskRowID(forPublicID: publicID, includeTombstoned: true)
-        else { return created }
+        guard body["reviewer_ids"] is [String] || body["watcher_ids"] is [String], let rowID = try taskRowID(forPublicID: publicID, includeTombstoned: true) else { return created }
         if let reviewerIDs = body["reviewer_ids"] as? [String] {
             _ = try replaceReviewers(rowID: rowID, reviewerIDs: reviewerIDs)
         }
@@ -449,15 +512,51 @@ public final class DemoServerSimulator {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 bind: { stmt in
-                    self.sqlite.bind(text: resolvedPublicID, at: 1, in: stmt)
-                    self.sqlite.bind(text: projectID, at: 2, in: stmt)
-                    self.sqlite.bind(nullableText: assigneeID, at: 3, in: stmt)
-                    self.sqlite.bind(text: authorID, at: 4, in: stmt)
-                    self.sqlite.bind(text: normalizedTitle, at: 5, in: stmt)
-                    self.sqlite.bind(nullableText: normalizedDescription, at: 6, in: stmt)
-                    self.sqlite.bind(text: normalizedState, at: 7, in: stmt)
-                    self.sqlite.bind(double: createdAt.timeIntervalSince1970, at: 8, in: stmt)
-                    self.sqlite.bind(double: updatedAt.timeIntervalSince1970, at: 9, in: stmt)
+                    self.sqlite.bind(
+                        text: resolvedPublicID,
+                        at: 1,
+                        in: stmt
+                    )
+                    self.sqlite.bind(
+                        text: projectID,
+                        at: 2,
+                        in: stmt
+                    )
+                    self.sqlite.bind(
+                        nullableText: assigneeID,
+                        at: 3,
+                        in: stmt
+                    )
+                    self.sqlite.bind(
+                        text: authorID,
+                        at: 4,
+                        in: stmt
+                    )
+                    self.sqlite.bind(
+                        text: normalizedTitle,
+                        at: 5,
+                        in: stmt
+                    )
+                    self.sqlite.bind(
+                        nullableText: normalizedDescription,
+                        at: 6,
+                        in: stmt
+                    )
+                    self.sqlite.bind(
+                        text: normalizedState,
+                        at: 7,
+                        in: stmt
+                    )
+                    self.sqlite.bind(
+                        double: createdAt.timeIntervalSince1970,
+                        at: 8,
+                        in: stmt
+                    )
+                    self.sqlite.bind(
+                        double: updatedAt.timeIntervalSince1970,
+                        at: 9,
+                        in: stmt
+                    )
                 }
             )
 
@@ -508,9 +607,7 @@ public final class DemoServerSimulator {
         } else {
             throw DemoBackendError.validation(message: "description is required")
         }
-        guard let stateDict = body["state"] as? [String: Any],
-            let stateID = stateDict["id"] as? String
-        else {
+        guard let stateDict = body["state"] as? [String: Any], let stateID = stateDict["id"] as? String else {
             throw DemoBackendError.validation(message: "state.id is required")
         }
 
@@ -526,9 +623,7 @@ public final class DemoServerSimulator {
             let existingRows = try itemsPayload(taskID: taskID)
             let existingTitlesByPublicID = Dictionary(
                 uniqueKeysWithValues: existingRows.compactMap { row -> (String, String)? in
-                    guard let publicID = row["id"] as? String,
-                        let title = row["title"] as? String
-                    else { return nil }
+                    guard let publicID = row["id"] as? String, let title = row["title"] as? String else { return nil }
                     return (publicID, title)
                 }
             )
@@ -564,17 +659,41 @@ public final class DemoServerSimulator {
                 WHERE id = ?
                 """,
                 bind: { stmt in
-                    self.sqlite.bind(text: normalizedTitle, at: 1, in: stmt)
-                    self.sqlite.bind(nullableText: normalizedDescription, at: 2, in: stmt)
-                    self.sqlite.bind(text: normalizedState, at: 3, in: stmt)
-                    self.sqlite.bind(nullableText: assigneeID, at: 4, in: stmt)
-                    self.sqlite.bind(double: next.timeIntervalSince1970, at: 5, in: stmt)
-                    self.sqlite.bind(int: taskID, at: 6, in: stmt)
+                    self.sqlite.bind(
+                        text: normalizedTitle,
+                        at: 1,
+                        in: stmt
+                    )
+                    self.sqlite.bind(
+                        nullableText: normalizedDescription,
+                        at: 2,
+                        in: stmt
+                    )
+                    self.sqlite.bind(
+                        text: normalizedState,
+                        at: 3,
+                        in: stmt
+                    )
+                    self.sqlite.bind(
+                        nullableText: assigneeID,
+                        at: 4,
+                        in: stmt
+                    )
+                    self.sqlite.bind(
+                        double: next.timeIntervalSince1970,
+                        at: 5,
+                        in: stmt
+                    )
+                    self.sqlite.bind(
+                        int: taskID,
+                        at: 6,
+                        in: stmt
+                    )
                 }
             )
 
             if let itemsToReconcile {
-                let incomingItemPublicIDs = Set(itemsToReconcile.map(\.publicID))
+                let incomingItemPublicIDs = Set(itemsToReconcile.map { $0.publicID })
                 guard incomingItemPublicIDs.count == itemsToReconcile.count else {
                     throw DemoBackendError.validation(message: "item ids must be unique")
                 }
@@ -587,11 +706,31 @@ public final class DemoServerSimulator {
                         WHERE task_id = ? AND public_id = ?
                         """,
                         bind: { stmt in
-                            self.sqlite.bind(text: item.title, at: 1, in: stmt)
-                            sqlite3_bind_int64(stmt, 2, Int64(item.position))
-                            self.sqlite.bind(double: item.updatedAt.timeIntervalSince1970, at: 3, in: stmt)
-                            self.sqlite.bind(int: taskID, at: 4, in: stmt)
-                            self.sqlite.bind(text: item.publicID, at: 5, in: stmt)
+                            self.sqlite.bind(
+                                text: item.title,
+                                at: 1,
+                                in: stmt
+                            )
+                            sqlite3_bind_int64(
+                                stmt,
+                                2,
+                                Int64(item.position)
+                            )
+                            self.sqlite.bind(
+                                double: item.updatedAt.timeIntervalSince1970,
+                                at: 3,
+                                in: stmt
+                            )
+                            self.sqlite.bind(
+                                int: taskID,
+                                at: 4,
+                                in: stmt
+                            )
+                            self.sqlite.bind(
+                                text: item.publicID,
+                                at: 5,
+                                in: stmt
+                            )
                         }
                     )
                 }
@@ -603,8 +742,16 @@ public final class DemoServerSimulator {
                     try self.sqlite.execute(
                         "DELETE FROM items WHERE task_id = ? AND public_id = ?",
                         bind: { stmt in
-                            self.sqlite.bind(int: taskID, at: 1, in: stmt)
-                            self.sqlite.bind(text: publicID, at: 2, in: stmt)
+                            self.sqlite.bind(
+                                int: taskID,
+                                at: 1,
+                                in: stmt
+                            )
+                            self.sqlite.bind(
+                                text: publicID,
+                                at: 2,
+                                in: stmt
+                            )
                         }
                     )
                 }
@@ -637,7 +784,11 @@ public final class DemoServerSimulator {
         try self.sqlite.execute(
             "DELETE FROM tasks WHERE id = ?",
             bind: { stmt in
-                self.sqlite.bind(int: rowID, at: 1, in: stmt)
+                self.sqlite.bind(
+                    int: rowID,
+                    at: 1,
+                    in: stmt
+                )
             }
         )
     }
@@ -657,14 +808,30 @@ public final class DemoServerSimulator {
             case "upsert": return try uploadUpsert(payload)
             case "delete": return try uploadDelete(payload)
             case .none:
-                return rejected(payload, code: "missing_operation", message: "operation is required")
+                return rejected(
+                    payload,
+                    code: "missing_operation",
+                    message: "operation is required"
+                )
             case .some(let other):
-                return rejected(payload, code: "unknown_operation", message: "unknown operation '\(other)'")
+                return rejected(
+                    payload,
+                    code: "unknown_operation",
+                    message: "unknown operation '\(other)'"
+                )
             }
         } catch let error as DemoBackendError {
-            return rejected(payload, code: "rejected", message: error.errorDescription ?? "rejected")
+            return rejected(
+                payload,
+                code: "rejected",
+                message: error.errorDescription ?? "rejected"
+            )
         } catch {
-            return rejected(payload, code: "error", message: "\(error)")
+            return rejected(
+                payload,
+                code: "error",
+                message: "\(error)"
+            )
         }
     }
 
@@ -688,7 +855,13 @@ public final class DemoServerSimulator {
             // Revive a tombstoned row before updating it — updateTask ignores tombstoned rows. No-op when live.
             try self.sqlite.execute(
                 "UPDATE tasks SET deleted_at = NULL WHERE id = ?",
-                bind: { stmt in self.sqlite.bind(int: existingID, at: 1, in: stmt) }
+                bind: { stmt in
+                    self.sqlite.bind(
+                        int: existingID,
+                        at: 1,
+                        in: stmt
+                    )
+                }
             )
             _ = try updateTaskInternal(rowID: existingID, body: body)
         } else {
@@ -718,9 +891,21 @@ public final class DemoServerSimulator {
         try self.sqlite.execute(
             "UPDATE tasks SET deleted_at = ?, updated_at = ? WHERE id = ?",
             bind: { stmt in
-                self.sqlite.bind(double: Date().timeIntervalSince1970, at: 1, in: stmt)
-                self.sqlite.bind(double: incoming.timeIntervalSince1970, at: 2, in: stmt)
-                self.sqlite.bind(int: rowID, at: 3, in: stmt)
+                self.sqlite.bind(
+                    double: Date().timeIntervalSince1970,
+                    at: 1,
+                    in: stmt
+                )
+                self.sqlite.bind(
+                    double: incoming.timeIntervalSince1970,
+                    at: 2,
+                    in: stmt
+                )
+                self.sqlite.bind(
+                    int: rowID,
+                    at: 3,
+                    in: stmt
+                )
             }
         )
         return ["operation": "delete", "id": id, "status": "applied"]
@@ -751,7 +936,13 @@ public final class DemoServerSimulator {
         let scope = includeTombstoned ? "" : " AND deleted_at IS NULL"
         let rows = try self.sqlite.query(
             "SELECT id FROM tasks WHERE public_id = ?\(scope) LIMIT 1",
-            bind: { stmt in self.sqlite.bind(text: publicID, at: 1, in: stmt) }
+            bind: { stmt in
+                self.sqlite.bind(
+                    text: publicID,
+                    at: 1,
+                    in: stmt
+                )
+            }
         )
         guard let value = rows.first?.int64("id") else { return nil }
         return Int(value)
@@ -760,20 +951,33 @@ public final class DemoServerSimulator {
     private func isStale(rowID: Int, incoming: Date) throws -> Bool {
         let rows = try self.sqlite.query(
             "SELECT updated_at FROM tasks WHERE id = ? LIMIT 1",
-            bind: { stmt in self.sqlite.bind(int: rowID, at: 1, in: stmt) }
+            bind: { stmt in
+                self.sqlite.bind(
+                    int: rowID,
+                    at: 1,
+                    in: stmt
+                )
+            }
         )
         guard let stored = rows.first?.double("updated_at") else { return false }
         // An incoming write older *or equal* loses — server wins ties.
         return incoming.timeIntervalSince1970 <= stored
     }
 
-    private func rejected(_ payload: [String: Any], code: String, message: String) -> [String: Any] {
+    private func rejected(
+        _ payload: [String: Any],
+        code: String,
+        message: String
+    ) -> [String: Any] {
         var result: [String: Any] = ["status": "rejected", "code": code, "message": message]
         if let operation = payload["operation"] as? String { result["operation"] = operation }
         if let id = payload["id"] as? String { result["id"] = id }
         return result
     }
 
+    // The simulated drift belongs behind its own name: its caller is the public read, and folding this in
+    // would put twenty lines of mutation between that read and its answer.
+    // oida:disable:next no_single_use_void_functions
     private func applyAmbientProjectMutation(projectID: String, step: Int) throws {
         guard try exists(in: "projects", id: projectID) else { return }
 
@@ -782,22 +986,30 @@ public final class DemoServerSimulator {
 
         switch operation {
         case 0:
-            try ambientUpdateTask(in: projectID, tasks: currentTasks, step: step)
+            try ambientUpdateTask(
+                in: projectID,
+                tasks: currentTasks,
+                step: step
+            )
         case 1:
             try ambientCreateTask(in: projectID, step: step)
         default:
             if currentTasks.count > 2 {
-                try ambientDeleteTask(tasks: currentTasks, step: step)
+                let doomed = currentTasks[(step / 2) % currentTasks.count]
+                if let publicID = doomed["id"] as? String {
+                    try deleteTask(publicID: publicID)
+                }
             } else {
-                try ambientUpdateTask(in: projectID, tasks: currentTasks, step: step)
+                try ambientUpdateTask(
+                    in: projectID,
+                    tasks: currentTasks,
+                    step: step
+                )
             }
         }
     }
 
-    private func getTasksPayload(
-        whereClause: String,
-        bind: ((OpaquePointer?) throws -> Void)?
-    ) throws -> [[String: Any]] {
+    private func getTasksPayload(whereClause: String, bind: ((OpaquePointer?) throws -> Void)?) throws -> [[String: Any]] {
         let scoped =
             whereClause.isEmpty
             ? "WHERE tasks.deleted_at IS NULL" : "\(whereClause) AND tasks.deleted_at IS NULL"
@@ -813,7 +1025,11 @@ public final class DemoServerSimulator {
         return try rows.map(taskPayload(from:))
     }
 
-    private func ambientUpdateTask(in projectID: String, tasks: [[String: Any]], step: Int) throws {
+    private func ambientUpdateTask(
+        in projectID: String,
+        tasks: [[String: Any]],
+        step: Int
+    ) throws {
         guard !tasks.isEmpty else {
             try ambientCreateTask(in: projectID, step: step)
             return
@@ -879,13 +1095,6 @@ public final class DemoServerSimulator {
         )
     }
 
-    private func ambientDeleteTask(tasks: [[String: Any]], step: Int) throws {
-        guard !tasks.isEmpty else { return }
-        let task = tasks[(step / 2) % tasks.count]
-        guard let publicID = task["id"] as? String else { return }
-        try deleteTask(publicID: publicID)
-    }
-
     private func taskPayload(from row: DemoSQLiteRow) throws -> [String: Any] {
         let taskID = Int(row.int64("id"))
         let publicID = row.string("public_id")
@@ -916,7 +1125,11 @@ public final class DemoServerSimulator {
             ORDER BY items.position ASC, items.id ASC
             """,
             bind: { stmt in
-                self.sqlite.bind(int: taskID, at: 1, in: stmt)
+                self.sqlite.bind(
+                    int: taskID,
+                    at: 1,
+                    in: stmt
+                )
             }
         )
         return rows.map { row in
@@ -970,7 +1183,11 @@ public final class DemoServerSimulator {
             ORDER BY user_id ASC
             """,
             bind: { stmt in
-                self.sqlite.bind(int: taskID, at: 1, in: stmt)
+                self.sqlite.bind(
+                    int: taskID,
+                    at: 1,
+                    in: stmt
+                )
             }
         )
         return rows.map { $0.string("user_id") }
@@ -985,16 +1202,17 @@ public final class DemoServerSimulator {
             ORDER BY user_id ASC
             """,
             bind: { stmt in
-                self.sqlite.bind(int: taskID, at: 1, in: stmt)
+                self.sqlite.bind(
+                    int: taskID,
+                    at: 1,
+                    in: stmt
+                )
             }
         )
         return rows.map { $0.string("user_id") }
     }
 
-    private func parseItems(
-        _ rawItems: [[String: Any]],
-        existingTitlesByID: [String: String] = [:]
-    ) throws -> [ItemInput] {
+    private func parseItems(_ rawItems: [[String: Any]], existingTitlesByID: [String: String] = [:]) throws -> [ItemInput] {
         try rawItems.enumerated().map { index, item in
             guard let publicID = item["id"] as? String, !publicID.isEmpty else {
                 throw DemoBackendError.validation(message: "items[\(index)].id is required")
@@ -1020,9 +1238,7 @@ public final class DemoServerSimulator {
 
             let createdAt: Date
             if let createdAtValue = item["created_at"] {
-                guard let createdAtString = createdAtValue as? String,
-                    let parsedCreatedAt = parseISO8601String(createdAtString)
-                else {
+                guard let createdAtString = createdAtValue as? String, let parsedCreatedAt = parseISO8601String(createdAtString) else {
                     throw DemoBackendError.validation(message: "items[\(index)].created_at must be ISO 8601")
                 }
                 createdAt = parsedCreatedAt
@@ -1032,9 +1248,7 @@ public final class DemoServerSimulator {
 
             let updatedAt: Date
             if let updatedAtValue = item["updated_at"] {
-                guard let updatedAtString = updatedAtValue as? String,
-                    let parsedUpdatedAt = parseISO8601String(updatedAtString)
-                else {
+                guard let updatedAtString = updatedAtValue as? String, let parsedUpdatedAt = parseISO8601String(updatedAtString) else {
                     throw DemoBackendError.validation(message: "items[\(index)].updated_at must be ISO 8601")
                 }
                 updatedAt = parsedUpdatedAt
@@ -1060,12 +1274,36 @@ public final class DemoServerSimulator {
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 bind: { stmt in
-                    self.sqlite.bind(text: item.publicID, at: 1, in: stmt)
-                    self.sqlite.bind(int: taskID, at: 2, in: stmt)
-                    self.sqlite.bind(text: item.title, at: 3, in: stmt)
-                    sqlite3_bind_int64(stmt, 4, Int64(item.position))
-                    self.sqlite.bind(double: item.createdAt.timeIntervalSince1970, at: 5, in: stmt)
-                    self.sqlite.bind(double: item.updatedAt.timeIntervalSince1970, at: 6, in: stmt)
+                    self.sqlite.bind(
+                        text: item.publicID,
+                        at: 1,
+                        in: stmt
+                    )
+                    self.sqlite.bind(
+                        int: taskID,
+                        at: 2,
+                        in: stmt
+                    )
+                    self.sqlite.bind(
+                        text: item.title,
+                        at: 3,
+                        in: stmt
+                    )
+                    sqlite3_bind_int64(
+                        stmt,
+                        4,
+                        Int64(item.position)
+                    )
+                    self.sqlite.bind(
+                        double: item.createdAt.timeIntervalSince1970,
+                        at: 5,
+                        in: stmt
+                    )
+                    self.sqlite.bind(
+                        double: item.updatedAt.timeIntervalSince1970,
+                        at: 6,
+                        in: stmt
+                    )
                 }
             )
         }
@@ -1075,7 +1313,11 @@ public final class DemoServerSimulator {
         let rows = try self.sqlite.query(
             "SELECT 1 AS one FROM \(table) WHERE id = ? LIMIT 1",
             bind: { stmt in
-                self.sqlite.bind(text: id, at: 1, in: stmt)
+                self.sqlite.bind(
+                    text: id,
+                    at: 1,
+                    in: stmt
+                )
             }
         )
         return !rows.isEmpty
@@ -1086,9 +1328,7 @@ public final class DemoServerSimulator {
     }
 
     private func allIDs(in table: String) throws -> [String] {
-        let rows = try self.sqlite.query(
-            "SELECT id FROM \(table) ORDER BY id ASC"
-        )
+        let rows = try self.sqlite.query("SELECT id FROM \(table) ORDER BY id ASC")
         return rows.map { $0.string("id") }
     }
 
@@ -1100,8 +1340,7 @@ public final class DemoServerSimulator {
             throw DemoBackendError.validation(message: "\(field) must not be empty")
         }
         guard trimmed.count <= Self.maxTitleLength else {
-            throw DemoBackendError.validation(
-                message: "\(field) must be \(Self.maxTitleLength) characters or fewer")
+            throw DemoBackendError.validation(message: "\(field) must be \(Self.maxTitleLength) characters or fewer")
         }
         return trimmed
     }
@@ -1147,14 +1386,9 @@ public final class DemoServerSimulator {
         ambientMutationsSuspendedUntil = Date().addingTimeInterval(1.25)
     }
 
-    private static func prepareSchema(_ sqlite: DemoSQLiteDatabase, seedData: DemoSeedData) throws {
-        try createSchemaIfNeeded(sqlite: sqlite)
-        try seedIfNeeded(sqlite, seedData: seedData)
-    }
-
-    private static func createSchemaIfNeeded(sqlite: DemoSQLiteDatabase) throws {
-        try sqlite.executeScript(
-            """
+    // The schema is data: one statement per table, run once at open. Held as a value so it reads as
+    // the description it is, rather than as a function that happens to contain it.
+    static let schemaSQL = """
             CREATE TABLE IF NOT EXISTS projects (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -1213,10 +1447,11 @@ public final class DemoServerSimulator {
                 FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
             );
 
-            """
-        )
-    }
+        """
 
+    // Two hundred lines of inserts in one transaction, six tables deep. The name is what lets the opening
+    // sequence be read as three steps rather than as the whole fixture.
+    // oida:disable:next no_single_use_void_functions
     private static func seedIfNeeded(_ sqlite: DemoSQLiteDatabase, seedData: DemoSeedData) throws {
         let rows = try sqlite.query("SELECT COUNT(*) AS count FROM projects")
         let projectCount = Int(rows.first?.int64("count") ?? 0)
@@ -1231,10 +1466,26 @@ public final class DemoServerSimulator {
                     VALUES (?, ?, ?, ?)
                     """,
                     bind: { stmt in
-                        sqlite.bind(text: project.id, at: 1, in: stmt)
-                        sqlite.bind(text: project.name, at: 2, in: stmt)
-                        sqlite.bind(double: project.createdAt.timeIntervalSince1970, at: 3, in: stmt)
-                        sqlite.bind(double: project.updatedAt.timeIntervalSince1970, at: 4, in: stmt)
+                        sqlite.bind(
+                            text: project.id,
+                            at: 1,
+                            in: stmt
+                        )
+                        sqlite.bind(
+                            text: project.name,
+                            at: 2,
+                            in: stmt
+                        )
+                        sqlite.bind(
+                            double: project.createdAt.timeIntervalSince1970,
+                            at: 3,
+                            in: stmt
+                        )
+                        sqlite.bind(
+                            double: project.updatedAt.timeIntervalSince1970,
+                            at: 4,
+                            in: stmt
+                        )
                     }
                 )
             }
@@ -1246,10 +1497,26 @@ public final class DemoServerSimulator {
                     VALUES (?, ?, ?, ?)
                     """,
                     bind: { stmt in
-                        sqlite.bind(text: user.id, at: 1, in: stmt)
-                        sqlite.bind(text: user.displayName, at: 2, in: stmt)
-                        sqlite.bind(double: user.createdAt.timeIntervalSince1970, at: 3, in: stmt)
-                        sqlite.bind(double: user.updatedAt.timeIntervalSince1970, at: 4, in: stmt)
+                        sqlite.bind(
+                            text: user.id,
+                            at: 1,
+                            in: stmt
+                        )
+                        sqlite.bind(
+                            text: user.displayName,
+                            at: 2,
+                            in: stmt
+                        )
+                        sqlite.bind(
+                            double: user.createdAt.timeIntervalSince1970,
+                            at: 3,
+                            in: stmt
+                        )
+                        sqlite.bind(
+                            double: user.updatedAt.timeIntervalSince1970,
+                            at: 4,
+                            in: stmt
+                        )
                     }
                 )
             }
@@ -1264,15 +1531,51 @@ public final class DemoServerSimulator {
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     bind: { stmt in
-                        sqlite.bind(text: task.id, at: 1, in: stmt)
-                        sqlite.bind(text: task.projectID, at: 2, in: stmt)
-                        sqlite.bind(nullableText: task.assigneeID, at: 3, in: stmt)
-                        sqlite.bind(text: task.authorID, at: 4, in: stmt)
-                        sqlite.bind(text: task.title, at: 5, in: stmt)
-                        sqlite.bind(nullableText: task.descriptionText, at: 6, in: stmt)
-                        sqlite.bind(text: task.state, at: 7, in: stmt)
-                        sqlite.bind(double: task.createdAt.timeIntervalSince1970, at: 8, in: stmt)
-                        sqlite.bind(double: task.updatedAt.timeIntervalSince1970, at: 9, in: stmt)
+                        sqlite.bind(
+                            text: task.id,
+                            at: 1,
+                            in: stmt
+                        )
+                        sqlite.bind(
+                            text: task.projectID,
+                            at: 2,
+                            in: stmt
+                        )
+                        sqlite.bind(
+                            nullableText: task.assigneeID,
+                            at: 3,
+                            in: stmt
+                        )
+                        sqlite.bind(
+                            text: task.authorID,
+                            at: 4,
+                            in: stmt
+                        )
+                        sqlite.bind(
+                            text: task.title,
+                            at: 5,
+                            in: stmt
+                        )
+                        sqlite.bind(
+                            nullableText: task.descriptionText,
+                            at: 6,
+                            in: stmt
+                        )
+                        sqlite.bind(
+                            text: task.state,
+                            at: 7,
+                            in: stmt
+                        )
+                        sqlite.bind(
+                            double: task.createdAt.timeIntervalSince1970,
+                            at: 8,
+                            in: stmt
+                        )
+                        sqlite.bind(
+                            double: task.updatedAt.timeIntervalSince1970,
+                            at: 9,
+                            in: stmt
+                        )
                     }
                 )
                 let taskRowID = sqlite.lastInsertRowID()
@@ -1285,8 +1588,16 @@ public final class DemoServerSimulator {
                         VALUES (?, ?)
                         """,
                         bind: { stmt in
-                            sqlite.bind(int: taskRowID, at: 1, in: stmt)
-                            sqlite.bind(text: reviewerID, at: 2, in: stmt)
+                            sqlite.bind(
+                                int: taskRowID,
+                                at: 1,
+                                in: stmt
+                            )
+                            sqlite.bind(
+                                text: reviewerID,
+                                at: 2,
+                                in: stmt
+                            )
                         }
                     )
                 }
@@ -1298,8 +1609,16 @@ public final class DemoServerSimulator {
                         VALUES (?, ?)
                         """,
                         bind: { stmt in
-                            sqlite.bind(int: taskRowID, at: 1, in: stmt)
-                            sqlite.bind(text: watcherID, at: 2, in: stmt)
+                            sqlite.bind(
+                                int: taskRowID,
+                                at: 1,
+                                in: stmt
+                            )
+                            sqlite.bind(
+                                text: watcherID,
+                                at: 2,
+                                in: stmt
+                            )
                         }
                     )
                 }
@@ -1315,12 +1634,36 @@ public final class DemoServerSimulator {
                     VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     bind: { stmt in
-                        sqlite.bind(text: item.id, at: 1, in: stmt)
-                        sqlite.bind(int: taskRowID, at: 2, in: stmt)
-                        sqlite.bind(text: item.title, at: 3, in: stmt)
-                        sqlite3_bind_int64(stmt, 4, Int64(item.position))
-                        sqlite.bind(double: item.createdAt.timeIntervalSince1970, at: 5, in: stmt)
-                        sqlite.bind(double: item.updatedAt.timeIntervalSince1970, at: 6, in: stmt)
+                        sqlite.bind(
+                            text: item.id,
+                            at: 1,
+                            in: stmt
+                        )
+                        sqlite.bind(
+                            int: taskRowID,
+                            at: 2,
+                            in: stmt
+                        )
+                        sqlite.bind(
+                            text: item.title,
+                            at: 3,
+                            in: stmt
+                        )
+                        sqlite3_bind_int64(
+                            stmt,
+                            4,
+                            Int64(item.position)
+                        )
+                        sqlite.bind(
+                            double: item.createdAt.timeIntervalSince1970,
+                            at: 5,
+                            in: stmt
+                        )
+                        sqlite.bind(
+                            double: item.updatedAt.timeIntervalSince1970,
+                            at: 6,
+                            in: stmt
+                        )
                     }
                 )
             }
@@ -1339,10 +1682,19 @@ private final class DemoSQLiteDatabase {
     init(databaseURL: URL) throws {
         let path = databaseURL.path
         let directory = databaseURL.deletingLastPathComponent()
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: nil)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
 
         let flags = SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX
-        if sqlite3_open_v2(path, &db, flags, nil) != SQLITE_OK {
+        if sqlite3_open_v2(
+            path,
+            &db,
+            flags,
+            nil
+        ) != SQLITE_OK {
             defer { sqlite3_close(db) }
             throw DemoBackendError.openDatabase(path)
         }
@@ -1354,7 +1706,15 @@ private final class DemoSQLiteDatabase {
 
     func execute(_ sql: String, bind: ((OpaquePointer?) throws -> Void)? = nil) throws {
         var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+        guard
+            sqlite3_prepare_v2(
+                db,
+                sql,
+                -1,
+                &stmt,
+                nil
+            ) == SQLITE_OK
+        else {
             throw sqliteError()
         }
         defer { sqlite3_finalize(stmt) }
@@ -1369,9 +1729,18 @@ private final class DemoSQLiteDatabase {
         }
     }
 
+    // One of this type's three ways to reach SQLite — execute prepares a statement, query returns rows,
+    // and this runs a multi-statement script. Having one caller today says nothing about the set.
+    // oida:disable:next no_single_use_void_functions
     func executeScript(_ sql: String) throws {
         var errorMessage: UnsafeMutablePointer<Int8>?
-        let rc = sqlite3_exec(db, sql, nil, nil, &errorMessage)
+        let rc = sqlite3_exec(
+            db,
+            sql,
+            nil,
+            nil,
+            &errorMessage
+        )
         guard rc == SQLITE_OK else {
             let message = errorMessage.map { String(cString: $0) } ?? "Unknown sqlite3_exec error"
             sqlite3_free(errorMessage)
@@ -1381,7 +1750,15 @@ private final class DemoSQLiteDatabase {
 
     func query(_ sql: String, bind: ((OpaquePointer?) throws -> Void)? = nil) throws -> [DemoSQLiteRow] {
         var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+        guard
+            sqlite3_prepare_v2(
+                db,
+                sql,
+                -1,
+                &stmt,
+                nil
+            ) == SQLITE_OK
+        else {
             throw sqliteError()
         }
         defer { sqlite3_finalize(stmt) }
@@ -1405,26 +1782,60 @@ private final class DemoSQLiteDatabase {
         return rows
     }
 
-    func bind(text value: String, at index: Int32, in stmt: OpaquePointer?) {
+    func bind(
+        text value: String,
+        at index: Int32,
+        in stmt: OpaquePointer?
+    ) {
         _ = value.withCString { cString in
-            sqlite3_bind_text(stmt, index, cString, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+            sqlite3_bind_text(
+                stmt,
+                index,
+                cString,
+                -1,
+                unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+            )
         }
     }
 
-    func bind(nullableText value: String?, at index: Int32, in stmt: OpaquePointer?) {
+    func bind(
+        nullableText value: String?,
+        at index: Int32,
+        in stmt: OpaquePointer?
+    ) {
         if let value {
-            bind(text: value, at: index, in: stmt)
+            bind(
+                text: value,
+                at: index,
+                in: stmt
+            )
         } else {
             sqlite3_bind_null(stmt, index)
         }
     }
 
-    func bind(double value: Double, at index: Int32, in stmt: OpaquePointer?) {
-        sqlite3_bind_double(stmt, index, value)
+    func bind(
+        double value: Double,
+        at index: Int32,
+        in stmt: OpaquePointer?
+    ) {
+        sqlite3_bind_double(
+            stmt,
+            index,
+            value
+        )
     }
 
-    func bind(int value: Int, at index: Int32, in stmt: OpaquePointer?) {
-        sqlite3_bind_int64(stmt, index, Int64(value))
+    func bind(
+        int value: Int,
+        at index: Int32,
+        in stmt: OpaquePointer?
+    ) {
+        sqlite3_bind_int64(
+            stmt,
+            index,
+            Int64(value)
+        )
     }
 
     func lastInsertRowID() -> Int {

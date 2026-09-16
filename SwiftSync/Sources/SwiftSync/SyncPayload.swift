@@ -42,6 +42,8 @@ public struct SyncPayload {
         }
         if T.self == Date.self, contains(key) {
             // Date parsing is best-effort; invalid values fall back to epoch for required fields.
+            // Guarded by the T.self == Date.self test this branch is under.
+            // oida:disable:next force_cast
             return Date(timeIntervalSince1970: 0) as! T
         }
         if isExplicitNull(for: key), let fallback: T = defaultValueForNull(as: type) {
@@ -242,11 +244,17 @@ public struct SyncPayload {
             }
         }
 
-        if T.self == UUID.self, let string = raw as? String, let value = UUID(uuidString: string) {
+        if T.self == UUID.self,
+            let string = raw as? String,
+            let value = UUID(uuidString: string)
+        {
             return value as? T
         }
 
-        if T.self == URL.self, let string = raw as? String, let value = URL(string: string) {
+        if T.self == URL.self,
+            let string = raw as? String,
+            let value = URL(string: string)
+        {
             return value as? T
         }
 
@@ -275,9 +283,7 @@ public struct SyncPayload {
         }
 
         if T.self == Decimal.self {
-            if let string = raw as? String,
-                let value = Decimal(string: string, locale: Locale(identifier: "en_US_POSIX"))
-            {
+            if let string = raw as? String, let value = Decimal(string: string, locale: Locale(identifier: "en_US_POSIX")) {
                 return value as? T
             }
             if let int = raw as? Int {
@@ -298,9 +304,7 @@ public struct SyncPayload {
             if let int = raw as? Int, let date = SyncDateParser.dateFromUnixTimestampNumber(NSNumber(value: int)) {
                 return date as? T
             }
-            if let double = raw as? Double,
-                let date = SyncDateParser.dateFromUnixTimestampNumber(NSNumber(value: double))
-            {
+            if let double = raw as? Double, let date = SyncDateParser.dateFromUnixTimestampNumber(NSNumber(value: double)) {
                 return date as? T
             }
             if let number = raw as? NSNumber, let date = SyncDateParser.dateFromUnixTimestampNumber(number) {

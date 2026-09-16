@@ -1,6 +1,6 @@
 import SwiftData
-import SwiftSync
 import XCTest
+import SwiftSync
 
 @Syncable
 @Model

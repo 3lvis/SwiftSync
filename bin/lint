@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+#
+# Lints with oida, our own linter, whose rules are in .oida.yml.
+#
+#   bin/lint             report what it finds
+#   bin/lint --fix       fix what can be fixed, and format
+#   bin/lint --check     fail on any violation or unformatted file (what CI runs)
+#   bin/lint --staged    the same check, over staged files only (what the commit hook runs)
+#
+# One tool does both jobs: the linter decides which lists split and which join, then hands the files to
+# swift-format — Xcode's on a Mac, the toolchain's on Linux CI, either way the binary Format File runs —
+# which owns every indent.
+#
+# There is no baseline. A standing violation would be silent under one, and this repository adopted oida
+# to find what it says rather than to record that it once said something, so the tree is kept at zero and
+# any violation fails.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+# oida ships two builds, and this is the only place that chooses between them. Anything else fails
+# loudly rather than guessing.
+case "$(uname -s)" in
+    Darwin)
+        platform="macos-arm64"
+        default_cache_root="$HOME/Library/Caches"
+        ;;
+    Linux)
+        platform="linux-x86_64"
+        default_cache_root="$HOME/.cache"
+        ;;
+    *)
+        echo "oida has no build for $(uname -s). It ships macOS arm64 and Linux x86_64 only." >&2
+        exit 1
+        ;;
+esac
+
+# The linter is ours (github.com/kolonialno/oida-swift). It arrives as a download rather than a committed
+# binary, because every landing of a 7 MB blob stays in the history forever.
+#
+# Pinned and checksummed rather than "latest": .oida-version names the release and .oida-checksum-$platform
+# names its bytes, so a clone cannot lint with a build this repository did not ask for, and a tampered
+# download cannot pass for one. The version is asserted after unzipping too, which is what catches a
+# half-finished download rather than running whatever is in the cache.
+version=$(cat .oida-version)
+expected=$(cat ".oida-checksum-$platform")
+cache="${XDG_CACHE_HOME:-$default_cache_root}/oida/$version"
+oida="$cache/oida"
+
+if [ ! -x "$oida" ]; then
+    archive=$(mktemp -d)/oida-$platform.zip
+    url="https://github.com/kolonialno/oida-swift/releases/download/$version/oida-$platform.zip"
+    echo "Fetching the linter, $version — once per version." >&2
+    if ! curl -fsSL "$url" -o "$archive"; then
+        echo "Could not download $url" >&2
+        echo "Check that .oida-version names a published release." >&2
+        exit 1
+    fi
+    found=$(shasum -a 256 "$archive" | cut -d' ' -f1)
+    if [ "$found" != "$expected" ]; then
+        echo "The download does not match .oida-checksum-$platform." >&2
+        echo "  expected $expected" >&2
+        echo "  found    $found" >&2
+        echo "Refusing to run it. Either the release was rebuilt or the download is not what it claims." >&2
+        exit 1
+    fi
+    mkdir -p "$cache"
+    unzip -qo "$archive" -d "$cache"
+    chmod +x "$oida"
+    rm -rf "$(dirname "$archive")"
+fi
+
+# The pin is asserted rather than trusted: a cached binary from an interrupted download, or one someone
+# put there by hand, would otherwise lint by rules this repository never chose.
+have=$("$oida" version)
+if [ "$version" != "$have" ]; then
+    echo "The linter at $oida reports $have but .oida-version pins $version." >&2
+    echo "Remove it and let this script fetch the pinned one:" >&2
+    echo "  rm -rf \"$cache\"" >&2
+    exit 1
+fi
+
+case "${1:-}" in
+    --staged)
+        staged=()
+        while IFS= read -r -d '' file; do staged+=("$file"); done < <(./bin/staged-swift-files)
+
+        if [ ${#staged[@]} -eq 0 ]; then
+            echo "No staged Swift files."
+            exit 0
+        fi
+
+        # The whole repository, not just the staged files. A rule that counts callers across the run
+        # reads a partial run as a function with fewer callers than it has and invents violations, so
+        # the staged list decides only whether to run at all.
+        if ! "$oida" lint --strict --format --quiet; then
+            echo "Fix the violations above, or justify one with a scoped oida:disable." >&2
+            exit 1
+        fi
+        echo "Lint clean, with ${#staged[@]} staged Swift file(s)."
+        ;;
+    --check)
+        "$oida" lint --strict --format --quiet
+        echo "Lint and formatting are clean."
+        ;;
+    --fix)
+        "$oida" --fix --format --quiet >/dev/null
+        echo "Fixed and formatted."
+        ;;
+    *)
+        "$oida" lint --strict
+        ;;
+esac

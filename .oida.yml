@@ -1,0 +1,93 @@
+# The linter is oida (github.com/kolonialno/oida-swift), a SwiftLint fork carrying the rules we
+# actually want. bin/lint fetches the pinned release and runs it; there is no baseline, so the tree
+# is kept at zero and any violation fails.
+
+opt_in_rules:
+  # The shape of every argument list, parameter list and condition: three or more elements go one per
+  # line, two or fewer go on one line, and both directions hold.
+  - multiline_call_arguments
+  - multiline_parameters
+  - multiline_conditions
+  # Imports in three groups — Apple, ours, third-party — alphabetical inside each. Correctable.
+  - grouped_imports
+  - key_path_only_where_the_api_takes_one
+  - multiline_string_opens_on_its_own_line
+  # What gets written too much of: a helper with one caller that returns nothing, a comment whose every
+  # word is already in the code below it, a banner naming what the declarations already name.
+  - comment_adds_no_word
+  - no_mark_comments
+  - no_single_use_void_functions
+  # VOICE.md's own contract, enforced on every root document.
+  - document_says_what_is
+  - document_avoids_retired_words
+  - document_links_resolve
+
+disabled_rules:
+  - todo # work is tracked in PRs and LEARNINGS, not in-code markers
+  - unused_closure_parameter
+
+excluded:
+  # Never lint vendored or generated code, wherever the build puts it. Matched by location, not path,
+  # so an in-repo `-derivedDataPath` does not drag SPM checkouts into scope.
+  - DerivedData
+  - build
+  - "**/.build"
+  - "**/SourcePackages"
+  - "**/GeneratedSources"
+  - "**/Intermediates.noindex"
+
+# Every document is VOICE.md's except docs/, which holds working notes — plans with checkboxes and
+# design scratch — that VOICE.md leaves alone. Scoped by exclusion so the rules keep covering a
+# document added anywhere later, and so they survive a checkout directory named after a branch. A dead
+# link is a defect anywhere, so document_links_resolve stays unscoped.
+document_says_what_is:
+  severity: error
+  excluded: "/docs/"
+
+document_avoids_retired_words:
+  severity: error
+  excluded: "/docs/"
+
+# Errors, not warnings: what these find is written by whoever is not reading the code around it, and a
+# warning is what a reader scrolls past.
+comment_adds_no_word:
+  severity: error
+no_mark_comments:
+  severity: error
+
+opening_brace:
+  # A condition spanning several lines gets its brace on its own line, so the body is not mistaken for
+  # another condition. That is what the formatter emits.
+  ignore_multiline_statement_conditions: true
+
+# A leading underscore marks SwiftSync's own machinery — reachable, and named so a reader knows it is
+# not the API. The tests drive those seams by that name.
+identifier_name:
+  min_length: 1
+  max_length: 70
+  allowed_symbols: ["_"]
+  validates_start_with_lowercase: off
+
+type_name:
+  max_length: 45
+  allowed_symbols: ["_"]
+
+multiline_call_arguments:
+  max_number_of_single_line_parameters: 2
+
+multiline_parameters:
+  max_number_of_single_line_parameters: 2
+
+multiline_conditions:
+  max_number_of_single_line_parameters: 2
+
+grouped_imports:
+  # The products of this repository's three manifests, plus the demo app target, which is only ever
+  # @testable-imported. Anything unlisted is third-party.
+  our_modules:
+    - Demo
+    - DemoBackend
+    - DemoCore
+    - MacrosImplementation
+    - ObjCExceptionCatcher
+    - SwiftSync

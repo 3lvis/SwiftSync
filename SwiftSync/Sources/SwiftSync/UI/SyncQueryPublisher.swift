@@ -53,7 +53,12 @@ public final class SyncQueryPublisher<Model: PersistentModel> {
         in syncContainer: SyncContainer,
         sortBy: [SortDescriptor<Model>] = []
     ) {
-        self.init(syncContainer: syncContainer, predicate: nil, sortBy: sortBy, postFetchFilter: nil)
+        self.init(
+            syncContainer: syncContainer,
+            predicate: nil,
+            sortBy: sortBy,
+            postFetchFilter: nil
+        )
     }
 
     public convenience init(
@@ -62,7 +67,12 @@ public final class SyncQueryPublisher<Model: PersistentModel> {
         in syncContainer: SyncContainer,
         sortBy: [SortDescriptor<Model>] = []
     ) {
-        self.init(syncContainer: syncContainer, predicate: predicate, sortBy: sortBy, postFetchFilter: nil)
+        self.init(
+            syncContainer: syncContainer,
+            predicate: predicate,
+            sortBy: sortBy,
+            postFetchFilter: nil
+        )
     }
 
     public convenience init<Related: SyncModelable>(
@@ -100,14 +110,11 @@ public final class SyncQueryPublisher<Model: PersistentModel> {
         )
     }
 
-    private func shouldReload(
-        changedTypeNames: Set<String>,
-        changedIDs: Set<PersistentIdentifier>
-    ) -> Bool {
+    private func shouldReload(changedTypeNames: Set<String>, changedIDs: Set<PersistentIdentifier>) -> Bool {
         if changedTypeNames.isEmpty { return true }
         if !observedModelTypeNames.isDisjoint(with: changedTypeNames) { return true }
         if changedIDs.isEmpty { return false }
-        return !Set(rows.map(\.persistentModelID)).isDisjoint(with: changedIDs)
+        return !Set(rows.map { $0.persistentModelID }).isDisjoint(with: changedIDs)
     }
 
     private func reload() {

@@ -5,19 +5,13 @@ public enum SwiftSync {
     static func normalize(payload: [Any], model: any PersistentModel.Type) throws -> [[String: Any]] {
         try payload.map { raw in
             guard let map = raw as? [String: Any] else {
-                throw SyncError.invalidPayload(
-                    model: String(describing: model),
-                    reason: "Expected array of dictionaries"
-                )
+                throw SyncError.invalidPayload(model: String(describing: model), reason: "Expected array of dictionaries")
             }
             return map
         }
     }
 
-    static func resolveIdentity<Model: SyncModelable>(
-        from payload: SyncPayload,
-        model: Model.Type
-    ) -> Model.SyncID? {
+    static func resolveIdentity<Model: SyncModelable>(from payload: SyncPayload, model: Model.Type) -> Model.SyncID? {
         for key in model.syncIdentityRemoteKeys {
             if let value = payload.value(for: key, as: Model.SyncID.self) {
                 return value
@@ -30,9 +24,7 @@ public enum SwiftSync {
         let identityKeyPath = Model.syncIdentity as AnyKeyPath
         for propertyMetadata in Model.schemaMetadata {
             let mirror = Mirror(reflecting: propertyMetadata)
-            guard let candidateKeyPath = mirror.children.first(where: { $0.label == "keypath" })?.value as? AnyKeyPath,
-                candidateKeyPath == identityKeyPath
-            else { continue }
+            guard let candidateKeyPath = mirror.children.first(where: { $0.label == "keypath" })?.value as? AnyKeyPath, candidateKeyPath == identityKeyPath else { continue }
             guard let rawMetadata = mirror.children.first(where: { $0.label == "metadata" })?.value else {
                 return false
             }
@@ -59,10 +51,7 @@ public enum SwiftSync {
         identityKey(from: row[keyPath: Model.syncIdentity])
     }
 
-    static func scopedIdentityKey<ID: Hashable>(
-        from identity: ID,
-        parentPersistentID: PersistentIdentifier
-    ) -> String {
+    static func scopedIdentityKey<ID: Hashable>(from identity: ID, parentPersistentID: PersistentIdentifier) -> String {
         "\(String(reflecting: ID.self))|\(String(describing: parentPersistentID))|\(identityKey(from: identity))"
     }
 
@@ -79,10 +68,7 @@ public enum SwiftSync {
         return try context.fetch(descriptor).first
     }
 
-    static func resolveParent<Parent: PersistentModel>(
-        _ parent: Parent,
-        in context: ModelContext
-    ) throws -> Parent? {
+    static func resolveParent<Parent: PersistentModel>(_ parent: Parent, in context: ModelContext) throws -> Parent? {
         let parents = try syncPerformanceProfile(.fetchParents) {
             try context.fetch(FetchDescriptor<Parent>())
         }

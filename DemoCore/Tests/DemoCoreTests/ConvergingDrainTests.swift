@@ -1,7 +1,7 @@
-import DemoBackend
 import SwiftData
-import SwiftSync
 import XCTest
+import DemoBackend
+import SwiftSync
 
 @testable import DemoCore
 
@@ -22,8 +22,7 @@ final class ConvergingDrainTests: XCTestCase {
 
         // A local pending insert (online, so no reconnect drain fires): clone a valid seeded task so the
         // server accepts the upsert, then drop it into the store as a default-author (local) edit.
-        let template = try XCTUnwrap(
-            fetchTask(id: DemoSeedData.SeedIDs.Tasks.sessionTimeout, in: syncContainer.mainContext))
+        let template = try XCTUnwrap(fetchTask(id: DemoSeedData.SeedIDs.Tasks.sessionTimeout, in: syncContainer.mainContext))
         let row = Task(
             id: "CONVERGE-A",
             projectID: template.projectID,
@@ -68,9 +67,15 @@ final class ConvergingDrainTests: XCTestCase {
 
         let server = try await apiClient.getTaskDetail(taskID: "CONVERGE-A")
         XCTAssertEqual(
-            server?.string("title"), "v2",
-            "the edit that landed mid-drain must reach the server, not be stranded")
-        XCTAssertEqual(engine.pendingChangeCount, 0, "convergence drains everything pending")
+            server?.string("title"),
+            "v2",
+            "the edit that landed mid-drain must reach the server, not be stranded"
+        )
+        XCTAssertEqual(
+            engine.pendingChangeCount,
+            0,
+            "convergence drains everything pending"
+        )
     }
 
     /// A row accepted by an earlier drain pass must leave the failures inbox even if a *later* pass throws.
@@ -86,14 +91,20 @@ final class ConvergingDrainTests: XCTestCase {
 
         let projectID = DemoSeedData.SeedIDs.Projects.accountSecurity
         try await engine.syncProjectTasks(projectID: projectID)
-        let template = try XCTUnwrap(
-            fetchTask(id: DemoSeedData.SeedIDs.Tasks.sessionTimeout, in: syncContainer.mainContext))
+        let template = try XCTUnwrap(fetchTask(id: DemoSeedData.SeedIDs.Tasks.sessionTimeout, in: syncContainer.mainContext))
 
         func localTask(id: String, title: String) -> Task {
             Task(
-                id: id, projectID: template.projectID, assigneeID: template.assigneeID,
-                authorID: template.authorID, title: title, descriptionText: template.descriptionText,
-                state: template.state, stateLabel: template.stateLabel, project: template.project)
+                id: id,
+                projectID: template.projectID,
+                assigneeID: template.assigneeID,
+                authorID: template.authorID,
+                title: title,
+                descriptionText: template.descriptionText,
+                state: template.state,
+                stateLabel: template.stateLabel,
+                project: template.project
+            )
         }
 
         // A previously-rejected row, now corrected and pending. Pass 1 uploads it; the server accepts.
@@ -128,9 +139,7 @@ final class ConvergingDrainTests: XCTestCase {
         _ = try? await drain.value  // pass 2 throws; the drain propagates it
 
         let fixed = try XCTUnwrap(fetchTask(id: "FIXED-A", in: syncContainer.mainContext))
-        XCTAssertNil(
-            fixed.syncFailureReason,
-            "a row accepted in an earlier pass must leave the failures inbox, even if a later pass throws")
+        XCTAssertNil(fixed.syncFailureReason, "a row accepted in an earlier pass must leave the failures inbox, even if a later pass throws")
     }
 
     @MainActor

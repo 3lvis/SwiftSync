@@ -4,9 +4,7 @@ import SwiftData
 extension ModelContext {
     func trimSwiftSyncInboundHistory() throws {
         let inbound = SwiftSync.inboundAuthor
-        try deleteHistory(
-            HistoryDescriptor<DefaultHistoryTransaction>(
-                predicate: #Predicate { $0.author == inbound }))
+        try deleteHistory(HistoryDescriptor<DefaultHistoryTransaction>(predicate: #Predicate { $0.author == inbound }))
     }
 
     func sync<Model: SyncUpdatableModel>(
@@ -64,7 +62,11 @@ extension ModelContext {
 
                     if let row = index[key] {
                         let didApplyFields = try syncPerformanceProfile(.applyFields) {
-                            try SwiftSync.applyHonoringLocalEdit(payloadModel, to: row, dirtyPIDs: dirtyPIDs)
+                            try SwiftSync.applyHonoringLocalEdit(
+                                payloadModel,
+                                to: row,
+                                dirtyPIDs: dirtyPIDs
+                            )
                         }
                         if didApplyFields {
                             changed = true
@@ -152,11 +154,13 @@ extension ModelContext {
                 let key = SwiftSync.identityKey(from: identity)
                 var changed = false
                 let matchingRow: Model?
-                if SwiftSync.syncIdentityHasUniqueAttribute(Model.self),
-                    Model.syncIdentityPredicate(matching: identity) != nil
-                {
+                if SwiftSync.syncIdentityHasUniqueAttribute(Model.self), Model.syncIdentityPredicate(matching: identity) != nil {
                     matchingRow = try syncPerformanceProfile(.fetchExistingByIdentity) {
-                        try SwiftSync.fetchUniqueRow(matching: identity, as: Model.self, in: self)
+                        try SwiftSync.fetchUniqueRow(
+                            matching: identity,
+                            as: Model.self,
+                            in: self
+                        )
                     }
                 } else {
                     let existing = try syncPerformanceProfile(.fetchExisting) {
@@ -175,7 +179,10 @@ extension ModelContext {
                         try Task.checkCancellation()
                         let didApplyRelationships = try await syncPerformanceProfile(.applyRelationships) {
                             try await row.applyRelationships(
-                                payloadModel, in: self, operations: relationshipOperations)
+                                payloadModel,
+                                in: self,
+                                operations: relationshipOperations
+                            )
                         }
                         if didApplyRelationships {
                             changed = true
@@ -191,7 +198,10 @@ extension ModelContext {
                         try Task.checkCancellation()
                         let didApplyRelationships = try await syncPerformanceProfile(.applyRelationships) {
                             try await created.applyRelationships(
-                                payloadModel, in: self, operations: relationshipOperations)
+                                payloadModel,
+                                in: self,
+                                operations: relationshipOperations
+                            )
                         }
                         if didApplyRelationships {
                             changed = true
@@ -240,18 +250,17 @@ extension ModelContext {
                         try SwiftSync.resolveParent(parent, in: self)
                     })
                 guard let resolvedParent else {
-                    throw SyncError.invalidPayload(
-                        model: String(describing: Model.self),
-                        reason: "Parent must be resolved in the same ModelContext used for sync."
-                    )
+                    throw SyncError.invalidPayload(model: String(describing: Model.self), reason: "Parent must be resolved in the same ModelContext used for sync.")
                 }
                 var changed = false
                 let matchingRow: Model?
-                if SwiftSync.syncIdentityHasUniqueAttribute(Model.self),
-                    Model.syncIdentityPredicate(matching: identity) != nil
-                {
+                if SwiftSync.syncIdentityHasUniqueAttribute(Model.self), Model.syncIdentityPredicate(matching: identity) != nil {
                     matchingRow = try syncPerformanceProfile(.fetchExistingByIdentity) {
-                        try SwiftSync.fetchUniqueRow(matching: identity, as: Model.self, in: self)
+                        try SwiftSync.fetchUniqueRow(
+                            matching: identity,
+                            as: Model.self,
+                            in: self
+                        )
                     }
                 } else {
                     let existing = try syncPerformanceProfile(.fetchExisting) {
@@ -281,7 +290,10 @@ extension ModelContext {
                         try Task.checkCancellation()
                         let didApplyRelationships = try await syncPerformanceProfile(.applyRelationships) {
                             try await row.applyRelationships(
-                                payloadModel, in: self, operations: relationshipOperations)
+                                payloadModel,
+                                in: self,
+                                operations: relationshipOperations
+                            )
                         }
                         if didApplyRelationships {
                             changed = true
@@ -300,7 +312,10 @@ extension ModelContext {
                         try Task.checkCancellation()
                         let didApplyRelationships = try await syncPerformanceProfile(.applyRelationships) {
                             try await created.applyRelationships(
-                                payloadModel, in: self, operations: relationshipOperations)
+                                payloadModel,
+                                in: self,
+                                operations: relationshipOperations
+                            )
                         }
                         if didApplyRelationships {
                             changed = true
@@ -365,15 +380,9 @@ extension ModelContext {
                         try SwiftSync.resolveParent(parent, in: self)
                     })
                 guard let resolvedParent else {
-                    throw SyncError.invalidPayload(
-                        model: String(describing: Model.self),
-                        reason: "Parent must be resolved in the same ModelContext used for sync."
-                    )
+                    throw SyncError.invalidPayload(model: String(describing: Model.self), reason: "Parent must be resolved in the same ModelContext used for sync.")
                 }
-                let parentPredicate = Model.syncParentPredicate(
-                    parentPersistentID: resolvedParent.persistentModelID,
-                    relationship: parentRelationship
-                )
+                let parentPredicate = Model.syncParentPredicate(parentPersistentID: resolvedParent.persistentModelID, relationship: parentRelationship)
                 let scopeRows: [Model]
                 if let parentPredicate {
                     scopeRows = try syncPerformanceProfile(.fetchExistingByParent) {
@@ -404,10 +413,7 @@ extension ModelContext {
                         }
                     } else {
                         for row in scopeRows {
-                            let key = SwiftSync.scopedIdentityKey(
-                                from: row[keyPath: Model.syncIdentity],
-                                parentPersistentID: resolvedParent.persistentModelID
-                            )
+                            let key = SwiftSync.scopedIdentityKey(from: row[keyPath: Model.syncIdentity], parentPersistentID: resolvedParent.persistentModelID)
                             if index[key] != nil {
                                 duplicates.append(row)
                                 continue
@@ -440,10 +446,7 @@ extension ModelContext {
                     if isGlobal {
                         key = SwiftSync.identityKey(from: identity)
                     } else {
-                        key = SwiftSync.scopedIdentityKey(
-                            from: identity,
-                            parentPersistentID: resolvedParent.persistentModelID
-                        )
+                        key = SwiftSync.scopedIdentityKey(from: identity, parentPersistentID: resolvedParent.persistentModelID)
                     }
                     seenKeys.insert(key)
 
@@ -455,7 +458,11 @@ extension ModelContext {
                             }
                         }
                         let didApplyFields = try syncPerformanceProfile(.applyFields) {
-                            try SwiftSync.applyHonoringLocalEdit(payloadModel, to: row, dirtyPIDs: dirtyPIDs)
+                            try SwiftSync.applyHonoringLocalEdit(
+                                payloadModel,
+                                to: row,
+                                dirtyPIDs: dirtyPIDs
+                            )
                         }
                         if didApplyFields {
                             changed = true
@@ -481,7 +488,11 @@ extension ModelContext {
                         let movedRow = try syncPerformanceProfile(
                             .fetchExistingByIdentity,
                             operation: {
-                                try SwiftSync.fetchUniqueRow(matching: identity, as: Model.self, in: self)
+                                try SwiftSync.fetchUniqueRow(
+                                    matching: identity,
+                                    as: Model.self,
+                                    in: self
+                                )
                             })
                         if let movedRow {
                             syncPerformanceProfile(.applyParent) {
@@ -493,7 +504,11 @@ extension ModelContext {
                                 }
                             }
                             let didApplyFields = try syncPerformanceProfile(.applyFields) {
-                                try SwiftSync.applyHonoringLocalEdit(payloadModel, to: movedRow, dirtyPIDs: dirtyPIDs)
+                                try SwiftSync.applyHonoringLocalEdit(
+                                    payloadModel,
+                                    to: movedRow,
+                                    dirtyPIDs: dirtyPIDs
+                                )
                             }
                             if didApplyFields {
                                 changed = true
@@ -549,10 +564,7 @@ extension ModelContext {
                         if isGlobal {
                             key = SwiftSync.identityKey(from: row[keyPath: Model.syncIdentity])
                         } else {
-                            key = SwiftSync.scopedIdentityKey(
-                                from: row[keyPath: Model.syncIdentity],
-                                parentPersistentID: resolvedParent.persistentModelID
-                            )
+                            key = SwiftSync.scopedIdentityKey(from: row[keyPath: Model.syncIdentity], parentPersistentID: resolvedParent.persistentModelID)
                         }
                         if seenKeys.contains(key) {
                             continue
@@ -607,11 +619,13 @@ extension ModelContext {
         }
     }
 
-    func syncFetchRelatedRowsByIdentity<Model: SyncModelable>(
-        _ modelType: Model.Type, matching identities: [Model.SyncID]
-    ) throws -> [String: Model] {
+    func syncFetchRelatedRowsByIdentity<Model: SyncModelable>(_ modelType: Model.Type, matching identities: [Model.SyncID]) throws -> [String: Model] {
         if let cache = SyncRelationshipLookupState.current {
-            return try cache.rowsByIdentity(for: modelType, matching: identities, in: self)
+            return try cache.rowsByIdentity(
+                for: modelType,
+                matching: identities,
+                in: self
+            )
         }
         guard let predicate = Model.syncIdentityPredicate(matchingAny: identities) else {
             return try syncFetchRelatedRowsByIdentity(modelType)

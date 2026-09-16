@@ -1,6 +1,6 @@
 import SwiftData
-import SwiftSync
 import XCTest
+import SwiftSync
 
 @testable import DemoCore
 
@@ -36,10 +36,12 @@ final class TaskFormDescriptionNormalizationTests: XCTestCase {
         let saved = expectation(description: "save callback")
         machine.send(
             .save(
-                mode: .edit(task: originalTask), draft: draft,
+                mode: .edit(task: originalTask),
+                draft: draft,
                 onSuccess: {
                     saved.fulfill()
-                }))
+                }
+            ))
         await fulfillment(of: [saved], timeout: 10)
 
         let updatedTask = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))

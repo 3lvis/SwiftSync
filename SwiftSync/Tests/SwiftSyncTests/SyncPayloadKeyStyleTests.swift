@@ -13,10 +13,7 @@ struct SyncPayloadKeyStyleTests {
 
     @Test("SyncPayload camelCase style resolves project_id lookup from projectId payload")
     func camelCaseStyleResolvesCamelPayload() {
-        let payload = SyncPayload(
-            values: ["projectId": "p-2"],
-            keyStyle: .camelCase
-        )
+        let payload = SyncPayload(values: ["projectId": "p-2"], keyStyle: .camelCase)
         let value: String? = payload.value(for: "project_id")
         #expect(value == "p-2")
     }

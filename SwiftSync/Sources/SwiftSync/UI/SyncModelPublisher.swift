@@ -44,10 +44,7 @@ public final class SyncModelPublisher<Model: PersistentModel & SyncModelable> {
         }
     }
 
-    private func shouldReload(
-        changedTypeNames: Set<String>,
-        changedIDs: Set<PersistentIdentifier>
-    ) -> Bool {
+    private func shouldReload(changedTypeNames: Set<String>, changedIDs: Set<PersistentIdentifier>) -> Bool {
         if changedTypeNames.isEmpty {
             return true
         }

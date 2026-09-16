@@ -250,14 +250,13 @@ extension SwiftSync {
             var relatedByID = try context.syncFetchRelatedRowsByIdentity(Related.self)
 
             var resolvedRelated: Related?
-            if let nestedIdentity = SwiftSync.resolveIdentityKey(from: nestedPayload, model: Related.self),
-                let existing = relatedByID[nestedIdentity]
-            {
+            if let nestedIdentity = SwiftSync.resolveIdentityKey(from: nestedPayload, model: Related.self), let existing = relatedByID[nestedIdentity] {
                 if operations.contains(.update), try existing.apply(nestedPayload) {
                     changed = true
                 }
                 resolvedRelated = existing
-            } else if let current = owner[keyPath: relationship], operations.contains(.update),
+            } else if let current = owner[keyPath: relationship],
+                operations.contains(.update),
                 SwiftSync.resolveIdentityKey(from: nestedPayload, model: Related.self) == nil
             {
                 if try current.apply(nestedPayload) {
@@ -339,9 +338,7 @@ extension SwiftSync {
                 let nestedPayload = SyncPayload(values: nestedValue, keyStyle: payload.keyStyle)
                 var resolved: Related?
 
-                if let nestedIdentity = SwiftSync.resolveIdentityKey(from: nestedPayload, model: Related.self),
-                    let existing = relatedByID[nestedIdentity]
-                {
+                if let nestedIdentity = SwiftSync.resolveIdentityKey(from: nestedPayload, model: Related.self), let existing = relatedByID[nestedIdentity] {
                     if operations.contains(.update), try existing.apply(nestedPayload) {
                         changed = true
                     }
@@ -402,7 +399,7 @@ extension SwiftSync {
         allowDelete: Bool,
         allowAdd: Bool
     ) -> [Model] {
-        let desiredIDs = Set(desired.map(\.persistentModelID))
+        let desiredIDs = Set(desired.map { $0.persistentModelID })
 
         var next: [Model]
         if allowDelete {
@@ -413,7 +410,7 @@ extension SwiftSync {
 
         guard allowAdd else { return next }
 
-        let nextIDs = Set(next.map(\.persistentModelID))
+        let nextIDs = Set(next.map { $0.persistentModelID })
         for model in desired where !nextIDs.contains(model.persistentModelID) {
             next.append(model)
         }
@@ -475,21 +472,40 @@ extension SwiftSync {
         }
     }
 
-    public static func exportSetValue(_ value: Any, for keyPath: String, into target: inout [String: Any]) {
+    public static func exportSetValue(
+        _ value: Any,
+        for keyPath: String,
+        into target: inout [String: Any]
+    ) {
         let parts = keyPath.split(separator: ".").map(String.init)
         guard !parts.isEmpty else { return }
-        exportSetValue(value, path: parts, into: &target)
+        target = exportSetting(
+            value,
+            at: parts,
+            in: target
+        )
     }
 
-    private static func exportSetValue(_ value: Any, path: [String], into target: inout [String: Any]) {
-        guard let head = path.first else { return }
+    // Answers the dictionary with `value` written at `path`, rather than writing through an `inout`:
+    // each level of the walk returns its own nested dictionary and the level above stores it.
+    private static func exportSetting(
+        _ value: Any,
+        at path: [String],
+        in target: [String: Any]
+    ) -> [String: Any] {
+        guard let head = path.first else { return target }
+        var result = target
         if path.count == 1 {
-            target[head] = value
-            return
+            result[head] = value
+            return result
         }
-        var nested = (target[head] as? [String: Any]) ?? [:]
-        exportSetValue(value, path: Array(path.dropFirst()), into: &nested)
-        target[head] = nested
+        let nested = (target[head] as? [String: Any]) ?? [:]
+        result[head] = exportSetting(
+            value,
+            at: Array(path.dropFirst()),
+            in: nested
+        )
+        return result
     }
 }
 

@@ -36,13 +36,21 @@ final class UploadEndpointTests: XCTestCase {
         let id = "22222222-2222-2222-2222-222222222222"
         let created = try result(
             of: backend.upload(operations: [
-                upsertOp(id: id, title: "Original", updatedAt: "2026-01-01T00:00:00.000Z")
+                upsertOp(
+                    id: id,
+                    title: "Original",
+                    updatedAt: "2026-01-01T00:00:00.000Z"
+                )
             ]))
         XCTAssertEqual(created["status"] as? String, "applied")
 
         let stale = try result(
             of: backend.upload(operations: [
-                upsertOp(id: id, title: "Stale edit", updatedAt: "2020-01-01T00:00:00.000Z")
+                upsertOp(
+                    id: id,
+                    title: "Stale edit",
+                    updatedAt: "2020-01-01T00:00:00.000Z"
+                )
             ]))
         XCTAssertEqual(stale["status"] as? String, "stale")
         XCTAssertNil(stale["remoteId"])
@@ -52,7 +60,11 @@ final class UploadEndpointTests: XCTestCase {
 
         let applied = try result(
             of: backend.upload(operations: [
-                upsertOp(id: id, title: "Fresh edit", updatedAt: "2030-01-01T00:00:00.000Z")
+                upsertOp(
+                    id: id,
+                    title: "Fresh edit",
+                    updatedAt: "2030-01-01T00:00:00.000Z"
+                )
             ]))
         XCTAssertEqual(applied["status"] as? String, "applied")
         let detail = try XCTUnwrap(backend.getTaskDetailPayload(publicID: id))
@@ -83,7 +95,11 @@ final class UploadEndpointTests: XCTestCase {
         let id = "44444444-4444-4444-4444-444444444444"
         _ = try result(
             of: backend.upload(operations: [
-                upsertOp(id: id, title: "Live", updatedAt: "2030-01-01T00:00:00.000Z")
+                upsertOp(
+                    id: id,
+                    title: "Live",
+                    updatedAt: "2030-01-01T00:00:00.000Z"
+                )
             ]))
 
         let stale = try result(
@@ -92,8 +108,7 @@ final class UploadEndpointTests: XCTestCase {
             ]))
         XCTAssertEqual(stale["status"] as? String, "stale")
         XCTAssertNotNil(stale["server"] as? [String: Any])
-        XCTAssertNotNil(
-            try backend.getTaskDetailPayload(publicID: id), "a stale delete must not tombstone the row")
+        XCTAssertNotNil(try backend.getTaskDetailPayload(publicID: id), "a stale delete must not tombstone the row")
 
         let applied = try result(
             of: backend.upload(operations: [
@@ -108,7 +123,11 @@ final class UploadEndpointTests: XCTestCase {
         let id = "55555555-5555-5555-5555-555555555555"
         _ = try result(
             of: backend.upload(operations: [
-                upsertOp(id: id, title: "Live", updatedAt: "2030-01-01T00:00:00.000Z")
+                upsertOp(
+                    id: id,
+                    title: "Live",
+                    updatedAt: "2030-01-01T00:00:00.000Z"
+                )
             ]))
         _ = try result(
             of: backend.upload(operations: [
@@ -118,13 +137,20 @@ final class UploadEndpointTests: XCTestCase {
 
         let revived = try result(
             of: backend.upload(operations: [
-                upsertOp(id: id, title: "Revived", updatedAt: "2050-01-01T00:00:00.000Z")
+                upsertOp(
+                    id: id,
+                    title: "Revived",
+                    updatedAt: "2050-01-01T00:00:00.000Z"
+                )
             ]))
         XCTAssertEqual(revived["status"] as? String, "applied")
-        let detail = try XCTUnwrap(
-            backend.getTaskDetailPayload(publicID: id), "a newer edit must resurrect the tombstoned row")
+        let detail = try XCTUnwrap(backend.getTaskDetailPayload(publicID: id), "a newer edit must resurrect the tombstoned row")
         XCTAssertEqual(detail["title"] as? String, "Revived")
-        XCTAssertEqual(detail["id"] as? String, id, "revival keeps the same public_id")
+        XCTAssertEqual(
+            detail["id"] as? String,
+            id,
+            "revival keeps the same public_id"
+        )
     }
 
     func testUploadUpsertOnTombstonedRowStaysDeletedWhenEditIsOlder() throws {
@@ -132,7 +158,11 @@ final class UploadEndpointTests: XCTestCase {
         let id = "66666666-6666-6666-6666-666666666666"
         _ = try result(
             of: backend.upload(operations: [
-                upsertOp(id: id, title: "Live", updatedAt: "2030-01-01T00:00:00.000Z")
+                upsertOp(
+                    id: id,
+                    title: "Live",
+                    updatedAt: "2030-01-01T00:00:00.000Z"
+                )
             ]))
         _ = try result(
             of: backend.upload(operations: [
@@ -141,7 +171,11 @@ final class UploadEndpointTests: XCTestCase {
 
         let stale = try result(
             of: backend.upload(operations: [
-                upsertOp(id: id, title: "Too late", updatedAt: "2035-01-01T00:00:00.000Z")
+                upsertOp(
+                    id: id,
+                    title: "Too late",
+                    updatedAt: "2035-01-01T00:00:00.000Z"
+                )
             ]))
         XCTAssertEqual(stale["status"] as? String, "stale")
         XCTAssertNil(try backend.getTaskDetailPayload(publicID: id), "the row stays deleted")
@@ -166,9 +200,11 @@ final class UploadEndpointTests: XCTestCase {
         return try DemoServerSimulator(databaseURL: url, seedData: DemoSeedData.generate())
     }
 
-    private func upsertOp(id: String, title: String, updatedAt: String = "2026-06-16T20:00:00.000Z")
-        -> [String: Any]
-    {
+    private func upsertOp(
+        id: String,
+        title: String,
+        updatedAt: String = "2026-06-16T20:00:00.000Z"
+    ) -> [String: Any] {
         [
             "operation": "upsert", "type": "tasks", "id": id, "updatedAt": updatedAt,
             "data": [

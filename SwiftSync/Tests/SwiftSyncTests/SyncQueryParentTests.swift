@@ -1,15 +1,12 @@
 import SwiftData
-import SwiftSync
 import XCTest
+import SwiftSync
 
 final class SyncQueryParentTests: XCTestCase {
     @MainActor
     func testSyncQueryWithoutPredicateReturnsSortedRows() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let modelContainer = try ModelContainer(
-            for: InferredTask.self,
-            configurations: configuration
-        )
+        let modelContainer = try ModelContainer(for: InferredTask.self, configurations: configuration)
         let syncContainer = SyncContainer(modelContainer)
         let context = syncContainer.mainContext
 
@@ -24,7 +21,7 @@ final class SyncQueryParentTests: XCTestCase {
             sortBy: [SortDescriptor(\InferredTask.title), SortDescriptor(\InferredTask.id)]
         )
 
-        XCTAssertEqual(query.wrappedValue.map(\.id), [1, 2, 3])
+        XCTAssertEqual(query.wrappedValue.map { $0.id }, [1, 2, 3])
     }
 
     @MainActor
@@ -39,7 +36,11 @@ final class SyncQueryParentTests: XCTestCase {
         context.insert(InferredTask(id: 3, title: "C"))
         try context.save()
 
-        let model = SyncModel(InferredTask.self, id: 2, in: syncContainer)
+        let model = SyncModel(
+            InferredTask.self,
+            id: 2,
+            in: syncContainer
+        )
 
         XCTAssertEqual(model.wrappedValue?.id, 2)
         XCTAssertEqual(model.wrappedValue?.title, "B")
@@ -48,10 +49,7 @@ final class SyncQueryParentTests: XCTestCase {
     @MainActor
     func testSyncQueryWithPredicateFiltersRows() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let modelContainer = try ModelContainer(
-            for: InferredTask.self,
-            configurations: configuration
-        )
+        let modelContainer = try ModelContainer(for: InferredTask.self, configurations: configuration)
         let syncContainer = SyncContainer(modelContainer)
         let context = syncContainer.mainContext
 
@@ -68,7 +66,7 @@ final class SyncQueryParentTests: XCTestCase {
             sortBy: [SortDescriptor(\InferredTask.id)]
         )
 
-        XCTAssertEqual(query.wrappedValue.map(\.id), [2, 3])
+        XCTAssertEqual(query.wrappedValue.map { $0.id }, [2, 3])
     }
 
     @MainActor
@@ -86,9 +84,24 @@ final class SyncQueryParentTests: XCTestCase {
         let taskB = InferredTask(id: 2, title: "B")
         context.insert(taskA)
         context.insert(taskB)
-        context.insert(InferredComment(id: 1, text: "A-1", task: taskA))
-        context.insert(InferredComment(id: 2, text: "A-2", task: taskA))
-        context.insert(InferredComment(id: 3, text: "B-3", task: taskB))
+        context.insert(
+            InferredComment(
+                id: 1,
+                text: "A-1",
+                task: taskA
+            ))
+        context.insert(
+            InferredComment(
+                id: 2,
+                text: "A-2",
+                task: taskA
+            ))
+        context.insert(
+            InferredComment(
+                id: 3,
+                text: "B-3",
+                task: taskB
+            ))
         try context.save()
 
         let query = SyncQuery(
@@ -99,7 +112,7 @@ final class SyncQueryParentTests: XCTestCase {
             sortBy: [SortDescriptor(\InferredComment.id)]
         )
 
-        XCTAssertEqual(query.wrappedValue.map(\.id), [1, 2])
+        XCTAssertEqual(query.wrappedValue.map { $0.id }, [1, 2])
     }
 
     @MainActor
@@ -117,9 +130,27 @@ final class SyncQueryParentTests: XCTestCase {
         let userB = RoleUser(id: 2, name: "B")
         context.insert(userA)
         context.insert(userB)
-        context.insert(RoleTicket(id: 10, title: "T-10", assignee: userA, reviewer: userB))
-        context.insert(RoleTicket(id: 11, title: "T-11", assignee: userB, reviewer: userA))
-        context.insert(RoleTicket(id: 12, title: "T-12", assignee: userA, reviewer: userA))
+        context.insert(
+            RoleTicket(
+                id: 10,
+                title: "T-10",
+                assignee: userA,
+                reviewer: userB
+            ))
+        context.insert(
+            RoleTicket(
+                id: 11,
+                title: "T-11",
+                assignee: userB,
+                reviewer: userA
+            ))
+        context.insert(
+            RoleTicket(
+                id: 12,
+                title: "T-12",
+                assignee: userA,
+                reviewer: userA
+            ))
         try context.save()
 
         let query = SyncQuery(
@@ -130,7 +161,7 @@ final class SyncQueryParentTests: XCTestCase {
             sortBy: [SortDescriptor(\RoleTicket.id)]
         )
 
-        XCTAssertEqual(query.wrappedValue.map(\.id), [10, 12])
+        XCTAssertEqual(query.wrappedValue.map { $0.id }, [10, 12])
     }
 
     @MainActor
@@ -168,7 +199,7 @@ final class SyncQueryParentTests: XCTestCase {
             sortBy: [SortDescriptor(\Tag.id)]
         )
 
-        XCTAssertEqual(query.wrappedValue.map(\.id), [10, 11])
+        XCTAssertEqual(query.wrappedValue.map { $0.id }, [10, 11])
     }
 
     @MainActor
@@ -184,7 +215,12 @@ final class SyncQueryParentTests: XCTestCase {
 
         let userA = RoleUser(id: 1, name: "A")
         let userB = RoleUser(id: 2, name: "B")
-        let ticket = RoleTicket(id: 10, title: "T-10", assignee: userA, reviewer: userB)
+        let ticket = RoleTicket(
+            id: 10,
+            title: "T-10",
+            assignee: userA,
+            reviewer: userB
+        )
         context.insert(userA)
         context.insert(userB)
         context.insert(ticket)
@@ -198,6 +234,6 @@ final class SyncQueryParentTests: XCTestCase {
             sortBy: [SortDescriptor(\RoleUser.id)]
         )
 
-        XCTAssertEqual(query.wrappedValue.map(\.id), [1])
+        XCTAssertEqual(query.wrappedValue.map { $0.id }, [1])
     }
 }

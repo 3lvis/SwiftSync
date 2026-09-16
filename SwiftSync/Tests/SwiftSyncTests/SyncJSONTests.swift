@@ -1,6 +1,6 @@
 import SwiftData
-import SwiftSync
 import XCTest
+import SwiftSync
 
 final class SyncJSONTests: XCTestCase {
     func testRoundTripsAStructuredDictionary() throws {
@@ -40,6 +40,6 @@ final class SyncJSONTests: XCTestCase {
         try await container.sync(payload: [SyncJSON(dictionary: ["id": 1, "full_name": "Ada"])], as: User.self)
 
         let users = try container.mainContext.fetch(FetchDescriptor<User>())
-        XCTAssertEqual(users.map(\.fullName), ["Ada"])
+        XCTAssertEqual(users.map { $0.fullName }, ["Ada"])
     }
 }

@@ -34,8 +34,7 @@ public enum SyncJSON: Sendable, SyncPayloadConvertible {
         case let value as [Any]:
             self = .array(try value.map { try SyncJSON($0) })
         default:
-            throw SyncError.invalidPayload(
-                model: "SyncJSON", reason: "unsupported value of type \(type(of: value))")
+            throw SyncError.invalidPayload(model: "SyncJSON", reason: "unsupported value of type \(type(of: value))")
         }
     }
 
@@ -65,7 +64,7 @@ public enum SyncJSON: Sendable, SyncPayloadConvertible {
         case .double(let value): return value
         case .bool(let value): return value
         case .object(let value): return value.mapValues(\.foundationValue)
-        case .array(let value): return value.map(\.foundationValue)
+        case .array(let value): return value.map { $0.foundationValue }
         case .null: return NSNull()
         }
     }

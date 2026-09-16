@@ -9,10 +9,7 @@ public protocol SyncModelable: PersistentModel {
     static var syncIdentityPropertyName: String { get }
     static func syncIdentityPredicate(matching identity: SyncID) -> Predicate<Self>?
     static func syncIdentityPredicate(matchingAny identities: [SyncID]) -> Predicate<Self>?
-    static func syncParentPredicate(
-        parentPersistentID: PersistentIdentifier,
-        relationship: PartialKeyPath<Self>
-    ) -> Predicate<Self>?
+    static func syncParentPredicate(parentPersistentID: PersistentIdentifier, relationship: PartialKeyPath<Self>) -> Predicate<Self>?
     static var syncIdentityRemoteKeys: [String] { get }
     static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] { get }
     static func syncRelatedModelType(for keyPath: PartialKeyPath<Self>) -> (any PersistentModel.Type)?
@@ -24,10 +21,7 @@ extension SyncModelable {
     public static var syncIdentityRemoteKeys: [String] { ["id", "remote_id", "remoteID"] }
     public static func syncIdentityPredicate(matching _: SyncID) -> Predicate<Self>? { nil }
     public static func syncIdentityPredicate(matchingAny _: [SyncID]) -> Predicate<Self>? { nil }
-    public static func syncParentPredicate(
-        parentPersistentID _: PersistentIdentifier,
-        relationship _: PartialKeyPath<Self>
-    ) -> Predicate<Self>? { nil }
+    public static func syncParentPredicate(parentPersistentID _: PersistentIdentifier, relationship _: PartialKeyPath<Self>) -> Predicate<Self>? { nil }
     public static var syncDefaultRefreshModelTypes: [any PersistentModel.Type] { [] }
 
     public static func syncRelatedModelType(for keyPath: PartialKeyPath<Self>) -> (any PersistentModel.Type)? {

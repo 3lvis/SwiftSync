@@ -1,7 +1,7 @@
-import DemoCore
 import SwiftData
-import SwiftSync
 import SwiftUI
+import DemoCore
+import SwiftSync
 
 struct TaskFormSheet: View {
     let mode: TaskFormMode
@@ -28,9 +28,7 @@ struct TaskFormSheet: View {
         let ctx = ModelContext(syncEngine.syncContainer.modelContainer)
         ctx.autosaveEnabled = false
         self.editContext = ctx
-        _machine = State(
-            initialValue: TaskFormSheetMachine(syncEngine: syncEngine, editContext: ctx)
-        )
+        _machine = State(initialValue: TaskFormSheetMachine(syncEngine: syncEngine, editContext: ctx))
 
         switch mode {
         case .create(let projectID):
@@ -58,13 +56,10 @@ struct TaskFormSheet: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { toolbarContent }
         }
-        .task(loadMetadata)
-        .task(id: defaultsTaskID, applyDefaults)
+        .task { machine.send(.metadata(.onAppear)) }
+        .task(id: defaultsTaskID) { machine.applyDefaultsIfNeeded(to: draft) }
         .animation(.snappy(duration: 0.2), value: itemIDs)
-        .taskFormPresentations(
-            saveFailureIsPresented: saveFailureIsPresented,
-            saveFailureMessage: saveFailureMessage
-        )
+        .taskFormPresentations(saveFailureIsPresented: saveFailureIsPresented, saveFailureMessage: saveFailureMessage)
         .presentationDetents([.large])
     }
 }
@@ -81,11 +76,11 @@ extension TaskFormSheet {
     }
 
     private var defaultsTaskID: String {
-        "\(machine.taskStateOptions.map(\.id).joined(separator: ","))|\(machine.users.map(\.id).joined(separator: ","))"
+        "\(machine.taskStateOptions.map { $0.id }.joined(separator: ","))|\(machine.users.map { $0.id }.joined(separator: ","))"
     }
 
     private var itemIDs: [String] {
-        machine.sortedItems(in: draft).map(\.id)
+        machine.sortedItems(in: draft).map { $0.id }
     }
 
     @ToolbarContentBuilder
@@ -96,7 +91,16 @@ extension TaskFormSheet {
                 .disabled(machine.saveState == .submitting)
         }
         ToolbarItem(placement: .topBarTrailing) {
-            Button(action: save) {
+            Button {
+                machine.send(
+                    .save(
+                        mode: mode,
+                        draft: draft,
+                        onSuccess: {
+                            dismiss()
+                        }
+                    ))
+            } label: {
                 saveButtonLabel
             }
             .accessibilityIdentifier("task-form.save")
@@ -119,9 +123,7 @@ extension TaskFormSheet {
     }
 
     var isSaveDisabled: Bool {
-        guard machine.saveState != .submitting,
-            !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else { return true }
+        guard machine.saveState != .submitting, !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return true }
         if case .create = mode {
             return draft.state.isEmpty || draft.authorID.isEmpty
         }
@@ -159,23 +161,6 @@ extension TaskFormSheet {
         return "Unknown error"
     }
 
-    func save() {
-        machine.send(
-            .save(
-                mode: mode, draft: draft,
-                onSuccess: {
-                    dismiss()
-                }))
-    }
-
-    func loadMetadata() {
-        machine.send(.metadata(.onAppear))
-    }
-
-    func applyDefaults() {
-        machine.applyDefaultsIfNeeded(to: draft)
-    }
-
     func itemTitleBinding(for item: Item) -> Binding<String> {
         Binding(
             get: { item.title },
@@ -199,40 +184,19 @@ extension TaskFormSheet {
     }
 
     fileprivate var availableReviewers: [User] {
-        let selectedIDs = Set(draft.reviewers.map(\.id))
+        let selectedIDs = Set(draft.reviewers.map { $0.id })
         return machine.users.filter { !selectedIDs.contains($0.id) }
     }
 
     fileprivate var availableWatchers: [User] {
-        let selectedIDs = Set(draft.watchers.map(\.id))
+        let selectedIDs = Set(draft.watchers.map { $0.id })
         return machine.users.filter { !selectedIDs.contains($0.id) }
-    }
-
-    fileprivate func addReviewer(_ userID: String?) {
-        defer { reviewerToAdd = nil }
-        guard let userID,
-            let user = machine.users.first(where: { $0.id == userID }),
-            !draft.reviewers.contains(where: { $0.id == userID })
-        else { return }
-        draft.reviewers.append(user)
-    }
-
-    fileprivate func addWatcher(_ userID: String?) {
-        defer { watcherToAdd = nil }
-        guard let userID,
-            let user = machine.users.first(where: { $0.id == userID }),
-            !draft.watchers.contains(where: { $0.id == userID })
-        else { return }
-        draft.watchers.append(user)
     }
 
 }
 
 extension View {
-    fileprivate func taskFormPresentations(
-        saveFailureIsPresented: Binding<Bool>,
-        saveFailureMessage: String
-    ) -> some View {
+    fileprivate func taskFormPresentations(saveFailureIsPresented: Binding<Bool>, saveFailureMessage: String) -> some View {
         self.alert("Save Failed", isPresented: saveFailureIsPresented) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -246,10 +210,14 @@ extension TaskFormSheet {
         Section {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .center, spacing: 8) {
-                    TextField("Task title", text: $draft.title, axis: .vertical)
-                        .lineLimit(2...4)
-                        .font(.title3.weight(.semibold))
-                        .accessibilityIdentifier("task-form.title")
+                    TextField(
+                        "Task title",
+                        text: $draft.title,
+                        axis: .vertical
+                    )
+                    .lineLimit(2...4)
+                    .font(.title3.weight(.semibold))
+                    .accessibilityIdentifier("task-form.title")
                     requiredPill
                 }
 
@@ -283,9 +251,13 @@ extension TaskFormSheet {
 
     var descriptionSection: some View {
         Section("Description") {
-            TextField("Why this task matters", text: descriptionBinding(), axis: .vertical)
-                .lineLimit(3...6)
-                .accessibilityIdentifier("task-form.description")
+            TextField(
+                "Why this task matters",
+                text: descriptionBinding(),
+                axis: .vertical
+            )
+            .lineLimit(3...6)
+            .accessibilityIdentifier("task-form.description")
         }
     }
 
@@ -331,7 +303,16 @@ extension TaskFormSheet {
                 Text("Items")
                 Spacer()
                 Button {
-                    addEmptyItem()
+                    let item = Item(
+                        taskID: draft.id,
+                        title: "",
+                        position: draft.items.count,
+                        createdAt: Date(),
+                        updatedAt: Date(),
+                        task: draft
+                    )
+                    draft.items.append(item)
+                    machine.normalizeItemPositions(in: draft)
                 } label: {
                     Image(systemName: "plus")
                         .font(.body.weight(.semibold))
@@ -340,19 +321,6 @@ extension TaskFormSheet {
                 .accessibilityIdentifier("task-form.items.add")
             }
         }
-    }
-
-    func addEmptyItem() {
-        let item = Item(
-            taskID: draft.id,
-            title: "",
-            position: draft.items.count,
-            createdAt: Date(),
-            updatedAt: Date(),
-            task: draft
-        )
-        draft.items.append(item)
-        machine.normalizeItemPositions(in: draft)
     }
 
     @ViewBuilder
@@ -449,10 +417,20 @@ extension TaskFormSheet {
         Section {
             peopleRows(for: .reviewers, users: draft.reviewers)
         } header: {
-            peopleSectionHeader(title: "Reviewers", selection: $reviewerToAdd, users: availableReviewers, accessibilityPrefix: "reviewers")
+            peopleSectionHeader(
+                title: "Reviewers",
+                selection: $reviewerToAdd,
+                users: availableReviewers,
+                accessibilityPrefix: "reviewers"
+            )
         }
         .onChange(of: reviewerToAdd) { _, newValue in
-            addReviewer(newValue)
+            defer { reviewerToAdd = nil }
+            guard let newValue,
+                let user = machine.users.first(where: { $0.id == newValue }),
+                !draft.reviewers.contains(where: { $0.id == newValue })
+            else { return }
+            draft.reviewers.append(user)
         }
     }
 
@@ -461,10 +439,20 @@ extension TaskFormSheet {
         Section {
             peopleRows(for: .watchers, users: draft.watchers)
         } header: {
-            peopleSectionHeader(title: "Watchers", selection: $watcherToAdd, users: availableWatchers, accessibilityPrefix: "watchers")
+            peopleSectionHeader(
+                title: "Watchers",
+                selection: $watcherToAdd,
+                users: availableWatchers,
+                accessibilityPrefix: "watchers"
+            )
         }
         .onChange(of: watcherToAdd) { _, newValue in
-            addWatcher(newValue)
+            defer { watcherToAdd = nil }
+            guard let newValue,
+                let user = machine.users.first(where: { $0.id == newValue }),
+                !draft.watchers.contains(where: { $0.id == newValue })
+            else { return }
+            draft.watchers.append(user)
         }
     }
 
@@ -485,7 +473,12 @@ extension TaskFormSheet {
                             .foregroundStyle(.primary)
                         Spacer()
                         Button(role: .destructive) {
-                            remove(user, from: route)
+                            switch route {
+                            case .reviewers:
+                                draft.reviewers.removeAll { $0.id == user.id }
+                            case .watchers:
+                                draft.watchers.removeAll { $0.id == user.id }
+                            }
                         } label: {
                             Image(systemName: "trash")
                         }
@@ -500,15 +493,6 @@ extension TaskFormSheet {
         case .unavailable:
             Text("People unavailable")
                 .foregroundStyle(.secondary)
-        }
-    }
-
-    fileprivate func remove(_ user: User, from route: PeoplePickerRoute) {
-        switch route {
-        case .reviewers:
-            draft.reviewers.removeAll { $0.id == user.id }
-        case .watchers:
-            draft.watchers.removeAll { $0.id == user.id }
         }
     }
 

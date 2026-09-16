@@ -1,6 +1,6 @@
+import SwiftUI
 import DemoCore
 import SwiftSync
-import SwiftUI
 
 struct ProjectView: View {
     let projectID: String
@@ -14,9 +14,7 @@ struct ProjectView: View {
         self.projectID = projectID
         self.syncEngine = syncEngine
 
-        _machine = State(
-            initialValue: ProjectViewMachine(projectID: projectID, syncEngine: syncEngine)
-        )
+        _machine = State(initialValue: ProjectViewMachine(projectID: projectID, syncEngine: syncEngine))
     }
 
     var body: some View {
@@ -26,14 +24,17 @@ struct ProjectView: View {
             .navigationTitle("Project")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
-            .task(loadProject)
+            .task { machine.send(.onAppear) }
             .animation(.snappy(duration: 0.2), value: taskIDs)
             .projectPresentations(
                 createTaskSheetIsPresented: $isShowingCreateTaskSheet,
                 createTaskSheet: { createTaskSheet },
                 deletePromptIsPresented: deletePromptIsPresented,
                 taskPendingDelete: taskPendingDelete,
-                onConfirmDelete: confirmDelete,
+                onConfirmDelete: { prompt in
+                    machine.sendDelete(.request(taskID: prompt.id))
+                    taskPendingDelete = nil
+                },
                 onCancelDelete: { taskPendingDelete = nil },
                 deleteFailureIsPresented: deleteFailureIsPresented,
                 deleteFailureMessage: deleteFailureMessage,
@@ -42,7 +43,7 @@ struct ProjectView: View {
     }
 
     private var taskIDs: [String] {
-        machine.tasks.map(\.id)
+        machine.tasks.map { $0.id }
     }
 
     @ViewBuilder
@@ -82,17 +83,11 @@ struct ProjectView: View {
     }
 
     private var createTaskSheet: some View {
-        TaskFormSheet(
-            mode: .create(projectID: projectID),
-            syncEngine: syncEngine
-        )
+        TaskFormSheet(mode: .create(projectID: projectID), syncEngine: syncEngine)
     }
 
     private var deletePromptIsPresented: Binding<Bool> {
-        Binding(
-            get: { taskPendingDelete != nil },
-            set: { if !$0 { taskPendingDelete = nil } }
-        )
+        Binding(get: { taskPendingDelete != nil }, set: { if !$0 { taskPendingDelete = nil } })
     }
 
     private var deleteFailureIsPresented: Binding<Bool> {
@@ -116,15 +111,6 @@ struct ProjectView: View {
         return "Could not delete this task."
     }
 
-    private func loadProject() {
-        machine.send(.onAppear)
-    }
-
-    private func confirmDelete(_ prompt: TaskDeletePrompt) {
-        machine.sendDelete(.request(taskID: prompt.id))
-        taskPendingDelete = nil
-    }
-
     @ViewBuilder
     private func errorSection(_ presentation: ErrorPresentationState) -> some View {
         Section {
@@ -144,10 +130,8 @@ struct ProjectView: View {
                     .font(.headline)
                     .lineLimit(3)
 
-                LabeledContent(
-                    "Tasks", value: projectModel.taskCount == 1 ? "1 task" : "\(projectModel.taskCount) tasks"
-                )
-                .foregroundStyle(.secondary)
+                LabeledContent("Tasks", value: projectModel.taskCount == 1 ? "1 task" : "\(projectModel.taskCount) tasks")
+                    .foregroundStyle(.secondary)
             } else {
                 Text("Project details unavailable")
                     .foregroundStyle(.secondary)
@@ -226,7 +210,11 @@ extension View {
             .sheet(isPresented: createTaskSheetIsPresented) {
                 createTaskSheet()
             }
-            .alert("Delete Task?", isPresented: deletePromptIsPresented, presenting: taskPendingDelete) { prompt in
+            .alert(
+                "Delete Task?",
+                isPresented: deletePromptIsPresented,
+                presenting: taskPendingDelete
+            ) { prompt in
                 Button("Delete", role: .destructive) { onConfirmDelete(prompt) }
                 Button("Cancel", role: .cancel) { onCancelDelete() }
             } message: { prompt in

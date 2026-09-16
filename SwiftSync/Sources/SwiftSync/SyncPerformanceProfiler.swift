@@ -82,9 +82,7 @@ func syncPerformanceProfile<T>(_ phase: SyncPhase, operation: () async throws ->
 }
 
 extension SwiftSync {
-    static func withPerformanceProfiling<T>(
-        operation: () throws -> T
-    ) rethrows -> (value: T, profile: SyncPerformanceReport) {
+    static func withPerformanceProfiling<T>(operation: () throws -> T) rethrows -> (value: T, profile: SyncPerformanceReport) {
         let profiler = SyncPerformanceProfiler()
         let value = try SyncPerformanceProfiler.$current.withValue(profiler) {
             try operation()
@@ -92,9 +90,7 @@ extension SwiftSync {
         return (value, profiler.snapshot())
     }
 
-    static func withPerformanceProfiling<T>(
-        operation: () async throws -> T
-    ) async rethrows -> (value: T, profile: SyncPerformanceReport) {
+    static func withPerformanceProfiling<T>(operation: () async throws -> T) async rethrows -> (value: T, profile: SyncPerformanceReport) {
         let profiler = SyncPerformanceProfiler()
         let value = try await SyncPerformanceProfiler.$current.withValue(profiler) {
             try await operation()
@@ -103,9 +99,7 @@ extension SwiftSync {
     }
 
     @MainActor
-    static func withMainActorPerformanceProfiling<T>(
-        operation: @MainActor () async throws -> T
-    ) async rethrows -> (value: T, profile: SyncPerformanceReport) {
+    static func withMainActorPerformanceProfiling<T>(operation: @MainActor () async throws -> T) async rethrows -> (value: T, profile: SyncPerformanceReport) {
         let profiler = SyncPerformanceProfiler()
         let value = try await SyncPerformanceProfiler.$current.withValue(profiler) {
             try await operation()

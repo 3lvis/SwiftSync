@@ -10,7 +10,11 @@ final class HistoryRow {
     var title: String
     var updatedAt: Date
 
-    init(id: String, title: String, updatedAt: Date) {
+    init(
+        id: String,
+        title: String,
+        updatedAt: Date
+    ) {
         self.id = id
         self.title = title
         self.updatedAt = updatedAt
@@ -33,16 +37,30 @@ final class OfflineHistoryTests: XCTestCase {
         // inboundAuthor marks this as a pull write, which pendingChanges must ignore.
         let inbound = ModelContext(container.modelContainer)
         inbound.author = SwiftSync.inboundAuthor
-        inbound.insert(HistoryRow(id: "server-1", title: "From server", updatedAt: now))
+        inbound.insert(
+            HistoryRow(
+                id: "server-1",
+                title: "From server",
+                updatedAt: now
+            ))
         try inbound.save()
 
         // Default author marks a local write, detected as pending.
         let local = container.mainContext
-        local.insert(HistoryRow(id: "local-1", title: "Made offline", updatedAt: now))
+        local.insert(
+            HistoryRow(
+                id: "local-1",
+                title: "Made offline",
+                updatedAt: now
+            ))
         try local.save()
 
         let pending = try SwiftSync.pendingChanges(for: HistoryRow.self, in: local)
-        XCTAssertEqual(pending.inserts, ["local-1"], "inbound row must be ignored; local insert detected")
+        XCTAssertEqual(
+            pending.inserts,
+            ["local-1"],
+            "inbound row must be ignored; local insert detected"
+        )
         XCTAssertTrue(pending.updates.isEmpty)
         XCTAssertTrue(pending.deletes.isEmpty)
 
@@ -51,15 +69,16 @@ final class OfflineHistoryTests: XCTestCase {
         _ = try await SwiftSync.withPendingChanges(for: HistoryRow.self, in: local) { _ in [] }
 
         // Plain context.delete — no special API; the id must still come back from the tombstone.
-        let row = try XCTUnwrap(
-            try local.fetch(FetchDescriptor<HistoryRow>(predicate: #Predicate { $0.id == "local-1" })).first)
+        let row = try XCTUnwrap(try local.fetch(FetchDescriptor<HistoryRow>(predicate: #Predicate { $0.id == "local-1" })).first)
         local.delete(row)
         try local.save()
 
         let afterDelete = try SwiftSync.pendingChanges(for: HistoryRow.self, in: local)
         XCTAssertEqual(
-            afterDelete.deletes, ["local-1"],
-            "deleted row's id must be recovered from the history tombstone")
+            afterDelete.deletes,
+            ["local-1"],
+            "deleted row's id must be recovered from the history tombstone"
+        )
     }
 
     func testInboundSyncTrimsOnlySwiftSyncAuthoredHistory() async throws {
@@ -74,18 +93,25 @@ final class OfflineHistoryTests: XCTestCase {
         let now = Date()
 
         let local = container.mainContext
-        local.insert(HistoryRow(id: "local-1", title: "Local", updatedAt: now))
+        local.insert(
+            HistoryRow(
+                id: "local-1",
+                title: "Local",
+                updatedAt: now
+            ))
         try local.save()
 
         let widget = ModelContext(container.modelContainer)
         widget.author = "widget"
-        widget.insert(HistoryRow(id: "widget-1", title: "Widget", updatedAt: now))
+        widget.insert(
+            HistoryRow(
+                id: "widget-1",
+                title: "Widget",
+                updatedAt: now
+            ))
         try widget.save()
 
-        try await container.sync(
-            payload: [["id": "server-1", "title": "Server", "updated_at": ISO8601DateFormatter().string(from: now)]],
-            as: HistoryRow.self
-        )
+        try await container.sync(payload: [["id": "server-1", "title": "Server", "updated_at": ISO8601DateFormatter().string(from: now)]], as: HistoryRow.self)
 
         let history = try local.fetchHistory(HistoryDescriptor<DefaultHistoryTransaction>())
         XCTAssertFalse(history.contains { $0.author == SwiftSync.inboundAuthor })
@@ -101,9 +127,7 @@ final class OfflineHistoryTests: XCTestCase {
     ///   SWIFTSYNC_RUN_BENCHMARKS=1 SWIFTSYNC_BENCHMARK_TIERS=100000 \
     ///     swift test --filter OfflineHistoryTests/testBulkPullOverhead
     func testBulkPullOverhead() async throws {
-        try XCTSkipUnless(
-            ProcessInfo.processInfo.environment["SWIFTSYNC_RUN_BENCHMARKS"] == "1",
-            "Set SWIFTSYNC_RUN_BENCHMARKS=1 to run.")
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["SWIFTSYNC_RUN_BENCHMARKS"] == "1", "Set SWIFTSYNC_RUN_BENCHMARKS=1 to run.")
         let tiers =
             (ProcessInfo.processInfo.environment["SWIFTSYNC_BENCHMARK_TIERS"]?
             .split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }).flatMap {
@@ -125,7 +149,11 @@ final class OfflineHistoryTests: XCTestCase {
 
             let clock = ContinuousClock()
             let pullStart = clock.now
-            try await context.sync(payload: payload, as: HistoryRow.self, keyStyle: .snakeCase)
+            try await context.sync(
+                payload: payload,
+                as: HistoryRow.self,
+                keyStyle: .snakeCase
+            )
             let pullMs = pullStart.duration(to: clock.now).msValue
 
             let cleanupStart = clock.now
@@ -134,13 +162,22 @@ final class OfflineHistoryTests: XCTestCase {
 
             // Push-side detection should be ~empty and fast: every row was inbound-authored.
             let detectStart = clock.now
-            let pending = try SwiftSync.pendingChanges(for: HistoryRow.self, in: context, since: nil)
+            let pending = try SwiftSync.pendingChanges(
+                for: HistoryRow.self,
+                in: context,
+                since: nil
+            )
             let detectMs = detectStart.duration(to: clock.now).msValue
 
             print(
                 String(
                     format: "[OfflineHistory] rows=%d pullMs=%.1f cleanupMs=%.1f detectMs=%.1f pendingInserts=%d",
-                    count, pullMs, cleanupMs, detectMs, pending.inserts.count))
+                    count,
+                    pullMs,
+                    cleanupMs,
+                    detectMs,
+                    pending.inserts.count
+                ))
         }
     }
 }

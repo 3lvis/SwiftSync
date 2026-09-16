@@ -8,10 +8,7 @@ final class SyncRelationshipLookupCache: @unchecked Sendable {
     // `rowsByIdentityType` so a partial map is never mistaken for a complete one.
     private var narrowedRowsByIdentityType: [ObjectIdentifier: Any] = [:]
 
-    func rows<Model: PersistentModel>(
-        for modelType: Model.Type,
-        in context: ModelContext
-    ) throws -> [Model] {
+    func rows<Model: PersistentModel>(for modelType: Model.Type, in context: ModelContext) throws -> [Model] {
         let key = ObjectIdentifier(modelType)
         if let cached = rowsByType[key] as? [Model] {
             return cached
@@ -24,10 +21,7 @@ final class SyncRelationshipLookupCache: @unchecked Sendable {
         return fetched
     }
 
-    func rowsByIdentity<Model: SyncModelable>(
-        for modelType: Model.Type,
-        in context: ModelContext
-    ) throws -> [String: Model] {
+    func rowsByIdentity<Model: SyncModelable>(for modelType: Model.Type, in context: ModelContext) throws -> [String: Model] {
         let key = ObjectIdentifier(modelType)
         if let cached = rowsByIdentityType[key] as? [String: Model] {
             return cached
@@ -101,10 +95,7 @@ enum SyncRelationshipLookupState {
 }
 
 extension SwiftSync {
-    static func withRelationshipLookupCache<T>(
-        isolation: isolated (any Actor)? = #isolation,
-        operation: () async throws -> T
-    ) async rethrows -> T {
+    static func withRelationshipLookupCache<T>(isolation: isolated (any Actor)? = #isolation, operation: () async throws -> T) async rethrows -> T {
         let cache = SyncRelationshipLookupCache()
         return try await SyncRelationshipLookupState.$current.withValue(cache) {
             try await operation()

@@ -1,7 +1,7 @@
-import DemoCore
 import Observation
-import SwiftSync
 import SwiftUI
+import DemoCore
+import SwiftSync
 
 struct ContentView: View {
     @Bindable var runtime: DemoRuntime
@@ -37,10 +37,7 @@ struct ContentView: View {
             Button {
                 engine.isOffline.toggle()
             } label: {
-                Label(
-                    engine.isOffline ? "Offline" : "Online",
-                    systemImage: engine.isOffline ? "wifi.slash" : "wifi"
-                )
+                Label(engine.isOffline ? "Offline" : "Online", systemImage: engine.isOffline ? "wifi.slash" : "wifi")
             }
             .tint(engine.isOffline ? .orange : .accentColor)
             .accessibilityIdentifier("offline-toggle")

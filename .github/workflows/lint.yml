@@ -1,0 +1,31 @@
+name: Lint
+
+# Its own workflow because ci.yml skips documents and this does not: oida holds VOICE.md's rules for
+# every root document and LEARNINGS note, so a doc-only change still has a gate, and it is the cheap
+# Linux one rather than the macOS matrix.
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: oida
+    # Linting needs no Xcode, so it runs on Linux where a runner minute is cheapest. bin/lint downloads
+    # oida, pinned by .oida-version and verified against .oida-checksum-<platform>, so CI and a laptop run
+    # the same bytes. The Swift toolchain container is what makes Linux work at all: oida's SourceKit-based
+    # rules and its swift-format handoff both resolve through the toolchain that ships in this image, the
+    # same way they resolve through an installed Xcode on a Mac. There is no baseline: any violation fails.
+    runs-on: ubuntu-latest
+    container: swift:6.3.2-noble
+    steps:
+      - uses: actions/checkout@v5
+      # curl isn't in the toolchain image; bin/lint needs it to fetch the pinned oida release.
+      - name: Install curl
+        run: apt-get update && apt-get install -y curl
+      - name: Lint
+        run: ./bin/lint --check

@@ -1,6 +1,6 @@
 import Foundation
-import ObjCExceptionCatcher
 import SwiftData
+import ObjCExceptionCatcher
 
 /// Carries a non-Sendable value across an actor hop. Sound only when the value is handed off (not used
 /// concurrently) — here, a sync payload passed to the main actor and read only there.
@@ -20,6 +20,9 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         private var isHeld = false
         private var waiters: [CheckedContinuation<Void, Never>] = []
 
+        // The actor's own state is what this reads and writes, so its caller outside the actor cannot hold
+        // these statements.
+        // oida:disable:next no_single_use_void_functions
         func acquire() async {
             if isHeld {
                 await withCheckedContinuation { waiters.append($0) }
@@ -64,10 +67,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             configurations: configurations,
             makeContainer: {
                 try Self._executeCatchingObjectiveCException {
-                    try ModelContainer(
-                        for: schema,
-                        configurations: configurations
-                    )
+                    try ModelContainer(for: schema, configurations: configurations)
                 }
             },
             resetPersistentStores: Self._resetPersistentStoreFiles(for:)
@@ -80,7 +80,11 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     }
 
     @MainActor
-    public init(_ modelContainer: ModelContainer, keyStyle: KeyStyle = .snakeCase, dateFormatter: DateFormatter? = nil) {
+    public init(
+        _ modelContainer: ModelContainer,
+        keyStyle: KeyStyle = .snakeCase,
+        dateFormatter: DateFormatter? = nil
+    ) {
         self.modelContainer = modelContainer
         self.mainContext = modelContainer.mainContext
         self.keyStyle = keyStyle
@@ -102,7 +106,11 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             let context = ModelContext(modelContainer)
             context.author = SwiftSync.inboundAuthor
             try await context.sync(
-                payload: payload, as: model, keyStyle: keyStyle, relationshipOperations: relationshipOperations)
+                payload: payload,
+                as: model,
+                keyStyle: keyStyle,
+                relationshipOperations: relationshipOperations
+            )
         }
     }
 
@@ -129,8 +137,13 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             let context = ModelContext(modelContainer)
             context.author = SwiftSync.inboundAuthor
             try await context.sync(
-                payload: payload, as: model, parent: parent, relationship: relationship, keyStyle: keyStyle,
-                relationshipOperations: relationshipOperations)
+                payload: payload,
+                as: model,
+                parent: parent,
+                relationship: relationship,
+                keyStyle: keyStyle,
+                relationshipOperations: relationshipOperations
+            )
         }
     }
 
@@ -162,11 +175,17 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     ) async throws {
         try await serialized {
             try await syncIntoMainContext(
-                UncheckedSendableBox(item), as: model, relationshipOperations: relationshipOperations)
+                UncheckedSendableBox(item),
+                as: model,
+                relationshipOperations: relationshipOperations
+            )
         }
     }
 
     @MainActor
+    // This is the hop onto the main actor. Its caller is nonisolated, so moving the body there moves
+    // main-actor work out of its isolation.
+    // oida:disable:next no_single_use_void_functions
     private func syncIntoMainContext<Model: SyncUpdatableModel>(
         _ item: UncheckedSendableBox<[String: Any]>,
         as model: Model.Type,
@@ -180,7 +199,11 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         mainContext.author = SwiftSync.inboundAuthor
         defer { mainContext.author = previousAuthor }
         try await mainContext.sync(
-            item: item.value, as: model, keyStyle: keyStyle, relationshipOperations: relationshipOperations)
+            item: item.value,
+            as: model,
+            keyStyle: keyStyle,
+            relationshipOperations: relationshipOperations
+        )
     }
 
     public func sync<Model: SyncUpdatableModel, Payload: SyncPayloadConvertible>(
@@ -206,8 +229,13 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             let context = ModelContext(modelContainer)
             context.author = SwiftSync.inboundAuthor
             try await context.sync(
-                item: item, as: model, parent: parent, relationship: relationship, keyStyle: keyStyle,
-                relationshipOperations: relationshipOperations)
+                item: item,
+                as: model,
+                parent: parent,
+                relationship: relationship,
+                keyStyle: keyStyle,
+                relationshipOperations: relationshipOperations
+            )
         }
     }
 
@@ -304,8 +332,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             let name = userInfo[SwiftSyncObjCExceptionNameKey] as? String
             let reason = userInfo[SwiftSyncObjCExceptionReasonKey] as? String ?? nsError.localizedDescription
             let detail = [name, reason].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ": ")
-            throw SyncError.containerInitialization(
-                reason: detail.isEmpty ? "Objective-C exception during ModelContainer initialization." : detail)
+            throw SyncError.containerInitialization(reason: detail.isEmpty ? "Objective-C exception during ModelContainer initialization." : detail)
         }
 
         if let swiftResult {
@@ -325,9 +352,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         var fullName: String { "\(ownerTypeName).\(propertyName)" }
     }
 
-    static func _validateSchema(
-        modelTypes: [any PersistentModel.Type]
-    ) throws {
+    static func _validateSchema(modelTypes: [any PersistentModel.Type]) throws {
 
         let relationships = _schemaRelationships(from: modelTypes)
             .sorted { lhs, rhs in
@@ -343,10 +368,10 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
             guard !reciprocalToMany.isEmpty else { continue }
 
             let hasAnchor =
-                relationship.hasExplicitInverseAnchor || reciprocalToMany.contains(where: \.hasExplicitInverseAnchor)
+                relationship.hasExplicitInverseAnchor || reciprocalToMany.contains(where: { $0.hasExplicitInverseAnchor })
             guard !hasAnchor else { continue }
 
-            let reciprocalList = reciprocalToMany.map(\.fullName).joined(separator: ", ")
+            let reciprocalList = reciprocalToMany.map { $0.fullName }.joined(separator: ", ")
             throw SyncError.schemaValidation(
                 reason:
                     """
@@ -365,11 +390,8 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     /// upsert silently destroy identity-distinct rows during sync — breaking SwiftSync's one-row-
     /// per-`syncIdentity` invariant. Enforced for `@Syncable` models (which synthesise
     /// `syncIdentityPropertyName`); hand-written conformances opt out by leaving it empty.
-    static func _validateUniquenessConstraints(
-        modelTypes: [any PersistentModel.Type]
-    ) throws {
-        let entitiesByName = Dictionary(
-            Schema(modelTypes).entities.map { ($0.name, $0) }, uniquingKeysWith: { lhs, _ in lhs })
+    static func _validateUniquenessConstraints(modelTypes: [any PersistentModel.Type]) throws {
+        let entitiesByName = Dictionary(Schema(modelTypes).entities.map { ($0.name, $0) }, uniquingKeysWith: { lhs, _ in lhs })
 
         for modelType in modelTypes {
             guard let syncType = modelType as? any SyncModelable.Type else { continue }
@@ -421,8 +443,7 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         if sourceContext == mainContext {
             // A local (immediate) write already landed in the main context, so its rows are current
             // here — don't re-touch the context during its own did-save (avoid reentrancy); just notify.
-            changedModelTypeNames = Set(
-                changedIDs.map { String(reflecting: type(of: sourceContext.model(for: $0))) })
+            changedModelTypeNames = Set(changedIDs.map { String(reflecting: type(of: sourceContext.model(for: $0))) })
         } else {
             // A background-context sync: register the changed rows in the main context and process its
             // pending changes so the merge lands, then notify.

@@ -48,7 +48,9 @@ public struct SyncableMacro: ExtensionMacro {
             return []
         }
 
-        emitBlockedNameDiagnostics(in: classDecl, context: context)
+        for diagnostic in blockedNameDiagnostics(in: classDecl) {
+            context.diagnose(diagnostic)
+        }
 
         let typeName = classDecl.name.text
         let declarationAccessModifier = classDecl.modifiers
@@ -61,7 +63,7 @@ public struct SyncableMacro: ExtensionMacro {
             return []
         }
 
-        let explicitPrimaryKey = properties.first(where: \.isPrimaryKey)
+        let explicitPrimaryKey = properties.first(where: { $0.isPrimaryKey })
         guard
             let identityProperty = explicitPrimaryKey ?? properties.first(where: { $0.name == "id" })
                 ?? properties.first(where: { $0.name == "remoteID" })
@@ -208,10 +210,10 @@ public struct SyncableMacro: ExtensionMacro {
         "hashValue": "hashValueRaw",
     ]
 
-    private static func emitBlockedNameDiagnostics(
-        in classDecl: ClassDeclSyntax,
-        context: some MacroExpansionContext
-    ) {
+    // Answers the diagnostics rather than raising them, so the rule they encode can be read back from a
+    // declaration without a MacroExpansionContext to catch them.
+    private static func blockedNameDiagnostics(in classDecl: ClassDeclSyntax) -> [Diagnostic] {
+        var diagnostics: [Diagnostic] = []
         for member in classDecl.memberBlock.members {
             guard let variable = member.decl.as(VariableDeclSyntax.self),
                 variable.bindings.count == 1,
@@ -226,12 +228,10 @@ public struct SyncableMacro: ExtensionMacro {
                 continue
             }
 
-            let message = ReservedModelPropertyNameDiagnostic(
-                propertyName: propertyName,
-                suggestedName: suggestedName
-            )
-            context.diagnose(Diagnostic(node: Syntax(pattern.identifier), message: message))
+            let message = ReservedModelPropertyNameDiagnostic(propertyName: propertyName, suggestedName: suggestedName)
+            diagnostics.append(Diagnostic(node: Syntax(pattern.identifier), message: message))
         }
+        return diagnostics
     }
 
     private static func syncedProperties(from classDecl: ClassDeclSyntax) -> [SyncedProperty] {

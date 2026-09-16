@@ -66,7 +66,11 @@ final class BenchmarkScopedTask {
     var title: String
     var project: BenchmarkProject?
 
-    init(id: Int, title: String, project: BenchmarkProject? = nil) {
+    init(
+        id: Int,
+        title: String,
+        project: BenchmarkProject? = nil
+    ) {
         self.id = id
         self.title = title
         self.project = project
@@ -184,10 +188,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                     let fixture = try makeStoreFixture(storeKind: storeKind)
                     defer { fixture.cleanup() }
 
-                    let container = try ModelContainer(
-                        for: BenchmarkUser.self,
-                        configurations: fixture.configuration
-                    )
+                    let container = try ModelContainer(for: BenchmarkUser.self, configurations: fixture.configuration)
                     let context = ModelContext(container)
 
                     try seedUsers(count: existingCount, in: context)
@@ -218,10 +219,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                     let fixture = try makeStoreFixture(storeKind: storeKind)
                     defer { fixture.cleanup() }
 
-                    let container = try ModelContainer(
-                        for: BenchmarkUser.self,
-                        configurations: fixture.configuration
-                    )
+                    let container = try ModelContainer(for: BenchmarkUser.self, configurations: fixture.configuration)
                     let context = ModelContext(container)
 
                     try seedUsers(count: existingCount, in: context)
@@ -275,8 +273,11 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                     ]
                     return try await measureDuration {
                         try await context.sync(
-                            item: payload, as: BenchmarkScopedTask.self, parent: targetProject,
-                            relationship: \BenchmarkScopedTask.project)
+                            item: payload,
+                            as: BenchmarkScopedTask.self,
+                            parent: targetProject,
+                            relationship: \BenchmarkScopedTask.project
+                        )
                     }
                 }
 
@@ -303,7 +304,8 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                     defer { fixture.cleanup() }
 
                     let container = try ModelContainer(
-                        for: BenchmarkProject.self, BenchmarkScopedTask.self,
+                        for: BenchmarkProject.self,
+                        BenchmarkScopedTask.self,
                         configurations: fixture.configuration
                     )
                     let context = ModelContext(container)
@@ -315,8 +317,11 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                     let payload = makeScopedTaskPayload(count: scopeCount)
                     return try await measureDuration {
                         try await context.sync(
-                            payload: payload, as: BenchmarkScopedTask.self, parent: targetProject,
-                            relationship: \BenchmarkScopedTask.project)
+                            payload: payload,
+                            as: BenchmarkScopedTask.self,
+                            parent: targetProject,
+                            relationship: \BenchmarkScopedTask.project
+                        )
                     }
                 }
 
@@ -342,7 +347,8 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                     defer { fixture.cleanup() }
 
                     let container = try ModelContainer(
-                        for: BenchmarkUser.self, BenchmarkWorkItem.self,
+                        for: BenchmarkUser.self,
+                        BenchmarkWorkItem.self,
                         configurations: fixture.configuration
                     )
                     let context = ModelContext(container)
@@ -383,7 +389,8 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                         defer { fixture.cleanup() }
 
                         let container = try ModelContainer(
-                            for: BenchmarkTag.self, BenchmarkWorkItem.self,
+                            for: BenchmarkTag.self,
+                            BenchmarkWorkItem.self,
                             configurations: fixture.configuration
                         )
                         let context = ModelContext(container)
@@ -425,7 +432,8 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                         defer { fixture.cleanup() }
 
                         let container = try ModelContainer(
-                            for: BenchmarkReviewer.self, BenchmarkWorkItem.self,
+                            for: BenchmarkReviewer.self,
+                            BenchmarkWorkItem.self,
                             configurations: fixture.configuration
                         )
                         let context = ModelContext(container)
@@ -511,8 +519,11 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                     return try await measureDuration {
                         try await context.sync(item: userPayload, as: BenchmarkUser.self)
                         try await context.sync(
-                            payload: scopedPayload, as: BenchmarkScopedTask.self, parent: targetProject,
-                            relationship: \BenchmarkScopedTask.project)
+                            payload: scopedPayload,
+                            as: BenchmarkScopedTask.self,
+                            parent: targetProject,
+                            relationship: \BenchmarkScopedTask.project
+                        )
                         try await context.sync(item: workItemPayload, as: BenchmarkWorkItem.self)
                     }
                 }
@@ -559,10 +570,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
                         in: context
                     )
 
-                    let taskListPayload = makeScenarioTaskListPayload(
-                        count: scopeCount,
-                        relationshipCount: relationshipCount
-                    )
+                    let taskListPayload = makeScenarioTaskListPayload(count: scopeCount, relationshipCount: relationshipCount)
                     let taskDetailPayload: [String: Any] = [
                         "id": 1,
                         "title": "Scenario Task 1 Detail Updated",
@@ -577,8 +585,11 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
 
                     return try await measureDuration {
                         try await context.sync(
-                            payload: taskListPayload, as: ScenarioTask.self, parent: targetProject,
-                            relationship: \ScenarioTask.project)
+                            payload: taskListPayload,
+                            as: ScenarioTask.self,
+                            parent: targetProject,
+                            relationship: \ScenarioTask.project
+                        )
                         try await context.sync(item: taskDetailPayload, as: ScenarioTask.self)
                         try await context.sync(item: userPresencePayload, as: ScenarioUser.self)
                     }
@@ -602,10 +613,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
     private func makeStoreFixture(storeKind: BenchmarkStoreKind) throws -> BenchmarkStoreFixture {
         switch storeKind {
         case .memory:
-            return BenchmarkStoreFixture(
-                configuration: ModelConfiguration(isStoredInMemoryOnly: true),
-                cleanup: {}
-            )
+            return BenchmarkStoreFixture(configuration: ModelConfiguration(isStoredInMemoryOnly: true), cleanup: {})
         case .sqlite:
             let directory = FileManager.default.temporaryDirectory
                 .appendingPathComponent("swift-sync-bench-\(UUID().uuidString)", isDirectory: true)
@@ -665,14 +673,24 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
         }
 
         for index in 1...targetScopeCount {
-            context.insert(BenchmarkScopedTask(id: index, title: "Target \(index)", project: target))
+            context.insert(
+                BenchmarkScopedTask(
+                    id: index,
+                    title: "Target \(index)",
+                    project: target
+                ))
         }
 
         if totalTaskCount > targetScopeCount {
             for offset in 0..<(totalTaskCount - targetScopeCount) {
                 let taskID = targetScopeCount + offset + 1
                 let parent = otherParents[offset % otherParents.count]
-                context.insert(BenchmarkScopedTask(id: taskID, title: "Other \(taskID)", project: parent))
+                context.insert(
+                    BenchmarkScopedTask(
+                        id: taskID,
+                        title: "Other \(taskID)",
+                        project: parent
+                    ))
             }
         }
 
@@ -703,14 +721,24 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
         }
 
         for index in 1...targetScopeCount {
-            context.insert(ScenarioTask(id: index, title: "Scenario Task \(index)", project: targetProject))
+            context.insert(
+                ScenarioTask(
+                    id: index,
+                    title: "Scenario Task \(index)",
+                    project: targetProject
+                ))
         }
 
         if totalTaskCount > targetScopeCount {
             for offset in 0..<(totalTaskCount - targetScopeCount) {
                 let taskID = targetScopeCount + offset + 1
                 let project = otherProjects[offset % otherProjects.count]
-                context.insert(ScenarioTask(id: taskID, title: "Scenario Task \(taskID)", project: project))
+                context.insert(
+                    ScenarioTask(
+                        id: taskID,
+                        title: "Scenario Task \(taskID)",
+                        project: project
+                    ))
             }
         }
 
@@ -730,10 +758,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
         }
     }
 
-    private func makeScenarioTaskListPayload(
-        count: Int,
-        relationshipCount: Int
-    ) -> [[String: Any]] {
+    private func makeScenarioTaskListPayload(count: Int, relationshipCount: Int) -> [[String: Any]] {
         (1...count).map { index in
             [
                 "id": index,
@@ -770,7 +795,7 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
             relationRows: relationRows,
             relationshipCount: relationshipCount,
             workload: workload,
-            durations: measurements.map(\.duration),
+            durations: measurements.map { $0.duration },
             phaseProfiles: BenchmarkPhaseProfile.build(from: measurements)
         )
     }
@@ -800,51 +825,35 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
             relationRows: relationRows,
             relationshipCount: relationshipCount,
             workload: workload,
-            durations: measurements.map(\.duration),
+            durations: measurements.map { $0.duration },
             phaseProfiles: BenchmarkPhaseProfile.build(from: measurements)
         )
     }
 
-    private func measureDuration(
-        operation: () throws -> Void
-    ) throws -> BenchmarkMeasurement {
+    private func measureDuration(operation: () throws -> Void) throws -> BenchmarkMeasurement {
         let clock = ContinuousClock()
         let start = clock.now
         if environment.phaseProfilingEnabled {
             let (_, profile) = try SwiftSync.withPerformanceProfiling {
                 try operation()
             }
-            return BenchmarkMeasurement(
-                duration: start.duration(to: clock.now),
-                phaseTotals: profile.totalsByPhase
-            )
+            return BenchmarkMeasurement(duration: start.duration(to: clock.now), phaseTotals: profile.totalsByPhase)
         }
         try operation()
-        return BenchmarkMeasurement(
-            duration: start.duration(to: clock.now),
-            phaseTotals: [:]
-        )
+        return BenchmarkMeasurement(duration: start.duration(to: clock.now), phaseTotals: [:])
     }
 
-    private func measureDuration(
-        operation: @MainActor () async throws -> Void
-    ) async throws -> BenchmarkMeasurement {
+    private func measureDuration(operation: @MainActor () async throws -> Void) async throws -> BenchmarkMeasurement {
         let clock = ContinuousClock()
         let start = clock.now
         if environment.phaseProfilingEnabled {
             let (_, profile) = try await SwiftSync.withMainActorPerformanceProfiling {
                 try await operation()
             }
-            return BenchmarkMeasurement(
-                duration: start.duration(to: clock.now),
-                phaseTotals: profile.totalsByPhase
-            )
+            return BenchmarkMeasurement(duration: start.duration(to: clock.now), phaseTotals: profile.totalsByPhase)
         }
         try await operation()
-        return BenchmarkMeasurement(
-            duration: start.duration(to: clock.now),
-            phaseTotals: [:]
-        )
+        return BenchmarkMeasurement(duration: start.duration(to: clock.now), phaseTotals: [:])
     }
 
     private func emit(_ result: BenchmarkSummary) {
@@ -852,7 +861,8 @@ final class FetchStrategyBenchmarkTests: XCTestCase {
         if let ceiling = environment.maxMedianMilliseconds {
             let medianMs = result.median.millisecondsValue
             XCTAssertLessThanOrEqual(
-                medianMs, ceiling,
+                medianMs,
+                ceiling,
                 "Perf regression: \(result.name) (store=\(result.storeKind.rawValue), totalRows=\(result.totalRows)) "
                     + "median \(medianMs)ms exceeded ceiling \(ceiling)ms"
             )
@@ -1044,14 +1054,8 @@ final class BenchmarkProfilingSupportTests: XCTestCase {
             workload: "mixed",
             durations: [.milliseconds(7000), .milliseconds(7100), .milliseconds(7200)],
             phaseProfiles: [
-                BenchmarkPhaseProfile(
-                    name: "fetch-existing",
-                    durations: [.milliseconds(1000), .milliseconds(1100), .milliseconds(1200)]
-                ),
-                BenchmarkPhaseProfile(
-                    name: "apply-relationships",
-                    durations: [.milliseconds(3000), .milliseconds(3200), .milliseconds(3100)]
-                ),
+                BenchmarkPhaseProfile(name: "fetch-existing", durations: [.milliseconds(1000), .milliseconds(1100), .milliseconds(1200)]),
+                BenchmarkPhaseProfile(name: "apply-relationships", durations: [.milliseconds(3000), .milliseconds(3200), .milliseconds(3100)]),
             ]
         )
 

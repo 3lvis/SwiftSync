@@ -103,10 +103,7 @@ final class SyncContainerRecoveryTests: XCTestCase {
                 attempts += 1
                 return try SyncContainer._executeCatchingObjectiveCException {
                     if attempts == 1 {
-                        NSException(
-                            name: .internalInconsistencyException,
-                            reason: "Simulated unsupported migration exception"
-                        ).raise()
+                        NSException(name: .internalInconsistencyException, reason: "Simulated unsupported migration exception").raise()
                     }
                     return 7
                 }

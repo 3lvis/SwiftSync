@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+#
+# Prints the staged Swift files worth checking, null-delimited, from the repo root.
+#
+# bin/lint decides from this list whether a commit is worth linting at all — it lints the whole
+# repository when it runs, since a rule that counts callers across the run cannot read a partial one.
+# So a file this list wrongly keeps costs a couple of seconds, and one it wrongly skips costs a commit
+# that was never checked. The list mirrors `excluded:` in .oida.yml.
+#
+# Null-delimited, so a Swift file under a folder with a space in its name stays one path.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+# Paths arrive relative to the repo root.
+excluded='/\.build/|^\.build/|^build/|/DerivedData/|/SourcePackages/|/GeneratedSources/|/Intermediates\.noindex/'
+
+# --diff-filter drops deletions and renames-away: there is nothing left to read.
+while IFS= read -r -d '' file; do
+    printf '%s' "$file" | grep -qE "$excluded" || printf '%s\0' "$file"
+done < <(git diff --cached --name-only --diff-filter=ACMR -z -- '*.swift')

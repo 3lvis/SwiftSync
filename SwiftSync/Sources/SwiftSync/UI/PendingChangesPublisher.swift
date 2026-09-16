@@ -31,6 +31,10 @@ public final class PendingChangesPublisher<Model: SyncUpdatableModel> where Mode
     public var pendingChanges: SyncPendingChanges {
         _ = revision
         return (try? SwiftSync.pendingChanges(for: Model.self, in: syncContainer.mainContext))
-            ?? SyncPendingChanges(inserts: [], updates: [], deletes: [])
+            ?? SyncPendingChanges(
+                inserts: [],
+                updates: [],
+                deletes: []
+            )
     }
 }

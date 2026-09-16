@@ -1,5 +1,5 @@
-import DemoCore
 import SwiftUI
+import DemoCore
 
 struct TaskView: View {
     let taskID: String
@@ -12,9 +12,7 @@ struct TaskView: View {
         self.taskID = taskID
         self.syncEngine = syncEngine
 
-        _machine = State(
-            initialValue: TaskViewMachine(taskID: taskID, syncEngine: syncEngine)
-        )
+        _machine = State(initialValue: TaskViewMachine(taskID: taskID, syncEngine: syncEngine))
     }
 
     var body: some View {
@@ -24,7 +22,7 @@ struct TaskView: View {
             .listSectionSpacing(.compact)
             .navigationTitle("Task")
             .toolbar { toolbarContent }
-            .task(loadTask)
+            .task { machine.send(.onAppear) }
             .animation(.snappy(duration: 0.2), value: itemIDs)
             .animation(.snappy(duration: 0.2), value: reviewerIDs)
             .animation(.snappy(duration: 0.2), value: watcherIDs)
@@ -76,23 +74,20 @@ extension TaskView {
     @ViewBuilder
     var editTaskSheet: some View {
         if let taskModel = task {
-            TaskFormSheet(
-                mode: .edit(task: taskModel),
-                syncEngine: syncEngine
-            )
+            TaskFormSheet(mode: .edit(task: taskModel), syncEngine: syncEngine)
         }
     }
 
     var itemIDs: [String] {
-        machine.items.map(\.id)
+        machine.items.map { $0.id }
     }
 
     var reviewerIDs: [String] {
-        task?.reviewers.map(\.id).sorted() ?? []
+        task?.reviewers.map { $0.id }.sorted() ?? []
     }
 
     var watcherIDs: [String] {
-        task?.watchers.map(\.id).sorted() ?? []
+        task?.watchers.map { $0.id }.sorted() ?? []
     }
 
     @ViewBuilder
@@ -191,12 +186,11 @@ extension TaskView {
         }
     }
 
-    @Sendable
-    func loadTask() async {
-        machine.send(.onAppear)
-    }
-
-    func personChip(role: String, name: String, identifier: String) -> some View {
+    func personChip(
+        role: String,
+        name: String,
+        identifier: String
+    ) -> some View {
         HStack(spacing: 4) {
             Text(role)
                 .foregroundStyle(.secondary)

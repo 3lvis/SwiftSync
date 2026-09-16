@@ -3,5 +3,8 @@
   "lineLength": 100000,
   "indentation": {
     "spaces": 4
+  },
+  "rules": {
+    "OrderedImports": false
   }
 }

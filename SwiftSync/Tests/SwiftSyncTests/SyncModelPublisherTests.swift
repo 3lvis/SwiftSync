@@ -12,7 +12,12 @@ final class ModelPubTask {
     var assigneeID: String?
     var assignee: ModelPubUser?
 
-    init(id: String, title: String, assigneeID: String? = nil, assignee: ModelPubUser? = nil) {
+    init(
+        id: String,
+        title: String,
+        assigneeID: String? = nil,
+        assignee: ModelPubUser? = nil
+    ) {
         self.id = id
         self.title = title
         self.assigneeID = assigneeID
@@ -38,16 +43,14 @@ final class SyncModelPublisherTests: XCTestCase {
     func testPublisherEventuallyEmitsAssignedAndHydratedRowAfterBackgroundSync() async throws {
         let syncContainer = try makeContainer(modelTypes: ModelPubTask.self, ModelPubUser.self)
 
-        try await syncContainer.sync(
-            payload: [["id": "u1", "display_name": "Alice", "role": ["id": "eng", "label": "Engineer"]]],
-            as: ModelPubUser.self
-        )
-        try await syncContainer.sync(
-            payload: [["id": "t1", "title": "Alpha", "assignee_id": NSNull()]],
-            as: ModelPubTask.self
-        )
+        try await syncContainer.sync(payload: [["id": "u1", "display_name": "Alice", "role": ["id": "eng", "label": "Engineer"]]], as: ModelPubUser.self)
+        try await syncContainer.sync(payload: [["id": "t1", "title": "Alpha", "assignee_id": NSNull()]], as: ModelPubTask.self)
 
-        let publisher = SyncModelPublisher(ModelPubTask.self, id: "t1", in: syncContainer)
+        let publisher = SyncModelPublisher(
+            ModelPubTask.self,
+            id: "t1",
+            in: syncContainer
+        )
         let spy = ObservationSpy<(String?, String?)> {
             (publisher.row?.assigneeID, publisher.row?.assignee?.id)
         }
@@ -56,10 +59,7 @@ final class SyncModelPublisherTests: XCTestCase {
         XCTAssertEqual(spy.values.last?.0 ?? nil, nil)
         XCTAssertEqual(spy.values.last?.1 ?? nil, nil)
 
-        try await syncContainer.sync(
-            item: ["id": "t1", "title": "Alpha", "assignee_id": "u1"],
-            as: ModelPubTask.self
-        )
+        try await syncContainer.sync(item: ["id": "t1", "title": "Alpha", "assignee_id": "u1"], as: ModelPubTask.self)
 
         try await waitUntil {
             publisher.row?.assigneeID == "u1" && publisher.row?.assignee?.id == "u1"
@@ -69,35 +69,27 @@ final class SyncModelPublisherTests: XCTestCase {
         XCTAssertTrue(initialRow === finalRow)
         XCTAssertEqual(publisher.row?.assigneeID, "u1")
         XCTAssertEqual(publisher.row?.assignee?.id, "u1")
-        XCTAssertTrue(
-            spy.values.contains(where: { $0.0 == "u1" && $0.1 == "u1" }),
-            "spy values: \(spy.values)"
-        )
+        XCTAssertTrue(spy.values.contains(where: { $0.0 == "u1" && $0.1 == "u1" }), "spy values: \(spy.values)")
     }
 
     @MainActor
     func testPublisherSpyRecordsTransitionFromNilToAssigned() async throws {
         let syncContainer = try makeContainer(modelTypes: ModelPubTask.self, ModelPubUser.self)
 
-        try await syncContainer.sync(
-            payload: [["id": "u1", "display_name": "Alice", "role": ["id": "eng", "label": "Engineer"]]],
-            as: ModelPubUser.self
-        )
-        try await syncContainer.sync(
-            payload: [["id": "t1", "title": "Alpha", "assignee_id": NSNull()]],
-            as: ModelPubTask.self
-        )
+        try await syncContainer.sync(payload: [["id": "u1", "display_name": "Alice", "role": ["id": "eng", "label": "Engineer"]]], as: ModelPubUser.self)
+        try await syncContainer.sync(payload: [["id": "t1", "title": "Alpha", "assignee_id": NSNull()]], as: ModelPubTask.self)
 
-        let publisher = SyncModelPublisher(ModelPubTask.self, id: "t1", in: syncContainer)
+        let publisher = SyncModelPublisher(
+            ModelPubTask.self,
+            id: "t1",
+            in: syncContainer
+        )
         let spy = ObservationSpy<(String?, String?)> {
             (publisher.row?.assigneeID, publisher.row?.assignee?.id)
         }
         let initialRow = try XCTUnwrap(publisher.row)
 
-        try await syncContainer.sync(
-            item: ["id": "t1", "title": "Alpha", "assignee_id": "u1"],
-            as: ModelPubTask.self
-        )
+        try await syncContainer.sync(item: ["id": "t1", "title": "Alpha", "assignee_id": "u1"], as: ModelPubTask.self)
 
         try await waitUntil {
             spy.values.contains(where: { $0.0 == "u1" })
@@ -109,10 +101,7 @@ final class SyncModelPublisherTests: XCTestCase {
         XCTAssertEqual(publisher.row?.assignee?.id, "u1")
         XCTAssertEqual(spy.values.first?.0 ?? nil, nil)
         XCTAssertEqual(spy.values.first?.1 ?? nil, nil)
-        XCTAssertTrue(
-            spy.values.contains(where: { $0.0 == "u1" }),
-            "spy values: \(spy.values)"
-        )
+        XCTAssertTrue(spy.values.contains(where: { $0.0 == "u1" }), "spy values: \(spy.values)")
     }
 
     @MainActor
@@ -127,35 +116,30 @@ final class SyncModelPublisherTests: XCTestCase {
             ],
             as: OneSidedUser.self
         )
-        try await syncContainer.sync(
-            payload: [["id": 10, "title": "Task 10", "member_ids": [1, 2]]],
-            as: OneSidedTask.self
-        )
+        try await syncContainer.sync(payload: [["id": 10, "title": "Task 10", "member_ids": [1, 2]]], as: OneSidedTask.self)
 
-        let publisher = SyncModelPublisher(OneSidedTask.self, id: 10, in: syncContainer)
+        let publisher = SyncModelPublisher(
+            OneSidedTask.self,
+            id: 10,
+            in: syncContainer
+        )
         let initialRow = try XCTUnwrap(publisher.row)
         let spy = ObservationSpy<[Int]> {
-            publisher.row?.members.map(\.id).sorted() ?? []
+            publisher.row?.members.map { $0.id }.sorted() ?? []
         }
 
         XCTAssertEqual(spy.values.first, [1, 2])
 
-        try await syncContainer.sync(
-            payload: [["id": 10, "title": "Task 10", "member_ids": [2, 3]]],
-            as: OneSidedTask.self
-        )
+        try await syncContainer.sync(payload: [["id": 10, "title": "Task 10", "member_ids": [2, 3]]], as: OneSidedTask.self)
 
         try await waitUntil {
-            publisher.row?.members.map(\.id).sorted() == [2, 3]
+            publisher.row?.members.map { $0.id }.sorted() == [2, 3]
         }
 
         let finalRow = try XCTUnwrap(publisher.row)
         XCTAssertTrue(initialRow === finalRow)
-        XCTAssertEqual(finalRow.members.map(\.id).sorted(), [2, 3])
-        XCTAssertTrue(
-            spy.values.contains(where: { $0 == [2, 3] }),
-            "spy values: \(spy.values)"
-        )
+        XCTAssertEqual(finalRow.members.map { $0.id }.sorted(), [2, 3])
+        XCTAssertTrue(spy.values.contains(where: { $0 == [2, 3] }), "spy values: \(spy.values)")
     }
 
     @MainActor
@@ -171,15 +155,15 @@ final class SyncModelPublisherTests: XCTestCase {
         )
 
         let (_, profile) = await SwiftSync.withMainActorPerformanceProfiling {
-            _ = SyncModelPublisher(ModelPubTask.self, id: "t2", in: syncContainer)
+            _ = SyncModelPublisher(
+                ModelPubTask.self,
+                id: "t2",
+                in: syncContainer
+            )
         }
 
-        XCTAssertTrue(
-            profile.entered(.fetchExistingByIdentity),
-            "a single-row publisher should reload via an identity-targeted fetch")
-        XCTAssertFalse(
-            profile.entered(.fetchExisting),
-            "should not full-table scan when the model has a generated identity predicate")
+        XCTAssertTrue(profile.entered(.fetchExistingByIdentity), "a single-row publisher should reload via an identity-targeted fetch")
+        XCTAssertFalse(profile.entered(.fetchExisting), "should not full-table scan when the model has a generated identity predicate")
     }
 
     @MainActor

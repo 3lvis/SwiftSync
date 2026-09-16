@@ -1,7 +1,7 @@
-import DemoCore
 import SwiftData
-import SwiftSync
 import SwiftUI
+import DemoCore
+import SwiftSync
 
 struct FailuresSheet: View {
     let syncEngine: DemoSyncEngine
@@ -39,8 +39,13 @@ struct FailuresSheet: View {
                                 Button("Edit") { editingTask = task }
                                     .accessibilityIdentifier("failure.edit.\(task.id)")
                                 Spacer()
-                                Button("Discard", role: .destructive) { discard(task) }
-                                    .accessibilityIdentifier("failure.discard.\(task.id)")
+                                Button("Discard", role: .destructive) {
+                                    let taskID = task.id
+                                    _Concurrency.Task {
+                                        try? await syncEngine.discardFailedChange(taskID: taskID)
+                                    }
+                                }
+                                .accessibilityIdentifier("failure.discard.\(task.id)")
                             }
                             .buttonStyle(.borderless)
                             .font(.callout)
@@ -63,8 +68,4 @@ struct FailuresSheet: View {
         }
     }
 
-    private func discard(_ task: Task) {
-        let taskID = task.id
-        _Concurrency.Task { try? await syncEngine.discardFailedChange(taskID: taskID) }
-    }
 }

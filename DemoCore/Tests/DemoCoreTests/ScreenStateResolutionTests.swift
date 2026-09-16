@@ -5,113 +5,90 @@ import XCTest
 final class ScreenStateResolutionTests: XCTestCase {
 
     func testProjectsListStatusState_loadingWithoutRows_showsLoading() {
-        XCTAssertEqual(
-            resolveProjectsListStatusState(phase: .loading, hasRows: false),
-            .loading
-        )
+        XCTAssertEqual(resolveProjectsListStatusState(phase: .loading, hasRows: false), .loading)
     }
 
     func testProjectsListStatusState_loadingWithRows_hidesStatus() {
-        XCTAssertEqual(
-            resolveProjectsListStatusState(phase: .loading, hasRows: true),
-            .hidden
-        )
+        XCTAssertEqual(resolveProjectsListStatusState(phase: .loading, hasRows: true), .hidden)
     }
 
     func testProjectsListStatusState_loadedWithoutRows_showsEmpty() {
-        XCTAssertEqual(
-            resolveProjectsListStatusState(phase: .loaded, hasRows: false),
-            .empty
-        )
+        XCTAssertEqual(resolveProjectsListStatusState(phase: .loaded, hasRows: false), .empty)
     }
 
     func testProjectsListStatusState_error_showsError() {
-        XCTAssertEqual(
-            resolveProjectsListStatusState(
-                phase: .failed(message: "boom"),
-                hasRows: false
-            ),
-            .error(ErrorPresentationState(message: "boom"))
-        )
+        XCTAssertEqual(resolveProjectsListStatusState(phase: .failed(message: "boom"), hasRows: false), .error(ErrorPresentationState(message: "boom")))
     }
 
     func testProjectDetailContentState_loadingWithoutCachedContent_showsLoading() {
         XCTAssertEqual(
-            resolveProjectDetailContentState(phase: .loading, hasProject: false, hasTasks: false),
+            resolveProjectDetailContentState(
+                phase: .loading,
+                hasProject: false,
+                hasTasks: false
+            ),
             .loading
         )
     }
 
     func testProjectDetailContentState_loadingWithCachedProject_showsContent() {
         XCTAssertEqual(
-            resolveProjectDetailContentState(phase: .loading, hasProject: true, hasTasks: false),
+            resolveProjectDetailContentState(
+                phase: .loading,
+                hasProject: true,
+                hasTasks: false
+            ),
             .content
         )
     }
 
     func testProjectDetailContentState_loadingWithCachedTasks_showsContent() {
         XCTAssertEqual(
-            resolveProjectDetailContentState(phase: .loading, hasProject: false, hasTasks: true),
+            resolveProjectDetailContentState(
+                phase: .loading,
+                hasProject: false,
+                hasTasks: true
+            ),
             .content
         )
     }
 
     func testProjectDetailContentState_loadedWithoutContent_showsNotFound() {
         XCTAssertEqual(
-            resolveProjectDetailContentState(phase: .loaded, hasProject: false, hasTasks: false),
+            resolveProjectDetailContentState(
+                phase: .loaded,
+                hasProject: false,
+                hasTasks: false
+            ),
             .notFound
         )
     }
 
     func testTaskDetailContentState_loadingWithoutCachedTask_showsLoading() {
-        XCTAssertEqual(
-            resolveTaskDetailContentState(phase: .loading, hasTask: false),
-            .loading
-        )
+        XCTAssertEqual(resolveTaskDetailContentState(phase: .loading, hasTask: false), .loading)
     }
 
     func testTaskDetailContentState_loadingWithCachedTask_showsContent() {
-        XCTAssertEqual(
-            resolveTaskDetailContentState(phase: .loading, hasTask: true),
-            .content
-        )
+        XCTAssertEqual(resolveTaskDetailContentState(phase: .loading, hasTask: true), .content)
     }
 
     func testTaskDetailContentState_loadedWithoutTask_showsNotFound() {
-        XCTAssertEqual(
-            resolveTaskDetailContentState(phase: .loaded, hasTask: false),
-            .notFound
-        )
+        XCTAssertEqual(resolveTaskDetailContentState(phase: .loaded, hasTask: false), .notFound)
     }
 
     func testTaskFormOptionsState_loadingWithoutOptions_showsLoading() {
-        XCTAssertEqual(
-            resolveTaskFormOptionsState(loadState: .loading, hasOptions: false),
-            .loading
-        )
+        XCTAssertEqual(resolveTaskFormOptionsState(loadState: .loading, hasOptions: false), .loading)
     }
 
     func testTaskFormOptionsState_loadingWithCachedOptions_showsAvailable() {
-        XCTAssertEqual(
-            resolveTaskFormOptionsState(loadState: .loading, hasOptions: true),
-            .available
-        )
+        XCTAssertEqual(resolveTaskFormOptionsState(loadState: .loading, hasOptions: true), .available)
     }
 
     func testTaskFormOptionsState_loadedWithoutOptions_showsUnavailable() {
-        XCTAssertEqual(
-            resolveTaskFormOptionsState(loadState: .loaded, hasOptions: false),
-            .unavailable
-        )
+        XCTAssertEqual(resolveTaskFormOptionsState(loadState: .loaded, hasOptions: false), .unavailable)
     }
 
     func testTaskFormOptionsState_errorWithoutOptions_showsUnavailable() {
-        XCTAssertEqual(
-            resolveTaskFormOptionsState(
-                loadState: .error(ErrorPresentationState(message: "boom")),
-                hasOptions: false
-            ),
-            .unavailable
-        )
+        XCTAssertEqual(resolveTaskFormOptionsState(loadState: .error(ErrorPresentationState(message: "boom")), hasOptions: false), .unavailable)
     }
 }

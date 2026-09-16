@@ -41,10 +41,7 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(projectTasks.first?["author_id"] as? String, userID)
         XCTAssertEqual(projectTasks.first?["watcher_ids"] as? [String], [userID])
         XCTAssertEqual(items(in: projectTasks.first).count, 2)
-        XCTAssertEqual(
-            items(in: projectTasks.first).map { $0["title"] as? String },
-            ["Gather requirements", "Draft implementation plan"]
-        )
+        XCTAssertEqual(items(in: projectTasks.first).map { $0["title"] as? String }, ["Gather requirements", "Draft implementation plan"])
         XCTAssertEqual(stateID(in: projectTasks.first), "todo")
         XCTAssertEqual(stateLabel(in: projectTasks.first), "To Do")
         XCTAssertNotNil(projectTasks.first?["description"])
@@ -132,7 +129,11 @@ final class DemoBackendTests: XCTestCase {
 
         let mintedID = try XCTUnwrap(created["id"] as? String)
         XCTAssertNotNil(UUID(uuidString: mintedID), "the server mints a UUID public_id")
-        XCTAssertEqual(mintedID, mintedID.lowercased(), "minted public_id is lowercased")
+        XCTAssertEqual(
+            mintedID,
+            mintedID.lowercased(),
+            "minted public_id is lowercased"
+        )
     }
 
     func testSQLiteBackendPatchTaskStateAndAssigneeReviewerAndRelationships() async throws {
@@ -322,12 +323,18 @@ final class DemoBackendTests: XCTestCase {
 
         let created = try backend.createTask(body: body)
         let serverID = try XCTUnwrap(created["id"] as? String)
-        XCTAssertEqual(serverID, newTaskID, "the client task id is adopted as public_id")
+        XCTAssertEqual(
+            serverID,
+            newTaskID,
+            "the client task id is adopted as public_id"
+        )
         let createdItems = items(in: created)
         XCTAssertEqual(createdItems.count, 2)
         XCTAssertEqual(
-            createdItems.map { $0["id"] as? String }, ["item-1", "item-2"],
-            "the client's item ids are the items' public_ids")
+            createdItems.map { $0["id"] as? String },
+            ["item-1", "item-2"],
+            "the client's item ids are the items' public_ids"
+        )
         XCTAssertEqual(createdItems.map { $0["title"] as? String }, ["First", "Second"])
         XCTAssertTrue(createdItems.allSatisfy { $0["done"] == nil })
         XCTAssertEqual(createdItems.map { $0["position"] as? Int }, [0, 1])
@@ -413,12 +420,25 @@ final class DemoBackendTests: XCTestCase {
         ])
 
         var database: OpaquePointer?
-        XCTAssertEqual(sqlite3_open_v2(url.path, &database, SQLITE_OPEN_READONLY, nil), SQLITE_OK)
+        XCTAssertEqual(
+            sqlite3_open_v2(
+                url.path,
+                &database,
+                SQLITE_OPEN_READONLY,
+                nil
+            ),
+            SQLITE_OK)
         defer { sqlite3_close(database) }
 
         var statement: OpaquePointer?
         XCTAssertEqual(
-            sqlite3_prepare_v2(database, "SELECT id FROM items WHERE public_id = 'stable-item'", -1, &statement, nil),
+            sqlite3_prepare_v2(
+                database,
+                "SELECT id FROM items WHERE public_id = 'stable-item'",
+                -1,
+                &statement,
+                nil
+            ),
             SQLITE_OK
         )
         XCTAssertEqual(sqlite3_step(statement), SQLITE_ROW)
@@ -437,7 +457,13 @@ final class DemoBackendTests: XCTestCase {
 
         statement = nil
         XCTAssertEqual(
-            sqlite3_prepare_v2(database, "SELECT id FROM items WHERE public_id = 'stable-item'", -1, &statement, nil),
+            sqlite3_prepare_v2(
+                database,
+                "SELECT id FROM items WHERE public_id = 'stable-item'",
+                -1,
+                &statement,
+                nil
+            ),
             SQLITE_OK
         )
         XCTAssertEqual(sqlite3_step(statement), SQLITE_ROW)
@@ -468,19 +494,36 @@ final class DemoBackendTests: XCTestCase {
         ])
 
         var database: OpaquePointer?
-        XCTAssertEqual(sqlite3_open_v2(url.path, &database, SQLITE_OPEN_READONLY, nil), SQLITE_OK)
+        XCTAssertEqual(
+            sqlite3_open_v2(
+                url.path,
+                &database,
+                SQLITE_OPEN_READONLY,
+                nil
+            ),
+            SQLITE_OK)
         defer { sqlite3_close(database) }
 
         var statement: OpaquePointer?
         XCTAssertEqual(
-            sqlite3_prepare_v2(database, "SELECT created_at FROM items WHERE public_id = 'stable-item'", -1, &statement, nil),
+            sqlite3_prepare_v2(
+                database,
+                "SELECT created_at FROM items WHERE public_id = 'stable-item'",
+                -1,
+                &statement,
+                nil
+            ),
             SQLITE_OK
         )
         XCTAssertEqual(sqlite3_step(statement), SQLITE_ROW)
         let originalCreatedAt = sqlite3_column_double(statement, 0)
         sqlite3_finalize(statement)
 
-        XCTAssertEqual(originalCreatedAt, 1_000_000_000, accuracy: 0.001)
+        XCTAssertEqual(
+            originalCreatedAt,
+            1_000_000_000,
+            accuracy: 0.001
+        )
 
         _ = try backend.updateTask(
             publicID: targetTaskID,
@@ -494,14 +537,24 @@ final class DemoBackendTests: XCTestCase {
 
         statement = nil
         XCTAssertEqual(
-            sqlite3_prepare_v2(database, "SELECT created_at FROM items WHERE public_id = 'stable-item'", -1, &statement, nil),
+            sqlite3_prepare_v2(
+                database,
+                "SELECT created_at FROM items WHERE public_id = 'stable-item'",
+                -1,
+                &statement,
+                nil
+            ),
             SQLITE_OK
         )
         XCTAssertEqual(sqlite3_step(statement), SQLITE_ROW)
         let updatedCreatedAt = sqlite3_column_double(statement, 0)
         sqlite3_finalize(statement)
 
-        XCTAssertEqual(updatedCreatedAt, originalCreatedAt, accuracy: 0.001)
+        XCTAssertEqual(
+            updatedCreatedAt,
+            originalCreatedAt,
+            accuracy: 0.001
+        )
     }
 
     func testUpdateTaskFromBodyDictItemsKeyAbsentPreservesItems() throws {
@@ -652,7 +705,11 @@ final class DemoBackendTests: XCTestCase {
         let created = try backend.createTask(body: body)
         let serverID = try XCTUnwrap(created["id"] as? String)
 
-        XCTAssertEqual(serverID, newID, "the client task id is adopted as public_id")
+        XCTAssertEqual(
+            serverID,
+            newID,
+            "the client task id is adopted as public_id"
+        )
         XCTAssertNil(created["local_id"])
         XCTAssertEqual(created["project_id"] as? String, projectID)
         XCTAssertEqual(created["assignee_id"] as? String, userID)
@@ -700,9 +757,7 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(updated["description"] as? String, "Updated description via PUT")
         XCTAssertEqual(stateID(in: updated), "done")
         XCTAssertEqual(stateLabel(in: updated), "Done")
-        XCTAssertTrue(
-            updated["assignee_id"] is NSNull || updated["assignee_id"] == nil,
-            "NSNull assignee_id must clear the assignee")
+        XCTAssertTrue(updated["assignee_id"] is NSNull || updated["assignee_id"] == nil, "NSNull assignee_id must clear the assignee")
         XCTAssertNotEqual(updated["updated_at"] as? String, beforeUpdatedAt)
         XCTAssertEqual(updated["created_at"] as? String, before?["created_at"] as? String)
     }
@@ -735,9 +790,7 @@ final class DemoBackendTests: XCTestCase {
         XCTAssertEqual(reset["reviewer_ids"] as? [String], [userID])
         XCTAssertEqual(reset["watcher_ids"] as? [String], [userID])
 
-        let titleOnly = try backend.updateTask(
-            publicID: taskID,
-            body: ["title": "t2", "description": "d", "state": ["id": "todo"]])
+        let titleOnly = try backend.updateTask(publicID: taskID, body: ["title": "t2", "description": "d", "state": ["id": "todo"]])
         XCTAssertEqual(titleOnly["reviewer_ids"] as? [String], [userID])
         XCTAssertEqual(titleOnly["watcher_ids"] as? [String], [userID])
     }
@@ -794,9 +847,7 @@ final class DemoBackendTests: XCTestCase {
             "description": "irrelevant",
             "state": ["id": "todo"],
         ]
-        XCTAssertThrowsError(
-            try backend.updateTask(publicID: "00000000-0000-0000-0000-000000000000", body: body)
-        )
+        XCTAssertThrowsError(try backend.updateTask(publicID: "00000000-0000-0000-0000-000000000000", body: body))
     }
 
     func testUpdateTaskFromBodyDictIDMismatchThrows() throws {
@@ -866,8 +917,10 @@ final class DemoBackendTests: XCTestCase {
         ]
         let updated = try backend.updateTask(publicID: taskID, body: body)
         XCTAssertEqual(
-            updated["assignee_id"] as? String, userID,
-            "Omitting assignee_id must preserve the existing assignee")
+            updated["assignee_id"] as? String,
+            userID,
+            "Omitting assignee_id must preserve the existing assignee"
+        )
     }
 
     func testSQLiteBackendAmbientProjectMutationKeepsSliceValid() async throws {
@@ -923,8 +976,22 @@ final class DemoBackendTests: XCTestCase {
     private func smallSeedData() -> DemoSeedData {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         return DemoSeedData(
-            projects: [.init(id: projectID, name: "Project", createdAt: now, updatedAt: now)],
-            users: [.init(id: userID, displayName: "User", createdAt: now, updatedAt: now)],
+            projects: [
+                .init(
+                    id: projectID,
+                    name: "Project",
+                    createdAt: now,
+                    updatedAt: now
+                )
+            ],
+            users: [
+                .init(
+                    id: userID,
+                    displayName: "User",
+                    createdAt: now,
+                    updatedAt: now
+                )
+            ],
             tasks: [
                 .init(
                     id: taskID,

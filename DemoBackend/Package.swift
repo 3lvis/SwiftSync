@@ -11,10 +11,7 @@ let package = Package(
         .library(name: "DemoBackend", targets: ["DemoBackend"])
     ],
     targets: [
-        .target(
-            name: "DemoBackend",
-            path: "Sources/DemoBackend"
-        ),
+        .target(name: "DemoBackend", path: "Sources/DemoBackend"),
         .testTarget(
             name: "DemoBackendTests",
             dependencies: ["DemoBackend"],

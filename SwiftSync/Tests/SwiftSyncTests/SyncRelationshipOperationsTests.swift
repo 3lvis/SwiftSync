@@ -20,7 +20,11 @@ final class OpsEmployee {
     var name: String
     var company: OpsCompany?
 
-    init(id: Int, name: String, company: OpsCompany? = nil) {
+    init(
+        id: Int,
+        name: String,
+        company: OpsCompany? = nil
+    ) {
         self.id = id
         self.name = name
         self.company = company
@@ -32,10 +36,7 @@ extension OpsCompany: SyncUpdatableModel {
     static var syncIdentity: KeyPath<OpsCompany, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> OpsCompany {
-        OpsCompany(
-            id: try payload.required(Int.self, for: "id"),
-            name: try payload.required(String.self, for: "name")
-        )
+        OpsCompany(id: try payload.required(Int.self, for: "id"), name: try payload.required(String.self, for: "name"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -56,10 +57,7 @@ extension OpsEmployee: SyncUpdatableModel {
     static var syncIdentity: KeyPath<OpsEmployee, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> OpsEmployee {
-        OpsEmployee(
-            id: try payload.required(Int.self, for: "id"),
-            name: try payload.required(String.self, for: "name")
-        )
+        OpsEmployee(id: try payload.required(Int.self, for: "id"), name: try payload.required(String.self, for: "name"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -81,7 +79,11 @@ extension OpsEmployee {
         in context: ModelContext,
         isolation: isolated (any Actor)? = #isolation
     ) async throws -> Bool {
-        try await applyRelationships(payload, in: context, operations: .all)
+        try await applyRelationships(
+            payload,
+            in: context,
+            operations: .all
+        )
     }
 
     func applyRelationships(
@@ -125,28 +127,38 @@ final class RelationshipOperationsTests: XCTestCase {
     @MainActor
     func testRelationshipOperationsSkipRelationshipUpdatesWhenUpdateFlagMissing() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: OpsCompany.self, OpsEmployee.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: OpsCompany.self,
+            OpsEmployee.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         try await context.sync(payload: [["id": 10, "name": "Acme"]], as: OpsCompany.self)
 
         try await context.sync(
-            payload: [["id": 1, "name": "Ava", "company_id": 10]], as: OpsEmployee.self,
-            relationshipOperations: [.insert])
+            payload: [["id": 1, "name": "Ava", "company_id": 10]],
+            as: OpsEmployee.self,
+            relationshipOperations: [.insert]
+        )
 
         var rows = try context.fetch(FetchDescriptor<OpsEmployee>())
         XCTAssertEqual(rows.first?.company?.id, 10)
 
         try await context.sync(
-            payload: [["id": 1, "name": "Ava", "company_id": NSNull()]], as: OpsEmployee.self,
-            relationshipOperations: [.insert])
+            payload: [["id": 1, "name": "Ava", "company_id": NSNull()]],
+            as: OpsEmployee.self,
+            relationshipOperations: [.insert]
+        )
 
         rows = try context.fetch(FetchDescriptor<OpsEmployee>())
         XCTAssertEqual(rows.first?.company?.id, 10)
 
         try await context.sync(
-            payload: [["id": 1, "name": "Ava", "company_id": NSNull()]], as: OpsEmployee.self,
-            relationshipOperations: [.update])
+            payload: [["id": 1, "name": "Ava", "company_id": NSNull()]],
+            as: OpsEmployee.self,
+            relationshipOperations: [.update]
+        )
 
         rows = try context.fetch(FetchDescriptor<OpsEmployee>())
         XCTAssertNil(rows.first?.company)

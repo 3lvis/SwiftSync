@@ -18,7 +18,11 @@ public final class SyncedModelPublisher<Model: PersistentModel & SyncModelable> 
         fallbackMessage: String = "Something went wrong. Please try again.",
         load: @escaping @MainActor () async throws -> Void
     ) {
-        self.model = SyncModelPublisher(modelType, id: id, in: syncContainer)
+        self.model = SyncModelPublisher(
+            modelType,
+            id: id,
+            in: syncContainer
+        )
         self.driver = SyncLoadDriver(fallbackMessage: fallbackMessage, load)
     }
 

@@ -63,27 +63,27 @@ enum SyncDateParser {
         let bytes = Array(input.utf8)
         guard bytes.count >= 19 else { return nil }
 
-        guard isDigit(bytes, 0, 4),
+        guard isDigit(bytes, 0..<4),
             bytes[safe: 4] == asciiMinus,
-            isDigit(bytes, 5, 2),
+            isDigit(bytes, 5..<7),
             bytes[safe: 7] == asciiMinus,
-            isDigit(bytes, 8, 2),
+            isDigit(bytes, 8..<10),
             bytes[safe: 10] == asciiT || bytes[safe: 10] == asciiSpace,
-            isDigit(bytes, 11, 2),
+            isDigit(bytes, 11..<13),
             bytes[safe: 13] == asciiColon,
-            isDigit(bytes, 14, 2),
+            isDigit(bytes, 14..<16),
             bytes[safe: 16] == asciiColon,
-            isDigit(bytes, 17, 2)
+            isDigit(bytes, 17..<19)
         else {
             return nil
         }
 
-        guard let year = int(bytes, 0, 4),
-            let month = int(bytes, 5, 2),
-            let day = int(bytes, 8, 2),
-            let hour = int(bytes, 11, 2),
-            let minute = int(bytes, 14, 2),
-            let second = int(bytes, 17, 2)
+        guard let year = int(bytes, 0..<4),
+            let month = int(bytes, 5..<7),
+            let day = int(bytes, 8..<10),
+            let hour = int(bytes, 11..<13),
+            let minute = int(bytes, 14..<16),
+            let second = int(bytes, 17..<19)
         else {
             return nil
         }
@@ -116,17 +116,18 @@ enum SyncDateParser {
         var timezoneOffsetSeconds = 0
         if bytes[safe: index] == asciiZ, index + 1 == bytes.count {
             index += 1
-        } else if index != bytes.count, let signByte = bytes[safe: index],
+        } else if index != bytes.count,
+            let signByte = bytes[safe: index],
             signByte == asciiPlus || signByte == asciiMinus
         {
             let sign = signByte == asciiMinus ? -1 : 1
             index += 1
 
-            guard isDigit(bytes, index, 2), let tzHour = int(bytes, index, 2) else { return nil }
+            guard isDigit(bytes, index..<index + 2), let tzHour = int(bytes, index..<index + 2) else { return nil }
             index += 2
 
             if bytes[safe: index] == asciiColon { index += 1 }
-            guard isDigit(bytes, index, 2), let tzMinute = int(bytes, index, 2) else { return nil }
+            guard isDigit(bytes, index..<index + 2), let tzMinute = int(bytes, index..<index + 2) else { return nil }
             index += 2
             guard (0...23).contains(tzHour), (0...59).contains(tzMinute) else { return nil }
 
@@ -167,13 +168,15 @@ enum SyncDateParser {
     private static func isDateOnly(_ utf8: String.UTF8View) -> Bool {
         let bytes = Array(utf8)
         guard bytes.count == 10 else { return false }
-        return isDigit(bytes, 0, 4) && bytes[safe: 4] == asciiMinus && isDigit(bytes, 5, 2)
-            && bytes[safe: 7] == asciiMinus && isDigit(bytes, 8, 2)
+        return isDigit(bytes, 0..<4) && bytes[safe: 4] == asciiMinus
+            && isDigit(bytes, 5..<7)
+            && bytes[safe: 7] == asciiMinus
+            && isDigit(bytes, 8..<10)
     }
 
-    private static func isDigit(_ bytes: [UInt8], _ start: Int, _ length: Int) -> Bool {
-        guard start >= 0, length >= 0, start + length <= bytes.count else { return false }
-        for idx in start..<(start + length) where !isDigit(bytes[idx]) {
+    private static func isDigit(_ bytes: [UInt8], _ range: Range<Int>) -> Bool {
+        guard range.lowerBound >= 0, range.upperBound <= bytes.count else { return false }
+        for idx in range where !isDigit(bytes[idx]) {
             return false
         }
         return true
@@ -183,10 +186,15 @@ enum SyncDateParser {
         byte >= asciiZero && byte <= asciiNine
     }
 
-    private static func int(_ bytes: [UInt8], _ start: Int, _ length: Int) -> Int? {
-        guard start >= 0, length > 0, start + length <= bytes.count else { return nil }
+    private static func int(_ bytes: [UInt8], _ range: Range<Int>) -> Int? {
+        guard range.lowerBound >= 0,
+            range.isEmpty == false,
+            range.upperBound <= bytes.count
+        else {
+            return nil
+        }
         var value = 0
-        for idx in start..<(start + length) {
+        for idx in range {
             let byte = bytes[idx]
             guard isDigit(byte) else { return nil }
             value = (value * 10) + Int(byte - asciiZero)
