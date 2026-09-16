@@ -87,7 +87,8 @@ public final class DemoSyncEngine {
     public func syncTaskFormMetadata() async throws {
         try await pull("taskFormMetadata") {
             try await self.syncUsersData()
-            try await self.syncTaskStatesData()
+            let taskStates = try await self.apiClient.getTaskStateOptions()
+            try await self.syncContainer.sync(payload: taskStates, as: TaskStateOption.self)
         }
     }
 
@@ -374,11 +375,6 @@ public final class DemoSyncEngine {
     private func syncUsersData() async throws {
         let payload = try await apiClient.getUsers()
         try await syncContainer.sync(payload: payload, as: User.self)
-    }
-
-    private func syncTaskStatesData() async throws {
-        let payload = try await apiClient.getTaskStateOptions()
-        try await syncContainer.sync(payload: payload, as: TaskStateOption.self)
     }
 
     private func syncProjectTasksData(projectID: String) async throws {

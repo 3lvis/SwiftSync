@@ -49,7 +49,8 @@ public final class DemoServerSimulator {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
         try self.sqlite.execute("PRAGMA foreign_keys = ON;")
-        try Self.prepareSchema(self.sqlite, seedData: seedData)
+        try Self.createSchemaIfNeeded(sqlite: self.sqlite)
+        try Self.seedIfNeeded(self.sqlite, seedData: seedData)
     }
 
     public func getProjectsPayload() throws -> [[String: Any]] {
@@ -1384,11 +1385,6 @@ public final class DemoServerSimulator {
 
     private func suspendAmbientMutationsAfterWrite() {
         ambientMutationsSuspendedUntil = Date().addingTimeInterval(1.25)
-    }
-
-    private static func prepareSchema(_ sqlite: DemoSQLiteDatabase, seedData: DemoSeedData) throws {
-        try createSchemaIfNeeded(sqlite: sqlite)
-        try seedIfNeeded(sqlite, seedData: seedData)
     }
 
     private static func createSchemaIfNeeded(sqlite: DemoSQLiteDatabase) throws {

@@ -22,7 +22,7 @@ struct TaskView: View {
             .listSectionSpacing(.compact)
             .navigationTitle("Task")
             .toolbar { toolbarContent }
-            .task(loadTask)
+            .task { machine.send(.onAppear) }
             .animation(.snappy(duration: 0.2), value: itemIDs)
             .animation(.snappy(duration: 0.2), value: reviewerIDs)
             .animation(.snappy(duration: 0.2), value: watcherIDs)
@@ -184,11 +184,6 @@ extension TaskView {
                 }
             }
         }
-    }
-
-    @Sendable
-    func loadTask() async {
-        machine.send(.onAppear)
     }
 
     func personChip(

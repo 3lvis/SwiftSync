@@ -24,14 +24,17 @@ struct ProjectView: View {
             .navigationTitle("Project")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbarContent }
-            .task(loadProject)
+            .task { machine.send(.onAppear) }
             .animation(.snappy(duration: 0.2), value: taskIDs)
             .projectPresentations(
                 createTaskSheetIsPresented: $isShowingCreateTaskSheet,
                 createTaskSheet: { createTaskSheet },
                 deletePromptIsPresented: deletePromptIsPresented,
                 taskPendingDelete: taskPendingDelete,
-                onConfirmDelete: confirmDelete,
+                onConfirmDelete: { prompt in
+                    machine.sendDelete(.request(taskID: prompt.id))
+                    taskPendingDelete = nil
+                },
                 onCancelDelete: { taskPendingDelete = nil },
                 deleteFailureIsPresented: deleteFailureIsPresented,
                 deleteFailureMessage: deleteFailureMessage,
@@ -106,15 +109,6 @@ struct ProjectView: View {
             return message
         }
         return "Could not delete this task."
-    }
-
-    private func loadProject() {
-        machine.send(.onAppear)
-    }
-
-    private func confirmDelete(_ prompt: TaskDeletePrompt) {
-        machine.sendDelete(.request(taskID: prompt.id))
-        taskPendingDelete = nil
     }
 
     @ViewBuilder

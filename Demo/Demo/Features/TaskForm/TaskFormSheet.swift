@@ -56,8 +56,8 @@ struct TaskFormSheet: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { toolbarContent }
         }
-        .task(loadMetadata)
-        .task(id: defaultsTaskID, applyDefaults)
+        .task { machine.send(.metadata(.onAppear)) }
+        .task(id: defaultsTaskID) { machine.applyDefaultsIfNeeded(to: draft) }
         .animation(.snappy(duration: 0.2), value: itemIDs)
         .taskFormPresentations(saveFailureIsPresented: saveFailureIsPresented, saveFailureMessage: saveFailureMessage)
         .presentationDetents([.large])
@@ -161,14 +161,6 @@ extension TaskFormSheet {
                     dismiss()
                 }
             ))
-    }
-
-    func loadMetadata() {
-        machine.send(.metadata(.onAppear))
-    }
-
-    func applyDefaults() {
-        machine.applyDefaultsIfNeeded(to: draft)
     }
 
     func itemTitleBinding(for item: Item) -> Binding<String> {
