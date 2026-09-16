@@ -839,9 +839,7 @@ final class OfflinePushTests: XCTestCase {
         )
     }
 
-    private func mutating(_ body: SyncJSON, _ transform: (inout [String: Any]) -> Void) throws
-        -> SyncJSON
-    {
+    private func mutating(_ body: SyncJSON, _ transform: (inout [String: Any]) -> Void) throws -> SyncJSON {
         var dictionary = body.toSyncPayloadDictionary()
         transform(&dictionary)
         return try SyncJSON(dictionary: dictionary)
@@ -852,9 +850,7 @@ final class OfflinePushTests: XCTestCase {
         from templateID: String,
         newID: String,
         in syncContainer: SyncContainer
-    ) throws
-        -> SyncJSON
-    {
+    ) throws -> SyncJSON {
         let template = try XCTUnwrap(fetchTask(id: templateID, in: syncContainer.mainContext))
         var dictionary = syncContainer.export(template)
         dictionary["id"] = newID

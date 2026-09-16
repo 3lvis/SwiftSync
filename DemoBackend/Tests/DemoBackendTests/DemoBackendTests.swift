@@ -426,7 +426,8 @@ final class DemoBackendTests: XCTestCase {
                 &database,
                 SQLITE_OPEN_READONLY,
                 nil
-            ), SQLITE_OK)
+            ),
+            SQLITE_OK)
         defer { sqlite3_close(database) }
 
         var statement: OpaquePointer?
@@ -499,7 +500,8 @@ final class DemoBackendTests: XCTestCase {
                 &database,
                 SQLITE_OPEN_READONLY,
                 nil
-            ), SQLITE_OK)
+            ),
+            SQLITE_OK)
         defer { sqlite3_close(database) }
 
         var statement: OpaquePointer?

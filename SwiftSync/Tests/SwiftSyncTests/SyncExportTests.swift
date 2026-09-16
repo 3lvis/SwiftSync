@@ -765,9 +765,7 @@ final class ExportTests: XCTestCase {
     }
 
     @MainActor
-    private func fetchSingle<Model: PersistentModel>(_ modelType: Model.Type, from context: ModelContext) throws
-        -> Model
-    {
+    private func fetchSingle<Model: PersistentModel>(_ modelType: Model.Type, from context: ModelContext) throws -> Model {
         let rows = try context.fetch(FetchDescriptor<Model>())
         XCTAssertEqual(rows.count, 1)
         return try XCTUnwrap(rows.first)

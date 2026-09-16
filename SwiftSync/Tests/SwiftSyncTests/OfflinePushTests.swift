@@ -194,7 +194,8 @@ final class OfflinePushTests: XCTestCase {
         var afterPassCalls = 0
         do {
             _ = try await SwiftSync.drainPendingChanges(
-                for: PushNote.self, in: context,
+                for: PushNote.self,
+                in: context,
                 process: { _ in
                     passes += 1
                     if passes == 1 {

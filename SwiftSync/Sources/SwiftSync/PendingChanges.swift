@@ -175,9 +175,7 @@ extension SwiftSync {
         return try row.apply(payload)
     }
 
-    private static func localTransactions(since token: DefaultHistoryToken?, in context: ModelContext) throws
-        -> [DefaultHistoryTransaction]
-    {
+    private static func localTransactions(since token: DefaultHistoryToken?, in context: ModelContext) throws -> [DefaultHistoryTransaction] {
         // A local write leaves `author` nil; in predicate/SQL semantics `nil != "inbound"` is NULL
         // (not true), which would wrongly exclude local changes. Match "nil OR not inbound" explicitly.
         let inbound = inboundAuthor
@@ -307,9 +305,7 @@ extension SwiftSync {
         }
     }
 
-    private static func lastPushedHistoryToken(for model: any PersistentModel.Type, in context: ModelContext)
-        -> DefaultHistoryToken?
-    {
+    private static func lastPushedHistoryToken(for model: any PersistentModel.Type, in context: ModelContext) -> DefaultHistoryToken? {
         let typeName = String(reflecting: model)
         var descriptor = FetchDescriptor<PushHistoryTokenRecord>(predicate: #Predicate { $0.modelTypeName == typeName })
         descriptor.fetchLimit = 1
@@ -321,9 +317,7 @@ extension SwiftSync {
         _ token: DefaultHistoryToken,
         for model: any PersistentModel.Type,
         in context: ModelContext
-    )
-        throws
-    {
+    ) throws {
         let typeName = String(reflecting: model)
         guard let data = try? JSONEncoder().encode(token) else { return }
         var descriptor = FetchDescriptor<PushHistoryTokenRecord>(predicate: #Predicate { $0.modelTypeName == typeName })

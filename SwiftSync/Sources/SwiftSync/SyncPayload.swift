@@ -42,6 +42,8 @@ public struct SyncPayload {
         }
         if T.self == Date.self, contains(key) {
             // Date parsing is best-effort; invalid values fall back to epoch for required fields.
+            // Guarded by the T.self == Date.self test this branch is under.
+            // oida:disable:next force_cast
             return Date(timeIntervalSince1970: 0) as! T
         }
         if isExplicitNull(for: key), let fallback: T = defaultValueForNull(as: type) {

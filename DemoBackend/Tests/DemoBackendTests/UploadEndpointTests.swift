@@ -204,9 +204,7 @@ final class UploadEndpointTests: XCTestCase {
         id: String,
         title: String,
         updatedAt: String = "2026-06-16T20:00:00.000Z"
-    )
-        -> [String: Any]
-    {
+    ) -> [String: Any] {
         [
             "operation": "upsert", "type": "tasks", "id": id, "updatedAt": updatedAt,
             "data": [

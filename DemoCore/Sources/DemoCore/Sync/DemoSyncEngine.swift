@@ -202,9 +202,7 @@ public final class DemoSyncEngine {
         taskID: String,
         reviewerIDs: [String]? = nil,
         watcherIDs: [String]? = nil
-    )
-        throws
-    {
+    ) throws {
         guard let task = try task(withID: taskID) else { return }
         if let reviewerIDs { task.reviewers = try users(for: reviewerIDs) }
         if let watcherIDs { task.watchers = try users(for: watcherIDs) }
