@@ -237,7 +237,16 @@ public final class DemoSyncEngine {
                 for: Task.self,
                 in: self.syncContainer.mainContext,
                 process: { pending in try await self.upload(pending) },
-                afterPass: { failures in try self.annotateFailures(failures) }
+                afterPass: { failures in
+                    let reasonsByID = Dictionary(failures.map { ($0.id, $0.error.localizedDescription) }, uniquingKeysWith: { first, _ in first })
+                    for task in self.failedTasks() where reasonsByID[task.id] == nil {
+                        task.syncFailureReason = nil
+                    }
+                    for (id, reason) in reasonsByID {
+                        if let task = try self.task(withID: id) { task.syncFailureReason = reason }
+                    }
+                    try self.syncContainer.mainContext.save()
+                }
             )
         }
         activeDrain = task
@@ -338,17 +347,6 @@ public final class DemoSyncEngine {
 
     /// Stamp `syncFailureReason` on each rejected row and clear it from any row that no longer fails.
     /// SwiftSync persists nothing — the failures inbox is entirely this app's concern.
-    private func annotateFailures(_ failures: [SyncPendingChangesFailure]) throws {
-        let reasonsByID = Dictionary(failures.map { ($0.id, $0.error.localizedDescription) }, uniquingKeysWith: { first, _ in first })
-        for task in failedTasks() where reasonsByID[task.id] == nil {
-            task.syncFailureReason = nil
-        }
-        for (id, reason) in reasonsByID {
-            if let task = try task(withID: id) { task.syncFailureReason = reason }
-        }
-        try syncContainer.mainContext.save()
-    }
-
     public func failedTasks() -> [Task] {
         (try? syncContainer.mainContext.fetch(FetchDescriptor<Task>(predicate: #Predicate { $0.syncFailureReason != nil }, sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]))) ?? []
     }
@@ -412,11 +410,6 @@ public final class DemoSyncEngine {
             try await syncUsersData()
         }
 
-        try await syncTaskDetailItem(payload)
-        try await syncItemsIfPresent(in: payload, taskID: taskID)
-    }
-
-    private func syncTaskDetailItem(_ payload: SyncJSON) async throws {
         guard let projectID = payload.string("project_id"), !projectID.isEmpty else {
             throw SyncTaskDetailError.missingProjectID
         }
@@ -424,6 +417,16 @@ public final class DemoSyncEngine {
             throw SyncTaskDetailError.missingProject(projectID)
         }
         try await syncContainer.sync(item: payload, as: Task.self)
+
+        guard let itemPayload = payload.objectArray("items") else { return }
+        guard let resolvedTask = try task(withID: taskID) else { return }
+        nonisolated(unsafe) let task = resolvedTask
+        try await syncContainer.sync(
+            payload: itemPayload,
+            as: Item.self,
+            parent: task,
+            relationship: \Item.task
+        )
     }
 
     private func syncTaskAfterMutation(taskID: String, projectID: String?) async throws {
@@ -453,18 +456,6 @@ public final class DemoSyncEngine {
 
     private func task(withID taskID: String) throws -> Task? {
         try syncContainer.mainContext.fetch(FetchDescriptor<Task>(predicate: #Predicate { $0.id == taskID })).first
-    }
-
-    private func syncItemsIfPresent(in payload: SyncJSON, taskID: String) async throws {
-        guard let itemPayload = payload.objectArray("items") else { return }
-        guard let resolvedTask = try task(withID: taskID) else { return }
-        nonisolated(unsafe) let task = resolvedTask
-        try await syncContainer.sync(
-            payload: itemPayload,
-            as: Item.self,
-            parent: task,
-            relationship: \Item.task
-        )
     }
 
     private func localUserCount() throws -> Int {

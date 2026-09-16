@@ -91,7 +91,16 @@ extension TaskFormSheet {
                 .disabled(machine.saveState == .submitting)
         }
         ToolbarItem(placement: .topBarTrailing) {
-            Button(action: save) {
+            Button {
+                machine.send(
+                    .save(
+                        mode: mode,
+                        draft: draft,
+                        onSuccess: {
+                            dismiss()
+                        }
+                    ))
+            } label: {
                 saveButtonLabel
             }
             .accessibilityIdentifier("task-form.save")
@@ -152,17 +161,6 @@ extension TaskFormSheet {
         return "Unknown error"
     }
 
-    func save() {
-        machine.send(
-            .save(
-                mode: mode,
-                draft: draft,
-                onSuccess: {
-                    dismiss()
-                }
-            ))
-    }
-
     func itemTitleBinding(for item: Item) -> Binding<String> {
         Binding(
             get: { item.title },
@@ -193,24 +191,6 @@ extension TaskFormSheet {
     fileprivate var availableWatchers: [User] {
         let selectedIDs = Set(draft.watchers.map { $0.id })
         return machine.users.filter { !selectedIDs.contains($0.id) }
-    }
-
-    fileprivate func addReviewer(_ userID: String?) {
-        defer { reviewerToAdd = nil }
-        guard let userID,
-            let user = machine.users.first(where: { $0.id == userID }),
-            !draft.reviewers.contains(where: { $0.id == userID })
-        else { return }
-        draft.reviewers.append(user)
-    }
-
-    fileprivate func addWatcher(_ userID: String?) {
-        defer { watcherToAdd = nil }
-        guard let userID,
-            let user = machine.users.first(where: { $0.id == userID }),
-            !draft.watchers.contains(where: { $0.id == userID })
-        else { return }
-        draft.watchers.append(user)
     }
 
 }
@@ -323,7 +303,16 @@ extension TaskFormSheet {
                 Text("Items")
                 Spacer()
                 Button {
-                    addEmptyItem()
+                    let item = Item(
+                        taskID: draft.id,
+                        title: "",
+                        position: draft.items.count,
+                        createdAt: Date(),
+                        updatedAt: Date(),
+                        task: draft
+                    )
+                    draft.items.append(item)
+                    machine.normalizeItemPositions(in: draft)
                 } label: {
                     Image(systemName: "plus")
                         .font(.body.weight(.semibold))
@@ -332,19 +321,6 @@ extension TaskFormSheet {
                 .accessibilityIdentifier("task-form.items.add")
             }
         }
-    }
-
-    func addEmptyItem() {
-        let item = Item(
-            taskID: draft.id,
-            title: "",
-            position: draft.items.count,
-            createdAt: Date(),
-            updatedAt: Date(),
-            task: draft
-        )
-        draft.items.append(item)
-        machine.normalizeItemPositions(in: draft)
     }
 
     @ViewBuilder
@@ -449,7 +425,12 @@ extension TaskFormSheet {
             )
         }
         .onChange(of: reviewerToAdd) { _, newValue in
-            addReviewer(newValue)
+            defer { reviewerToAdd = nil }
+            guard let newValue,
+                let user = machine.users.first(where: { $0.id == newValue }),
+                !draft.reviewers.contains(where: { $0.id == newValue })
+            else { return }
+            draft.reviewers.append(user)
         }
     }
 
@@ -466,7 +447,12 @@ extension TaskFormSheet {
             )
         }
         .onChange(of: watcherToAdd) { _, newValue in
-            addWatcher(newValue)
+            defer { watcherToAdd = nil }
+            guard let newValue,
+                let user = machine.users.first(where: { $0.id == newValue }),
+                !draft.watchers.contains(where: { $0.id == newValue })
+            else { return }
+            draft.watchers.append(user)
         }
     }
 
@@ -487,7 +473,12 @@ extension TaskFormSheet {
                             .foregroundStyle(.primary)
                         Spacer()
                         Button(role: .destructive) {
-                            remove(user, from: route)
+                            switch route {
+                            case .reviewers:
+                                draft.reviewers.removeAll { $0.id == user.id }
+                            case .watchers:
+                                draft.watchers.removeAll { $0.id == user.id }
+                            }
                         } label: {
                             Image(systemName: "trash")
                         }
@@ -502,15 +493,6 @@ extension TaskFormSheet {
         case .unavailable:
             Text("People unavailable")
                 .foregroundStyle(.secondary)
-        }
-    }
-
-    fileprivate func remove(_ user: User, from route: PeoplePickerRoute) {
-        switch route {
-        case .reviewers:
-            draft.reviewers.removeAll { $0.id == user.id }
-        case .watchers:
-            draft.watchers.removeAll { $0.id == user.id }
         }
     }
 

@@ -232,7 +232,15 @@ extension SwiftSync {
         process: (SyncPendingChanges) async throws -> [SyncPendingChangesFailure]
     ) async throws -> [SyncPendingChangesFailure] where Model.SyncID == String {
         try requireOfflineCapable(Model.self, in: context)
-        try requireOfflinePushBookkeeping(in: context)
+        let bookkeepingModel = String(describing: PushHistoryTokenRecord.self)
+        guard context.container.schema.entities.contains(where: { $0.name == bookkeepingModel }) else {
+            throw SyncError.schemaValidation(
+                reason: """
+                    Offline push needs SwiftSync's bookkeeping model (\(bookkeepingModel)) in the context's \
+                    schema, but it is missing. Build the container with SyncContainer, which registers it \
+                    automatically, so an acknowledged upload is never lost to a failed token write.
+                    """)
+        }
         let token = lastPushedHistoryToken(for: Model.self, in: context)
         let transactions = try localTransactions(since: token, in: context)
         let pending = try pendingChanges(
@@ -293,18 +301,6 @@ extension SwiftSync {
     /// acknowledged. `SyncContainer` registers that model automatically; a caller who builds their own
     /// `ModelContainer` may not. Validate it's in the schema *before* the upload, so an acknowledged
     /// server write is never stranded by a token write that throws afterward.
-    private static func requireOfflinePushBookkeeping(in context: ModelContext) throws {
-        let name = String(describing: PushHistoryTokenRecord.self)
-        guard context.container.schema.entities.contains(where: { $0.name == name }) else {
-            throw SyncError.schemaValidation(
-                reason: """
-                    Offline push needs SwiftSync's bookkeeping model (\(name)) in the context's schema, \
-                    but it is missing. Build the container with SyncContainer, which registers it \
-                    automatically, so an acknowledged upload is never lost to a failed token write.
-                    """)
-        }
-    }
-
     private static func lastPushedHistoryToken(for model: any PersistentModel.Type, in context: ModelContext) -> DefaultHistoryToken? {
         let typeName = String(reflecting: model)
         var descriptor = FetchDescriptor<PushHistoryTokenRecord>(predicate: #Predicate { $0.modelTypeName == typeName })
