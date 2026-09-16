@@ -10,7 +10,7 @@ Define your models once, read from local SwiftData, and let SwiftSync handle the
 - Deterministic diffing for inserts, updates, and deletes
 - Automatic relationship syncing for nested objects and foreign keys
 - Export back into API-ready JSON
-- Offline push (local → server) via SwiftData History — no offline fields, last-writer-wins
+- Offline push (local → server) via SwiftData History — the store's own change journal, last-writer-wins
 - Reactive local reads for SwiftUI and UIKit
 
 ## Quick Start
@@ -269,7 +269,7 @@ Table of contents:
 
 ## One-to-Many w/ child IDs
 
-Use this shape when the parent JSON does not include full child objects and only sends their IDs.
+Use this shape when the parent JSON sends child IDs alone, rather than the full child objects.
 
 ### Model
 
@@ -367,7 +367,7 @@ try await syncContainer.sync(
 )
 ```
 
-The explicit `relationship:` key path tells SwiftSync which parent these rows belong to. It compares changes only inside that parent’s set of rows, not across the whole table.
+The explicit `relationship:` key path tells SwiftSync which parent these rows belong to. It compares changes inside that parent’s set of rows alone, leaving the rest of the table untouched.
 
 ### Read
 
@@ -498,7 +498,7 @@ final class Task {
 
 In that example:
 
-- `title` needs no annotation because the local name already matches the backend key
+- `title` is annotation-free: the local name already matches the backend key
 - `details` maps back to `description`, which avoids overloading a common Swift model property name
 - `state` reads from `state.id`, so your app can work with a flat status identifier
 - `stateLabel` reads from `state.label`, which keeps the display string available without storing a nested type locally
@@ -508,14 +508,14 @@ Use these annotations when you need them:
 - Rely on convention when names already line up
 - Use `@RemoteKey` when the local property name intentionally differs
 - Use deep paths when the backend nests values but your local model should stay flat
-- Use `@PrimaryKey` or `@PrimaryKey(remote:)` when identity is not `id`
-- Use `@NotExport` when a property should not be written back out
+- Use `@PrimaryKey` or `@PrimaryKey(remote:)` when identity lives on some other property
+- Use `@NotExport` to keep a property out of what is written back
 
 See [Property Mapping Contract](docs/project/property-mapping-contract.md) for the complete mapping rules.
 
 ## Sendable Payloads
 
-`sync(payload:)` takes `[String: Any]`, which is fine when you decode and sync on the same actor. But `[String: Any]` is not `Sendable`, so if a payload has to cross an actor boundary — e.g. you decode a response on one actor and `sync` it on another — Swift 6 will flag the hop.
+`sync(payload:)` takes `[String: Any]`, which is fine when you decode and sync on the same actor. But `[String: Any]` lacks `Sendable`, so if a payload has to cross an actor boundary — e.g. you decode a response on one actor and `sync` it on another — Swift 6 will flag the hop.
 
 `SyncJSON` is the carrier for that case: a `Sendable`, structured JSON value that conforms to `SyncPayloadConvertible`, so it feeds `sync` directly. Box your JSON once, carry it across actors, and read it back with keyed accessors:
 
@@ -531,7 +531,7 @@ It preserves `null` (so a sync can clear a field) and the underlying value shape
 
 ## Reactive Reads
 
-SwiftSync is built around local reactive reads. That means your views do not fetch directly from the network and then hold onto that response as UI state. Instead, sync writes backend changes into SwiftData, and the UI reads from SwiftData as its source of truth.
+SwiftSync is built around local reactive reads. That means sync writes backend changes into SwiftData and your views read from SwiftData as their source of truth, so a network response lands in the store rather than in UI state.
 
 The "reactive" part is that those reads stay fresh automatically. When a sync updates the local store, `@SyncQuery` and `@SyncModel` observe the relevant changes, refetch from the local container, and let SwiftUI re-render with current data.
 
@@ -621,7 +621,7 @@ Defaults:
 
 Best practices:
 
-- Export a draft object, not the live screen state from network responses
+- Export a draft object rather than the live screen state from network responses
 - Prefer exporting right before create or update requests so the payload reflects the latest local edits
 - Treat the exported object as a transport body, then re-sync the confirmed backend response into SwiftData
 - Use `@RemoteKey`, `@NotExport`, and container formatting options to keep transport concerns out of your UI code
@@ -632,7 +632,7 @@ See [FAQ](docs/project/faq.md) and [Property Mapping Contract](docs/project/prop
 
 `sync` and `export` cover the pull side: pull server state into SwiftData, and turn a draft into a request body. **Push** is the outbound counterpart for offline-first apps — edit locally while disconnected, then reconcile with the server when you reconnect.
 
-There are **no offline fields and no side table.** SwiftSync reads the store's own change journal — SwiftData History (iOS 18+) — to find what changed locally, so the consumer adds nothing to the model. The one requirement: mark the identity `@Attribute(.preserveValueOnDeletion)` so a deleted row's id survives in history and its deletion can be pushed. That attribute *is* the offline opt-in — its presence switches this model's pull semantics to "honor pending local edits"; a plain `@Syncable` model without it keeps "server is authoritative".
+**The store's own change journal is the whole mechanism.** SwiftSync reads SwiftData History (iOS 18+) to find what changed locally, so your model stays exactly as you wrote it, with the same fields it had and a single table. The one requirement: mark the identity `@Attribute(.preserveValueOnDeletion)` so a deleted row's id survives in history and its deletion can be pushed. That attribute *is* the offline opt-in — its presence switches this model's pull semantics to "honor pending local edits"; a plain `@Syncable` model lacking it keeps "server is authoritative".
 
 ```swift
 @Syncable @Model
@@ -643,11 +643,11 @@ final class Task {
 }
 ```
 
-The identity is the only id: it's client-generated and the backend adopts it, so push is an idempotent **upsert** keyed by that id — there is no separate server id to map home. Make local edits with plain SwiftData (`context.insert` / mutate / `context.delete`); SwiftSync tracks them via history.
+The identity is the only id: it's client-generated and the backend adopts it, so push is an idempotent **upsert** keyed by that id — the id you generated is the one the server keeps. Make local edits with plain SwiftData (`context.insert` / mutate / `context.delete`); SwiftSync tracks them via history.
 
-`pendingChanges` partitions the un-pushed local changes (history authored by you, since SwiftSync's internal per-type history token) into inserts, updates, and deletes. A row inserted *and* deleted before it was ever pushed is dropped (the server never saw it).
+`pendingChanges` partitions the un-pushed local changes (history authored by you, since SwiftSync's internal per-type history token) into inserts, updates, and deletes. A row inserted *and* deleted before it was ever pushed is dropped, since it only ever existed here.
 
-`withPendingChanges` runs one pass inside a scope SwiftSync manages (the `with…` idiom: it sets up the pending changes, your closure does the work, it commits the bookmark on the way out). It hands your closure a `Sendable` `SyncPendingChanges` (so SwiftData objects never cross into a network call — you own the request); the closure does the network work and **returns the failures** (`[SyncPendingChangesFailure]`), which the method returns straight back to you. Everything else is confirmed by complement — the client id *is* the identity the server adopts, so a push is an idempotent upsert with no acknowledgements to echo back. Only when the closure reports **no** failures does it advance its internal history token. It writes no per-row state; a failed (or otherwise un-pushed) change stays pending and is re-detected next call. Surface the returned failures however you like (discard / edit / retry).
+`withPendingChanges` runs one pass inside a scope SwiftSync manages (the `with…` idiom: it sets up the pending changes, your closure does the work, it commits the bookmark on the way out). It hands your closure a `Sendable` `SyncPendingChanges` (so SwiftData objects stay out of the network call — you own the request); the closure does the network work and **returns the failures** (`[SyncPendingChangesFailure]`), which the method returns straight back to you. Everything else is confirmed by complement — the client id *is* the identity the server adopts, so a push is an idempotent upsert the server can answer with a bare acknowledgement. It advances its internal history token only on a clean pass, and keeps per-row state nowhere: a failed or otherwise un-pushed change stays pending and is re-detected next call. Surface the returned failures however you like (discard / edit / retry).
 
 ```swift
 let failures = try await SwiftSync.withPendingChanges(for: Task.self, in: syncContainer.mainContext) { pending in
@@ -658,13 +658,13 @@ let failures = try await SwiftSync.withPendingChanges(for: Task.self, in: syncCo
 // No history token to persist — SwiftSync owns it. `failures` is empty on a fully clean pass.
 ```
 
-`withPendingChanges` is the storage *primitive* — SwiftSync brackets the local-change detection and the history token; **you** own the network call and decide *when* to push. Orchestration (push-before-pull, draining on reconnect, surfacing the failures inbox) is the app's job, not the library's — see the demo's `DemoSyncEngine` and [`docs/project/architecture.md`](docs/project/architecture.md) for the layering.
+`withPendingChanges` is the storage *primitive* — SwiftSync brackets the local-change detection and the history token; **you** own the network call and decide *when* to push. Orchestration (push-before-pull, draining on reconnect, surfacing the failures inbox) belongs to the app rather than the library — see the demo's `DemoSyncEngine` and [`docs/project/architecture.md`](docs/project/architecture.md) for the layering.
 
-Inbound pulls are tagged internally so a freshly-pulled row is never mistaken for a local edit; an un-pushed local insert survives a pull that omits it, and a newer local edit isn't clobbered by an older server version (last-writer-wins). Offline requires a persistent store (history is unavailable to ephemeral stores).
+Inbound pulls are tagged internally so a freshly-pulled row stays distinct from a local edit; an un-pushed local insert survives a pull that omits it, and a newer local edit wins over an older server version (last-writer-wins). Offline requires a persistent store, since history is a property of one.
 
 ## Date Handling
 
-SwiftSync handles common API date formats out of the box, so most apps do not need any date setup to get started.
+SwiftSync handles common API date formats out of the box, so most apps get started on the defaults alone.
 
 On import, it accepts common ISO8601 variants, date-only strings, `YYYY-MM-DD HH:mm:ss`, fractional seconds, and unix timestamps.
 
@@ -683,7 +683,7 @@ Use that when the server expects a specific non-default string format for create
 
 ## Demo App
 
-The demo app shows the full workflow end to end. It is there to show the pieces working together, not to explain every concept in the README.
+The demo app shows the full workflow end to end. It is there to show the pieces working together, leaving the README to explain the concepts.
 
 It includes:
 

@@ -21,9 +21,9 @@ LEARNINGS/2026-09-15-1520-a-warm-build-hides-a-warning.md
 The filename is the whole of the discipline. As many branches write this repository at once as there are
 worktrees open, and a file apiece is what lets them: each branch adds a path the others lack, so a merge
 takes every side whole and the file you wrote arrives byte for byte. Sharing one file costs a conflict per
-pair of open branches, and `merge=union` in `.gitattributes` does not save you — it is read off a **working
-tree**, which a server-side merge lacks, so it clears the conflicts on your machine and none of the ones
-that block a merge button.
+pair of open branches, and `merge=union` in `.gitattributes` applies only where a **working
+tree** exists, which a server-side merge lacks — so it clears the conflicts on your machine while every
+one that blocks a merge button stands.
 
 Inside:
 
