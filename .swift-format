@@ -3,8 +3,5 @@
   "lineLength": 100000,
   "indentation": {
     "spaces": 4
-  },
-  "maximumBlankLines": 1,
-  "respectsExistingLineBreaks": true,
-  "lineBreakBeforeEachArgument": false
+  }
 }
