@@ -14,6 +14,6 @@ extension Array where Element: Hashable {
 
 extension Sequence where Element: PersistentModel {
     var syncModelIDSet: Set<PersistentIdentifier> {
-        Set(map(\.persistentModelID))
+        Set(map { $0.persistentModelID })
     }
 }

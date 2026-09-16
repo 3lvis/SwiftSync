@@ -1,7 +1,7 @@
 import Observation
 import SwiftData
-import SwiftSync
 import XCTest
+import SwiftSync
 
 @testable import DemoCore
 
@@ -22,11 +22,8 @@ final class TaskFormPeopleMutationTests: XCTestCase {
         try await engine.syncTaskFormMetadata()
 
         let originalTask = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
-        XCTAssertEqual(originalTask.reviewers.map(\.id).sorted(), [DemoSeedData.SeedIDs.Users.noahKim])
-        XCTAssertEqual(
-            originalTask.watchers.map(\.id).sorted(),
-            [DemoSeedData.SeedIDs.Users.ethanLee, DemoSeedData.SeedIDs.Users.liamBrown].sorted()
-        )
+        XCTAssertEqual(originalTask.reviewers.map { $0.id }.sorted(), [DemoSeedData.SeedIDs.Users.noahKim])
+        XCTAssertEqual(originalTask.watchers.map { $0.id }.sorted(), [DemoSeedData.SeedIDs.Users.ethanLee, DemoSeedData.SeedIDs.Users.liamBrown].sorted())
 
         let editContext = ModelContext(syncContainer.modelContainer)
         editContext.autosaveEnabled = false
@@ -53,19 +50,18 @@ final class TaskFormPeopleMutationTests: XCTestCase {
         let saved = expectation(description: "save callback")
         machine.send(
             .save(
-                mode: .edit(task: originalTask), draft: draft,
+                mode: .edit(task: originalTask),
+                draft: draft,
                 onSuccess: {
                     saved.fulfill()
-                }))
+                }
+            ))
         await fulfillment(of: [saved], timeout: 10)
 
         let updatedTask = try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext))
         XCTAssertEqual(updatedTask.assigneeID, DemoSeedData.SeedIDs.Users.miaPatel)
-        XCTAssertEqual(updatedTask.reviewers.map(\.id).sorted(), [DemoSeedData.SeedIDs.Users.sofiaGarcia])
-        XCTAssertEqual(
-            updatedTask.watchers.map(\.id).sorted(),
-            [DemoSeedData.SeedIDs.Users.liamBrown, DemoSeedData.SeedIDs.Users.sofiaGarcia].sorted()
-        )
+        XCTAssertEqual(updatedTask.reviewers.map { $0.id }.sorted(), [DemoSeedData.SeedIDs.Users.sofiaGarcia])
+        XCTAssertEqual(updatedTask.watchers.map { $0.id }.sorted(), [DemoSeedData.SeedIDs.Users.liamBrown, DemoSeedData.SeedIDs.Users.sofiaGarcia].sorted())
     }
 
     @MainActor
@@ -86,16 +82,16 @@ final class TaskFormPeopleMutationTests: XCTestCase {
         detailMachine.send(.onAppear)
         try await waitUntil {
             detailMachine.task?.id == taskID
-                && detailMachine.task?.reviewers.map(\.id).sorted() == [DemoSeedData.SeedIDs.Users.noahKim]
-                && detailMachine.task?.watchers.map(\.id).sorted()
+                && detailMachine.task?.reviewers.map { $0.id }.sorted() == [DemoSeedData.SeedIDs.Users.noahKim]
+                && detailMachine.task?.watchers.map { $0.id }.sorted()
                     == [DemoSeedData.SeedIDs.Users.ethanLee, DemoSeedData.SeedIDs.Users.liamBrown].sorted()
         }
 
         let spy = ObservationSpy {
             (
                 detailMachine.task?.assignee?.displayName,
-                detailMachine.task?.reviewers.map(\.id).sorted() ?? [],
-                detailMachine.task?.watchers.map(\.id).sorted() ?? []
+                detailMachine.task?.reviewers.map { $0.id }.sorted() ?? [],
+                detailMachine.task?.watchers.map { $0.id }.sorted() ?? []
             )
         }
 
@@ -124,16 +120,18 @@ final class TaskFormPeopleMutationTests: XCTestCase {
         let saved = expectation(description: "save callback")
         formMachine.send(
             .save(
-                mode: .edit(task: originalTask), draft: draft,
+                mode: .edit(task: originalTask),
+                draft: draft,
                 onSuccess: {
                     saved.fulfill()
-                }))
+                }
+            ))
         await fulfillment(of: [saved], timeout: 10)
 
         try await waitUntil {
             detailMachine.task?.assignee?.displayName == "Mia Patel"
-                && detailMachine.task?.reviewers.map(\.id).sorted() == [DemoSeedData.SeedIDs.Users.sofiaGarcia]
-                && detailMachine.task?.watchers.map(\.id).sorted()
+                && detailMachine.task?.reviewers.map { $0.id }.sorted() == [DemoSeedData.SeedIDs.Users.sofiaGarcia]
+                && detailMachine.task?.watchers.map { $0.id }.sorted()
                     == [DemoSeedData.SeedIDs.Users.liamBrown, DemoSeedData.SeedIDs.Users.sofiaGarcia].sorted()
         }
 
@@ -171,14 +169,19 @@ final class TaskFormPeopleMutationTests: XCTestCase {
         let draft = try XCTUnwrap(fetchTask(id: taskID, in: editContext))
         draft.title = "Edited but cancelled"
         // Cancel-create: insert a brand-new draft in the editContext, never save.
-        editContext.insert(Task(id: "CANCELLED-CREATE-1", projectID: projectID, title: "New but cancelled"))
+        editContext.insert(
+            Task(
+                id: "CANCELLED-CREATE-1",
+                projectID: projectID,
+                title: "New but cancelled"
+            ))
 
         XCTAssertEqual(
-            try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext)).title, originalTitle,
-            "an unsaved edit must not reach the store (cancel-edit discards)")
-        XCTAssertNil(
-            try fetchTask(id: "CANCELLED-CREATE-1", in: syncContainer.mainContext),
-            "an unsaved new draft must not reach the store (cancel-create discards)")
+            try XCTUnwrap(fetchTask(id: taskID, in: syncContainer.mainContext)).title,
+            originalTitle,
+            "an unsaved edit must not reach the store (cancel-edit discards)"
+        )
+        XCTAssertNil(try fetchTask(id: "CANCELLED-CREATE-1", in: syncContainer.mainContext), "an unsaved new draft must not reach the store (cancel-create discards)")
     }
 
     @MainActor

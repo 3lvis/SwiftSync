@@ -1,7 +1,7 @@
-import DemoCore
 import SwiftData
-import SwiftSync
 import SwiftUI
+import DemoCore
+import SwiftSync
 
 struct TaskFormSheet: View {
     let mode: TaskFormMode
@@ -28,9 +28,7 @@ struct TaskFormSheet: View {
         let ctx = ModelContext(syncEngine.syncContainer.modelContainer)
         ctx.autosaveEnabled = false
         self.editContext = ctx
-        _machine = State(
-            initialValue: TaskFormSheetMachine(syncEngine: syncEngine, editContext: ctx)
-        )
+        _machine = State(initialValue: TaskFormSheetMachine(syncEngine: syncEngine, editContext: ctx))
 
         switch mode {
         case .create(let projectID):
@@ -61,10 +59,7 @@ struct TaskFormSheet: View {
         .task(loadMetadata)
         .task(id: defaultsTaskID, applyDefaults)
         .animation(.snappy(duration: 0.2), value: itemIDs)
-        .taskFormPresentations(
-            saveFailureIsPresented: saveFailureIsPresented,
-            saveFailureMessage: saveFailureMessage
-        )
+        .taskFormPresentations(saveFailureIsPresented: saveFailureIsPresented, saveFailureMessage: saveFailureMessage)
         .presentationDetents([.large])
     }
 }
@@ -81,11 +76,11 @@ extension TaskFormSheet {
     }
 
     private var defaultsTaskID: String {
-        "\(machine.taskStateOptions.map(\.id).joined(separator: ","))|\(machine.users.map(\.id).joined(separator: ","))"
+        "\(machine.taskStateOptions.map { $0.id }.joined(separator: ","))|\(machine.users.map { $0.id }.joined(separator: ","))"
     }
 
     private var itemIDs: [String] {
-        machine.sortedItems(in: draft).map(\.id)
+        machine.sortedItems(in: draft).map { $0.id }
     }
 
     @ToolbarContentBuilder
@@ -119,9 +114,7 @@ extension TaskFormSheet {
     }
 
     var isSaveDisabled: Bool {
-        guard machine.saveState != .submitting,
-            !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else { return true }
+        guard machine.saveState != .submitting, !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return true }
         if case .create = mode {
             return draft.state.isEmpty || draft.authorID.isEmpty
         }
@@ -162,10 +155,12 @@ extension TaskFormSheet {
     func save() {
         machine.send(
             .save(
-                mode: mode, draft: draft,
+                mode: mode,
+                draft: draft,
                 onSuccess: {
                     dismiss()
-                }))
+                }
+            ))
     }
 
     func loadMetadata() {
@@ -199,12 +194,12 @@ extension TaskFormSheet {
     }
 
     fileprivate var availableReviewers: [User] {
-        let selectedIDs = Set(draft.reviewers.map(\.id))
+        let selectedIDs = Set(draft.reviewers.map { $0.id })
         return machine.users.filter { !selectedIDs.contains($0.id) }
     }
 
     fileprivate var availableWatchers: [User] {
-        let selectedIDs = Set(draft.watchers.map(\.id))
+        let selectedIDs = Set(draft.watchers.map { $0.id })
         return machine.users.filter { !selectedIDs.contains($0.id) }
     }
 
@@ -229,10 +224,7 @@ extension TaskFormSheet {
 }
 
 extension View {
-    fileprivate func taskFormPresentations(
-        saveFailureIsPresented: Binding<Bool>,
-        saveFailureMessage: String
-    ) -> some View {
+    fileprivate func taskFormPresentations(saveFailureIsPresented: Binding<Bool>, saveFailureMessage: String) -> some View {
         self.alert("Save Failed", isPresented: saveFailureIsPresented) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -246,10 +238,14 @@ extension TaskFormSheet {
         Section {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .center, spacing: 8) {
-                    TextField("Task title", text: $draft.title, axis: .vertical)
-                        .lineLimit(2...4)
-                        .font(.title3.weight(.semibold))
-                        .accessibilityIdentifier("task-form.title")
+                    TextField(
+                        "Task title",
+                        text: $draft.title,
+                        axis: .vertical
+                    )
+                    .lineLimit(2...4)
+                    .font(.title3.weight(.semibold))
+                    .accessibilityIdentifier("task-form.title")
                     requiredPill
                 }
 
@@ -283,9 +279,13 @@ extension TaskFormSheet {
 
     var descriptionSection: some View {
         Section("Description") {
-            TextField("Why this task matters", text: descriptionBinding(), axis: .vertical)
-                .lineLimit(3...6)
-                .accessibilityIdentifier("task-form.description")
+            TextField(
+                "Why this task matters",
+                text: descriptionBinding(),
+                axis: .vertical
+            )
+            .lineLimit(3...6)
+            .accessibilityIdentifier("task-form.description")
         }
     }
 
@@ -449,7 +449,12 @@ extension TaskFormSheet {
         Section {
             peopleRows(for: .reviewers, users: draft.reviewers)
         } header: {
-            peopleSectionHeader(title: "Reviewers", selection: $reviewerToAdd, users: availableReviewers, accessibilityPrefix: "reviewers")
+            peopleSectionHeader(
+                title: "Reviewers",
+                selection: $reviewerToAdd,
+                users: availableReviewers,
+                accessibilityPrefix: "reviewers"
+            )
         }
         .onChange(of: reviewerToAdd) { _, newValue in
             addReviewer(newValue)
@@ -461,7 +466,12 @@ extension TaskFormSheet {
         Section {
             peopleRows(for: .watchers, users: draft.watchers)
         } header: {
-            peopleSectionHeader(title: "Watchers", selection: $watcherToAdd, users: availableWatchers, accessibilityPrefix: "watchers")
+            peopleSectionHeader(
+                title: "Watchers",
+                selection: $watcherToAdd,
+                users: availableWatchers,
+                accessibilityPrefix: "watchers"
+            )
         }
         .onChange(of: watcherToAdd) { _, newValue in
             addWatcher(newValue)

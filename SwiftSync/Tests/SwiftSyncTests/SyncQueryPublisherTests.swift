@@ -1,6 +1,6 @@
 import SwiftData
-import SwiftSync
 import XCTest
+import SwiftSync
 
 @Syncable
 @Model
@@ -10,7 +10,12 @@ final class PubTask {
     var assigneeID: String?
     var assignee: PubUser?
 
-    init(id: String, title: String, assigneeID: String? = nil, assignee: PubUser? = nil) {
+    init(
+        id: String,
+        title: String,
+        assigneeID: String? = nil,
+        assignee: PubUser? = nil
+    ) {
         self.id = id
         self.title = title
         self.assigneeID = assigneeID
@@ -66,7 +71,7 @@ final class SyncQueryPublisherTests: XCTestCase {
             sortBy: [SortDescriptor(\PubTask.title)]
         )
 
-        XCTAssertEqual(publisher.rows.map(\.id), ["t1", "t2"])
+        XCTAssertEqual(publisher.rows.map { $0.id }, ["t1", "t2"])
     }
 
     @MainActor
@@ -81,24 +86,18 @@ final class SyncQueryPublisherTests: XCTestCase {
 
         XCTAssertEqual(publisher.rows.count, 0)
 
-        try await syncContainer.sync(
-            payload: [["id": "t1", "title": "Alpha", "assignee_id": NSNull()]],
-            as: PubTask.self
-        )
+        try await syncContainer.sync(payload: [["id": "t1", "title": "Alpha", "assignee_id": NSNull()]], as: PubTask.self)
 
         await Task.yield()
 
-        XCTAssertEqual(publisher.rows.map(\.id), ["t1"])
+        XCTAssertEqual(publisher.rows.map { $0.id }, ["t1"])
     }
 
     @MainActor
     func testPublisherReloadsAfterUpdate() async throws {
         let syncContainer = try makeContainer(modelTypes: PubTask.self, PubUser.self)
 
-        try await syncContainer.sync(
-            payload: [["id": "t1", "title": "Old Title", "assignee_id": NSNull()]],
-            as: PubTask.self
-        )
+        try await syncContainer.sync(payload: [["id": "t1", "title": "Old Title", "assignee_id": NSNull()]], as: PubTask.self)
 
         let publisher = SyncQueryPublisher(
             PubTask.self,
@@ -108,10 +107,7 @@ final class SyncQueryPublisherTests: XCTestCase {
 
         XCTAssertEqual(publisher.rows.first?.title, "Old Title")
 
-        try await syncContainer.sync(
-            payload: [["id": "t1", "title": "New Title", "assignee_id": NSNull()]],
-            as: PubTask.self
-        )
+        try await syncContainer.sync(payload: [["id": "t1", "title": "New Title", "assignee_id": NSNull()]], as: PubTask.self)
 
         await Task.yield()
 
@@ -141,17 +137,18 @@ final class SyncQueryPublisherTests: XCTestCase {
 
         await Task.yield()
 
-        XCTAssertEqual(publisher.rows.map(\.id).sorted(), ["t1", "t3"])
+        XCTAssertEqual(publisher.rows.map { $0.id }.sorted(), ["t1", "t3"])
     }
 
     @MainActor
     func testPublisherDoesNotReloadForUnrelatedTypeChange() async throws {
-        let syncContainer = try makeContainer(modelTypes: PubTask.self, PubUser.self, PubUnrelatedTag.self)
-
-        try await syncContainer.sync(
-            payload: [["id": "t1", "title": "Alpha", "assignee_id": NSNull()]],
-            as: PubTask.self
+        let syncContainer = try makeContainer(
+            modelTypes: PubTask.self,
+            PubUser.self,
+            PubUnrelatedTag.self
         )
+
+        try await syncContainer.sync(payload: [["id": "t1", "title": "Alpha", "assignee_id": NSNull()]], as: PubTask.self)
 
         let publisher = SyncQueryPublisher(
             PubTask.self,
@@ -159,16 +156,13 @@ final class SyncQueryPublisherTests: XCTestCase {
             sortBy: [SortDescriptor(\PubTask.title)]
         )
 
-        let originalRows = publisher.rows.map(\.id)
+        let originalRows = publisher.rows.map { $0.id }
 
-        try await syncContainer.sync(
-            payload: [["id": "tag1", "name": "swift"]],
-            as: PubUnrelatedTag.self
-        )
+        try await syncContainer.sync(payload: [["id": "tag1", "name": "swift"]], as: PubUnrelatedTag.self)
 
         await Task.yield()
 
-        XCTAssertEqual(publisher.rows.map(\.id), originalRows)
+        XCTAssertEqual(publisher.rows.map { $0.id }, originalRows)
     }
 
     @MainActor
@@ -202,7 +196,7 @@ final class SyncQueryPublisherTests: XCTestCase {
 
         await Task.yield()
 
-        XCTAssertEqual(publisher.rows.map(\.id).sorted(), ["t1", "t2"])
+        XCTAssertEqual(publisher.rows.map { $0.id }.sorted(), ["t1", "t2"])
     }
 
     @MainActor
@@ -212,8 +206,18 @@ final class SyncQueryPublisherTests: XCTestCase {
 
         let userA = RoleUser(id: 1, name: "A")
         let userB = RoleUser(id: 2, name: "B")
-        let ticketA = RoleTicket(id: 10, title: "T-10", assignee: userA, reviewer: userB)
-        let ticketB = RoleTicket(id: 11, title: "T-11", assignee: userB, reviewer: userA)
+        let ticketA = RoleTicket(
+            id: 10,
+            title: "T-10",
+            assignee: userA,
+            reviewer: userB
+        )
+        let ticketB = RoleTicket(
+            id: 11,
+            title: "T-11",
+            assignee: userB,
+            reviewer: userA
+        )
 
         context.insert(userA)
         context.insert(userB)
@@ -231,21 +235,15 @@ final class SyncQueryPublisherTests: XCTestCase {
 
         await Task.yield()
 
-        XCTAssertEqual(publisher.rows.map(\.id), [1])
+        XCTAssertEqual(publisher.rows.map { $0.id }, [1])
     }
 
     @MainActor
     func testPublisherReloadsWhenLoadedRowIDAppears() async throws {
         let syncContainer = try makeContainer(modelTypes: PubTask.self, PubUser.self)
 
-        try await syncContainer.sync(
-            payload: [["id": "u1", "display_name": "Alice", "role": ["id": "eng", "label": "Engineer"]]],
-            as: PubUser.self
-        )
-        try await syncContainer.sync(
-            payload: [["id": "t1", "title": "Original", "assignee_id": "u1"]],
-            as: PubTask.self
-        )
+        try await syncContainer.sync(payload: [["id": "u1", "display_name": "Alice", "role": ["id": "eng", "label": "Engineer"]]], as: PubUser.self)
+        try await syncContainer.sync(payload: [["id": "t1", "title": "Original", "assignee_id": "u1"]], as: PubTask.self)
 
         let publisher = SyncQueryPublisher(
             PubTask.self,
@@ -258,10 +256,7 @@ final class SyncQueryPublisherTests: XCTestCase {
         await Task.yield()
         XCTAssertEqual(publisher.rows.first?.title, "Original")
 
-        try await syncContainer.sync(
-            payload: [["id": "t1", "title": "Updated", "assignee_id": "u1"]],
-            as: PubTask.self
-        )
+        try await syncContainer.sync(payload: [["id": "t1", "title": "Updated", "assignee_id": "u1"]], as: PubTask.self)
 
         await Task.yield()
 
@@ -280,12 +275,9 @@ final class SyncQueryPublisherTests: XCTestCase {
 
         XCTAssertTrue(publisher.rows.isEmpty)
 
-        try await syncContainer.sync(
-            payload: [["id": "t1", "title": "Alpha", "assignee_id": NSNull()]],
-            as: PubTask.self
-        )
+        try await syncContainer.sync(payload: [["id": "t1", "title": "Alpha", "assignee_id": NSNull()]], as: PubTask.self)
         await Task.yield()
-        XCTAssertEqual(publisher.rows.map(\.id), ["t1"])
+        XCTAssertEqual(publisher.rows.map { $0.id }, ["t1"])
     }
 
     @MainActor
@@ -299,10 +291,7 @@ final class SyncQueryPublisherTests: XCTestCase {
             ],
             as: PubUser.self
         )
-        try await syncContainer.sync(
-            payload: [["id": "t1", "title": "Original", "assignee_id": NSNull()]],
-            as: PubTask.self
-        )
+        try await syncContainer.sync(payload: [["id": "t1", "title": "Original", "assignee_id": NSNull()]], as: PubTask.self)
 
         let publisher = SyncModelPublisher(
             PubTask.self,
@@ -314,12 +303,8 @@ final class SyncQueryPublisherTests: XCTestCase {
         XCTAssertNil(publisher.row?.assigneeID)
 
         let backgroundContext = ModelContext(syncContainer.modelContainer)
-        let backgroundTask = try XCTUnwrap(
-            backgroundContext.fetch(FetchDescriptor<PubTask>(predicate: #Predicate { $0.id == "t1" })).first
-        )
-        let backgroundAssignee = try XCTUnwrap(
-            backgroundContext.fetch(FetchDescriptor<PubUser>(predicate: #Predicate { $0.id == "u2" })).first
-        )
+        let backgroundTask = try XCTUnwrap(backgroundContext.fetch(FetchDescriptor<PubTask>(predicate: #Predicate { $0.id == "t1" })).first)
+        let backgroundAssignee = try XCTUnwrap(backgroundContext.fetch(FetchDescriptor<PubUser>(predicate: #Predicate { $0.id == "u2" })).first)
         backgroundTask.assigneeID = backgroundAssignee.id
         backgroundTask.assignee = backgroundAssignee
         try backgroundContext.save()
@@ -356,8 +341,7 @@ final class SyncQueryPublisherTests: XCTestCase {
         try container.mainContext.save()
 
         // Stands in for a live query/view holding the registered main-context instance.
-        let row = try XCTUnwrap(
-            container.mainContext.fetch(FetchDescriptor<PubTask>()).first { $0.id == "t1" })
+        let row = try XCTUnwrap(container.mainContext.fetch(FetchDescriptor<PubTask>()).first { $0.id == "t1" })
 
         // Single-object sync applies on the main context, so the edit lands in place — no merge to await.
         try await container.sync(item: ["id": "t1", "title": "Edited"], as: PubTask.self)

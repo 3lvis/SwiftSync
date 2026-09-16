@@ -1,5 +1,5 @@
-import DemoBackend
 import Foundation
+import DemoBackend
 import SwiftSync
 
 public typealias DemoSeedData = DemoBackend.DemoSeedData

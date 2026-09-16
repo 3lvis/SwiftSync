@@ -1,6 +1,6 @@
+import UIKit
 import DemoCore
 import SwiftSync
-import UIKit
 
 final class ProjectsViewController: UITableViewController {
 
@@ -66,7 +66,7 @@ final class ProjectsViewController: UITableViewController {
             guard let self else { return }
             var snapshot = NSDiffableDataSourceSnapshot<String, String>()
             snapshot.appendSections(["projects"])
-            snapshot.appendItems(machine.rows.map(\.id), toSection: "projects")
+            snapshot.appendItems(machine.rows.map { $0.id }, toSection: "projects")
             diffableDataSource.apply(snapshot, animatingDifferences: true)
         }
         SwiftSync.observeContinuously { [weak self] in

@@ -27,10 +27,7 @@ public struct ErrorPresentationState: Equatable {
     }
 }
 
-public func presentError(
-    _ error: Error,
-    fallbackMessage: String = "Something went wrong. Please try again."
-) -> ErrorPresentationState {
+public func presentError(_ error: Error, fallbackMessage: String = "Something went wrong. Please try again.") -> ErrorPresentationState {
     let localized = (error as? LocalizedError)?.errorDescription
     let trimmed = localized?.trimmingCharacters(in: .whitespacesAndNewlines)
     let message = (trimmed?.isEmpty == false ? trimmed : nil) ?? fallbackMessage
@@ -80,12 +77,20 @@ public final class ScreenLoadMachine {
     }
 
     public func send(_ event: ScreenLoadEvent) {
-        let next = ScreenLoadReducer.reduce(state: state, event: event, presentFailure: presentFailure)
+        let next = ScreenLoadReducer.reduce(
+            state: state,
+            event: event,
+            presentFailure: presentFailure
+        )
         state = next.0
     }
 
     public func send(_ event: ScreenLoadEvent, run operation: @escaping @MainActor () async throws -> Void) {
-        let next = ScreenLoadReducer.reduce(state: state, event: event, presentFailure: presentFailure)
+        let next = ScreenLoadReducer.reduce(
+            state: state,
+            event: event,
+            presentFailure: presentFailure
+        )
         state = next.0
         guard next.1 == .load else { return }
 

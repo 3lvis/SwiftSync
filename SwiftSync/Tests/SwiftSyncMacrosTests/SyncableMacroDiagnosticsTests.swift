@@ -1,6 +1,6 @@
+import XCTest
 import SwiftSyntaxMacros
 import SwiftSyntaxMacrosTestSupport
-import XCTest
 
 @testable import MacrosImplementation
 

@@ -52,8 +52,16 @@ final class DemoUITests: XCTestCase {
 
         openEditTaskForm(app)
 
-        replaceText(in: app.textFields["task-form.title"], with: updatedTitle, app: app)
-        replaceText(in: app.textFields["task-form.description"], with: "   ", app: app)
+        replaceText(
+            in: app.textFields["task-form.title"],
+            with: updatedTitle,
+            app: app
+        )
+        replaceText(
+            in: app.textFields["task-form.description"],
+            with: "   ",
+            app: app
+        )
         app.buttons["task-form.save"].tap()
 
         XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 3))
@@ -74,8 +82,7 @@ final class DemoUITests: XCTestCase {
 
         // Opening online first warms reference data (users + task states) into the cache.
         openProject(app, id: DemoSeedProjectID.accountSecurity)
-        XCTAssertTrue(
-            app.staticTexts["Add session timeout controls to account settings"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.staticTexts["Add session timeout controls to account settings"].waitForExistence(timeout: 2))
         goBack(app)
 
         let toggle = app.buttons["offline-toggle"]
@@ -87,7 +94,11 @@ final class DemoUITests: XCTestCase {
         openProject(app, id: DemoSeedProjectID.accountSecurity)
         openCreateTaskForm(app)
         let title = uniqueTitle(prefix: "Offline Created")
-        replaceText(in: app.textFields["task-form.title"], with: title, app: app)
+        replaceText(
+            in: app.textFields["task-form.title"],
+            with: title,
+            app: app
+        )
         XCTAssertTrue(app.buttons["task-form.save"].isEnabled, "offline create works with cached reference data")
         app.buttons["task-form.save"].tap()
         XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 3))
@@ -98,9 +109,7 @@ final class DemoUITests: XCTestCase {
 
         // Reconnecting auto-syncs the queue — no button tap.
         app.buttons["offline-toggle"].tap()
-        XCTAssertTrue(
-            app.staticTexts["pending-count"].waitForNonExistence(timeout: 5),
-            "reconnecting auto-syncs the queue")
+        XCTAssertTrue(app.staticTexts["pending-count"].waitForNonExistence(timeout: 5), "reconnecting auto-syncs the queue")
 
         openProject(app, id: DemoSeedProjectID.accountSecurity)
         XCTAssertTrue(findAfterScrolling(app.staticTexts[title], in: app))
@@ -114,19 +123,25 @@ final class DemoUITests: XCTestCase {
         let app = configuredApp()
         app.launch()
         openTaskDetail(
-            app, projectID: DemoSeedProjectID.accountSecurity, taskID: DemoSeedTaskID.sessionTimeout)
+            app,
+            projectID: DemoSeedProjectID.accountSecurity,
+            taskID: DemoSeedTaskID.sessionTimeout
+        )
 
         // Rename to a title the server will reject (too long) so the offline push fails on sync.
         app.buttons["offline-toggle"].tap()
         openEditTaskForm(app)
-        replaceText(in: app.textFields["task-form.title"], with: String(repeating: "A", count: 100), app: app)
+        replaceText(
+            in: app.textFields["task-form.title"],
+            with: String(repeating: "A", count: 100),
+            app: app
+        )
         app.buttons["task-form.save"].tap()
         XCTAssertTrue(app.buttons["task-form.save"].waitForNonExistence(timeout: 3))
 
         app.buttons["offline-toggle"].tap()
         let failuresButton = app.buttons["failures-button"]
-        XCTAssertTrue(
-            failuresButton.waitForExistence(timeout: 5), "a rejected change surfaces in the failures inbox")
+        XCTAssertTrue(failuresButton.waitForExistence(timeout: 5), "a rejected change surfaces in the failures inbox")
         failuresButton.tap()
 
         let discard = app.buttons["failure.discard.\(DemoSeedTaskID.sessionTimeout)"]
@@ -164,7 +179,11 @@ extension DemoUITests {
         taskRow.tap()
     }
 
-    fileprivate func openTaskDetail(_ app: XCUIApplication, projectID: String, taskID: String) {
+    fileprivate func openTaskDetail(
+        _ app: XCUIApplication,
+        projectID: String,
+        taskID: String
+    ) {
         openProject(app, id: projectID)
         openTask(app, id: taskID)
         XCTAssertTrue(detailElement(app, id: "task.title").exists)
@@ -188,7 +207,11 @@ extension DemoUITests {
         XCTAssertTrue(app.buttons["task-form.save"].exists)
     }
 
-    fileprivate func findAfterScrolling(_ element: XCUIElement, in app: XCUIApplication, maxSwipes: Int = 6) -> Bool {
+    fileprivate func findAfterScrolling(
+        _ element: XCUIElement,
+        in app: XCUIApplication,
+        maxSwipes: Int = 6
+    ) -> Bool {
         for _ in 0..<maxSwipes where !element.exists {
             if app.tables.firstMatch.exists {
                 app.tables.firstMatch.swipeUp()
@@ -201,7 +224,11 @@ extension DemoUITests {
         return element.exists
     }
 
-    fileprivate func replaceText(in element: XCUIElement, with text: String, app: XCUIApplication) {
+    fileprivate func replaceText(
+        in element: XCUIElement,
+        with text: String,
+        app: XCUIApplication
+    ) {
         XCTAssertTrue(element.exists)
         element.tap()
 

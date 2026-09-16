@@ -24,9 +24,7 @@ final class OfflinePushTests: XCTestCase {
             .appendingPathComponent("offline-push-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
-        return try SyncContainer(
-            for: PushNote.self,
-            configurations: ModelConfiguration(url: directory.appendingPathComponent("store.sqlite")))
+        return try SyncContainer(for: PushNote.self, configurations: ModelConfiguration(url: directory.appendingPathComponent("store.sqlite")))
     }
 
     private func noFailures(_ pending: SyncPendingChanges) -> [SyncPendingChangesFailure] { [] }
@@ -41,7 +39,11 @@ final class OfflinePushTests: XCTestCase {
         for id in ["a", "b", "d"] { context.insert(PushNote(id: id, title: id)) }
         try context.save()
         // Baseline push: a, b, d become synced (token advances past their inserts).
-        _ = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context, process: noFailures)
+        _ = try await SwiftSync.withPendingChanges(
+            for: PushNote.self,
+            in: context,
+            process: noFailures
+        )
 
         try mutate(context) { $0.first { $0.id == "b" }?.title = "edited" }
         try delete("d", in: context)
@@ -97,7 +99,11 @@ final class OfflinePushTests: XCTestCase {
         let context = container.mainContext
         context.insert(PushNote(id: "u1", title: "v1"))
         try context.save()
-        _ = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context, process: noFailures)
+        _ = try await SwiftSync.withPendingChanges(
+            for: PushNote.self,
+            in: context,
+            process: noFailures
+        )
 
         try mutate(context) { $0.first { $0.id == "u1" }?.title = "v2" }
         try context.save()
@@ -106,8 +112,10 @@ final class OfflinePushTests: XCTestCase {
             [SyncPendingChangesFailure(id: "u1", error: PushTestError(message: "500"))]
         }
         XCTAssertEqual(
-            try SwiftSync.pendingChanges(for: PushNote.self, in: context).updates, ["u1"],
-            "an unacknowledged update stays pending")
+            try SwiftSync.pendingChanges(for: PushNote.self, in: context).updates,
+            ["u1"],
+            "an unacknowledged update stays pending"
+        )
     }
 
     /// Any failure freezes the token (all-or-nothing): the rejected row comes back in the returned
@@ -123,10 +131,12 @@ final class OfflinePushTests: XCTestCase {
         let failures = try await SwiftSync.withPendingChanges(for: PushNote.self, in: context) { _ in
             [SyncPendingChangesFailure(id: "c2", error: PushTestError(message: "422"))]
         }
-        XCTAssertEqual(failures.map(\.id), ["c2"])
+        XCTAssertEqual(failures.map { $0.id }, ["c2"])
         XCTAssertEqual(
-            try SwiftSync.pendingChanges(for: PushNote.self, in: context).inserts.sorted(), ["c1", "c2"],
-            "a failure freezes the token, so even the accepted row is re-detected")
+            try SwiftSync.pendingChanges(for: PushNote.self, in: context).inserts.sorted(),
+            ["c1", "c2"],
+            "a failure freezes the token, so even the accepted row is re-detected"
+        )
     }
 
     /// A local write during the upload await wasn't in the batch, so the token must not advance past it:
@@ -139,7 +149,11 @@ final class OfflinePushTests: XCTestCase {
         container.mainContext.insert(PushNote(id: "a", title: "a"))
         try container.mainContext.save()
 
-        XCTAssertEqual(publisher.pendingChanges.inserts, ["a"], "the publisher must reflect the live pending set")
+        XCTAssertEqual(
+            publisher.pendingChanges.inserts,
+            ["a"],
+            "the publisher must reflect the live pending set"
+        )
     }
 
     func testDrainConvergesAcrossWritesThatLandDuringUpload() async throws {
@@ -161,10 +175,12 @@ final class OfflinePushTests: XCTestCase {
         }
 
         XCTAssertTrue(failures.isEmpty)
-        XCTAssertEqual(passes, 2, "the write that landed during the first upload must be drained by a second pass")
-        XCTAssertTrue(
-            try SwiftSync.pendingChanges(for: PushNote.self, in: context).isEmpty,
-            "drain must converge — nothing left pending")
+        XCTAssertEqual(
+            passes,
+            2,
+            "the write that landed during the first upload must be drained by a second pass"
+        )
+        XCTAssertTrue(try SwiftSync.pendingChanges(for: PushNote.self, in: context).isEmpty, "drain must converge — nothing left pending")
     }
 
     func testDrainAfterPassRunsPerCompletedPassNotForThrowingPass() async throws {
@@ -193,7 +209,11 @@ final class OfflinePushTests: XCTestCase {
         } catch is Boom {}
 
         XCTAssertEqual(passes, 2)
-        XCTAssertEqual(afterPassCalls, 1, "afterPass runs for the completed pass, not the one whose process threw")
+        XCTAssertEqual(
+            afterPassCalls,
+            1,
+            "afterPass runs for the completed pass, not the one whose process threw"
+        )
     }
 
     func testDrainStopsWhenAPassReturnsFailures() async throws {
@@ -208,8 +228,12 @@ final class OfflinePushTests: XCTestCase {
             return [SyncPendingChangesFailure(id: "c1", error: PushTestError(message: "no"))]
         }
 
-        XCTAssertEqual(passes, 1, "a failing pass pins the token; the drain must stop, not spin")
-        XCTAssertEqual(failures.map(\.id), ["c1"])
+        XCTAssertEqual(
+            passes,
+            1,
+            "a failing pass pins the token; the drain must stop, not spin"
+        )
+        XCTAssertEqual(failures.map { $0.id }, ["c1"])
     }
 
     func testLocalWriteDuringUploadStaysPending() async throws {
@@ -228,8 +252,10 @@ final class OfflinePushTests: XCTestCase {
 
         XCTAssertTrue(failures.isEmpty)
         XCTAssertEqual(
-            try SwiftSync.pendingChanges(for: PushNote.self, in: context).inserts, ["p2"],
-            "a local write during upload must survive the token advance")
+            try SwiftSync.pendingChanges(for: PushNote.self, in: context).inserts,
+            ["p2"],
+            "a local write during upload must survive the token advance"
+        )
     }
 
     /// Push must fail before uploading when the bookkeeping model is missing, so an acknowledged server
@@ -240,9 +266,7 @@ final class OfflinePushTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
         // Built WITHOUT SyncContainer → PushHistoryTokenRecord is absent from the schema.
-        let container = try ModelContainer(
-            for: PushNote.self,
-            configurations: ModelConfiguration(url: directory.appendingPathComponent("store.sqlite")))
+        let container = try ModelContainer(for: PushNote.self, configurations: ModelConfiguration(url: directory.appendingPathComponent("store.sqlite")))
         let context = ModelContext(container)
         context.insert(PushNote(id: "x", title: "t"))
         try context.save()
@@ -255,8 +279,7 @@ final class OfflinePushTests: XCTestCase {
             }
             XCTFail("expected push to throw when the bookkeeping model is not registered")
         } catch {}
-        XCTAssertFalse(
-            uploadCalled, "push must fail before uploading, so an acknowledged server write is never stranded")
+        XCTAssertFalse(uploadCalled, "push must fail before uploading, so an acknowledged server write is never stranded")
     }
 
     private func mutate(_ context: ModelContext, _ body: ([PushNote]) -> Void) throws {

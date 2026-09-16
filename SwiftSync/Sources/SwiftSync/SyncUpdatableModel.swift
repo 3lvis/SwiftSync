@@ -40,7 +40,11 @@ extension SyncUpdatableModel {
         operations: SyncRelationshipOperations,
         isolation: isolated (any Actor)? = #isolation
     ) async throws -> Bool {
-        try await applyRelationships(payload, in: context, isolation: isolation)
+        try await applyRelationships(
+            payload,
+            in: context,
+            isolation: isolation
+        )
     }
 
     public func export(keyStyle _: KeyStyle, dateFormatter _: DateFormatter) -> [String: Any] {

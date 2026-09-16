@@ -1,6 +1,6 @@
+import SwiftUI
 import DemoCore
 import SwiftSync
-import SwiftUI
 
 struct ProjectView: View {
     let projectID: String
@@ -14,9 +14,7 @@ struct ProjectView: View {
         self.projectID = projectID
         self.syncEngine = syncEngine
 
-        _machine = State(
-            initialValue: ProjectViewMachine(projectID: projectID, syncEngine: syncEngine)
-        )
+        _machine = State(initialValue: ProjectViewMachine(projectID: projectID, syncEngine: syncEngine))
     }
 
     var body: some View {
@@ -42,7 +40,7 @@ struct ProjectView: View {
     }
 
     private var taskIDs: [String] {
-        machine.tasks.map(\.id)
+        machine.tasks.map { $0.id }
     }
 
     @ViewBuilder
@@ -82,17 +80,11 @@ struct ProjectView: View {
     }
 
     private var createTaskSheet: some View {
-        TaskFormSheet(
-            mode: .create(projectID: projectID),
-            syncEngine: syncEngine
-        )
+        TaskFormSheet(mode: .create(projectID: projectID), syncEngine: syncEngine)
     }
 
     private var deletePromptIsPresented: Binding<Bool> {
-        Binding(
-            get: { taskPendingDelete != nil },
-            set: { if !$0 { taskPendingDelete = nil } }
-        )
+        Binding(get: { taskPendingDelete != nil }, set: { if !$0 { taskPendingDelete = nil } })
     }
 
     private var deleteFailureIsPresented: Binding<Bool> {
@@ -144,10 +136,8 @@ struct ProjectView: View {
                     .font(.headline)
                     .lineLimit(3)
 
-                LabeledContent(
-                    "Tasks", value: projectModel.taskCount == 1 ? "1 task" : "\(projectModel.taskCount) tasks"
-                )
-                .foregroundStyle(.secondary)
+                LabeledContent("Tasks", value: projectModel.taskCount == 1 ? "1 task" : "\(projectModel.taskCount) tasks")
+                    .foregroundStyle(.secondary)
             } else {
                 Text("Project details unavailable")
                     .foregroundStyle(.secondary)
@@ -226,7 +216,11 @@ extension View {
             .sheet(isPresented: createTaskSheetIsPresented) {
                 createTaskSheet()
             }
-            .alert("Delete Task?", isPresented: deletePromptIsPresented, presenting: taskPendingDelete) { prompt in
+            .alert(
+                "Delete Task?",
+                isPresented: deletePromptIsPresented,
+                presenting: taskPendingDelete
+            ) { prompt in
                 Button("Delete", role: .destructive) { onConfirmDelete(prompt) }
                 Button("Cancel", role: .cancel) { onCancelDelete() }
             } message: { prompt in

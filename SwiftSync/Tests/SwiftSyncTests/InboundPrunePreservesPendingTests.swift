@@ -22,7 +22,11 @@ final class PruneTask {
     var title: String
     @NotExport var project: PruneProject?
 
-    init(id: String, title: String, project: PruneProject? = nil) {
+    init(
+        id: String,
+        title: String,
+        project: PruneProject? = nil
+    ) {
         self.id = id
         self.title = title
         self.project = project
@@ -39,8 +43,10 @@ final class InboundPrunePreservesPendingTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
         return try SyncContainer(
-            for: PruneProject.self, PruneTask.self,
-            configurations: ModelConfiguration(url: directory.appendingPathComponent("store.sqlite")))
+            for: PruneProject.self,
+            PruneTask.self,
+            configurations: ModelConfiguration(url: directory.appendingPathComponent("store.sqlite"))
+        )
     }
 
     func testParentScopedPullKeepsNeverSyncedLocalInsert() async throws {
@@ -48,14 +54,22 @@ final class InboundPrunePreservesPendingTests: XCTestCase {
         let context = container.mainContext
         let project = PruneProject(id: "p1")
         context.insert(project)
-        context.insert(PruneTask(id: "t-local", title: "offline created", project: project))
+        context.insert(
+            PruneTask(
+                id: "t-local",
+                title: "offline created",
+                project: project
+            ))
         try context.save()
 
         try await container.sync(
             payload: [["id": "t-server", "title": "from server"]],
-            as: PruneTask.self, parent: project, relationship: \PruneTask.project)
+            as: PruneTask.self,
+            parent: project,
+            relationship: \PruneTask.project
+        )
 
-        let ids = Set(try context.fetch(FetchDescriptor<PruneTask>()).map(\.id))
+        let ids = Set(try context.fetch(FetchDescriptor<PruneTask>()).map { $0.id })
         XCTAssertTrue(ids.contains("t-local"), "a never-synced local insert must survive a pull that omits it")
         XCTAssertTrue(ids.contains("t-server"))
     }
@@ -70,12 +84,19 @@ final class InboundPrunePreservesPendingTests: XCTestCase {
         // Arrives via a pull, so it's server-known and not dirty…
         try await container.sync(
             payload: [["id": "t-synced", "title": "synced"]],
-            as: PruneTask.self, parent: project, relationship: \PruneTask.project)
+            as: PruneTask.self,
+            parent: project,
+            relationship: \PruneTask.project
+        )
         // …then an empty pull omits it, meaning server-side deletion, so the prune must remove it.
         try await container.sync(
-            payload: [], as: PruneTask.self, parent: project, relationship: \PruneTask.project)
+            payload: [],
+            as: PruneTask.self,
+            parent: project,
+            relationship: \PruneTask.project
+        )
 
-        let ids = Set(try context.fetch(FetchDescriptor<PruneTask>()).map(\.id))
+        let ids = Set(try context.fetch(FetchDescriptor<PruneTask>()).map { $0.id })
         XCTAssertFalse(ids.contains("t-synced"), "a server-known row the server deleted must be pruned")
     }
 }

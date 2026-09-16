@@ -1,5 +1,5 @@
-import DemoCore
 import SwiftUI
+import DemoCore
 
 struct ProjectsRepresentable: UIViewControllerRepresentable {
     let syncEngine: DemoSyncEngine
@@ -23,10 +23,7 @@ struct ProjectsView: View {
             }
             .navigationTitle("Projects")
             .navigationDestination(item: $selectedProjectID) { projectID in
-                ProjectView(
-                    projectID: projectID,
-                    syncEngine: syncEngine
-                )
+                ProjectView(projectID: projectID, syncEngine: syncEngine)
             }
         }
     }

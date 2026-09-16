@@ -7,7 +7,12 @@ public struct DemoSeedData {
         public let createdAt: Date
         public let updatedAt: Date
 
-        public init(id: String, name: String, createdAt: Date, updatedAt: Date) {
+        public init(
+            id: String,
+            name: String,
+            createdAt: Date,
+            updatedAt: Date
+        ) {
             self.id = id
             self.name = name
             self.createdAt = createdAt
@@ -21,7 +26,12 @@ public struct DemoSeedData {
         public let createdAt: Date
         public let updatedAt: Date
 
-        public init(id: String, displayName: String, createdAt: Date, updatedAt: Date) {
+        public init(
+            id: String,
+            displayName: String,
+            createdAt: Date,
+            updatedAt: Date
+        ) {
             self.id = id
             self.displayName = displayName
             self.createdAt = createdAt
@@ -163,20 +173,63 @@ public struct DemoSeedData {
         let t = SeedIDs.Tasks.self
 
         let projects: [SeedProject] = [
-            .init(id: p.accountSecurity, name: "Account Security Controls", createdAt: at(540), updatedAt: at(540)),
             .init(
-                id: p.notificationsReliability, name: "Team Notifications Reliability", createdAt: at(525),
-                updatedAt: at(525)),
-            .init(id: p.supportInbox, name: "Support Inbox Refresh", createdAt: at(510), updatedAt: at(510)),
+                id: p.accountSecurity,
+                name: "Account Security Controls",
+                createdAt: at(540),
+                updatedAt: at(540)
+            ),
+            .init(
+                id: p.notificationsReliability,
+                name: "Team Notifications Reliability",
+                createdAt: at(525),
+                updatedAt: at(525)
+            ),
+            .init(
+                id: p.supportInbox,
+                name: "Support Inbox Refresh",
+                createdAt: at(510),
+                updatedAt: at(510)
+            ),
         ]
 
         let users: [SeedUser] = [
-            .init(id: u.avaMartinez, displayName: "Ava Martinez", createdAt: at(60), updatedAt: at(60)),
-            .init(id: u.noahKim, displayName: "Noah Kim", createdAt: at(70), updatedAt: at(70)),
-            .init(id: u.miaPatel, displayName: "Mia Patel", createdAt: at(80), updatedAt: at(80)),
-            .init(id: u.liamBrown, displayName: "Liam Brown", createdAt: at(90), updatedAt: at(90)),
-            .init(id: u.sofiaGarcia, displayName: "Sofia Garcia", createdAt: at(100), updatedAt: at(100)),
-            .init(id: u.ethanLee, displayName: "Ethan Lee", createdAt: at(110), updatedAt: at(110)),
+            .init(
+                id: u.avaMartinez,
+                displayName: "Ava Martinez",
+                createdAt: at(60),
+                updatedAt: at(60)
+            ),
+            .init(
+                id: u.noahKim,
+                displayName: "Noah Kim",
+                createdAt: at(70),
+                updatedAt: at(70)
+            ),
+            .init(
+                id: u.miaPatel,
+                displayName: "Mia Patel",
+                createdAt: at(80),
+                updatedAt: at(80)
+            ),
+            .init(
+                id: u.liamBrown,
+                displayName: "Liam Brown",
+                createdAt: at(90),
+                updatedAt: at(90)
+            ),
+            .init(
+                id: u.sofiaGarcia,
+                displayName: "Sofia Garcia",
+                createdAt: at(100),
+                updatedAt: at(100)
+            ),
+            .init(
+                id: u.ethanLee,
+                displayName: "Ethan Lee",
+                createdAt: at(110),
+                updatedAt: at(110)
+            ),
         ]
 
         let tasks: [SeedTask] = [
@@ -190,7 +243,8 @@ public struct DemoSeedData {
                 descriptionText: "Keep session controls clear and safe for account-security settings.",
                 state: "inProgress",
                 watcherIDs: [u.noahKim, u.sofiaGarcia],
-                createdAt: at(300), updatedAt: at(300)
+                createdAt: at(300),
+                updatedAt: at(300)
             ),
             .init(
                 id: t.securityPolicyPatch,
@@ -202,7 +256,8 @@ public struct DemoSeedData {
                 descriptionText: "Protect the API contract for security settings updates.",
                 state: "todo",
                 watcherIDs: [u.liamBrown],
-                createdAt: at(305), updatedAt: at(305)
+                createdAt: at(305),
+                updatedAt: at(305)
             ),
             .init(
                 id: t.qaItemList,
@@ -214,7 +269,8 @@ public struct DemoSeedData {
                 descriptionText: "Catch risky session recovery regressions before rollout.",
                 state: "todo",
                 watcherIDs: [u.avaMartinez, u.miaPatel],
-                createdAt: at(310), updatedAt: at(310)
+                createdAt: at(310),
+                updatedAt: at(310)
             ),
             .init(
                 id: t.warningCopy,
@@ -226,7 +282,8 @@ public struct DemoSeedData {
                 descriptionText: "Make risky security actions easier to understand at a glance.",
                 state: "done",
                 watcherIDs: [u.liamBrown],
-                createdAt: at(315), updatedAt: at(315)
+                createdAt: at(315),
+                updatedAt: at(315)
             ),
             .init(
                 id: t.rolloutFlag,
@@ -238,7 +295,8 @@ public struct DemoSeedData {
                 descriptionText: "Enable a controlled rollout after QA approval.",
                 state: "inProgress",
                 watcherIDs: [u.liamBrown, u.sofiaGarcia],
-                createdAt: at(320), updatedAt: at(320)
+                createdAt: at(320),
+                updatedAt: at(320)
             ),
             .init(
                 id: t.duplicatePushFix,
@@ -250,7 +308,8 @@ public struct DemoSeedData {
                 descriptionText: "Stop duplicate rows from eroding trust after reconnect.",
                 state: "inProgress",
                 watcherIDs: [u.liamBrown, u.ethanLee],
-                createdAt: at(330), updatedAt: at(330)
+                createdAt: at(330),
+                updatedAt: at(330)
             ),
             .init(
                 id: t.idempotencyGuard,
@@ -262,7 +321,8 @@ public struct DemoSeedData {
                 descriptionText: "Make repeated saves safe and predictable.",
                 state: "todo",
                 watcherIDs: [u.avaMartinez, u.liamBrown],
-                createdAt: at(335), updatedAt: at(335)
+                createdAt: at(335),
+                updatedAt: at(335)
             ),
             .init(
                 id: t.scopedDeleteVerify,
@@ -274,7 +334,8 @@ public struct DemoSeedData {
                 descriptionText: "Prevent scoped deletes from removing the wrong channels.",
                 state: "todo",
                 watcherIDs: [u.liamBrown],
-                createdAt: at(340), updatedAt: at(340)
+                createdAt: at(340),
+                updatedAt: at(340)
             ),
             .init(
                 id: t.incidentPlaybook,
@@ -286,7 +347,8 @@ public struct DemoSeedData {
                 descriptionText: "Speed up response during notification delivery incidents.",
                 state: "todo",
                 watcherIDs: [u.noahKim, u.ethanLee],
-                createdAt: at(345), updatedAt: at(345)
+                createdAt: at(345),
+                updatedAt: at(345)
             ),
             .init(
                 id: t.assigneeChip,
@@ -296,7 +358,8 @@ public struct DemoSeedData {
                 title: "Add assignee chip to support rows",
                 descriptionText: "Help support agents see ownership without opening each thread.",
                 state: "inProgress",
-                createdAt: at(350), updatedAt: at(350)
+                createdAt: at(350),
+                updatedAt: at(350)
             ),
             .init(
                 id: t.inboxFilterKeys,
@@ -306,7 +369,8 @@ public struct DemoSeedData {
                 title: "Normalize inbox filter payload keys across clients",
                 descriptionText: "Keep filters consistent across clients and backend services.",
                 state: "done",
-                createdAt: at(355), updatedAt: at(355)
+                createdAt: at(355),
+                updatedAt: at(355)
             ),
             .init(
                 id: t.regressionChecks,
@@ -316,7 +380,8 @@ public struct DemoSeedData {
                 title: "Backfill regression checks for task detail edits",
                 descriptionText: "Reduce regressions in task editing flows.",
                 state: "inProgress",
-                createdAt: at(360), updatedAt: at(360)
+                createdAt: at(360),
+                updatedAt: at(360)
             ),
         ]
 

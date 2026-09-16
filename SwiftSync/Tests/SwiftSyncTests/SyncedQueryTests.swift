@@ -1,6 +1,6 @@
 import SwiftData
-import SwiftSync
 import XCTest
+import SwiftSync
 
 final class SyncedQueryTests: XCTestCase {
     @MainActor
@@ -11,7 +11,9 @@ final class SyncedQueryTests: XCTestCase {
         try container.mainContext.save()
 
         let published = SyncedQueryPublisher(
-            InferredTask.self, in: container, sortBy: [SortDescriptor(\InferredTask.id)]
+            InferredTask.self,
+            in: container,
+            sortBy: [SortDescriptor(\InferredTask.id)]
         ) {
             // Empty by design: the load closure normally syncs; this test only needs it to succeed.
         }
@@ -20,7 +22,7 @@ final class SyncedQueryTests: XCTestCase {
         await published.load()
 
         XCTAssertEqual(published.phase, .loaded)
-        XCTAssertEqual(published.rows.map(\.id), [1, 2])
+        XCTAssertEqual(published.rows.map { $0.id }, [1, 2])
     }
 
     @MainActor
@@ -29,7 +31,11 @@ final class SyncedQueryTests: XCTestCase {
         container.mainContext.insert(InferredTask(id: 5, title: "X"))
         try container.mainContext.save()
 
-        let published = SyncedModelPublisher(InferredTask.self, id: 5, in: container) {}
+        let published = SyncedModelPublisher(
+            InferredTask.self,
+            id: 5,
+            in: container
+        ) {}
 
         await published.load()
 
@@ -56,7 +62,11 @@ final class SyncedQueryTests: XCTestCase {
         struct BlankError: LocalizedError { var errorDescription: String? { "   " } }
         let container = try SyncContainer(for: InferredTask.self, configurations: .init(isStoredInMemoryOnly: true))
 
-        let published = SyncedQueryPublisher(InferredTask.self, in: container, fallbackMessage: "Could not load tasks.") {
+        let published = SyncedQueryPublisher(
+            InferredTask.self,
+            in: container,
+            fallbackMessage: "Could not load tasks."
+        ) {
             throw BlankError()
         }
 

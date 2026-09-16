@@ -137,7 +137,11 @@ public final class ProjectViewMachine {
     public init(projectID: String, syncEngine: DemoSyncEngine) {
         self.projectID = projectID
         self.syncEngine = syncEngine
-        self.projectPublisher = SyncModelPublisher(Project.self, id: projectID, in: syncEngine.syncContainer)
+        self.projectPublisher = SyncModelPublisher(
+            Project.self,
+            id: projectID,
+            in: syncEngine.syncContainer
+        )
         self.tasksSynced = SyncedQueryPublisher(
             Task.self,
             relationship: \Task.project,
@@ -186,13 +190,13 @@ public final class TaskViewMachine {
     }
     public var reviewerNames: [String] {
         guard let task else { return [] }
-        return task.reviewers.map(\.displayName).sorted()
+        return task.reviewers.map { $0.displayName }.sorted()
     }
     public var watcherNames: [String] {
         guard let task else { return [] }
         return task.watchers
             .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
-            .map(\.displayName)
+            .map { $0.displayName }
     }
     public var contentState: TaskDetailContentState {
         resolveTaskDetailContentState(phase: taskSynced.phase, hasTask: task != nil)
@@ -205,7 +209,10 @@ public final class TaskViewMachine {
     private let itemPublisher: SyncQueryPublisher<Item>
     public init(taskID: String, syncEngine: DemoSyncEngine) {
         self.taskSynced = SyncedModelPublisher(
-            Task.self, id: taskID, in: syncEngine.syncContainer, fallbackMessage: "Could not load this task yet."
+            Task.self,
+            id: taskID,
+            in: syncEngine.syncContainer,
+            fallbackMessage: "Could not load this task yet."
         ) { [syncEngine, taskID] in
             try await syncEngine.syncTaskDetail(taskID: taskID)
         }
@@ -263,10 +270,7 @@ public final class TaskFormSheetMachine {
         self.syncEngine = syncEngine
         self.editContext = editContext
         self.metadataLoadMachine = ScreenLoadMachine { error in
-            presentError(
-                error,
-                fallbackMessage: "Could not load form options yet."
-            )
+            presentError(error, fallbackMessage: "Could not load form options yet.")
         }
         SwiftSync.observeContinuously {
             self.metadataLoadState = self.metadataLoadMachine.state
@@ -300,8 +304,8 @@ public final class TaskFormSheetMachine {
             draft.updatedAt = Date()
 
             var body = syncEngine.syncContainer.export(draft)
-            let capturedReviewerIDs = draft.reviewers.map(\.id).sorted()
-            let capturedWatcherIDs = draft.watchers.map(\.id).sorted()
+            let capturedReviewerIDs = draft.reviewers.map { $0.id }.sorted()
+            let capturedWatcherIDs = draft.watchers.map { $0.id }.sorted()
 
             // reviewers/watchers are @NotExport, so add them to the body explicitly — and only when
             // changed, so a non-people edit doesn't churn them.
@@ -310,10 +314,10 @@ public final class TaskFormSheetMachine {
                 if !capturedReviewerIDs.isEmpty { body["reviewer_ids"] = capturedReviewerIDs }
                 if !capturedWatcherIDs.isEmpty { body["watcher_ids"] = capturedWatcherIDs }
             case .edit(let originalTask):
-                if Set(capturedReviewerIDs) != Set(originalTask.reviewers.map(\.id)) {
+                if Set(capturedReviewerIDs) != Set(originalTask.reviewers.map({ $0.id })) {
                     body["reviewer_ids"] = capturedReviewerIDs
                 }
-                if Set(capturedWatcherIDs) != Set(originalTask.watchers.map(\.id)) {
+                if Set(capturedWatcherIDs) != Set(originalTask.watchers.map({ $0.id })) {
                     body["watcher_ids"] = capturedWatcherIDs
                 }
             }
@@ -327,7 +331,10 @@ public final class TaskFormSheetMachine {
                         try await self.syncEngine.createTask(body: payload, projectID: projectID)
                     case .edit(let task):
                         try await self.syncEngine.updateTask(
-                            taskID: task.id, projectID: task.projectID, body: payload)
+                            taskID: task.id,
+                            projectID: task.projectID,
+                            body: payload
+                        )
                     }
                     onSuccess()
                 }
@@ -379,7 +386,11 @@ public final class TaskFormSheetMachine {
 
         case .move(let source, let destination):
             var reordered = sortedItems(in: draft)
-            reordered = reorderItems(reordered, from: source, to: destination)
+            reordered = reorderItems(
+                reordered,
+                from: source,
+                to: destination
+            )
             for (index, item) in reordered.enumerated() {
                 item.position = index
                 item.updatedAt = Date()
@@ -403,9 +414,7 @@ public final class TaskFormSheetMachine {
             draft.stateLabel = first.label
         }
 
-        if !users.isEmpty,
-            draft.authorID.isEmpty || !users.contains(where: { $0.id == draft.authorID })
-        {
+        if !users.isEmpty, draft.authorID.isEmpty || !users.contains(where: { $0.id == draft.authorID }) {
             draft.authorID =
                 draft.assigneeID.flatMap { id in
                     users.contains(where: { $0.id == id }) ? id : nil
@@ -414,18 +423,18 @@ public final class TaskFormSheetMachine {
     }
 
     private func refreshMetadataSnapshot() {
-        let userDescriptor = FetchDescriptor<User>(
-            sortBy: [SortDescriptor(\.displayName), SortDescriptor(\.id)]
-        )
+        let userDescriptor = FetchDescriptor<User>(sortBy: [SortDescriptor(\.displayName), SortDescriptor(\.id)])
         users = (try? editContext.fetch(userDescriptor)) ?? []
 
-        let stateDescriptor = FetchDescriptor<TaskStateOption>(
-            sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.id)]
-        )
+        let stateDescriptor = FetchDescriptor<TaskStateOption>(sortBy: [SortDescriptor(\.sortOrder), SortDescriptor(\.id)])
         taskStateOptions = (try? editContext.fetch(stateDescriptor)) ?? []
     }
 
-    private func reorderItems(_ items: [Item], from source: IndexSet, to destination: Int) -> [Item] {
+    private func reorderItems(
+        _ items: [Item],
+        from source: IndexSet,
+        to destination: Int
+    ) -> [Item] {
         guard !items.isEmpty else { return items }
 
         var reordered = items

@@ -41,7 +41,7 @@ public final class DemoSyncEngine {
     /// as *failed*, not *pending*, so the same task isn't counted twice. Reactive via `pendingPublisher`.
     public var pendingChangeCount: Int {
         let pending = pendingPublisher.pendingChanges
-        let failedIDs = Set(failedTasks().map(\.id))
+        let failedIDs = Set(failedTasks().map { $0.id })
         return (pending.inserts + pending.updates + pending.deletes).filter { !failedIDs.contains($0) }.count
     }
 
@@ -117,7 +117,11 @@ public final class DemoSyncEngine {
         }
     }
 
-    public func updateTask(taskID: String, projectID: String?, body: SyncJSON) async throws {
+    public func updateTask(
+        taskID: String,
+        projectID: String?,
+        body: SyncJSON
+    ) async throws {
         // A row the server doesn't have yet (offline-created, or a rejected insert) can't be PUT — it
         // must be (re)sent as an upsert. Apply locally so it stays a pending change; online, push it.
         let neverSynced = isNeverPushed(taskID)
@@ -162,7 +166,11 @@ public final class DemoSyncEngine {
         }
     }
 
-    public func replaceTaskReviewers(taskID: String, projectID: String?, reviewerIDs: [String]) async throws {
+    public func replaceTaskReviewers(
+        taskID: String,
+        projectID: String?,
+        reviewerIDs: [String]
+    ) async throws {
         if isOffline {
             try applyLocalPeople(taskID: taskID, reviewerIDs: reviewerIDs)
             return
@@ -173,7 +181,11 @@ public final class DemoSyncEngine {
         }
     }
 
-    public func replaceTaskWatchers(taskID: String, projectID: String?, watcherIDs: [String]) async throws {
+    public func replaceTaskWatchers(
+        taskID: String,
+        projectID: String?,
+        watcherIDs: [String]
+    ) async throws {
         if isOffline {
             try applyLocalPeople(taskID: taskID, watcherIDs: watcherIDs)
             return
@@ -186,7 +198,11 @@ public final class DemoSyncEngine {
 
     /// Apply a reviewers/watchers change to the local store only (offline). The bumped `updatedAt`
     /// makes it a pending update; the push carries `reviewer_ids`/`watcher_ids` so the server applies it.
-    private func applyLocalPeople(taskID: String, reviewerIDs: [String]? = nil, watcherIDs: [String]? = nil)
+    private func applyLocalPeople(
+        taskID: String,
+        reviewerIDs: [String]? = nil,
+        watcherIDs: [String]? = nil
+    )
         throws
     {
         guard let task = try task(withID: taskID) else { return }
@@ -219,9 +235,11 @@ public final class DemoSyncEngine {
             // must clear even if a later pass throws (afterPass is skipped for the throwing pass). The
             // pending count is reactive (PendingChangesPublisher), so it needs no explicit refresh.
             try await SwiftSync.drainPendingChanges(
-                for: Task.self, in: self.syncContainer.mainContext,
+                for: Task.self,
+                in: self.syncContainer.mainContext,
                 process: { pending in try await self.upload(pending) },
-                afterPass: { failures in try self.annotateFailures(failures) })
+                afterPass: { failures in try self.annotateFailures(failures) }
+            )
         }
         activeDrain = task
         defer { activeDrain = nil }
@@ -268,19 +286,14 @@ public final class DemoSyncEngine {
                 // The server won last-writer-wins — adopt its state locally (the inbound sync re-creates a
                 // hard-deleted row when a delete loses) and treat the row as resolved, not a failure.
                 if let server = result["server"] as? [String: Any] {
-                    try? await syncContainer.sync(
-                        item: SyncJSON(dictionary: server), as: Task.self)
+                    try? await syncContainer.sync(item: SyncJSON(dictionary: server), as: Task.self)
                 }
             case ("upsert", "applied"), ("delete", "applied"):
                 break
             default:
                 // Bubble the backend's rejection up as this app's own error; SwiftSync returns failures
                 // verbatim without interpreting them.
-                failures.append(
-                    SyncPendingChangesFailure(
-                        id: id ?? "",
-                        error: DemoUploadRejection(
-                            message: (result["message"] as? String) ?? "rejected")))
+                failures.append(SyncPendingChangesFailure(id: id ?? "", error: DemoUploadRejection(message: (result["message"] as? String) ?? "rejected")))
             }
         }
         return failures
@@ -290,8 +303,8 @@ public final class DemoSyncEngine {
     /// `@NotExport`, so `export` omits them) so relationship edits travel with the operation.
     private func taskData(_ task: Task) -> [String: Any] {
         var data = syncContainer.export(task)
-        data["reviewer_ids"] = task.reviewers.map(\.id)
-        data["watcher_ids"] = task.watchers.map(\.id)
+        data["reviewer_ids"] = task.reviewers.map { $0.id }
+        data["watcher_ids"] = task.watchers.map { $0.id }
         return data
     }
 
@@ -327,9 +340,7 @@ public final class DemoSyncEngine {
     /// Stamp `syncFailureReason` on each rejected row and clear it from any row that no longer fails.
     /// SwiftSync persists nothing — the failures inbox is entirely this app's concern.
     private func annotateFailures(_ failures: [SyncPendingChangesFailure]) throws {
-        let reasonsByID = Dictionary(
-            failures.map { ($0.id, $0.error.localizedDescription) },
-            uniquingKeysWith: { first, _ in first })
+        let reasonsByID = Dictionary(failures.map { ($0.id, $0.error.localizedDescription) }, uniquingKeysWith: { first, _ in first })
         for task in failedTasks() where reasonsByID[task.id] == nil {
             task.syncFailureReason = nil
         }
@@ -340,10 +351,7 @@ public final class DemoSyncEngine {
     }
 
     public func failedTasks() -> [Task] {
-        (try? syncContainer.mainContext.fetch(
-            FetchDescriptor<Task>(
-                predicate: #Predicate { $0.syncFailureReason != nil },
-                sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]))) ?? []
+        (try? syncContainer.mainContext.fetch(FetchDescriptor<Task>(predicate: #Predicate { $0.syncFailureReason != nil }, sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]))) ?? []
     }
 
     public func discardFailedChange(taskID: String) async throws {
@@ -450,9 +458,7 @@ public final class DemoSyncEngine {
     }
 
     private func task(withID taskID: String) throws -> Task? {
-        try syncContainer.mainContext.fetch(
-            FetchDescriptor<Task>(predicate: #Predicate { $0.id == taskID })
-        ).first
+        try syncContainer.mainContext.fetch(FetchDescriptor<Task>(predicate: #Predicate { $0.id == taskID })).first
     }
 
     private func syncItemsIfPresent(in payload: SyncJSON, taskID: String) async throws {

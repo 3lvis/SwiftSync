@@ -14,6 +14,11 @@ public struct SyncModel<Model: PersistentModel & SyncModelable>: DynamicProperty
         id: Model.SyncID,
         in syncContainer: SyncContainer
     ) {
-        _publisher = State(initialValue: SyncModelPublisher(Model.self, id: id, in: syncContainer))
+        _publisher = State(
+            initialValue: SyncModelPublisher(
+                Model.self,
+                id: id,
+                in: syncContainer
+            ))
     }
 }

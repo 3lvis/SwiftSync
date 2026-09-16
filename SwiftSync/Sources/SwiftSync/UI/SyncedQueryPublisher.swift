@@ -18,7 +18,11 @@ public final class SyncedQueryPublisher<Model: PersistentModel> {
         fallbackMessage: String = "Something went wrong. Please try again.",
         load: @escaping @MainActor () async throws -> Void
     ) {
-        self.query = SyncQueryPublisher(modelType, in: syncContainer, sortBy: sortBy)
+        self.query = SyncQueryPublisher(
+            modelType,
+            in: syncContainer,
+            sortBy: sortBy
+        )
         self.driver = SyncLoadDriver(fallbackMessage: fallbackMessage, load)
     }
 
@@ -32,7 +36,12 @@ public final class SyncedQueryPublisher<Model: PersistentModel> {
         load: @escaping @MainActor () async throws -> Void
     ) {
         self.query = SyncQueryPublisher(
-            modelType, relationship: relationship, relationshipID: relationshipID, in: syncContainer, sortBy: sortBy)
+            modelType,
+            relationship: relationship,
+            relationshipID: relationshipID,
+            in: syncContainer,
+            sortBy: sortBy
+        )
         self.driver = SyncLoadDriver(fallbackMessage: fallbackMessage, load)
     }
 

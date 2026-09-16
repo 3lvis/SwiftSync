@@ -59,7 +59,11 @@ final class Profile {
     var firstName: String
     var updatedAt: Date
 
-    init(id: Int, firstName: String, updatedAt: Date) {
+    init(
+        id: Int,
+        firstName: String,
+        updatedAt: Date
+    ) {
         self.id = id
         self.firstName = firstName
         self.updatedAt = updatedAt
@@ -158,7 +162,12 @@ final class Team {
     var owner: Member?
     var members: [Member]
 
-    init(id: Int, name: String, owner: Member? = nil, members: [Member] = []) {
+    init(
+        id: Int,
+        name: String,
+        owner: Member? = nil,
+        members: [Member] = []
+    ) {
         self.id = id
         self.name = name
         self.owner = owner
@@ -183,7 +192,11 @@ final class Employee {
     var name: String
     var company: Company?
 
-    init(id: Int, name: String, company: Company? = nil) {
+    init(
+        id: Int,
+        name: String,
+        company: Company? = nil
+    ) {
         self.id = id
         self.name = name
         self.company = company
@@ -209,7 +222,11 @@ final class AutoEmployee {
     var name: String
     var company: AutoCompany?
 
-    init(id: Int, name: String, company: AutoCompany? = nil) {
+    init(
+        id: Int,
+        name: String,
+        company: AutoCompany? = nil
+    ) {
         self.id = id
         self.name = name
         self.company = company
@@ -222,7 +239,11 @@ final class AutoTag {
     var name: String
     var tasks: [AutoTask]
 
-    init(id: Int, name: String, tasks: [AutoTask] = []) {
+    init(
+        id: Int,
+        name: String,
+        tasks: [AutoTask] = []
+    ) {
         self.id = id
         self.name = name
         self.tasks = tasks
@@ -239,7 +260,11 @@ final class AutoTask {
     @Relationship(inverse: \AutoTag.tasks)
     var tags: [AutoTag]
 
-    init(id: Int, title: String, tags: [AutoTag] = []) {
+    init(
+        id: Int,
+        title: String,
+        tags: [AutoTag] = []
+    ) {
         self.id = id
         self.title = title
         self.tags = tags
@@ -276,7 +301,12 @@ final class AutoNestedTeam {
     @Relationship(inverse: \AutoNestedMember.memberTeams)
     var members: [AutoNestedMember]
 
-    init(id: Int, name: String, owner: AutoNestedMember? = nil, members: [AutoNestedMember] = []) {
+    init(
+        id: Int,
+        name: String,
+        owner: AutoNestedMember? = nil,
+        members: [AutoNestedMember] = []
+    ) {
         self.id = id
         self.name = name
         self.owner = owner
@@ -301,7 +331,11 @@ final class UserWithNotes {
     var name: String
     var notes: [Note]
 
-    init(id: Int, name: String, notes: [Note] = []) {
+    init(
+        id: Int,
+        name: String,
+        notes: [Note] = []
+    ) {
         self.id = id
         self.name = name
         self.notes = notes
@@ -330,7 +364,11 @@ final class UserTagsByObjects {
     @Relationship(inverse: \Tag.usersByObjects)
     var tags: [Tag]
 
-    init(id: Int, name: String, tags: [Tag] = []) {
+    init(
+        id: Int,
+        name: String,
+        tags: [Tag] = []
+    ) {
         self.id = id
         self.name = name
         self.tags = tags
@@ -344,7 +382,11 @@ final class UserTagsByIDs {
     @Relationship(inverse: \Tag.usersByIDs)
     var tags: [Tag]
 
-    init(id: Int, name: String, tags: [Tag] = []) {
+    init(
+        id: Int,
+        name: String,
+        tags: [Tag] = []
+    ) {
         self.id = id
         self.name = name
         self.tags = tags
@@ -357,7 +399,11 @@ final class SuperUser {
     var name: String
     var notes: [SuperNote]
 
-    init(id: Int, name: String, notes: [SuperNote] = []) {
+    init(
+        id: Int,
+        name: String,
+        notes: [SuperNote] = []
+    ) {
         self.id = id
         self.name = name
         self.notes = notes
@@ -371,7 +417,11 @@ final class SuperNote {
     @Relationship(inverse: \SuperUser.notes)
     var superUser: SuperUser?
 
-    init(id: Int, text: String, superUser: SuperUser? = nil) {
+    init(
+        id: Int,
+        text: String,
+        superUser: SuperUser? = nil
+    ) {
         self.id = id
         self.text = text
         self.superUser = superUser
@@ -383,10 +433,7 @@ extension AutoTag: SyncUpdatableModel {
     static var syncIdentity: KeyPath<AutoTag, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> AutoTag {
-        AutoTag(
-            id: try payload.required(Int.self, for: "id"),
-            name: try payload.required(String.self, for: "name")
-        )
+        AutoTag(id: try payload.required(Int.self, for: "id"), name: try payload.required(String.self, for: "name"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -402,10 +449,7 @@ extension AutoNestedMember: SyncUpdatableModel {
     static var syncIdentity: KeyPath<AutoNestedMember, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> AutoNestedMember {
-        AutoNestedMember(
-            id: try payload.required(Int.self, for: "id"),
-            fullName: try payload.required(String.self, for: "full_name")
-        )
+        AutoNestedMember(id: try payload.required(Int.self, for: "id"), fullName: try payload.required(String.self, for: "full_name"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -421,10 +465,7 @@ extension Team: SyncUpdatableModel {
     static var syncIdentity: KeyPath<Team, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> Team {
-        Team(
-            id: try payload.required(Int.self, for: "id"),
-            name: try payload.required(String.self, for: "name")
-        )
+        Team(id: try payload.required(Int.self, for: "id"), name: try payload.required(String.self, for: "name"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -470,7 +511,7 @@ extension Team {
             } else {
                 desiredMembers = []
             }
-            if members.map(\.id) != desiredMembers.map(\.id) {
+            if members.map({ $0.id }) != desiredMembers.map({ $0.id }) {
                 members = desiredMembers
                 changed = true
             }
@@ -498,10 +539,7 @@ extension Company: SyncUpdatableModel {
     static var syncIdentity: KeyPath<Company, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> Company {
-        Company(
-            id: try payload.required(Int.self, for: "id"),
-            name: try payload.required(String.self, for: "name")
-        )
+        Company(id: try payload.required(Int.self, for: "id"), name: try payload.required(String.self, for: "name"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -520,10 +558,7 @@ extension Employee: SyncUpdatableModel {
     static var syncIdentity: KeyPath<Employee, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> Employee {
-        Employee(
-            id: try payload.required(Int.self, for: "id"),
-            name: try payload.required(String.self, for: "name")
-        )
+        Employee(id: try payload.required(Int.self, for: "id"), name: try payload.required(String.self, for: "name"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -569,10 +604,7 @@ extension Note: SyncUpdatableModel {
     static var syncIdentity: KeyPath<Note, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> Note {
-        Note(
-            id: try payload.required(Int.self, for: "id"),
-            text: try payload.required(String.self, for: "text")
-        )
+        Note(id: try payload.required(Int.self, for: "id"), text: try payload.required(String.self, for: "text"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -591,10 +623,7 @@ extension UserWithNotes: SyncUpdatableModel {
     static var syncIdentity: KeyPath<UserWithNotes, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> UserWithNotes {
-        UserWithNotes(
-            id: try payload.required(Int.self, for: "id"),
-            name: try payload.required(String.self, for: "name")
-        )
+        UserWithNotes(id: try payload.required(Int.self, for: "id"), name: try payload.required(String.self, for: "name"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -627,7 +656,7 @@ extension UserWithNotes {
         let byID = Dictionary(uniqueKeysWithValues: allNotes.map { ($0.id, $0) })
         let desiredNotes = desiredIDs.compactMap { byID[$0] }
 
-        if notes.map(\.id) != desiredNotes.map(\.id) {
+        if notes.map({ $0.id }) != desiredNotes.map({ $0.id }) {
             notes = desiredNotes
             return true
         }
@@ -640,10 +669,7 @@ extension Tag: SyncUpdatableModel {
     static var syncIdentity: KeyPath<Tag, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> Tag {
-        Tag(
-            id: try payload.required(Int.self, for: "id"),
-            name: try payload.required(String.self, for: "name")
-        )
+        Tag(id: try payload.required(Int.self, for: "id"), name: try payload.required(String.self, for: "name"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -662,10 +688,7 @@ extension UserTagsByObjects: SyncUpdatableModel {
     static var syncIdentity: KeyPath<UserTagsByObjects, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> UserTagsByObjects {
-        UserTagsByObjects(
-            id: try payload.required(Int.self, for: "id"),
-            name: try payload.required(String.self, for: "name")
-        )
+        UserTagsByObjects(id: try payload.required(Int.self, for: "id"), name: try payload.required(String.self, for: "name"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -696,7 +719,7 @@ extension UserTagsByObjects {
         } else {
             desiredTags = []
         }
-        if tags.map(\.id) != desiredTags.map(\.id) {
+        if tags.map({ $0.id }) != desiredTags.map({ $0.id }) {
             tags = desiredTags
             return true
         }
@@ -722,10 +745,7 @@ extension UserTagsByIDs: SyncUpdatableModel {
     static var syncIdentity: KeyPath<UserTagsByIDs, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> UserTagsByIDs {
-        UserTagsByIDs(
-            id: try payload.required(Int.self, for: "id"),
-            name: try payload.required(String.self, for: "name")
-        )
+        UserTagsByIDs(id: try payload.required(Int.self, for: "id"), name: try payload.required(String.self, for: "name"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -755,7 +775,7 @@ extension UserTagsByIDs {
         let allTags = try context.fetch(FetchDescriptor<Tag>())
         let byID = Dictionary(uniqueKeysWithValues: allTags.map { ($0.id, $0) })
         let desiredTags = desiredIDs.compactMap { byID[$0] }
-        if tags.map(\.id) != desiredTags.map(\.id) {
+        if tags.map({ $0.id }) != desiredTags.map({ $0.id }) {
             tags = desiredTags
             return true
         }
@@ -768,10 +788,7 @@ extension SuperUser: SyncUpdatableModel {
     static var syncIdentity: KeyPath<SuperUser, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> SuperUser {
-        SuperUser(
-            id: try payload.required(Int.self, for: "id"),
-            name: try payload.required(String.self, for: "name")
-        )
+        SuperUser(id: try payload.required(Int.self, for: "id"), name: try payload.required(String.self, for: "name"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -790,10 +807,7 @@ extension SuperNote: SyncUpdatableModel {
     static var syncIdentity: KeyPath<SuperNote, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> SuperNote {
-        SuperNote(
-            id: try payload.required(Int.self, for: "id"),
-            text: payload.value(for: "text") ?? ""
-        )
+        SuperNote(id: try payload.required(Int.self, for: "id"), text: payload.value(for: "text") ?? "")
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -817,7 +831,12 @@ final class StatusItem {
     @RemoteKey("status.label")
     var statusLabel: String
 
-    init(id: String, title: String, statusID: String, statusLabel: String) {
+    init(
+        id: String,
+        title: String,
+        statusID: String,
+        statusLabel: String
+    ) {
         self.id = id
         self.title = title
         self.statusID = statusID
@@ -832,7 +851,11 @@ final class MacroScopedNote {
     var text: String
     var folder: NoteFolder?
 
-    init(id: Int, text: String, folder: NoteFolder? = nil) {
+    init(
+        id: Int,
+        text: String,
+        folder: NoteFolder? = nil
+    ) {
         self.id = id
         self.text = text
         self.folder = folder
@@ -846,7 +869,11 @@ final class ScopedBucket {
     @Relationship(inverse: \ScopedItem.bucket)
     var items: [ScopedItem]
 
-    init(id: Int, name: String, items: [ScopedItem] = []) {
+    init(
+        id: Int,
+        name: String,
+        items: [ScopedItem] = []
+    ) {
         self.id = id
         self.name = name
         self.items = items
@@ -859,7 +886,11 @@ final class ScopedItem {
     var text: String
     var bucket: ScopedBucket?
 
-    init(id: Int, text: String, bucket: ScopedBucket? = nil) {
+    init(
+        id: Int,
+        text: String,
+        bucket: ScopedBucket? = nil
+    ) {
         self.id = id
         self.text = text
         self.bucket = bucket
@@ -871,10 +902,7 @@ extension ScopedItem: SyncUpdatableModel {
     static var syncIdentity: KeyPath<ScopedItem, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> ScopedItem {
-        ScopedItem(
-            id: try payload.required(Int.self, for: "id"),
-            text: try payload.required(String.self, for: "text")
-        )
+        ScopedItem(id: try payload.required(Int.self, for: "id"), text: try payload.required(String.self, for: "text"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -897,7 +925,11 @@ final class GlobalBucket {
     @Relationship(inverse: \GlobalItem.bucket)
     var items: [GlobalItem]
 
-    init(id: Int, name: String, items: [GlobalItem] = []) {
+    init(
+        id: Int,
+        name: String,
+        items: [GlobalItem] = []
+    ) {
         self.id = id
         self.name = name
         self.items = items
@@ -910,7 +942,11 @@ final class GlobalItem {
     var text: String
     var bucket: GlobalBucket?
 
-    init(id: Int, text: String, bucket: GlobalBucket? = nil) {
+    init(
+        id: Int,
+        text: String,
+        bucket: GlobalBucket? = nil
+    ) {
         self.id = id
         self.text = text
         self.bucket = bucket
@@ -922,10 +958,7 @@ extension GlobalItem: SyncUpdatableModel {
     static var syncIdentity: KeyPath<GlobalItem, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> GlobalItem {
-        GlobalItem(
-            id: try payload.required(Int.self, for: "id"),
-            text: try payload.required(String.self, for: "text")
-        )
+        GlobalItem(id: try payload.required(Int.self, for: "id"), text: try payload.required(String.self, for: "text"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -958,7 +991,11 @@ final class UniqueIDNote {
     var text: String
     var folder: NoteFolder?
 
-    init(id: Int, text: String, folder: NoteFolder? = nil) {
+    init(
+        id: Int,
+        text: String,
+        folder: NoteFolder? = nil
+    ) {
         self.id = id
         self.text = text
         self.folder = folder
@@ -970,10 +1007,7 @@ extension UniqueIDNote: SyncUpdatableModel {
     static var syncIdentity: KeyPath<UniqueIDNote, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> UniqueIDNote {
-        UniqueIDNote(
-            id: try payload.required(Int.self, for: "id"),
-            text: try payload.required(String.self, for: "text")
-        )
+        UniqueIDNote(id: try payload.required(Int.self, for: "id"), text: try payload.required(String.self, for: "text"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -996,7 +1030,12 @@ final class UniqueEmailNote {
     var text: String
     var folder: NoteFolder?
 
-    init(id: Int, email: String, text: String, folder: NoteFolder? = nil) {
+    init(
+        id: Int,
+        email: String,
+        text: String,
+        folder: NoteFolder? = nil
+    ) {
         self.id = id
         self.email = email
         self.text = text
@@ -1036,7 +1075,11 @@ final class InferredNote {
     var text: String
     var folder: NoteFolder?
 
-    init(id: Int, text: String, folder: NoteFolder? = nil) {
+    init(
+        id: Int,
+        text: String,
+        folder: NoteFolder? = nil
+    ) {
         self.id = id
         self.text = text
         self.folder = folder
@@ -1048,10 +1091,7 @@ extension InferredNote: SyncUpdatableModel {
     static var syncIdentity: KeyPath<InferredNote, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> InferredNote {
-        InferredNote(
-            id: try payload.required(Int.self, for: "id"),
-            text: try payload.required(String.self, for: "text")
-        )
+        InferredNote(id: try payload.required(Int.self, for: "id"), text: try payload.required(String.self, for: "text"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -1145,7 +1185,11 @@ final class RemoteKeyIssue {
     var title: String
     @RemoteKey("relationships.owner") var owner: RemoteKeyOwner?
 
-    init(id: Int, title: String, owner: RemoteKeyOwner? = nil) {
+    init(
+        id: Int,
+        title: String,
+        owner: RemoteKeyOwner? = nil
+    ) {
         self.id = id
         self.title = title
         self.owner = owner
@@ -1160,7 +1204,11 @@ final class InferredTask {
     @Relationship(inverse: \InferredComment.task)
     var comments: [InferredComment]
 
-    init(id: Int, title: String, comments: [InferredComment] = []) {
+    init(
+        id: Int,
+        title: String,
+        comments: [InferredComment] = []
+    ) {
         self.id = id
         self.title = title
         self.comments = comments
@@ -1174,7 +1222,11 @@ final class InferredComment {
     var text: String
     var task: InferredTask?
 
-    init(id: Int, text: String, task: InferredTask? = nil) {
+    init(
+        id: Int,
+        text: String,
+        task: InferredTask? = nil
+    ) {
         self.id = id
         self.text = text
         self.task = task
@@ -1224,7 +1276,12 @@ final class RoleTicket {
     var assignee: RoleUser?
     var reviewer: RoleUser?
 
-    init(id: Int, title: String, assignee: RoleUser? = nil, reviewer: RoleUser? = nil) {
+    init(
+        id: Int,
+        title: String,
+        assignee: RoleUser? = nil,
+        reviewer: RoleUser? = nil
+    ) {
         self.id = id
         self.title = title
         self.assignee = assignee
@@ -1296,10 +1353,7 @@ extension ConcurrentRaceUser: SyncUpdatableModel {
     static var syncIdentity: KeyPath<ConcurrentRaceUser, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> ConcurrentRaceUser {
-        ConcurrentRaceUser(
-            id: try payload.required(Int.self, for: "id"),
-            fullName: try payload.required(String.self, for: "full_name")
-        )
+        ConcurrentRaceUser(id: try payload.required(Int.self, for: "id"), fullName: try payload.required(String.self, for: "full_name"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -1411,8 +1465,7 @@ final class SyncTests: XCTestCase {
         let container = try SyncContainer(for: User.self, configurations: .init(isStoredInMemoryOnly: true))
         try await container.sync(payload: [SendableUserPayload(id: 9, fullName: "Initial")], as: User.self)
 
-        try await container.sync(
-            item: SendableUserPayload(id: 9, fullName: "Updated"), as: User.self)
+        try await container.sync(item: SendableUserPayload(id: 9, fullName: "Updated"), as: User.self)
 
         let users = try container.mainContext.fetch(FetchDescriptor<User>())
         XCTAssertEqual(users.count, 1)
@@ -1452,9 +1505,15 @@ final class SyncTests: XCTestCase {
         items = try context.fetch(FetchDescriptor<StatusItem>())
         XCTAssertEqual(items.count, 1)
         XCTAssertEqual(
-            items.first?.statusID, "done", "statusID must be updated by apply(_:) via nested @RemoteKey path")
+            items.first?.statusID,
+            "done",
+            "statusID must be updated by apply(_:) via nested @RemoteKey path"
+        )
         XCTAssertEqual(
-            items.first?.statusLabel, "Done", "statusLabel must be updated by apply(_:) via nested @RemoteKey path")
+            items.first?.statusLabel,
+            "Done",
+            "statusLabel must be updated by apply(_:) via nested @RemoteKey path"
+        )
     }
 
     @MainActor
@@ -1630,7 +1689,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testSyncInvalidDateDefaultsRequiredAndNilForOptional() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: Profile.self, OptionalDateProfile.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: Profile.self,
+            OptionalDateProfile.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         try await context.sync(
@@ -1751,7 +1814,7 @@ final class SyncTests: XCTestCase {
         let users = try context.fetch(FetchDescriptor<User>())
         XCTAssertEqual(users.count, 3)
 
-        let ids = Set(users.map(\.id))
+        let ids = Set(users.map { $0.id })
         XCTAssertEqual(ids, Set([0, 1, 6]))
         XCTAssertEqual(users.filter { $0.id == 0 }.count, 1)
         XCTAssertEqual(users.filter { $0.id == 1 }.count, 1)
@@ -1857,7 +1920,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testSyncRelationshipsApplyToOneAndToMany() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: Team.self, Member.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: Team.self,
+            Member.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         let seedPayload: [Any] = [
@@ -1890,13 +1957,17 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(teams.count, 1)
         XCTAssertEqual(teams.first?.name, "Platform Updated")
         XCTAssertEqual(teams.first?.owner?.id, 2)
-        XCTAssertEqual(teams.first?.members.map(\.id), [2, 3])
+        XCTAssertEqual(teams.first?.members.map { $0.id }, [2, 3])
     }
 
     @MainActor
     func testSyncRelationshipsClearWithNullAndEmptyCollection() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: Team.self, Member.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: Team.self,
+            Member.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         let seedPayload: [Any] = [
@@ -1931,7 +2002,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testSyncToManyObjectArrayEmptyClearsRelationshipSet() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: UserTagsByObjects.self, Tag.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: UserTagsByObjects.self,
+            Tag.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         let seedPayload: [Any] = [
@@ -1963,7 +2038,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testSyncToManyObjectArrayNullClearsRelationshipSetAndMatchesEmptySemantics() async throws {
         let configurationA = ModelConfiguration(isStoredInMemoryOnly: true)
-        let containerA = try ModelContainer(for: UserTagsByObjects.self, Tag.self, configurations: configurationA)
+        let containerA = try ModelContainer(
+            for: UserTagsByObjects.self,
+            Tag.self,
+            configurations: configurationA
+        )
         let contextA = ModelContext(containerA)
         try await contextA.sync(
             payload: [
@@ -1987,7 +2066,11 @@ final class SyncTests: XCTestCase {
         let usersA = try contextA.fetch(FetchDescriptor<UserTagsByObjects>())
 
         let configurationB = ModelConfiguration(isStoredInMemoryOnly: true)
-        let containerB = try ModelContainer(for: UserTagsByObjects.self, Tag.self, configurations: configurationB)
+        let containerB = try ModelContainer(
+            for: UserTagsByObjects.self,
+            Tag.self,
+            configurations: configurationB
+        )
         let contextB = ModelContext(containerB)
         try await contextB.sync(
             payload: [
@@ -2018,13 +2101,17 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(usersB.count, 1)
         XCTAssertEqual(usersA[0].tags.count, 0)
         XCTAssertEqual(usersB[0].tags.count, 0)
-        XCTAssertEqual(Set(usersA[0].tags.map(\.id)), Set(usersB[0].tags.map(\.id)))
+        XCTAssertEqual(Set(usersA[0].tags.map { $0.id }), Set(usersB[0].tags.map { $0.id }))
     }
 
     @MainActor
     func testSyncRelationshipsMissingKeysPreserveExistingLinks() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: Team.self, Member.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: Team.self,
+            Member.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         let seedPayload: [Any] = [
@@ -2052,13 +2139,17 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(teams.count, 1)
         XCTAssertEqual(teams.first?.name, "Platform Renamed")
         XCTAssertEqual(teams.first?.owner?.id, 1)
-        XCTAssertEqual(Set(teams.first?.members.map(\.id) ?? []), Set([1, 2]))
+        XCTAssertEqual(Set(teams.first?.members.map { $0.id } ?? []), Set([1, 2]))
     }
 
     @MainActor
     func testSyncToOneByIDSetsAndClearsRelationship() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: Employee.self, Company.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: Employee.self,
+            Company.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         try await context.sync(payload: [["id": 10, "name": "Apple"]], as: Company.self)
@@ -2096,7 +2187,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testSyncToOneByIDMissingReferencedCompanyIsDeterministic() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: Employee.self, Company.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: Employee.self,
+            Company.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         try await context.sync(payload: [["id": 1, "name": "Ava"]], as: Employee.self)
@@ -2122,7 +2217,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testSyncableGeneratedToOneForeignKeySupportsStrictNullMissingAndUnknown() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: AutoEmployee.self, AutoCompany.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: AutoEmployee.self,
+            AutoCompany.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         try await context.sync(payload: [["id": 10, "name": "Acme"]], as: AutoCompany.self)
@@ -2191,7 +2290,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testSyncToManyNestedObjectArrayReplacesMembershipAndUpdatesExistingChild() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: Team.self, Member.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: Team.self,
+            Member.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         let payloadA: [Any] = [
@@ -2208,7 +2311,7 @@ final class SyncTests: XCTestCase {
 
         var teams = try context.fetch(FetchDescriptor<Team>())
         XCTAssertEqual(teams.count, 1)
-        XCTAssertEqual(Set(teams[0].members.map(\.id)), Set([101, 102]))
+        XCTAssertEqual(Set(teams[0].members.map { $0.id }), Set([101, 102]))
 
         let payloadB: [Any] = [
             [
@@ -2224,8 +2327,8 @@ final class SyncTests: XCTestCase {
 
         teams = try context.fetch(FetchDescriptor<Team>())
         XCTAssertEqual(teams.count, 1)
-        XCTAssertEqual(Set(teams[0].members.map(\.id)), Set([102, 103]))
-        XCTAssertFalse(Set(teams[0].members.map(\.id)).contains(101))
+        XCTAssertEqual(Set(teams[0].members.map { $0.id }), Set([102, 103]))
+        XCTAssertFalse(Set(teams[0].members.map { $0.id }).contains(101))
 
         let allMembers = try context.fetch(FetchDescriptor<Member>())
         XCTAssertEqual(allMembers.filter { $0.id == 102 }.count, 1)
@@ -2235,7 +2338,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testSyncToManyByIDsReplacesMembershipExactly() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: UserWithNotes.self, Note.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: UserWithNotes.self,
+            Note.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         try await context.sync(
@@ -2258,7 +2365,7 @@ final class SyncTests: XCTestCase {
 
         var users = try context.fetch(FetchDescriptor<UserWithNotes>())
         XCTAssertEqual(users.count, 1)
-        XCTAssertEqual(Set(users[0].notes.map(\.id)), Set([0, 1]))
+        XCTAssertEqual(Set(users[0].notes.map { $0.id }), Set([0, 1]))
 
         let payloadB: [Any] = [
             [
@@ -2271,14 +2378,18 @@ final class SyncTests: XCTestCase {
 
         users = try context.fetch(FetchDescriptor<UserWithNotes>())
         XCTAssertEqual(users.count, 1)
-        XCTAssertEqual(Set(users[0].notes.map(\.id)), Set([1, 2]))
-        XCTAssertFalse(Set(users[0].notes.map(\.id)).contains(0))
+        XCTAssertEqual(Set(users[0].notes.map { $0.id }), Set([1, 2]))
+        XCTAssertFalse(Set(users[0].notes.map { $0.id }).contains(0))
     }
 
     @MainActor
     func testSyncableGeneratedToManyIDsDedupeUnknownMissingAndNull() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: AutoTask.self, AutoTag.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: AutoTask.self,
+            AutoTag.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         try await context.sync(
@@ -2298,7 +2409,7 @@ final class SyncTests: XCTestCase {
 
         var tasks = try context.fetch(FetchDescriptor<AutoTask>())
         XCTAssertEqual(tasks.count, 1)
-        XCTAssertEqual(Set(tasks[0].tags.map(\.id)), Set([1, 2]))
+        XCTAssertEqual(Set(tasks[0].tags.map { $0.id }), Set([1, 2]))
 
         try await context.sync(
             payload: [
@@ -2309,7 +2420,7 @@ final class SyncTests: XCTestCase {
             ], as: AutoTask.self)
         tasks = try context.fetch(FetchDescriptor<AutoTask>())
         XCTAssertEqual(tasks[0].title, "Task A Updated")
-        XCTAssertEqual(Set(tasks[0].tags.map(\.id)), Set([1, 2]))
+        XCTAssertEqual(Set(tasks[0].tags.map { $0.id }), Set([1, 2]))
 
         try await context.sync(
             payload: [
@@ -2327,7 +2438,10 @@ final class SyncTests: XCTestCase {
     func testSyncableGeneratedNestedRelationshipsUpsertAndReplaceMembership() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(
-            for: AutoNestedTeam.self, AutoNestedMember.self, configurations: configuration)
+            for: AutoNestedTeam.self,
+            AutoNestedMember.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         try await context.sync(
@@ -2346,7 +2460,7 @@ final class SyncTests: XCTestCase {
         var teams = try context.fetch(FetchDescriptor<AutoNestedTeam>())
         XCTAssertEqual(teams.count, 1)
         XCTAssertEqual(teams[0].owner?.id, 1)
-        XCTAssertEqual(Set(teams[0].members.map(\.id)), Set([1, 2]))
+        XCTAssertEqual(Set(teams[0].members.map { $0.id }), Set([1, 2]))
 
         try await context.sync(
             payload: [
@@ -2364,7 +2478,7 @@ final class SyncTests: XCTestCase {
         teams = try context.fetch(FetchDescriptor<AutoNestedTeam>())
         XCTAssertEqual(teams[0].name, "Team v2")
         XCTAssertEqual(teams[0].owner?.id, 2)
-        XCTAssertEqual(Set(teams[0].members.map(\.id)), Set([2, 3]))
+        XCTAssertEqual(Set(teams[0].members.map { $0.id }), Set([2, 3]))
 
         let allMembers = try context.fetch(FetchDescriptor<AutoNestedMember>())
         XCTAssertEqual(allMembers.first(where: { $0.id == 2 })?.fullName, "Member Two Updated")
@@ -2387,7 +2501,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testSyncToManyByIDsIsIdempotentForRepeatedPayload() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: UserWithNotes.self, Note.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: UserWithNotes.self,
+            Note.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         try await context.sync(
@@ -2409,11 +2527,11 @@ final class SyncTests: XCTestCase {
 
         let users = try context.fetch(FetchDescriptor<UserWithNotes>())
         XCTAssertEqual(users.count, 1)
-        XCTAssertEqual(Set(users[0].notes.map(\.id)), Set([1, 2]))
+        XCTAssertEqual(Set(users[0].notes.map { $0.id }), Set([1, 2]))
 
         let notes = try context.fetch(FetchDescriptor<Note>())
         XCTAssertEqual(notes.count, 2)
-        XCTAssertEqual(Set(notes.map(\.id)), Set([1, 2]))
+        XCTAssertEqual(Set(notes.map { $0.id }), Set([1, 2]))
     }
 
     @MainActor
@@ -2445,7 +2563,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testSyncParentScopedLinksChildrenToExactParent() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: SuperUser.self, SuperNote.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: SuperUser.self,
+            SuperNote.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         let userA = SuperUser(id: 6, name: "A")
@@ -2457,18 +2579,26 @@ final class SyncTests: XCTestCase {
             ["id": 1, "text": "n1"],
         ]
         try await context.sync(
-            payload: childPayload, as: SuperNote.self, parent: userA, relationship: \SuperNote.superUser)
+            payload: childPayload,
+            as: SuperNote.self,
+            parent: userA,
+            relationship: \SuperNote.superUser
+        )
 
         let notes = try context.fetch(FetchDescriptor<SuperNote>())
         XCTAssertEqual(notes.count, 2)
-        XCTAssertEqual(Set(notes.map(\.id)), Set([0, 1]))
+        XCTAssertEqual(Set(notes.map { $0.id }), Set([0, 1]))
         XCTAssertTrue(notes.allSatisfy { $0.superUser?.id == 6 })
     }
 
     @MainActor
     func testSyncParentScopedDeleteAffectsOnlyThatParentScope() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: SuperUser.self, SuperNote.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: SuperUser.self,
+            SuperNote.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         let userA = SuperUser(id: 6, name: "A")
@@ -2481,31 +2611,47 @@ final class SyncTests: XCTestCase {
             payload: [
                 ["id": 0, "text": "a0"],
                 ["id": 1, "text": "a1"],
-            ], as: SuperNote.self, parent: userA, relationship: \SuperNote.superUser)
+            ],
+            as: SuperNote.self,
+            parent: userA,
+            relationship: \SuperNote.superUser
+        )
         try await context.sync(
             payload: [
                 ["id": 2, "text": "b2"],
                 ["id": 3, "text": "b3"],
-            ], as: SuperNote.self, parent: userB, relationship: \SuperNote.superUser)
+            ],
+            as: SuperNote.self,
+            parent: userB,
+            relationship: \SuperNote.superUser
+        )
 
         try await context.sync(
             payload: [
                 ["id": 1, "text": "a1-updated"]
-            ], as: SuperNote.self, parent: userA, relationship: \SuperNote.superUser)
+            ],
+            as: SuperNote.self,
+            parent: userA,
+            relationship: \SuperNote.superUser
+        )
 
         let notes = try context.fetch(FetchDescriptor<SuperNote>())
         let notesA = notes.filter { $0.superUser?.id == 6 }
         let notesB = notes.filter { $0.superUser?.id == 7 }
 
-        XCTAssertEqual(Set(notesA.map(\.id)), Set([1]))
+        XCTAssertEqual(Set(notesA.map { $0.id }), Set([1]))
         XCTAssertEqual(notesA.first?.text, "a1-updated")
-        XCTAssertEqual(Set(notesB.map(\.id)), Set([2, 3]))
+        XCTAssertEqual(Set(notesB.map { $0.id }), Set([2, 3]))
     }
 
     @MainActor
     func testParentObjectFromDifferentContextHandledDeterministically() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: SuperUser.self, SuperNote.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: SuperUser.self,
+            SuperNote.self,
+            configurations: configuration
+        )
         let contextA = ModelContext(container)
         let contextB = ModelContext(container)
 
@@ -2515,16 +2661,16 @@ final class SyncTests: XCTestCase {
         var capturedError: Error?
         do {
             try await contextB.sync(
-                payload: [["id": 1001, "text": "cross-context-child"]], as: SuperNote.self, parent: userFromContextA,
-                relationship: \SuperNote.superUser)
+                payload: [["id": 1001, "text": "cross-context-child"]],
+                as: SuperNote.self,
+                parent: userFromContextA,
+                relationship: \SuperNote.superUser
+            )
         } catch {
             capturedError = error
         }
 
-        XCTAssertNotNil(
-            capturedError,
-            "Expected deterministic handling for cross-context parent usage with a clear diagnostic."
-        )
+        XCTAssertNotNil(capturedError, "Expected deterministic handling for cross-context parent usage with a clear diagnostic.")
         if let capturedError {
             let description = String(describing: capturedError).lowercased()
             XCTAssertTrue(
@@ -2535,13 +2681,21 @@ final class SyncTests: XCTestCase {
         }
 
         let notes = try contextB.fetch(FetchDescriptor<SuperNote>())
-        XCTAssertEqual(notes.count, 0, "Safe fallback should avoid partial writes when parent context mismatches.")
+        XCTAssertEqual(
+            notes.count,
+            0,
+            "Safe fallback should avoid partial writes when parent context mismatches."
+        )
     }
 
     @MainActor
     func testParentSyncWithExplicitRelationship() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: InferredTask.self, InferredComment.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: InferredTask.self,
+            InferredComment.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         let taskA = InferredTask(id: 1, title: "A")
@@ -2554,27 +2708,43 @@ final class SyncTests: XCTestCase {
             payload: [
                 ["id": 1, "text": "A-1"],
                 ["id": 2, "text": "A-2"],
-            ], as: InferredComment.self, parent: taskA, relationship: \InferredComment.task)
+            ],
+            as: InferredComment.self,
+            parent: taskA,
+            relationship: \InferredComment.task
+        )
         try await context.sync(
             payload: [
                 ["id": 3, "text": "B-3"]
-            ], as: InferredComment.self, parent: taskB, relationship: \InferredComment.task)
+            ],
+            as: InferredComment.self,
+            parent: taskB,
+            relationship: \InferredComment.task
+        )
 
         try await context.sync(
             payload: [
                 ["id": 1, "text": "A-1 Updated"]
-            ], as: InferredComment.self, parent: taskA, relationship: \InferredComment.task)
+            ],
+            as: InferredComment.self,
+            parent: taskA,
+            relationship: \InferredComment.task
+        )
 
         let rows = try context.fetch(FetchDescriptor<InferredComment>())
-        XCTAssertEqual(Set(rows.filter { $0.task?.id == 1 }.map(\.id)), Set([1]))
+        XCTAssertEqual(Set(rows.filter { $0.task?.id == 1 }.map { $0.id }), Set([1]))
         XCTAssertEqual(rows.first(where: { $0.id == 1 })?.text, "A-1 Updated")
-        XCTAssertEqual(Set(rows.filter { $0.task?.id == 2 }.map(\.id)), Set([3]))
+        XCTAssertEqual(Set(rows.filter { $0.task?.id == 2 }.map { $0.id }), Set([3]))
     }
 
     @MainActor
     private func runManyToManyObjectsScenario() async throws -> [Int: Set<Int>] {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: UserTagsByObjects.self, Tag.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: UserTagsByObjects.self,
+            Tag.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         let payloadA: [Any] = [
@@ -2617,13 +2787,17 @@ final class SyncTests: XCTestCase {
         try await context.sync(payload: payloadB, as: UserTagsByObjects.self)
 
         let users = try context.fetch(FetchDescriptor<UserTagsByObjects>())
-        return Dictionary(uniqueKeysWithValues: users.map { ($0.id, Set($0.tags.map(\.id))) })
+        return Dictionary(uniqueKeysWithValues: users.map { ($0.id, Set($0.tags.map { $0.id })) })
     }
 
     @MainActor
     private func runManyToManyIDsScenario() async throws -> [Int: Set<Int>] {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: UserTagsByIDs.self, Tag.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: UserTagsByIDs.self,
+            Tag.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         try await context.sync(
@@ -2647,7 +2821,7 @@ final class SyncTests: XCTestCase {
         try await context.sync(payload: payloadB, as: UserTagsByIDs.self)
 
         let users = try context.fetch(FetchDescriptor<UserTagsByIDs>())
-        return Dictionary(uniqueKeysWithValues: users.map { ($0.id, Set($0.tags.map(\.id))) })
+        return Dictionary(uniqueKeysWithValues: users.map { ($0.id, Set($0.tags.map { $0.id })) })
     }
 
     @MainActor
@@ -2691,7 +2865,7 @@ final class SyncTests: XCTestCase {
 
         let readerContext = ModelContext(syncContainer.modelContainer)
         let rows = try readerContext.fetch(FetchDescriptor<ConcurrentRaceUser>())
-        XCTAssertEqual(Set(rows.map(\.id)), Set([1, 99]))
+        XCTAssertEqual(Set(rows.map { $0.id }), Set([1, 99]))
         XCTAssertEqual(rows.first(where: { $0.id == 99 })?.fullName, "Websocket Winner")
     }
 
@@ -2703,10 +2877,8 @@ final class SyncTests: XCTestCase {
         let backgroundContext = ModelContext(container)
         let readerContext = ModelContext(container)
 
-        try await foregroundContext.sync(
-            payload: [["id": 500, "full_name": "Foreground Winner"]], as: DifferentContextConflictUser.self)
-        try await backgroundContext.sync(
-            payload: [["id": 500, "full_name": "Background Winner"]], as: DifferentContextConflictUser.self)
+        try await foregroundContext.sync(payload: [["id": 500, "full_name": "Foreground Winner"]], as: DifferentContextConflictUser.self)
+        try await backgroundContext.sync(payload: [["id": 500, "full_name": "Background Winner"]], as: DifferentContextConflictUser.self)
 
         let rows = try readerContext.fetch(FetchDescriptor<DifferentContextConflictUser>())
         XCTAssertEqual(rows.count, 1)
@@ -2797,10 +2969,7 @@ final class SyncTests: XCTestCase {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let syncContainer = try SyncContainer(for: KeyStyleRecord.self, configurations: configuration)
 
-        try await syncContainer.sync(
-            payload: [["id": 1, "project_id": "P-1"]],
-            as: KeyStyleRecord.self
-        )
+        try await syncContainer.sync(payload: [["id": 1, "project_id": "P-1"]], as: KeyStyleRecord.self)
 
         let rows = try syncContainer.mainContext.fetch(FetchDescriptor<KeyStyleRecord>())
         XCTAssertEqual(rows.count, 1)
@@ -2816,10 +2985,7 @@ final class SyncTests: XCTestCase {
             configurations: configuration
         )
 
-        try await syncContainer.sync(
-            payload: [["id": 1, "projectId": "P-2"]],
-            as: KeyStyleRecord.self
-        )
+        try await syncContainer.sync(payload: [["id": 1, "projectId": "P-2"]], as: KeyStyleRecord.self)
 
         let rows = try syncContainer.mainContext.fetch(FetchDescriptor<KeyStyleRecord>())
         XCTAssertEqual(rows.count, 1)
@@ -2836,24 +3002,15 @@ final class SyncTests: XCTestCase {
             configurations: configuration
         )
 
-        try await syncContainer.sync(
-            payload: [["id": 10, "name": "Acme"]],
-            as: AutoCompany.self
-        )
+        try await syncContainer.sync(payload: [["id": 10, "name": "Acme"]], as: AutoCompany.self)
 
-        try await syncContainer.sync(
-            payload: [["id": 1, "name": "Ava", "companyId": 10]],
-            as: AutoEmployee.self
-        )
+        try await syncContainer.sync(payload: [["id": 1, "name": "Ava", "companyId": 10]], as: AutoEmployee.self)
 
         var employees = try syncContainer.mainContext.fetch(FetchDescriptor<AutoEmployee>())
         XCTAssertEqual(employees.count, 1)
         XCTAssertEqual(employees[0].company?.id, 10)
 
-        try await syncContainer.sync(
-            payload: [["id": 1, "name": "Ava", "companyId": NSNull()]],
-            as: AutoEmployee.self
-        )
+        try await syncContainer.sync(payload: [["id": 1, "name": "Ava", "companyId": NSNull()]], as: AutoEmployee.self)
 
         employees = try syncContainer.mainContext.fetch(FetchDescriptor<AutoEmployee>())
         XCTAssertNil(employees[0].company)
@@ -2877,22 +3034,16 @@ final class SyncTests: XCTestCase {
             as: AutoTag.self
         )
 
-        try await syncContainer.sync(
-            payload: [["id": 100, "title": "Launch", "tagIds": [1, 2]]],
-            as: AutoTask.self
-        )
+        try await syncContainer.sync(payload: [["id": 100, "title": "Launch", "tagIds": [1, 2]]], as: AutoTask.self)
 
         var tasks = try syncContainer.mainContext.fetch(FetchDescriptor<AutoTask>())
         XCTAssertEqual(tasks.count, 1)
-        XCTAssertEqual(Set(tasks[0].tags.map(\.id)), Set([1, 2]))
+        XCTAssertEqual(Set(tasks[0].tags.map { $0.id }), Set([1, 2]))
 
-        try await syncContainer.sync(
-            payload: [["id": 100, "title": "Launch", "tagIds": [2]]],
-            as: AutoTask.self
-        )
+        try await syncContainer.sync(payload: [["id": 100, "title": "Launch", "tagIds": [2]]], as: AutoTask.self)
 
         tasks = try syncContainer.mainContext.fetch(FetchDescriptor<AutoTask>())
-        XCTAssertEqual(Set(tasks[0].tags.map(\.id)), Set([2]))
+        XCTAssertEqual(Set(tasks[0].tags.map { $0.id }), Set([2]))
     }
 
     @MainActor
@@ -2918,10 +3069,7 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows[0].email, "first@example.com")
 
-        try await syncContainer.sync(
-            payload: [["id": 1]],
-            as: RemoteKeyPathContactRecord.self
-        )
+        try await syncContainer.sync(payload: [["id": 1]], as: RemoteKeyPathContactRecord.self)
 
         rows = try syncContainer.mainContext.fetch(FetchDescriptor<RemoteKeyPathContactRecord>())
         XCTAssertEqual(rows[0].email, "first@example.com")
@@ -3000,10 +3148,7 @@ final class SyncTests: XCTestCase {
         XCTAssertEqual(issues[0].owner?.id, 10)
         XCTAssertEqual(issues[0].owner?.fullName, "Alice")
 
-        try await syncContainer.sync(
-            payload: [["id": 1, "title": "Issue 1 updated"]],
-            as: RemoteKeyIssue.self
-        )
+        try await syncContainer.sync(payload: [["id": 1, "title": "Issue 1 updated"]], as: RemoteKeyIssue.self)
 
         issues = try syncContainer.mainContext.fetch(FetchDescriptor<RemoteKeyIssue>())
         XCTAssertEqual(issues[0].owner?.id, 10)
@@ -3089,7 +3234,10 @@ final class SyncTests: XCTestCase {
     func testSyncContainerRequiresExplicitParentRelationship() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let syncContainer = try SyncContainer(
-            for: InferredTask.self, InferredComment.self, configurations: configuration)
+            for: InferredTask.self,
+            InferredComment.self,
+            configurations: configuration
+        )
 
         let taskA = InferredTask(id: 1, title: "A")
         let taskB = InferredTask(id: 2, title: "B")
@@ -3124,15 +3272,18 @@ final class SyncTests: XCTestCase {
         )
 
         let rows = try syncContainer.mainContext.fetch(FetchDescriptor<InferredComment>())
-        XCTAssertEqual(Set(rows.filter { $0.task?.id == 1 }.map(\.id)), Set([1]))
-        XCTAssertEqual(Set(rows.filter { $0.task?.id == 2 }.map(\.id)), Set([3]))
+        XCTAssertEqual(Set(rows.filter { $0.task?.id == 1 }.map { $0.id }), Set([1]))
+        XCTAssertEqual(Set(rows.filter { $0.task?.id == 2 }.map { $0.id }), Set([3]))
     }
 
     @MainActor
     func testSyncContainerParentScopedPayloadConvertibleSyncsRows() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let syncContainer = try SyncContainer(
-            for: InferredTask.self, InferredComment.self, configurations: configuration)
+            for: InferredTask.self,
+            InferredComment.self,
+            configurations: configuration
+        )
 
         let taskA = InferredTask(id: 1, title: "A")
         let taskB = InferredTask(id: 2, title: "B")
@@ -3157,16 +3308,13 @@ final class SyncTests: XCTestCase {
         )
 
         let rows = try syncContainer.mainContext.fetch(FetchDescriptor<InferredComment>())
-        XCTAssertEqual(Set(rows.filter { $0.task?.id == 1 }.map(\.id)), Set([1, 2]))
-        XCTAssertEqual(Set(rows.filter { $0.task?.id == 2 }.map(\.id)), Set([3]))
+        XCTAssertEqual(Set(rows.filter { $0.task?.id == 1 }.map { $0.id }), Set([1, 2]))
+        XCTAssertEqual(Set(rows.filter { $0.task?.id == 2 }.map { $0.id }), Set([3]))
     }
 
     func testSyncErrorInvalidPayloadHasReadableLocalizedDescription() {
         let error = SyncError.invalidPayload(model: "Task", reason: "Expected array of dictionaries")
-        XCTAssertEqual(
-            error.localizedDescription,
-            "Invalid payload for Task: Expected array of dictionaries"
-        )
+        XCTAssertEqual(error.localizedDescription, "Invalid payload for Task: Expected array of dictionaries")
     }
 
     @MainActor
@@ -3453,7 +3601,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testParentScopedBatchSyncUsesParentTargetedFetchWhenPredicateExists() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: NoteFolder.self, MacroScopedNote.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: NoteFolder.self,
+            MacroScopedNote.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         let folder = NoteFolder(id: 1, name: "Folder")
@@ -3464,14 +3616,22 @@ final class SyncTests: XCTestCase {
             payload: [
                 ["id": 1, "text": "First"],
                 ["id": 2, "text": "Second"],
-            ], as: MacroScopedNote.self, parent: folder, relationship: \MacroScopedNote.folder)
+            ],
+            as: MacroScopedNote.self,
+            parent: folder,
+            relationship: \MacroScopedNote.folder
+        )
 
         let (_, profile) = try await SwiftSync.withMainActorPerformanceProfiling {
             try await context.sync(
                 payload: [
                     ["id": 1, "text": "First Updated"],
                     ["id": 2, "text": "Second Updated"],
-                ], as: MacroScopedNote.self, parent: folder, relationship: \MacroScopedNote.folder)
+                ],
+                as: MacroScopedNote.self,
+                parent: folder,
+                relationship: \MacroScopedNote.folder
+            )
         }
 
         XCTAssertTrue(profile.entered(.fetchExistingByParent))
@@ -3482,7 +3642,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testParentScopedBatchSyncFallsBackToTableFetchForManualConformerWithoutPredicate() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: SuperUser.self, SuperNote.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: SuperUser.self,
+            SuperNote.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
         let parent = SuperUser(id: 10, name: "Parent")
         context.insert(parent)
@@ -3492,14 +3656,22 @@ final class SyncTests: XCTestCase {
             payload: [
                 ["id": 1, "text": "First"],
                 ["id": 2, "text": "Second"],
-            ], as: SuperNote.self, parent: parent, relationship: \SuperNote.superUser)
+            ],
+            as: SuperNote.self,
+            parent: parent,
+            relationship: \SuperNote.superUser
+        )
 
         let (_, profile) = try await SwiftSync.withMainActorPerformanceProfiling {
             try await context.sync(
                 payload: [
                     ["id": 1, "text": "First Updated"],
                     ["id": 2, "text": "Second Updated"],
-                ], as: SuperNote.self, parent: parent, relationship: \SuperNote.superUser)
+                ],
+                as: SuperNote.self,
+                parent: parent,
+                relationship: \SuperNote.superUser
+            )
         }
 
         XCTAssertTrue(profile.entered(.fetchExisting))
@@ -3510,7 +3682,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testSyncItemWithParentUpdatesExistingRowWithoutDeletingOthers() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: SuperUser.self, SuperNote.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: SuperUser.self,
+            SuperNote.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
         let parent = SuperUser(id: 10, name: "Parent")
         context.insert(parent)
@@ -3520,11 +3696,18 @@ final class SyncTests: XCTestCase {
             payload: [
                 ["id": 1, "text": "First"],
                 ["id": 2, "text": "Second"],
-            ], as: SuperNote.self, parent: parent, relationship: \SuperNote.superUser)
+            ],
+            as: SuperNote.self,
+            parent: parent,
+            relationship: \SuperNote.superUser
+        )
 
         try await context.sync(
-            item: ["id": 1, "text": "First Updated"], as: SuperNote.self, parent: parent,
-            relationship: \SuperNote.superUser)
+            item: ["id": 1, "text": "First Updated"],
+            as: SuperNote.self,
+            parent: parent,
+            relationship: \SuperNote.superUser
+        )
 
         let notes = try context.fetch(FetchDescriptor<SuperNote>())
             .filter { $0.superUser?.persistentModelID == parent.persistentModelID }
@@ -3536,7 +3719,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testSyncItemWithParentUsesIdentityTargetedFetchWhenIdentityIsUnique() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: NoteFolder.self, MacroScopedNote.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: NoteFolder.self,
+            MacroScopedNote.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
         let folder = NoteFolder(id: 1, name: "Folder")
         context.insert(folder)
@@ -3546,12 +3733,19 @@ final class SyncTests: XCTestCase {
             payload: [
                 ["id": 1, "text": "First"],
                 ["id": 2, "text": "Second"],
-            ], as: MacroScopedNote.self, parent: folder, relationship: \MacroScopedNote.folder)
+            ],
+            as: MacroScopedNote.self,
+            parent: folder,
+            relationship: \MacroScopedNote.folder
+        )
 
         let (_, profile) = try await SwiftSync.withMainActorPerformanceProfiling {
             try await context.sync(
-                item: ["id": 1, "text": "First Updated"], as: MacroScopedNote.self, parent: folder,
-                relationship: \MacroScopedNote.folder)
+                item: ["id": 1, "text": "First Updated"],
+                as: MacroScopedNote.self,
+                parent: folder,
+                relationship: \MacroScopedNote.folder
+            )
         }
 
         XCTAssertTrue(profile.entered(.fetchExistingByIdentity))
@@ -3563,7 +3757,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testSyncItemWithParentFallsBackToTableFetchForManualConformerWithoutPredicate() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: SuperUser.self, SuperNote.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: SuperUser.self,
+            SuperNote.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
         let parent = SuperUser(id: 10, name: "Parent")
         context.insert(parent)
@@ -3573,12 +3771,19 @@ final class SyncTests: XCTestCase {
             payload: [
                 ["id": 1, "text": "First"],
                 ["id": 2, "text": "Second"],
-            ], as: SuperNote.self, parent: parent, relationship: \SuperNote.superUser)
+            ],
+            as: SuperNote.self,
+            parent: parent,
+            relationship: \SuperNote.superUser
+        )
 
         let (_, profile) = try await SwiftSync.withMainActorPerformanceProfiling {
             try await context.sync(
-                item: ["id": 1, "text": "First Updated"], as: SuperNote.self, parent: parent,
-                relationship: \SuperNote.superUser)
+                item: ["id": 1, "text": "First Updated"],
+                as: SuperNote.self,
+                parent: parent,
+                relationship: \SuperNote.superUser
+            )
         }
 
         XCTAssertTrue(profile.entered(.fetchExisting))
@@ -3590,18 +3795,29 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testSyncItemWithParentInsertsNewRowWhenNotFound() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: SuperUser.self, SuperNote.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: SuperUser.self,
+            SuperNote.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
         let parent = SuperUser(id: 10, name: "Parent")
         context.insert(parent)
         try context.save()
 
         try await context.sync(
-            payload: [["id": 1, "text": "First"]], as: SuperNote.self, parent: parent,
-            relationship: \SuperNote.superUser)
+            payload: [["id": 1, "text": "First"]],
+            as: SuperNote.self,
+            parent: parent,
+            relationship: \SuperNote.superUser
+        )
 
         try await context.sync(
-            item: ["id": 2, "text": "Second"], as: SuperNote.self, parent: parent, relationship: \SuperNote.superUser)
+            item: ["id": 2, "text": "Second"],
+            as: SuperNote.self,
+            parent: parent,
+            relationship: \SuperNote.superUser
+        )
 
         let notes = try context.fetch(FetchDescriptor<SuperNote>())
             .filter { $0.superUser?.persistentModelID == parent.persistentModelID }
@@ -3613,7 +3829,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testSyncItemWithParentGlobalIdentityMovesRowAcrossParents() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: NoteFolder.self, UniqueIDNote.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: NoteFolder.self,
+            UniqueIDNote.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         let folderA = NoteFolder(id: 1, name: "A")
@@ -3623,12 +3843,18 @@ final class SyncTests: XCTestCase {
         try context.save()
 
         try await context.sync(
-            item: ["id": 10, "text": "original"], as: UniqueIDNote.self, parent: folderA,
-            relationship: \UniqueIDNote.folder)
+            item: ["id": 10, "text": "original"],
+            as: UniqueIDNote.self,
+            parent: folderA,
+            relationship: \UniqueIDNote.folder
+        )
 
         try await context.sync(
-            item: ["id": 10, "text": "moved"], as: UniqueIDNote.self, parent: folderB,
-            relationship: \UniqueIDNote.folder)
+            item: ["id": 10, "text": "moved"],
+            as: UniqueIDNote.self,
+            parent: folderB,
+            relationship: \UniqueIDNote.folder
+        )
 
         let all = try context.fetch(FetchDescriptor<UniqueIDNote>())
         XCTAssertEqual(all.count, 1)
@@ -3639,7 +3865,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testParentScopedSyncScopedIdentityAllowsDuplicateIDsAcrossParents() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: ScopedBucket.self, ScopedItem.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: ScopedBucket.self,
+            ScopedItem.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         let parentA = ScopedBucket(id: 1, name: "A")
@@ -3649,12 +3879,18 @@ final class SyncTests: XCTestCase {
         try context.save()
 
         try await context.sync(
-            payload: [["id": 10, "text": "A-10"]], as: ScopedItem.self, parent: parentA,
-            relationship: \ScopedItem.bucket)
+            payload: [["id": 10, "text": "A-10"]],
+            as: ScopedItem.self,
+            parent: parentA,
+            relationship: \ScopedItem.bucket
+        )
 
         try await context.sync(
-            payload: [["id": 10, "text": "B-10"]], as: ScopedItem.self, parent: parentB,
-            relationship: \ScopedItem.bucket)
+            payload: [["id": 10, "text": "B-10"]],
+            as: ScopedItem.self,
+            parent: parentB,
+            relationship: \ScopedItem.bucket
+        )
 
         let all = try context.fetch(FetchDescriptor<ScopedItem>())
         XCTAssertEqual(all.count, 2)
@@ -3665,7 +3901,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testParentScopedSyncGlobalIdentityMovesRowAcrossParents() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: GlobalBucket.self, GlobalItem.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: GlobalBucket.self,
+            GlobalItem.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         let parentA = GlobalBucket(id: 1, name: "A")
@@ -3675,12 +3915,18 @@ final class SyncTests: XCTestCase {
         try context.save()
 
         try await context.sync(
-            payload: [["id": 10, "text": "A-10"]], as: GlobalItem.self, parent: parentA,
-            relationship: \GlobalItem.bucket)
+            payload: [["id": 10, "text": "A-10"]],
+            as: GlobalItem.self,
+            parent: parentA,
+            relationship: \GlobalItem.bucket
+        )
 
         try await context.sync(
-            payload: [["id": 10, "text": "B-10"]], as: GlobalItem.self, parent: parentB,
-            relationship: \GlobalItem.bucket)
+            payload: [["id": 10, "text": "B-10"]],
+            as: GlobalItem.self,
+            parent: parentB,
+            relationship: \GlobalItem.bucket
+        )
 
         let all = try context.fetch(FetchDescriptor<GlobalItem>())
         XCTAssertEqual(all.count, 1)
@@ -3692,7 +3938,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testParentScopedDeleteAffectsOnlyCurrentParentScopeWhenScoped() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: ScopedBucket.self, ScopedItem.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: ScopedBucket.self,
+            ScopedItem.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         let parentA = ScopedBucket(id: 1, name: "A")
@@ -3705,23 +3955,35 @@ final class SyncTests: XCTestCase {
             payload: [
                 ["id": 1, "text": "A-1"],
                 ["id": 2, "text": "A-2"],
-            ], as: ScopedItem.self, parent: parentA, relationship: \ScopedItem.bucket)
+            ],
+            as: ScopedItem.self,
+            parent: parentA,
+            relationship: \ScopedItem.bucket
+        )
 
         try await context.sync(
             payload: [
                 ["id": 1, "text": "B-1"],
                 ["id": 3, "text": "B-3"],
-            ], as: ScopedItem.self, parent: parentB, relationship: \ScopedItem.bucket)
+            ],
+            as: ScopedItem.self,
+            parent: parentB,
+            relationship: \ScopedItem.bucket
+        )
 
         try await context.sync(
             payload: [
                 ["id": 1, "text": "A-1 updated"]
-            ], as: ScopedItem.self, parent: parentA, relationship: \ScopedItem.bucket)
+            ],
+            as: ScopedItem.self,
+            parent: parentA,
+            relationship: \ScopedItem.bucket
+        )
 
         let rows = try context.fetch(FetchDescriptor<ScopedItem>())
-        XCTAssertEqual(Set(rows.filter { $0.bucket?.id == 1 }.map(\.id)), Set([1]))
+        XCTAssertEqual(Set(rows.filter { $0.bucket?.id == 1 }.map { $0.id }), Set([1]))
         XCTAssertEqual(rows.first(where: { $0.bucket?.id == 1 && $0.id == 1 })?.text, "A-1 updated")
-        XCTAssertEqual(Set(rows.filter { $0.bucket?.id == 2 }.map(\.id)), Set([1, 3]))
+        XCTAssertEqual(Set(rows.filter { $0.bucket?.id == 2 }.map { $0.id }), Set([1, 3]))
     }
 
     @MainActor
@@ -3746,7 +4008,7 @@ final class SyncTests: XCTestCase {
         try await context.sync(item: ["id": 1, "full_name": "One Recreated"], as: User.self)
 
         let rows = try context.fetch(FetchDescriptor<User>())
-        XCTAssertEqual(Set(rows.map(\.id)), Set([1, 2]))
+        XCTAssertEqual(Set(rows.map { $0.id }), Set([1, 2]))
         XCTAssertEqual(rows.first(where: { $0.id == 1 })?.fullName, "One Recreated")
         XCTAssertEqual(rows.first(where: { $0.id == 2 })?.fullName, "Two")
     }
@@ -3754,7 +4016,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testUniqueAttributeOnSyncIdentityImpliesGlobalPolicy() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: NoteFolder.self, UniqueIDNote.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: NoteFolder.self,
+            UniqueIDNote.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         let folderA = NoteFolder(id: 1, name: "A")
@@ -3764,12 +4030,18 @@ final class SyncTests: XCTestCase {
         try context.save()
 
         try await context.sync(
-            payload: [["id": 10, "text": "original"]], as: UniqueIDNote.self, parent: folderA,
-            relationship: \UniqueIDNote.folder)
+            payload: [["id": 10, "text": "original"]],
+            as: UniqueIDNote.self,
+            parent: folderA,
+            relationship: \UniqueIDNote.folder
+        )
 
         try await context.sync(
-            payload: [["id": 10, "text": "moved"]], as: UniqueIDNote.self, parent: folderB,
-            relationship: \UniqueIDNote.folder)
+            payload: [["id": 10, "text": "moved"]],
+            as: UniqueIDNote.self,
+            parent: folderB,
+            relationship: \UniqueIDNote.folder
+        )
 
         let all = try context.fetch(FetchDescriptor<UniqueIDNote>())
         XCTAssertEqual(all.count, 1)
@@ -3780,7 +4052,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testExplicitParentRelationshipWithoutUniqueAttributeUsesScopedPolicy() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: NoteFolder.self, InferredNote.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: NoteFolder.self,
+            InferredNote.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         let folderA = NoteFolder(id: 1, name: "A")
@@ -3790,12 +4066,18 @@ final class SyncTests: XCTestCase {
         try context.save()
 
         try await context.sync(
-            payload: [["id": 10, "text": "A-note"]], as: InferredNote.self, parent: folderA,
-            relationship: \InferredNote.folder)
+            payload: [["id": 10, "text": "A-note"]],
+            as: InferredNote.self,
+            parent: folderA,
+            relationship: \InferredNote.folder
+        )
 
         try await context.sync(
-            payload: [["id": 10, "text": "B-note"]], as: InferredNote.self, parent: folderB,
-            relationship: \InferredNote.folder)
+            payload: [["id": 10, "text": "B-note"]],
+            as: InferredNote.self,
+            parent: folderB,
+            relationship: \InferredNote.folder
+        )
 
         let all = try context.fetch(FetchDescriptor<InferredNote>())
         XCTAssertEqual(all.count, 2)
@@ -3806,7 +4088,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testUniqueAttributeOnNonIdentityFieldDoesNotImplyGlobalPolicy() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: NoteFolder.self, UniqueEmailNote.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: NoteFolder.self,
+            UniqueEmailNote.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         let folderA = NoteFolder(id: 1, name: "A")
@@ -3816,12 +4102,18 @@ final class SyncTests: XCTestCase {
         try context.save()
 
         try await context.sync(
-            payload: [["id": 10, "email": "a@example.com", "text": "A-note"]], as: UniqueEmailNote.self,
-            parent: folderA, relationship: \UniqueEmailNote.folder)
+            payload: [["id": 10, "email": "a@example.com", "text": "A-note"]],
+            as: UniqueEmailNote.self,
+            parent: folderA,
+            relationship: \UniqueEmailNote.folder
+        )
 
         try await context.sync(
-            payload: [["id": 10, "email": "b@example.com", "text": "B-note"]], as: UniqueEmailNote.self,
-            parent: folderB, relationship: \UniqueEmailNote.folder)
+            payload: [["id": 10, "email": "b@example.com", "text": "B-note"]],
+            as: UniqueEmailNote.self,
+            parent: folderB,
+            relationship: \UniqueEmailNote.folder
+        )
 
         let all = try context.fetch(FetchDescriptor<UniqueEmailNote>())
         XCTAssertEqual(all.count, 2)
@@ -3832,7 +4124,11 @@ final class SyncTests: XCTestCase {
     @MainActor
     func testStrictForeignKeyTypingDoesNotCoerceRelationshipIDs() async throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: AutoCompany.self, AutoEmployee.self, configurations: configuration)
+        let container = try ModelContainer(
+            for: AutoCompany.self,
+            AutoEmployee.self,
+            configurations: configuration
+        )
         let context = ModelContext(container)
 
         try await context.sync(payload: [["id": 10, "name": "Acme"]], as: AutoCompany.self)

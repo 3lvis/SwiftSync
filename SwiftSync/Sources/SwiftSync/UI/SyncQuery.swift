@@ -14,7 +14,12 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
         in syncContainer: SyncContainer,
         sortBy: [SortDescriptor<Model>] = []
     ) {
-        _publisher = State(initialValue: SyncQueryPublisher(Model.self, in: syncContainer, sortBy: sortBy))
+        _publisher = State(
+            initialValue: SyncQueryPublisher(
+                Model.self,
+                in: syncContainer,
+                sortBy: sortBy
+            ))
     }
 
     public init(
@@ -24,7 +29,12 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
         sortBy: [SortDescriptor<Model>] = []
     ) {
         _publisher = State(
-            initialValue: SyncQueryPublisher(Model.self, predicate: predicate, in: syncContainer, sortBy: sortBy))
+            initialValue: SyncQueryPublisher(
+                Model.self,
+                predicate: predicate,
+                in: syncContainer,
+                sortBy: sortBy
+            ))
     }
 
     public init<Related: SyncModelable>(
@@ -36,8 +46,12 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
     ) {
         _publisher = State(
             initialValue: SyncQueryPublisher(
-                Model.self, relationship: relationship, relationshipID: relationshipID, in: syncContainer,
-                sortBy: sortBy))
+                Model.self,
+                relationship: relationship,
+                relationshipID: relationshipID,
+                in: syncContainer,
+                sortBy: sortBy
+            ))
     }
 
     public init<Related: SyncModelable>(
@@ -49,7 +63,11 @@ public struct SyncQuery<Model: PersistentModel>: DynamicProperty {
     ) {
         _publisher = State(
             initialValue: SyncQueryPublisher(
-                Model.self, relationship: relationship, relationshipID: relationshipID, in: syncContainer,
-                sortBy: sortBy))
+                Model.self,
+                relationship: relationship,
+                relationshipID: relationshipID,
+                in: syncContainer,
+                sortBy: sortBy
+            ))
     }
 }

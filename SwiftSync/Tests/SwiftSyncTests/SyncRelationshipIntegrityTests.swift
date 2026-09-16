@@ -11,7 +11,11 @@ final class MissingInverseRegressionTag {
     // Intentionally no explicit inverse — reproduces the Demo bug; don't "fix" it.
     var tasks: [MissingInverseRegressionTask]
 
-    init(id: Int, name: String, tasks: [MissingInverseRegressionTask] = []) {
+    init(
+        id: Int,
+        name: String,
+        tasks: [MissingInverseRegressionTask] = []
+    ) {
         self.id = id
         self.name = name
         self.tasks = tasks
@@ -26,7 +30,11 @@ final class MissingInverseRegressionTask {
     @RemoteKey("tag_ids")
     var tags: [MissingInverseRegressionTag]
 
-    init(id: Int, title: String, tags: [MissingInverseRegressionTag] = []) {
+    init(
+        id: Int,
+        title: String,
+        tags: [MissingInverseRegressionTag] = []
+    ) {
         self.id = id
         self.title = title
         self.tags = tags
@@ -39,7 +47,11 @@ final class ExplicitInverseRegressionTag {
     var name: String
     var tasks: [ExplicitInverseRegressionTask]
 
-    init(id: Int, name: String, tasks: [ExplicitInverseRegressionTask] = []) {
+    init(
+        id: Int,
+        name: String,
+        tasks: [ExplicitInverseRegressionTask] = []
+    ) {
         self.id = id
         self.name = name
         self.tasks = tasks
@@ -55,7 +67,11 @@ final class ExplicitInverseRegressionTask {
     @Relationship(inverse: \ExplicitInverseRegressionTag.tasks)
     var tags: [ExplicitInverseRegressionTag]
 
-    init(id: Int, title: String, tags: [ExplicitInverseRegressionTag] = []) {
+    init(
+        id: Int,
+        title: String,
+        tags: [ExplicitInverseRegressionTag] = []
+    ) {
         self.id = id
         self.title = title
         self.tags = tags
@@ -67,10 +83,7 @@ extension MissingInverseRegressionTag: SyncUpdatableModel {
     static var syncIdentity: KeyPath<MissingInverseRegressionTag, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> MissingInverseRegressionTag {
-        MissingInverseRegressionTag(
-            id: try payload.required(Int.self, for: "id"),
-            name: try payload.required(String.self, for: "name")
-        )
+        MissingInverseRegressionTag(id: try payload.required(Int.self, for: "id"), name: try payload.required(String.self, for: "name"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -91,10 +104,7 @@ extension MissingInverseRegressionTask: SyncUpdatableModel {
     static var syncIdentity: KeyPath<MissingInverseRegressionTask, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> MissingInverseRegressionTask {
-        MissingInverseRegressionTask(
-            id: try payload.required(Int.self, for: "id"),
-            title: try payload.required(String.self, for: "title")
-        )
+        MissingInverseRegressionTask(id: try payload.required(Int.self, for: "id"), title: try payload.required(String.self, for: "title"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -114,7 +124,11 @@ extension MissingInverseRegressionTask: SyncUpdatableModel {
         in context: ModelContext,
         isolation: isolated (any Actor)? = #isolation
     ) async throws -> Bool {
-        try await applyRelationships(payload, in: context, operations: .all)
+        try await applyRelationships(
+            payload,
+            in: context,
+            operations: .all
+        )
     }
 
     func applyRelationships(
@@ -139,10 +153,7 @@ extension ExplicitInverseRegressionTag: SyncUpdatableModel {
     static var syncIdentity: KeyPath<ExplicitInverseRegressionTag, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> ExplicitInverseRegressionTag {
-        ExplicitInverseRegressionTag(
-            id: try payload.required(Int.self, for: "id"),
-            name: try payload.required(String.self, for: "name")
-        )
+        ExplicitInverseRegressionTag(id: try payload.required(Int.self, for: "id"), name: try payload.required(String.self, for: "name"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -163,10 +174,7 @@ extension ExplicitInverseRegressionTask: SyncUpdatableModel {
     static var syncIdentity: KeyPath<ExplicitInverseRegressionTask, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> ExplicitInverseRegressionTask {
-        ExplicitInverseRegressionTask(
-            id: try payload.required(Int.self, for: "id"),
-            title: try payload.required(String.self, for: "title")
-        )
+        ExplicitInverseRegressionTask(id: try payload.required(Int.self, for: "id"), title: try payload.required(String.self, for: "title"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -186,7 +194,11 @@ extension ExplicitInverseRegressionTask: SyncUpdatableModel {
         in context: ModelContext,
         isolation: isolated (any Actor)? = #isolation
     ) async throws -> Bool {
-        try await applyRelationships(payload, in: context, operations: .all)
+        try await applyRelationships(
+            payload,
+            in: context,
+            operations: .all
+        )
     }
 
     func applyRelationships(
@@ -228,7 +240,12 @@ final class OneSidedTask {
     // No explicit inverse, mirroring Task.reviewers / Task.watchers in the Demo.
     @Relationship var members: [OneSidedUser]
 
-    init(id: Int, title: String, syncChangeToken: Int = 0, members: [OneSidedUser] = []) {
+    init(
+        id: Int,
+        title: String,
+        syncChangeToken: Int = 0,
+        members: [OneSidedUser] = []
+    ) {
         self.id = id
         self.title = title
         self.syncChangeToken = syncChangeToken
@@ -241,10 +258,7 @@ extension OneSidedUser: SyncUpdatableModel {
     static var syncIdentity: KeyPath<OneSidedUser, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> OneSidedUser {
-        OneSidedUser(
-            id: try payload.required(Int.self, for: "id"),
-            name: try payload.required(String.self, for: "name")
-        )
+        OneSidedUser(id: try payload.required(Int.self, for: "id"), name: try payload.required(String.self, for: "name"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -268,10 +282,7 @@ extension OneSidedTask: SyncUpdatableModel {
     static var syncIdentity: KeyPath<OneSidedTask, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> OneSidedTask {
-        OneSidedTask(
-            id: try payload.required(Int.self, for: "id"),
-            title: try payload.required(String.self, for: "title")
-        )
+        OneSidedTask(id: try payload.required(Int.self, for: "id"), title: try payload.required(String.self, for: "title"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -291,7 +302,11 @@ extension OneSidedTask: SyncUpdatableModel {
         in context: ModelContext,
         isolation: isolated (any Actor)? = #isolation
     ) async throws -> Bool {
-        try await applyRelationships(payload, in: context, operations: .all)
+        try await applyRelationships(
+            payload,
+            in: context,
+            operations: .all
+        )
     }
 
     func applyRelationships(
@@ -334,7 +349,11 @@ final class OneSidedNestedTask {
 
     @Relationship var members: [OneSidedNestedUser]
 
-    init(id: Int, title: String, members: [OneSidedNestedUser] = []) {
+    init(
+        id: Int,
+        title: String,
+        members: [OneSidedNestedUser] = []
+    ) {
         self.id = id
         self.title = title
         self.members = members
@@ -346,10 +365,7 @@ extension OneSidedNestedUser: SyncUpdatableModel {
     static var syncIdentity: KeyPath<OneSidedNestedUser, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> OneSidedNestedUser {
-        OneSidedNestedUser(
-            id: try payload.required(Int.self, for: "id"),
-            name: try payload.required(String.self, for: "name")
-        )
+        OneSidedNestedUser(id: try payload.required(Int.self, for: "id"), name: try payload.required(String.self, for: "name"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -372,10 +388,7 @@ extension OneSidedNestedTask: SyncUpdatableModel {
     static var syncIdentity: KeyPath<OneSidedNestedTask, Int> { \.id }
 
     static func make(from payload: SyncPayload) throws -> OneSidedNestedTask {
-        OneSidedNestedTask(
-            id: try payload.required(Int.self, for: "id"),
-            title: try payload.required(String.self, for: "title")
-        )
+        OneSidedNestedTask(id: try payload.required(Int.self, for: "id"), title: try payload.required(String.self, for: "title"))
     }
 
     func apply(_ payload: SyncPayload) throws -> Bool {
@@ -395,7 +408,11 @@ extension OneSidedNestedTask: SyncUpdatableModel {
         in context: ModelContext,
         isolation: isolated (any Actor)? = #isolation
     ) async throws -> Bool {
-        try await applyRelationships(payload, in: context, operations: .all)
+        try await applyRelationships(
+            payload,
+            in: context,
+            operations: .all
+        )
     }
 
     func applyRelationships(
@@ -429,18 +446,21 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
     func testSyncApplyToManyForeignKeysCallsSyncMarkChangedAfterMembershipChange() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(
-            for: OneSidedTask.self, OneSidedUser.self,
+            for: OneSidedTask.self,
+            OneSidedUser.self,
             configurations: config
         )
         let context = ModelContext(container)
 
-        try await context.sync(
-            payload: [["id": 1, "name": "Alice"], ["id": 2, "name": "Bob"]], as: OneSidedUser.self)
-        try await context.sync(
-            payload: [["id": 10, "title": "Task 10", "member_ids": [] as [Int]]], as: OneSidedTask.self)
+        try await context.sync(payload: [["id": 1, "name": "Alice"], ["id": 2, "name": "Bob"]], as: OneSidedUser.self)
+        try await context.sync(payload: [["id": 10, "title": "Task 10", "member_ids": [] as [Int]]], as: OneSidedTask.self)
 
         let task = try XCTUnwrap(context.fetch(FetchDescriptor<OneSidedTask>()).first)
-        XCTAssertEqual(task.members.count, 0, "precondition: task starts with no members")
+        XCTAssertEqual(
+            task.members.count,
+            0,
+            "precondition: task starts with no members"
+        )
 
         OneSidedTask.syncMarkChangedCallCount = 0
 
@@ -448,25 +468,26 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
         try await context.sync(payload: [["id": 10, "title": "Task 10", "member_ids": [1, 2]]], as: OneSidedTask.self)
 
         XCTAssertEqual(
-            OneSidedTask.syncMarkChangedCallCount, 1,
+            OneSidedTask.syncMarkChangedCallCount,
+            1,
             "syncApplyToManyForeignKeys must call syncMarkChanged() after a membership change "
                 + "so the owning model's store row is marked dirty on iOS persistent stores. "
                 + "Count was \(OneSidedTask.syncMarkChangedCallCount), expected 1."
         )
 
-        XCTAssertEqual(Set(task.members.map(\.id)), Set([1, 2]))
+        XCTAssertEqual(Set(task.members.map { $0.id }), Set([1, 2]))
     }
 
     func testSyncApplyToManyForeignKeysDoesNotCallSyncMarkChangedWhenUnchanged() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(
-            for: OneSidedTask.self, OneSidedUser.self,
+            for: OneSidedTask.self,
+            OneSidedUser.self,
             configurations: config
         )
         let context = ModelContext(container)
 
-        try await context.sync(
-            payload: [["id": 1, "name": "Alice"], ["id": 2, "name": "Bob"]], as: OneSidedUser.self)
+        try await context.sync(payload: [["id": 1, "name": "Alice"], ["id": 2, "name": "Bob"]], as: OneSidedUser.self)
         try await context.sync(payload: [["id": 10, "title": "Task 10", "member_ids": [1, 2]]], as: OneSidedTask.self)
 
         OneSidedTask.syncMarkChangedCallCount = 0
@@ -474,7 +495,8 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
         try await context.sync(payload: [["id": 10, "title": "Task 10", "member_ids": [1, 2]]], as: OneSidedTask.self)
 
         XCTAssertEqual(
-            OneSidedTask.syncMarkChangedCallCount, 0,
+            OneSidedTask.syncMarkChangedCallCount,
+            0,
             "syncMarkChanged() must not be called when relationship membership is unchanged."
         )
     }
@@ -482,16 +504,20 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
     func testSyncApplyToManyNestedObjectsCallsSyncMarkChangedAfterMembershipChange() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(
-            for: OneSidedNestedTask.self, OneSidedNestedUser.self,
+            for: OneSidedNestedTask.self,
+            OneSidedNestedUser.self,
             configurations: config
         )
         let context = ModelContext(container)
 
-        try await context.sync(
-            payload: [["id": 10, "title": "Task 10", "members": [] as [[String: Any]]]], as: OneSidedNestedTask.self)
+        try await context.sync(payload: [["id": 10, "title": "Task 10", "members": [] as [[String: Any]]]], as: OneSidedNestedTask.self)
 
         let task = try XCTUnwrap(context.fetch(FetchDescriptor<OneSidedNestedTask>()).first)
-        XCTAssertEqual(task.members.count, 0, "precondition: task starts with no members")
+        XCTAssertEqual(
+            task.members.count,
+            0,
+            "precondition: task starts with no members"
+        )
 
         OneSidedNestedTask.syncMarkChangedCallCount = 0
 
@@ -508,16 +534,18 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
             ], as: OneSidedNestedTask.self)
 
         XCTAssertEqual(
-            OneSidedNestedTask.syncMarkChangedCallCount, 1,
+            OneSidedNestedTask.syncMarkChangedCallCount,
+            1,
             "syncApplyToManyNestedObjects must call syncMarkChanged() after a membership change."
         )
-        XCTAssertEqual(Set(task.members.map(\.id)), Set([1, 2]))
+        XCTAssertEqual(Set(task.members.map { $0.id }), Set([1, 2]))
     }
 
     func testSyncApplyToManyNestedObjectsDoesNotCallSyncMarkChangedWhenUnchanged() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(
-            for: OneSidedNestedTask.self, OneSidedNestedUser.self,
+            for: OneSidedNestedTask.self,
+            OneSidedNestedUser.self,
             configurations: config
         )
         let context = ModelContext(container)
@@ -549,7 +577,8 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
             ], as: OneSidedNestedTask.self)
 
         XCTAssertEqual(
-            OneSidedNestedTask.syncMarkChangedCallCount, 0,
+            OneSidedNestedTask.syncMarkChangedCallCount,
+            0,
             "syncMarkChanged() must not be called when nested relationship membership is unchanged."
         )
     }
@@ -557,7 +586,8 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
     func testSyncApplyToManyNestedObjectsCallsSyncMarkChangedAfterClear() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(
-            for: OneSidedNestedTask.self, OneSidedNestedUser.self,
+            for: OneSidedNestedTask.self,
+            OneSidedNestedUser.self,
             configurations: config
         )
         let context = ModelContext(container)
@@ -575,7 +605,11 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
             ], as: OneSidedNestedTask.self)
 
         let task = try XCTUnwrap(context.fetch(FetchDescriptor<OneSidedNestedTask>()).first)
-        XCTAssertEqual(Set(task.members.map(\.id)), Set([1, 2]), "precondition: task starts populated")
+        XCTAssertEqual(
+            Set(task.members.map { $0.id }),
+            Set([1, 2]),
+            "precondition: task starts populated"
+        )
 
         OneSidedNestedTask.syncMarkChangedCallCount = 0
 
@@ -589,7 +623,8 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
             ], as: OneSidedNestedTask.self)
 
         XCTAssertEqual(
-            OneSidedNestedTask.syncMarkChangedCallCount, 1,
+            OneSidedNestedTask.syncMarkChangedCallCount,
+            1,
             "syncApplyToManyNestedObjects must call syncMarkChanged() after an explicit clear."
         )
         XCTAssertEqual(task.members.count, 0)
@@ -599,35 +634,31 @@ final class SyncMarkChangedCallSiteTests: XCTestCase {
     func testSyncMarkChangedTokenMakesDirectModelObservationSeeToManyMembershipChange() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(
-            for: OneSidedTask.self, OneSidedUser.self,
+            for: OneSidedTask.self,
+            OneSidedUser.self,
             configurations: config
         )
         let context = ModelContext(container)
 
-        try await context.sync(
-            payload: [["id": 1, "name": "Alice"], ["id": 2, "name": "Bob"], ["id": 3, "name": "Cara"]],
-            as: OneSidedUser.self)
+        try await context.sync(payload: [["id": 1, "name": "Alice"], ["id": 2, "name": "Bob"], ["id": 3, "name": "Cara"]], as: OneSidedUser.self)
         try await context.sync(payload: [["id": 10, "title": "Task 10", "member_ids": [1, 2]]], as: OneSidedTask.self)
 
         let task = try XCTUnwrap(context.fetch(FetchDescriptor<OneSidedTask>()).first)
-        XCTAssertEqual(task.members.map(\.id).sorted(), [1, 2])
+        XCTAssertEqual(task.members.map { $0.id }.sorted(), [1, 2])
 
         // onChange fires synchronously during the mutation, so the flag is set by the time the sync's
         // await returns — asserting it directly avoids the polling/re-registration that flakes under load.
         let observedChange = ObservationFlag()
         withObservationTracking {
-            _ = task.members.map(\.id).sorted()
+            _ = task.members.map { $0.id }.sorted()
         } onChange: {
             observedChange.fire()
         }
 
         try await context.sync(payload: [["id": 10, "title": "Task 10", "member_ids": [2, 3]]], as: OneSidedTask.self)
 
-        XCTAssertEqual(task.members.map(\.id).sorted(), [2, 3])
-        XCTAssertTrue(
-            observedChange.didFire,
-            "direct withObservationTracking observer was not notified of the to-many membership change"
-        )
+        XCTAssertEqual(task.members.map { $0.id }.sorted(), [2, 3])
+        XCTAssertTrue(observedChange.didFire, "direct withObservationTracking observer was not notified of the to-many membership change")
     }
 }
 
@@ -652,9 +683,7 @@ private final class ObservationFlag: @unchecked Sendable {
 final class RelationshipIntegrityRegressionTests: XCTestCase {
     @MainActor
     func testMissingExplicitInverseCanDropSharedTagMembershipAcrossTaskBatchSync() async throws {
-        XCTExpectFailure(
-            "Known SwiftData/SwiftSync runtime bug: a many-to-many pair with no explicit inverse anchor can corrupt shared memberships during batch sync. Use one explicit @Relationship(inverse: ...) anchor until runtime guardrails are added."
-        )
+        XCTExpectFailure("Known SwiftData/SwiftSync runtime bug: a many-to-many pair with no explicit inverse anchor can corrupt shared memberships during batch sync. Use one explicit @Relationship(inverse: ...) anchor until runtime guardrails are added.")
 
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(
@@ -689,7 +718,7 @@ final class RelationshipIntegrityRegressionTests: XCTestCase {
             ], as: MissingInverseRegressionTask.self)
 
         let tasks = try context.fetch(FetchDescriptor<MissingInverseRegressionTask>())
-        let tasksByID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, Set($0.tags.map(\.id))) })
+        let tasksByID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, Set($0.tags.map { $0.id })) })
 
         XCTAssertEqual(tasksByID[10], Set([1, 2]))
         XCTAssertEqual(tasksByID[20], Set([2, 3]))
@@ -728,7 +757,7 @@ final class RelationshipIntegrityRegressionTests: XCTestCase {
             ], as: ExplicitInverseRegressionTask.self)
 
         let tasks = try context.fetch(FetchDescriptor<ExplicitInverseRegressionTask>())
-        let tasksByID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, Set($0.tags.map(\.id))) })
+        let tasksByID = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, Set($0.tags.map { $0.id })) })
 
         XCTAssertEqual(tasksByID[10], Set([1, 2]))
         XCTAssertEqual(tasksByID[20], Set([2, 3]))

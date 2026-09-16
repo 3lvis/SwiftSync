@@ -1,6 +1,6 @@
 import SwiftData
-import SwiftSync
 import XCTest
+import SwiftSync
 
 @testable import DemoCore
 
@@ -31,7 +31,10 @@ final class DirtyTrackingGapTests: XCTestCase {
     func testToManyOnlyWriteIncludesOwnerInNotification_persistentStore() async throws {
         let config = ModelConfiguration(url: makeTemporaryStoreURL())
         let container = try ModelContainer(
-            for: Task.self, User.self, Project.self, TaskStateOption.self,
+            for: Task.self,
+            User.self,
+            Project.self,
+            TaskStateOption.self,
             configurations: config
         )
         try await runDirtyTrackingTest(container: container, label: "persistent")
@@ -41,7 +44,10 @@ final class DirtyTrackingGapTests: XCTestCase {
     func testToManyOnlyWriteIncludesOwnerInNotification_inMemoryStore() async throws {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(
-            for: Task.self, User.self, Project.self, TaskStateOption.self,
+            for: Task.self,
+            User.self,
+            Project.self,
+            TaskStateOption.self,
             configurations: config
         )
         try await runDirtyTrackingTest(container: container, label: "in-memory")
@@ -51,12 +57,30 @@ final class DirtyTrackingGapTests: XCTestCase {
     private func runDirtyTrackingTest(container: ModelContainer, label: String) async throws {
         let mainContext = container.mainContext
 
-        let user1 = User(id: "u1", displayName: "Alice", createdAt: Date(), updatedAt: Date())
-        let user2 = User(id: "u2", displayName: "Bob", createdAt: Date(), updatedAt: Date())
+        let user1 = User(
+            id: "u1",
+            displayName: "Alice",
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        let user2 = User(
+            id: "u2",
+            displayName: "Bob",
+            createdAt: Date(),
+            updatedAt: Date()
+        )
         let task = Task(
-            id: "t1", projectID: "p1", assigneeID: nil, authorID: "u1",
-            title: "Test Task", descriptionText: "", state: "open", stateLabel: "Open",
-            createdAt: Date(), updatedAt: Date())
+            id: "t1",
+            projectID: "p1",
+            assigneeID: nil,
+            authorID: "u1",
+            title: "Test Task",
+            descriptionText: "",
+            state: "open",
+            stateLabel: "Open",
+            createdAt: Date(),
+            updatedAt: Date()
+        )
         mainContext.insert(user1)
         mainContext.insert(user2)
         mainContext.insert(task)
@@ -70,13 +94,12 @@ final class DirtyTrackingGapTests: XCTestCase {
         let bgContext = ModelContext(container)
 
         let token = NotificationCenter.default.addObserver(
-            forName: ModelContext.didSave, object: bgContext, queue: nil
+            forName: ModelContext.didSave,
+            object: bgContext,
+            queue: nil
         ) { notification in
             if let ui = notification.userInfo {
-                capture.record(
-                    updated: ui["updated"] as? [PersistentIdentifier] ?? [],
-                    inserted: ui["inserted"] as? [PersistentIdentifier] ?? []
-                )
+                capture.record(updated: ui["updated"] as? [PersistentIdentifier] ?? [], inserted: ui["inserted"] as? [PersistentIdentifier] ?? [])
             }
             saved.fulfill()
         }
@@ -95,14 +118,15 @@ final class DirtyTrackingGapTests: XCTestCase {
 
         await fulfillment(of: [saved], timeout: 5)
 
-        XCTAssertTrue(
-            capture.contains(taskID),
-            "[\(label)] Task ID absent from didSave after syncApplyToManyForeignKeys. \(capture.summary)"
-        )
+        XCTAssertTrue(capture.contains(taskID), "[\(label)] Task ID absent from didSave after syncApplyToManyForeignKeys. \(capture.summary)")
 
         mainContext.processPendingChanges()
         let refreshed = try mainContext.fetch(FetchDescriptor<Task>())
-        XCTAssertEqual(refreshed.first?.reviewers.count, 2, "[\(label)] Relationship not written")
+        XCTAssertEqual(
+            refreshed.first?.reviewers.count,
+            2,
+            "[\(label)] Relationship not written"
+        )
     }
 
 }

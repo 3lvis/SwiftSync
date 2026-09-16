@@ -1,7 +1,7 @@
-import DemoCore
 import SwiftData
-import SwiftSync
 import SwiftUI
+import DemoCore
+import SwiftSync
 
 struct FailuresSheet: View {
     let syncEngine: DemoSyncEngine

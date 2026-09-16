@@ -37,7 +37,12 @@ public final class User {
     public var createdAt: Date
     public var updatedAt: Date
 
-    public init(id: String, displayName: String, createdAt: Date, updatedAt: Date) {
+    public init(
+        id: String,
+        displayName: String,
+        createdAt: Date,
+        updatedAt: Date
+    ) {
         self.id = id
         self.displayName = displayName
         self.createdAt = createdAt
@@ -54,7 +59,13 @@ public final class TaskStateOption {
     public var createdAt: Date
     public var updatedAt: Date
 
-    public init(id: String, label: String, sortOrder: Int, createdAt: Date, updatedAt: Date) {
+    public init(
+        id: String,
+        label: String,
+        sortOrder: Int,
+        createdAt: Date,
+        updatedAt: Date
+    ) {
         self.id = id
         self.label = label
         self.sortOrder = sortOrder
