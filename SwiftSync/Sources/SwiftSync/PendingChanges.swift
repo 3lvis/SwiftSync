@@ -256,11 +256,18 @@ extension SwiftSync {
 
         let failures = try await process(pending)
         if failures.isEmpty, let uploadedThrough {
-            try setLastPushedHistoryToken(
-                uploadedThrough,
-                for: Model.self,
-                in: context
-            )
+            // The encode guard is an `if`, so a token that will not encode leaves the trim below intact.
+            let typeName = String(reflecting: Model.self)
+            if let tokenData = try? JSONEncoder().encode(uploadedThrough) {
+                var descriptor = FetchDescriptor<PushHistoryTokenRecord>(predicate: #Predicate { $0.modelTypeName == typeName })
+                descriptor.fetchLimit = 1
+                if let record = try context.fetch(descriptor).first {
+                    record.tokenData = tokenData
+                } else {
+                    context.insert(PushHistoryTokenRecord(modelTypeName: typeName, tokenData: tokenData))
+                }
+                try context.save()
+            }
             try? context.trimSwiftSyncInboundHistory()
         }
         return failures
@@ -307,23 +314,6 @@ extension SwiftSync {
         descriptor.fetchLimit = 1
         guard let record = try? context.fetch(descriptor).first else { return nil }
         return try? JSONDecoder().decode(DefaultHistoryToken.self, from: record.tokenData)
-    }
-
-    private static func setLastPushedHistoryToken(
-        _ token: DefaultHistoryToken,
-        for model: any PersistentModel.Type,
-        in context: ModelContext
-    ) throws {
-        let typeName = String(reflecting: model)
-        guard let data = try? JSONEncoder().encode(token) else { return }
-        var descriptor = FetchDescriptor<PushHistoryTokenRecord>(predicate: #Predicate { $0.modelTypeName == typeName })
-        descriptor.fetchLimit = 1
-        if let record = try context.fetch(descriptor).first {
-            record.tokenData = data
-        } else {
-            context.insert(PushHistoryTokenRecord(modelTypeName: typeName, tokenData: data))
-        }
-        try context.save()
     }
 
 }

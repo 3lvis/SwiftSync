@@ -20,6 +20,9 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
         private var isHeld = false
         private var waiters: [CheckedContinuation<Void, Never>] = []
 
+        // The actor's own state is what this reads and writes, so its caller outside the actor cannot hold
+        // these statements.
+        // oida:disable:next no_single_use_void_functions
         func acquire() async {
             if isHeld {
                 await withCheckedContinuation { waiters.append($0) }
@@ -180,6 +183,9 @@ public final class SyncContainer: NSObject, @unchecked Sendable {
     }
 
     @MainActor
+    // This is the hop onto the main actor. Its caller is nonisolated, so moving the body there moves
+    // main-actor work out of its isolation.
+    // oida:disable:next no_single_use_void_functions
     private func syncIntoMainContext<Model: SyncUpdatableModel>(
         _ item: UncheckedSendableBox<[String: Any]>,
         as model: Model.Type,

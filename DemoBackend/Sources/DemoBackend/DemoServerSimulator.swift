@@ -49,7 +49,7 @@ public final class DemoServerSimulator {
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
 
         try self.sqlite.execute("PRAGMA foreign_keys = ON;")
-        try Self.createSchemaIfNeeded(sqlite: self.sqlite)
+        try self.sqlite.executeScript(Self.schemaSQL)
         try Self.seedIfNeeded(self.sqlite, seedData: seedData)
     }
 
@@ -975,6 +975,9 @@ public final class DemoServerSimulator {
         return result
     }
 
+    // The simulated drift belongs behind its own name: its caller is the public read, and folding this in
+    // would put twenty lines of mutation between that read and its answer.
+    // oida:disable:next no_single_use_void_functions
     private func applyAmbientProjectMutation(projectID: String, step: Int) throws {
         guard try exists(in: "projects", id: projectID) else { return }
 
@@ -992,7 +995,10 @@ public final class DemoServerSimulator {
             try ambientCreateTask(in: projectID, step: step)
         default:
             if currentTasks.count > 2 {
-                try ambientDeleteTask(tasks: currentTasks, step: step)
+                let doomed = currentTasks[(step / 2) % currentTasks.count]
+                if let publicID = doomed["id"] as? String {
+                    try deleteTask(publicID: publicID)
+                }
             } else {
                 try ambientUpdateTask(
                     in: projectID,
@@ -1087,13 +1093,6 @@ public final class DemoServerSimulator {
             createdAt: now,
             updatedAt: now
         )
-    }
-
-    private func ambientDeleteTask(tasks: [[String: Any]], step: Int) throws {
-        guard !tasks.isEmpty else { return }
-        let task = tasks[(step / 2) % tasks.count]
-        guard let publicID = task["id"] as? String else { return }
-        try deleteTask(publicID: publicID)
     }
 
     private func taskPayload(from row: DemoSQLiteRow) throws -> [String: Any] {
@@ -1387,9 +1386,9 @@ public final class DemoServerSimulator {
         ambientMutationsSuspendedUntil = Date().addingTimeInterval(1.25)
     }
 
-    private static func createSchemaIfNeeded(sqlite: DemoSQLiteDatabase) throws {
-        try sqlite.executeScript(
-            """
+    // The schema is data: one statement per table, run once at open. Held as a value so it reads as
+    // the description it is, rather than as a function that happens to contain it.
+    static let schemaSQL = """
             CREATE TABLE IF NOT EXISTS projects (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -1448,10 +1447,11 @@ public final class DemoServerSimulator {
                 FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
             );
 
-            """
-        )
-    }
+        """
 
+    // Two hundred lines of inserts in one transaction, six tables deep. The name is what lets the opening
+    // sequence be read as three steps rather than as the whole fixture.
+    // oida:disable:next no_single_use_void_functions
     private static func seedIfNeeded(_ sqlite: DemoSQLiteDatabase, seedData: DemoSeedData) throws {
         let rows = try sqlite.query("SELECT COUNT(*) AS count FROM projects")
         let projectCount = Int(rows.first?.int64("count") ?? 0)
@@ -1729,6 +1729,9 @@ private final class DemoSQLiteDatabase {
         }
     }
 
+    // One of this type's three ways to reach SQLite — execute prepares a statement, query returns rows,
+    // and this runs a multi-statement script. Having one caller today says nothing about the set.
+    // oida:disable:next no_single_use_void_functions
     func executeScript(_ sql: String) throws {
         var errorMessage: UnsafeMutablePointer<Int8>?
         let rc = sqlite3_exec(
