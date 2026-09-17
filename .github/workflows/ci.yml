@@ -33,7 +33,7 @@ jobs:
           - name: DemoCore
             path: DemoCore
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Cache SPM
         uses: actions/cache@v5
@@ -63,7 +63,7 @@ jobs:
           - name: DemoCore
             path: DemoCore
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       # No SPM cache on purpose: a fresh build recompiles everything so warnings are
       # actually re-emitted (an incremental build would skip unchanged files).
       - name: Build and fail on first-party warnings
@@ -80,7 +80,7 @@ jobs:
     name: Doc link check
     runs-on: xcode-27
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Check relative markdown links resolve
         run: python3 scripts/check-doc-links.py
 
@@ -88,7 +88,7 @@ jobs:
     name: Perf regression gate
     runs-on: xcode-27
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Cache SPM
         uses: actions/cache@v5
