@@ -42,11 +42,11 @@ excluded:
 # link is a defect anywhere, so document_links_resolve stays unscoped.
 document_says_what_is:
   severity: error
-  excluded: "/docs/"
+  excluded: "^docs/"
 
 document_avoids_retired_words:
   severity: error
-  excluded: "/docs/"
+  excluded: "^docs/"
 
 # Errors, not warnings: what these find is written by whoever is not reading the code around it, and a
 # warning is what a reader scrolls past.
