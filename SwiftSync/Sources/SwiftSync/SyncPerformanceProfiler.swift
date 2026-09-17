@@ -90,14 +90,6 @@ extension SwiftSync {
         return (value, profiler.snapshot())
     }
 
-    static func withPerformanceProfiling<T>(operation: () async throws -> T) async rethrows -> (value: T, profile: SyncPerformanceReport) {
-        let profiler = SyncPerformanceProfiler()
-        let value = try await SyncPerformanceProfiler.$current.withValue(profiler) {
-            try await operation()
-        }
-        return (value, profiler.snapshot())
-    }
-
     @MainActor
     static func withMainActorPerformanceProfiling<T>(operation: @MainActor () async throws -> T) async rethrows -> (value: T, profile: SyncPerformanceReport) {
         let profiler = SyncPerformanceProfiler()
