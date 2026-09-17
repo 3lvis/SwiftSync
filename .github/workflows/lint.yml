@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     container: swift:6.3.2-noble
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       # curl isn't in the toolchain image; bin/lint needs it to fetch the pinned oida release.
       - name: Install curl
         run: apt-get update && apt-get install -y curl
