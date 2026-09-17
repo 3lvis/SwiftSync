@@ -78,7 +78,9 @@ jobs:
 
   doc-links:
     name: Doc link check
-    runs-on: xcode-27
+    # Pure stdlib Python over the markdown tree, so it wants no Xcode and no macOS. Linux is also the
+    # stricter reader: a case-mismatched link passes on a case-insensitive filesystem and fails here.
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Check relative markdown links resolve
