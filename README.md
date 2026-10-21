@@ -240,7 +240,7 @@ Then import:
 import SwiftSync
 ```
 
-Requirements: Xcode 17+, Swift 6.2, iOS 17+ / macOS 14+
+Requirements: Xcode 26+, Swift 6.2, iOS 18+ / macOS 15+
 
 ## Full Overview
 
